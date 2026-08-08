@@ -60,4 +60,6 @@ export interface LearningTreeSnapshot {
   edges: SkillEdge[];
   current_node_id: string | null;
   progress: NodeLearningProgress[];
+  /** 演示数据来源标识（如 'nestjs' / 'agent'），后端真实数据无此字段 */
+  demo_source?: string | null;
 }

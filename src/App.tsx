@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchLearningTree } from './lib/api';
+import { DEMO_TREES } from './lib/demoTrees';
 import NodeDetailPanel from './features/skill-tree/NodeDetailPanel';
 import CompletionFlash from './features/skill-tree/CompletionFlash';
 import ProgressOverview from './features/skill-tree/ProgressOverview';
@@ -10,19 +11,28 @@ import type { LearningStatus, SkillNode } from './types/learning';
 export default function App() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [completion, setCompletion] = useState<{ node: SkillNode; nonce: number } | null>(null);
+  const [treeKey, setTreeKey] = useState('nestjs');
   const query = useQuery({
-    queryKey: ['learning-tree'],
-    queryFn: fetchLearningTree,
+    queryKey: ['learning-tree', treeKey],
+    queryFn: () => fetchLearningTree(treeKey),
     refetchInterval: 2000,
   });
 
   const prevProgressRef = useRef<Map<string, LearningStatus>>(new Map());
 
   useEffect(() => {
-    if (!selectedNodeId && query.data) {
+    if (!query.data) return;
+    const exists = query.data.nodes.some((n) => n.id === selectedNodeId);
+    if (!exists) {
       setSelectedNodeId(query.data.current_node_id ?? query.data.nodes[0]?.id ?? null);
     }
   }, [query.data, selectedNodeId]);
+
+  const handleTreeChange = (key: string) => {
+    setTreeKey(key);
+    setSelectedNodeId(null);
+    setCompletion(null);
+  };
 
   useEffect(() => {
     if (!query.data) return;
@@ -80,6 +90,20 @@ export default function App() {
           <p className="mt-0.5 text-xs text-slate-500">由项目学习记录实时生成 · 每 2 秒自动同步</p>
         </div>
         <div className="flex items-center gap-4 text-xs">
+          {snapshot.demo_source && (
+            <select
+              value={treeKey}
+              onChange={(e) => handleTreeChange(e.target.value)}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 font-medium text-slate-200 outline-none focus:border-cyan-400"
+              aria-label="切换演示技能树"
+            >
+              {Object.entries(DEMO_TREES).map(([key, tree]) => (
+                <option key={key} value={key}>
+                  {tree.tree.topic}
+                </option>
+              ))}
+            </select>
+          )}
           <Legend color="bg-slate-700" label="未学习" />
           <Legend color="bg-amber-400" label="当前" />
           <Legend color="bg-emerald-300" label="完成" />

@@ -9,7 +9,7 @@ import {
   type Edge,
 } from '@xyflow/react';
 import type { LearningTreeSnapshot } from '../../types/learning';
-import { computeCompactLayout } from './layoutDagre';
+import { computeTreeLayout } from './layoutTree';
 import SkillNodeComponent, {
   type SkillFlowNode,
 } from './SkillNode';
@@ -32,7 +32,7 @@ export default function SkillTreeCanvas({
     [snapshot.progress],
   );
   const positions = useMemo(
-    () => computeCompactLayout(snapshot.nodes, snapshot.edges),
+    () => computeTreeLayout(snapshot.nodes, snapshot.edges),
     [snapshot.nodes, snapshot.edges],
   );
   const generatedNodes = useMemo<SkillFlowNode[]>(
