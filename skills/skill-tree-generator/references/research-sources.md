@@ -271,7 +271,7 @@
 
 1. **以主流共识为准**：统计多个来源中的推荐频次，取多数。
 2. **在节点说明中提及争议**：在对应节点的 `learning_objectives` 或 `key_concepts` 中注明"另有 X 推荐 Y，但多数来源推荐 Z"。
-3. **争议点可设为 optional**：如果争议双方各有充分理由，将该节点的 `recommended_depth` 设为 `Understand`（而非 `Master`），或将其标记为可选分支。
+3. **争议点可设为 optional**：如果争议双方各有充分理由，将该节点的 `recommended_depth` 设为 `Understand`（而非 `DeepMastery`），或将其标记为可选分支。
 4. **记录争议来源**：在技能树生成完成后，附一份争议点说明（放在 `SKILL_TREE.json` 的 `description` 字段或单独备注）。
 
 格式示例：

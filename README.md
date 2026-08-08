@@ -90,7 +90,7 @@ GitHub 生态、思维导图与主流能力要求，基于研究产出完整 SKI
       "recommended_depth": "Use",
       "learning_objectives": "[\"理解 IoC 容器\"]",
       "key_concepts": "[\"DI\", \"provider\"]",
-      "observable_evidence": "能自定义一个服务并注入使用"
+      "observable_evidence": "[\"能自定义一个服务并注入使用\"]"
     }
   ],
   "edges": [{ "id": "e1", "source_node_id": "node-1", "target_node_id": "node-2" }],
