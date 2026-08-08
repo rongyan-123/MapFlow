@@ -1,0 +1,20 @@
+export const ICON_EMOJI: Record<string, string> = {
+  compass: '🧭',
+  shield: '🛡️',
+  code: '⌨️',
+  database: '🗄️',
+  brain: '🧠',
+  network: '🕸️',
+  server: '🖥️',
+  cloud: '☁️',
+  wrench: '🔧',
+  book: '📖',
+};
+
+export const DEPTH_LABELS: Record<string, string> = {
+  Recognize: '认识',
+  Understand: '理解',
+  Use: '应用',
+  Transfer: '迁移',
+  DeepMastery: '深度掌握',
+};

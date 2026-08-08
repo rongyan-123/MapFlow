@@ -1,0 +1,396 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #020617;
+  color: #e2e8f0;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.react-flow__pane {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(8, 145, 178, 0.08), transparent 38%),
+    #020617;
+}
+
+.react-flow__controls button {
+  border-bottom-color: #334155 !important;
+  background: #0f172a !important;
+  fill: #cbd5e1 !important;
+}
+
+.react-flow__controls button:hover {
+  background: #1e293b !important;
+}
+
+.react-flow__minimap {
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #020617;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #334155;
+}
+
+/* 节点完成特效：只狼斩杀感 + 青色科技感，低亮度不伤眼 */
+/* 时间线：开场(0-0.5s) → 背景压暗(0.55s) → 四字逐个压下(0.62-1.44s) → 斜斩(1.56s) → 分离散开(1.98s) → 淡出(2.7s) */
+.completion-flash {
+  pointer-events: none;
+  background: rgba(6, 8, 12, 0);
+  animation:
+    flash-container 2.7s ease forwards,
+    flash-dim 0.3s ease-out 0.55s both,
+    flash-shake-a 0.28s ease-in-out 1.52s,
+    flash-shake-b 0.34s ease-in-out 1.92s;
+}
+
+.completion-flash__glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 46%, rgba(34, 211, 238, 0.18), transparent 42%),
+    radial-gradient(circle at 50% 46%, rgba(248, 250, 252, 0.14), transparent 30%);
+  animation: flash-glow 0.55s ease-out both;
+}
+
+.completion-flash__slash {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 38%;
+  height: 2px;
+  transform: translate(-120%, -50%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(34, 211, 238, 0.9),
+    #a5f3fc,
+    rgba(34, 211, 238, 0.9),
+    transparent
+  );
+  filter: blur(0.5px);
+  box-shadow:
+    0 0 24px rgba(34, 211, 238, 0.55),
+    0 0 64px rgba(34, 211, 238, 0.3);
+  animation: flash-slash 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) 0.05s both;
+}
+
+.completion-flash__slash-diag {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 60vw;
+  height: 2px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  z-index: 5;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(34, 211, 238, 0.95),
+    #a5f3fc,
+    rgba(34, 211, 238, 0.95),
+    transparent
+  );
+  filter: blur(0.5px);
+  box-shadow:
+    0 0 28px rgba(34, 211, 238, 0.6),
+    0 0 70px rgba(34, 211, 238, 0.32);
+  opacity: 0;
+  animation: flash-slash-diag 0.4s cubic-bezier(0.22, 0.61, 0.36, 1) 1.56s both;
+}
+
+.completion-flash__content {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.completion-flash__kicker {
+  position: absolute;
+  top: 14%;
+  left: 0;
+  right: 0;
+  width: max-content;
+  margin-inline: auto;
+  font-size: 0.72rem;
+  letter-spacing: 0.5em;
+  color: #22d3ee;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: flash-soft-in 0.4s ease 0.22s both;
+}
+
+/* 十字架结构：竖柱「此间事了」占满屏高，横梁为标题从中部横穿 */
+/* 全部用 margin auto 居中（不依赖 transform），避免动画覆盖定位 */
+.completion-flash__verdict {
+  position: absolute;
+  inset: 0;
+  width: max-content;
+  height: max-content;
+  margin: auto;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.completion-flash__verdict-char {
+  --scatter-x: 0em;
+  --scatter-y: 0em;
+  --scatter-r: 0deg;
+  font-size: 22vh;
+  font-weight: 800;
+  line-height: 0.96;
+  color: #ffffff;
+  text-shadow:
+    0 0 22px rgba(34, 211, 238, 0.75),
+    0 0 64px rgba(34, 211, 238, 0.45),
+    0 0 120px rgba(34, 211, 238, 0.25);
+  opacity: 0;
+  animation:
+    verdict-fall 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.4) both,
+    verdict-scatter 0.42s ease-in 1.98s both;
+}
+
+.verdict-1 {
+  --scatter-x: -1.2em;
+  --scatter-y: -0.8em;
+  --scatter-r: -14deg;
+  animation-delay: 0.62s, 1.98s;
+}
+
+.verdict-2 {
+  --scatter-x: -0.7em;
+  --scatter-y: 0.9em;
+  --scatter-r: 10deg;
+  animation-delay: 0.84s, 2.04s;
+}
+
+.verdict-3 {
+  --scatter-x: 0.7em;
+  --scatter-y: -0.8em;
+  --scatter-r: -8deg;
+  animation-delay: 1.06s, 2.1s;
+}
+
+.verdict-4 {
+  --scatter-x: 1.2em;
+  --scatter-y: 0.9em;
+  --scatter-r: 12deg;
+  animation-delay: 1.28s, 2.16s;
+}
+
+.completion-flash__title {
+  position: absolute;
+  inset: 0;
+  width: max-content;
+  height: max-content;
+  margin: auto;
+  z-index: 2;
+  font-size: clamp(2.4rem, 7vw, 5rem);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #f8fafc;
+  white-space: nowrap;
+  text-shadow:
+    0 0 18px rgba(34, 211, 238, 0.55),
+    0 0 46px rgba(34, 211, 238, 0.35),
+    0 2px 2px rgba(2, 6, 23, 0.8);
+  animation:
+    flash-pop 0.42s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both,
+    flash-title-smote 0.16s ease-out 0.62s both;
+}
+
+@keyframes flash-container {
+  0% {
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes flash-glow {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes flash-slash {
+  0% {
+    transform: translate(-18vw, -50%);
+  }
+  100% {
+    transform: translate(160vw, -50%);
+  }
+}
+
+@keyframes flash-slash-diag {
+  0% {
+    opacity: 0;
+    transform: translate(-60vw, -60vw) rotate(45deg);
+  }
+  6% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translate(60vw, 60vw) rotate(45deg);
+  }
+}
+
+@keyframes flash-dim {
+  0% {
+    background: rgba(6, 8, 12, 0);
+  }
+  100% {
+    background: rgba(13, 15, 21, 0.95);
+  }
+}
+
+@keyframes flash-pop {
+  0% {
+    opacity: 0;
+    transform: scale(1.18);
+    filter: blur(8px);
+    letter-spacing: 0.02em;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+    letter-spacing: 0.01em;
+  }
+}
+
+@keyframes flash-soft-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes flash-title-smote {
+  0% {
+    color: #f8fafc;
+    text-shadow:
+      0 0 18px rgba(34, 211, 238, 0.55),
+      0 0 46px rgba(34, 211, 238, 0.35),
+      0 2px 2px rgba(2, 6, 23, 0.8);
+  }
+  100% {
+    color: #5c6675;
+    text-shadow:
+      0 0 6px rgba(34, 211, 238, 0.15),
+      0 0 18px rgba(2, 6, 23, 0.8),
+      0 2px 2px rgba(2, 6, 23, 0.9);
+  }
+}
+
+@keyframes verdict-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(-0.5em);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes verdict-scatter {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--scatter-x), var(--scatter-y)) rotate(var(--scatter-r));
+  }
+}
+
+@keyframes flash-shake-a {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-4px, 3px);
+  }
+  50% {
+    transform: translate(4px, -3px);
+  }
+  75% {
+    transform: translate(-3px, -2px);
+  }
+}
+
+@keyframes flash-shake-b {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-5px, 4px);
+  }
+  40% {
+    transform: translate(5px, -4px);
+  }
+  60% {
+    transform: translate(-4px, -3px);
+  }
+  80% {
+    transform: translate(4px, 3px);
+  }
+}
