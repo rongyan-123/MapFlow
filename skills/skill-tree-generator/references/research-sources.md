@@ -131,7 +131,7 @@
 | 字节跳动技术博客 | https://blog.bytedance.com / https://tech.bytedance.com | 获取字节工程实践和能力要求 | 中文、案例丰富 |
 | 阿里技术 | https://developer.aliyun.com / https://www.aliyun.com | 获取阿里技术栈和工程实践 | 中文、覆盖广 |
 | 腾讯技术工程 | https://cloud.tencent.com/developer | 获取腾讯技术文章和课程 | 中文、有课程体系 |
-| Google Engineering Blog | https://developers.google.com / https://research.google/blog | 获取 Google 工程实践 | 英文、前沿 |
+| Google Engineering Blog | https://developers.googleblog.com / https://research.google/blog | 获取 Google 工程实践 | 英文、前沿 |
 | Meta Engineering Blog | https://engineering.fb.com | 获取 Meta 工程实践 | 英文、系统设计 |
 | InfoQ | https://www.infoq.cn / https://www.infoq.com | 获取技术大会演讲和架构分享 | 中英文、大会议题有体系 |
 | 极客时间 | https://time.geekbang.org | 获取系统化课程大纲 | 中文、课程章节清晰 |
