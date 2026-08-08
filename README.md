@@ -56,6 +56,23 @@ npm run dev
 
 见下一节。前端只认 `GET /api/learning/tree` 一个接口，返回 JSON 即可。
 
+**方式 D：用仓库自带的生成 Skill（推荐，零代码）**
+
+本仓库自带一个**技能树生成 skill**（`skills/skill-tree-generator/`），任何 AI 都可以调用它
+从零生成一棵符合格式的学习技能树——先问你想走的方向，再大范围研究主流学习路径、
+GitHub 生态、思维导图与主流能力要求，基于研究产出完整 SKILL_TREE.json。
+
+用法：在你的 AI 环境中（Claude Code、Codex 或任何支持 skill 规范的 agent）打开本仓库目录，
+对它说：
+
+> 帮我在这个仓库生成一棵学习 XX 的技能树
+
+- 想学哪个方向、规模多大、职业/项目目标是什么，都会在生成过程中逐步确认
+- 生成结果默认写入 `learning/SKILL_TREE.json`；想直接在前端可视化，把生成的 JSON
+  注册进 `src/lib/demoTrees.ts` 即可（格式见「接入真实数据」一节）
+- skill 遵循通用 skill 规范：Claude Code 用户可复制到自己的 `.claude/skills/` 实现自动加载，
+  其他 agent / API 用户可直接按 SKILL.md 的流程执行
+
 ## 接入真实数据
 
 前端从 `GET /api/learning/tree` 读取技能树快照（自动每 2 秒轮询同步）。接入你的后端后，只需让该接口返回如下结构的 JSON：
