@@ -75,11 +75,11 @@
 | 类别 | 可用值 |
 |------|--------|
 | 导航/基础 | `compass`, `map`, `layers` |
-| 安全/防护 | `shield`, `lock`（如有） |
+| 安全/防护 | `shield` |
 | 代码/API | `code`, `edit`, `scissors`, `sort` |
 | 数据/存储 | `database`, `cloud`, `server` |
 | 智能/AI | `brain`, `lightbulb`, `puzzle` |
-| 网络/通信 | `network`, `link`, `message`, `radio`, `wifi`（如有） |
+| 网络/通信 | `network`, `link`, `message`, `radio` |
 | 工具/配置 | `wrench`, `tool`, `settings`, `gauge` |
 | 工作流/状态 | `workflow`, `pause`, `sync`, `refresh`, `history` |
 | 模板/输出 | `template`, `output`, `book` |
@@ -235,11 +235,11 @@
   "position_x": 1008.0,
   "position_y": 696.0,
   "order_in_level": 1,
-  "learning_objectives": "[\"能够用自己的话解释「配置、环境与秘密」解决的问题与适用边界\", \"能够在 NestJS 后端中实现并验证「配置、环境与秘密」的最小闭环\"]",
+  "learning_objectives": "[\"能够用自己的话解释“配置、环境与秘密”解决的问题与适用边界\", \"能够在 NestJS 后端中实现并验证“配置、环境与秘密”的最小闭环\"]",
   "key_concepts": "[\"配置、环境与秘密\", \"NestJS\", \"生产级后端\"]",
   "recommended_depth": "Use",
   "depth_rationale": "该节点是可重复使用的工程能力；学习终点是脱离逐行照抄后仍能按可靠模式完成实现。",
-  "observable_evidence": "[\"能够用自己的话解释「配置、环境与秘密」解决的问题与适用边界\", \"能够在 NestJS 后端中实现并验证「配置、环境与秘密」的最小闭环\", \"能独立完成「配置、环境与秘密」的最小可运行实现，并用测试、请求或日志证明其行为\"]"
+  "observable_evidence": "[\"能够用自己的话解释“配置、环境与秘密”解决的问题与适用边界\", \"能够在 NestJS 后端中实现并验证“配置、环境与秘密”的最小闭环\", \"能独立完成「配置、环境与秘密」的最小可运行实现，并用测试、请求或日志证明其行为\"]"
 }
 ```
 
