@@ -1,9 +1,15 @@
 import { DEPTH_LABELS, ICON_EMOJI } from '../../lib/constants';
-import type { LearningTreeSnapshot } from '../../types/learning';
+import type {
+  LearningTreeSnapshot,
+  TreeDisplayMode,
+} from '../../types/learning';
 
 interface NodeDetailPanelProps {
   snapshot: LearningTreeSnapshot;
   selectedNodeId: string | null;
+  displayMode: TreeDisplayMode;
+  onSetCompleted?: (nodeId: string, completed: boolean) => void;
+  completionPending?: boolean;
 }
 
 function parseStringList(raw: string | null): string[] {
@@ -21,6 +27,9 @@ function parseStringList(raw: string | null): string[] {
 export default function NodeDetailPanel({
   snapshot,
   selectedNodeId,
+  displayMode,
+  onSetCompleted,
+  completionPending = false,
 }: NodeDetailPanelProps) {
   const node = snapshot.nodes.find((item) => item.id === selectedNodeId);
   if (!node) {
@@ -33,6 +42,7 @@ export default function NodeDetailPanel({
 
   const progress = snapshot.progress.find((item) => item.node_id === node.id);
   const status = progress?.status ?? 'not_started';
+  const completed = status === 'completed' || status === 'mastered';
   const objectives = parseStringList(node.learning_objectives);
   const expectedEvidence = parseStringList(node.observable_evidence);
   const prerequisites = snapshot.edges
@@ -60,7 +70,7 @@ export default function NodeDetailPanel({
               {DEPTH_LABELS[node.recommended_depth]} · {node.recommended_depth}
             </span>
             <span className="rounded-full bg-slate-800 px-2 py-1 text-slate-300">
-              {statusLabels[status]}
+              {displayMode === 'showcase' ? '示例节点' : statusLabels[status]}
             </span>
           </div>
         </div>
@@ -95,12 +105,36 @@ export default function NodeDetailPanel({
         </section>
       )}
 
-      <section className="mb-5 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">我的掌握证据</h3>
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">
-          {progress?.evidence || '尚未记录学习证据。'}
-        </p>
-      </section>
+      {displayMode === 'personal' && onSetCompleted ? (
+        <section className="mb-5 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            我的学习进度
+          </h3>
+          <p className="mt-2 text-xs leading-5 text-slate-500">
+            首版只记录“未完成 / 已完成”，以后可以继续扩展证据和熟练度。
+          </p>
+          <button
+            type="button"
+            disabled={completionPending}
+            onClick={() => onSetCompleted(node.id, !completed)}
+            className={`mt-3 w-full rounded-lg px-3 py-2 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-60 ${
+              completed
+                ? 'border border-slate-700 text-slate-300 hover:border-rose-400 hover:text-rose-300'
+                : 'bg-emerald-300 text-emerald-950 hover:bg-emerald-200'
+            }`}
+          >
+            {completionPending
+              ? '正在保存…'
+              : completed
+                ? '取消完成'
+                : '标记为已完成'}
+          </button>
+        </section>
+      ) : (
+        <section className="mb-5 rounded-xl border border-cyan-900/70 bg-cyan-950/20 p-3 text-xs leading-5 text-cyan-200/80">
+          当前是全亮示例预览。加入个人库后，这棵树会从 0 开始，节点默认全部未完成。
+        </section>
+      )}
 
       {prerequisites.length > 0 && (
         <section>

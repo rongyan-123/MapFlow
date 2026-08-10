@@ -11,6 +11,8 @@ export type LearningStatus =
   | 'completed'
   | 'mastered';
 
+export type TreeDisplayMode = 'showcase' | 'personal';
+
 export interface SkillTree {
   id: string;
   topic: string;

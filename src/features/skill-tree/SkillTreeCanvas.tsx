@@ -8,7 +8,10 @@ import {
   useNodesState,
   type Edge,
 } from '@xyflow/react';
-import type { LearningTreeSnapshot } from '../../types/learning';
+import type {
+  LearningTreeSnapshot,
+  TreeDisplayMode,
+} from '../../types/learning';
 import { computeTreeLayout } from './layoutTree';
 import SkillNodeComponent, {
   type SkillFlowNode,
@@ -18,12 +21,14 @@ const nodeTypes = { skill: SkillNodeComponent };
 
 interface SkillTreeCanvasProps {
   snapshot: LearningTreeSnapshot;
+  displayMode: TreeDisplayMode;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string) => void;
 }
 
 export default function SkillTreeCanvas({
   snapshot,
+  displayMode,
   selectedNodeId,
   onSelectNode,
 }: SkillTreeCanvasProps) {
@@ -48,9 +53,10 @@ export default function SkillTreeCanvas({
           node,
           progress: progressMap.get(node.id) ?? null,
           isCurrent: node.id === snapshot.current_node_id,
+          displayMode,
         },
       })),
-    [positions, progressMap, snapshot.current_node_id, snapshot.nodes],
+    [displayMode, positions, progressMap, snapshot.current_node_id, snapshot.nodes],
   );
   const generatedEdges = useMemo<Edge[]>(
     () =>
@@ -58,6 +64,15 @@ export default function SkillTreeCanvas({
         const sourceStatus = progressMap.get(edge.source_node_id)?.status;
         const mastered = sourceStatus === 'mastered';
         const completed = sourceStatus === 'completed';
+        if (displayMode === 'showcase') {
+          return {
+            id: edge.id,
+            source: edge.source_node_id,
+            target: edge.target_node_id,
+            type: 'smoothstep',
+            style: { stroke: '#22d3ee', strokeWidth: 1.8 },
+          };
+        }
         return {
           id: edge.id,
           source: edge.source_node_id,
@@ -70,7 +85,7 @@ export default function SkillTreeCanvas({
           },
         };
       }),
-    [progressMap, snapshot.edges],
+    [displayMode, progressMap, snapshot.edges],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState<SkillFlowNode>([]);
@@ -115,6 +130,7 @@ export default function SkillTreeCanvas({
       <Controls className="!rounded-lg !border-slate-700 !bg-slate-900" />
       <MiniMap
         nodeColor={(node) => {
+          if (displayMode === 'showcase') return '#22d3ee';
           const flowNode = node as SkillFlowNode;
           const status = flowNode.data.progress?.status ?? 'not_started';
           if (status === 'mastered') return '#facc15';
