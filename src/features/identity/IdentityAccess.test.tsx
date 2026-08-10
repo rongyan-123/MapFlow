@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import IdentityAccess from './IdentityAccess';
+import { IdentityProvider } from './IdentityContext';
 
 const api = vi.hoisted(() => ({
   fetchCapabilities: vi.fn(),
@@ -97,7 +98,9 @@ function renderIdentityAccess() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <IdentityAccess />
+      <IdentityProvider>
+        <IdentityAccess />
+      </IdentityProvider>
     </QueryClientProvider>,
   );
 }
