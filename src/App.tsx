@@ -6,6 +6,7 @@ import NodeDetailPanel from './features/skill-tree/NodeDetailPanel';
 import CompletionFlash from './features/skill-tree/CompletionFlash';
 import ProgressOverview from './features/skill-tree/ProgressOverview';
 import SkillTreeCanvas from './features/skill-tree/SkillTreeCanvas';
+import IdentityAccess from './features/identity/IdentityAccess';
 import type { LearningStatus, SkillNode } from './types/learning';
 
 export default function App() {
@@ -84,12 +85,16 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-950/95 px-5">
-        <div>
-          <h1 className="text-lg font-bold tracking-tight">{snapshot.tree.title}</h1>
-          <p className="mt-0.5 text-xs text-slate-500">由项目学习记录实时生成 · 每 2 秒自动同步</p>
+      <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 sm:px-5">
+        <div className="min-w-0">
+          <h1 className="truncate text-base font-bold tracking-tight sm:text-lg">
+            {snapshot.tree.title}
+          </h1>
+          <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">
+            由项目学习记录实时生成 · 每 2 秒自动同步
+          </p>
         </div>
-        <div className="flex items-center gap-4 text-xs">
+        <div className="flex shrink-0 items-center gap-2 text-xs lg:gap-4">
           {snapshot.demo_source && (
             <select
               value={treeKey}
@@ -104,10 +109,13 @@ export default function App() {
               ))}
             </select>
           )}
-          <Legend color="bg-slate-700" label="未学习" />
-          <Legend color="bg-amber-400" label="当前" />
-          <Legend color="bg-emerald-300" label="完成" />
-          <Legend color="bg-yellow-200" label="掌握" />
+          <div className="hidden items-center gap-4 xl:flex">
+            <Legend color="bg-slate-700" label="未学习" />
+            <Legend color="bg-amber-400" label="当前" />
+            <Legend color="bg-emerald-300" label="完成" />
+            <Legend color="bg-yellow-200" label="掌握" />
+          </div>
+          <IdentityAccess />
         </div>
       </header>
 
