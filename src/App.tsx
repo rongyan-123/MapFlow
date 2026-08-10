@@ -35,6 +35,12 @@ export default function App() {
   const [selectedLibraryEntryId, setSelectedLibraryEntryId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [completion, setCompletion] = useState<{ node: SkillNode; nonce: number } | null>(null);
+  const accountPlayerId = session?.account.playerId ?? null;
+  const personalTreeLibraryQueryKey = [
+    'me',
+    accountPlayerId,
+    'tree-library',
+  ] as const;
 
   const publicCatalog = useQuery({
     queryKey: ['trees', 'public'],
@@ -50,17 +56,19 @@ export default function App() {
     retry: 1,
   });
   const personalLibrary = useQuery({
-    queryKey: ['me', 'tree-library'],
+    queryKey: personalTreeLibraryQueryKey,
     queryFn: fetchPersonalLibrary,
-    enabled: session !== null,
+    enabled: accountPlayerId !== null,
     staleTime: 30 * 1000,
     retry: false,
   });
   const personalTree = useQuery({
-    queryKey: ['me', 'tree-library', selectedLibraryEntryId],
+    queryKey: [...personalTreeLibraryQueryKey, selectedLibraryEntryId],
     queryFn: () => fetchPersonalTree(selectedLibraryEntryId ?? ''),
     enabled:
-      view === 'personal' && session !== null && selectedLibraryEntryId !== null,
+      view === 'personal' &&
+      accountPlayerId !== null &&
+      selectedLibraryEntryId !== null,
     staleTime: 15 * 1000,
     retry: false,
   });
@@ -87,10 +95,14 @@ export default function App() {
   }, [personalLibrary.data, selectedLibraryEntryId, session, view]);
 
   useEffect(() => {
+    setSelectedLibraryEntryId(null);
+    setSelectedNodeId(null);
+    setCompletion(null);
+  }, [accountPlayerId]);
+
+  useEffect(() => {
     if (!session && !sessionPending && view === 'personal') {
       setView('public');
-      setSelectedLibraryEntryId(null);
-      setSelectedNodeId(null);
     }
   }, [session, sessionPending, view]);
 
@@ -120,7 +132,7 @@ export default function App() {
       setSelectedNodeId(null);
       setCompletion(null);
       setView('personal');
-      await queryClient.invalidateQueries({ queryKey: ['me', 'tree-library'] });
+      await queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
     },
   });
 
@@ -137,7 +149,7 @@ export default function App() {
       );
     },
     onSuccess: async (_, variables) => {
-      await queryClient.invalidateQueries({ queryKey: ['me', 'tree-library'] });
+      await queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
       if (variables.completed) {
         const node = activeGraph?.nodes.find((item) => item.id === variables.nodeId);
         if (node) setCompletion({ node, nonce: Date.now() });

@@ -98,6 +98,15 @@ const authenticated = {
   csrfToken: 'csrf-secret',
 };
 
+const secondAccount = {
+  account: {
+    playerId: 'MF-2B4N-6Q8R-T1VX',
+    username: 'seconduser',
+    status: 'active' as const,
+  },
+  csrfToken: 'second-csrf-secret',
+};
+
 beforeEach(() => {
   for (const mock of Object.values(identityApi)) mock.mockReset();
   for (const mock of Object.values(treeApi)) mock.mockReset();
@@ -227,6 +236,41 @@ describe('MapFlow tree library', () => {
     expect(
       await screen.findByText('从公共树池加入一棵技能树后，就可以从零记录进度。'),
     ).toBeInTheDocument();
+  });
+
+  it('does not expose the previous account personal library after logout and login', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    identityApi.logoutIdentity.mockResolvedValue(undefined);
+    identityApi.loginIdentity.mockResolvedValue(secondAccount);
+    treeApi.fetchPersonalLibrary
+      .mockResolvedValueOnce({ entries: [personalEntry] })
+      .mockResolvedValueOnce({ entries: [] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp();
+
+    expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    expect(await screen.findByText('0/2 已完成')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '退出登录' }));
+    expect(
+      await screen.findByRole('button', { name: '登录 / 激活账号' }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '登录 / 激活账号' }));
+    await user.type(screen.getByLabelText('用户名'), secondAccount.account.username);
+    await user.type(screen.getByLabelText('密码'), 'safe-password-2026');
+    const loginButtons = screen.getAllByRole('button', { name: '登录' });
+    await user.click(loginButtons[loginButtons.length - 1]);
+
+    expect(await screen.findByText(secondAccount.account.playerId)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+
+    expect(
+      await screen.findByText('从公共树池加入一棵技能树后，就可以从零记录进度。'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('0/2 已完成')).not.toBeInTheDocument();
+    expect(treeApi.fetchPersonalLibrary).toHaveBeenCalledTimes(2);
   });
 });
 

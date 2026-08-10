@@ -59,6 +59,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
         ? loginIdentity(action.input)
         : registerIdentity(action.input),
     onSuccess: (authenticated) => {
+      queryClient.removeQueries({ queryKey: ['me'] });
       queryClient.setQueryData<IdentitySession | null>(
         SESSION_QUERY_KEY,
         authenticated,
@@ -73,6 +74,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       queryClient.setQueryData<IdentitySession | null>(SESSION_QUERY_KEY, null);
+      queryClient.removeQueries({ queryKey: ['me'] });
     },
   });
   const openIdentityDialog = useCallback(() => {
