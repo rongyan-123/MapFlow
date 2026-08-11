@@ -17,12 +17,26 @@ afterEach(() => {
 describe('identityClient', () => {
   it('reads the capability contract with same-origin credentials', async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ identity: { registrationEnabled: true } }),
+      jsonResponse({
+        identity: { registrationEnabled: true },
+        generation: {
+          enabled: true,
+          models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+          thinkingModes: ['enabled', 'disabled'],
+          reasoningEfforts: ['high', 'max'],
+        },
+      }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(fetchCapabilities()).resolves.toEqual({
       identity: { registrationEnabled: true },
+      generation: {
+        enabled: true,
+        models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+        thinkingModes: ['enabled', 'disabled'],
+        reasoningEfforts: ['high', 'max'],
+      },
     });
     expect(fetchMock).toHaveBeenCalledWith('/api/capabilities', {
       credentials: 'same-origin',

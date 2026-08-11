@@ -33,12 +33,26 @@ export async function fetchCapabilities(): Promise<IdentityCapabilities> {
   if (
     !isRecord(body) ||
     !isRecord(body.identity) ||
-    typeof body.identity.registrationEnabled !== 'boolean'
+    typeof body.identity.registrationEnabled !== 'boolean' ||
+    !isRecord(body.generation) ||
+    typeof body.generation.enabled !== 'boolean' ||
+    !isExactStringArray(body.generation.models, [
+      'deepseek-v4-flash',
+      'deepseek-v4-pro',
+    ]) ||
+    !isExactStringArray(body.generation.thinkingModes, ['enabled', 'disabled']) ||
+    !isExactStringArray(body.generation.reasoningEfforts, ['high', 'max'])
   ) {
     throw invalidResponseError();
   }
   return {
     identity: { registrationEnabled: body.identity.registrationEnabled },
+    generation: {
+      enabled: body.generation.enabled,
+      models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+      thinkingModes: ['enabled', 'disabled'],
+      reasoningEfforts: ['high', 'max'],
+    },
   };
 }
 
@@ -171,4 +185,12 @@ function invalidResponseError(): IdentityApiError {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isExactStringArray(value: unknown, expected: readonly string[]): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length === expected.length &&
+    value.every((item, index) => item === expected[index])
+  );
 }

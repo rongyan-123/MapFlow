@@ -1,6 +1,18 @@
+import type {
+  DeepSeekModel,
+  ReasoningEffort,
+  ThinkingMode,
+} from '../tree-generation/types';
+
 export interface IdentityCapabilities {
   identity: {
     registrationEnabled: boolean;
+  };
+  generation: {
+    enabled: boolean;
+    models: DeepSeekModel[];
+    thinkingModes: ThinkingMode[];
+    reasoningEfforts: ReasoningEffort[];
   };
 }
 
