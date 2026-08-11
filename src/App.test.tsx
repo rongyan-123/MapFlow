@@ -27,6 +27,35 @@ const legacyApi = vi.hoisted(() => ({ fetchLearningTree: vi.fn() }));
 vi.mock('./features/identity/identityClient', () => identityApi);
 vi.mock('./features/tree-library/treeLibraryClient', () => treeApi);
 vi.mock('./lib/api', () => legacyApi);
+vi.mock('./features/tree-generation/TreeGenerationDialog', () => ({
+  default: ({
+    sessionId,
+    onSessionIdChange,
+    onComplete,
+    onClose,
+  }: {
+    sessionId: string | null;
+    onSessionIdChange: (sessionId: string) => void;
+    onComplete: (libraryEntryId: string) => void;
+    onClose: () => void;
+  }) => (
+    <section role="dialog" aria-label="mock tree generator">
+      <span>{sessionId ?? 'new-generation-session'}</span>
+      <button type="button" onClick={() => onSessionIdChange('generation-session-1')}>
+        保存生成会话
+      </button>
+      <button
+        type="button"
+        onClick={() => onComplete('33333333-3333-4333-8333-333333333333')}
+      >
+        完成生成
+      </button>
+      <button type="button" onClick={onClose}>
+        关闭生成器
+      </button>
+    </section>
+  ),
+}));
 vi.mock('@xyflow/react', async () => {
   const React = await import('react');
 
@@ -114,6 +143,12 @@ beforeEach(() => {
 
   identityApi.fetchCapabilities.mockResolvedValue({
     identity: { registrationEnabled: true },
+    generation: {
+      enabled: true,
+      models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+      thinkingModes: ['enabled', 'disabled'],
+      reasoningEfforts: ['high', 'max'],
+    },
   });
   identityApi.fetchCurrentSession.mockResolvedValue(null);
   treeApi.fetchPublicTrees.mockResolvedValue({ trees: [nestjsTree, agentTree] });
@@ -125,6 +160,7 @@ beforeEach(() => {
   );
   treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [] });
   legacyApi.fetchLearningTree.mockResolvedValue(legacySnapshot);
+  window.history.replaceState({}, '', '/');
 });
 
 afterEach(() => {
@@ -271,6 +307,53 @@ describe('MapFlow tree library', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('0/2 已完成')).not.toBeInTheDocument();
     expect(treeApi.fetchPersonalLibrary).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens generation only from an authenticated personal library and selects its result', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary
+      .mockResolvedValueOnce({ entries: [] })
+      .mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp();
+
+    expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '生成新技能树' }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '生成新技能树' }));
+    expect(screen.getByRole('dialog', { name: 'mock tree generator' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '保存生成会话' }));
+    expect(new URLSearchParams(window.location.search).get('generationSession')).toBe(
+      'generation-session-1',
+    );
+    await user.click(screen.getByRole('button', { name: '完成生成' }));
+
+    await waitFor(() =>
+      expect(treeApi.fetchPersonalTree).toHaveBeenCalledWith(
+        personalEntry.library_entry_id,
+      ),
+    );
+    expect(screen.queryByRole('dialog', { name: 'mock tree generator' })).not.toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).has('generationSession')).toBe(false);
+  });
+
+  it('restores an unfinished generation dialog from the URL after reload', async () => {
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    window.history.replaceState(
+      {},
+      '',
+      '/?generationSession=generation-session-1',
+    );
+    renderApp();
+
+    expect(
+      await screen.findByRole('dialog', { name: 'mock tree generator' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('generation-session-1')).toBeInTheDocument();
   });
 });
 

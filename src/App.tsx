@@ -6,6 +6,7 @@ import ProgressOverview from './features/skill-tree/ProgressOverview';
 import SkillTreeCanvas from './features/skill-tree/SkillTreeCanvas';
 import IdentityAccess from './features/identity/IdentityAccess';
 import { useIdentity } from './features/identity/IdentityContext';
+import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
 import {
   addTreeToPersonalLibrary,
   fetchPersonalLibrary,
@@ -26,6 +27,7 @@ type AppView = 'public' | 'personal';
 export default function App() {
   const queryClient = useQueryClient();
   const {
+    generationCapabilities,
     session,
     sessionPending,
     openIdentityDialog,
@@ -35,6 +37,10 @@ export default function App() {
   const [selectedLibraryEntryId, setSelectedLibraryEntryId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [completion, setCompletion] = useState<{ node: SkillNode; nonce: number } | null>(null);
+  const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
+  const [generationSessionId, setGenerationSessionId] = useState<string | null>(
+    readGenerationSessionId,
+  );
   const accountPlayerId = session?.account.playerId ?? null;
   const personalTreeLibraryQueryKey = [
     'me',
@@ -105,6 +111,21 @@ export default function App() {
       setView('public');
     }
   }, [session, sessionPending, view]);
+
+  useEffect(() => {
+    if (!session && !sessionPending) {
+      setGenerationDialogOpen(false);
+      setGenerationSessionId(null);
+      writeGenerationSessionId(null);
+    }
+  }, [session, sessionPending]);
+
+  useEffect(() => {
+    if (session && generationCapabilities?.enabled && generationSessionId) {
+      setView('personal');
+      setGenerationDialogOpen(true);
+    }
+  }, [generationCapabilities?.enabled, generationSessionId, session]);
 
   const activeGraph =
     view === 'public' ? publicTree.data?.graph : personalTree.data?.graph;
@@ -184,6 +205,28 @@ export default function App() {
       return;
     }
     if (selectedPublicTreeId) addTree.mutate(selectedPublicTreeId);
+  };
+  const openTreeGenerator = () => {
+    if (!session) {
+      openIdentityDialog();
+      return;
+    }
+    if (!generationCapabilities?.enabled) return;
+    setView('personal');
+    setGenerationDialogOpen(true);
+  };
+  const rememberGenerationSession = (nextSessionId: string | null) => {
+    setGenerationSessionId(nextSessionId);
+    writeGenerationSessionId(nextSessionId);
+  };
+  const showGeneratedTree = (libraryEntryId: string) => {
+    setSelectedLibraryEntryId(libraryEntryId);
+    setSelectedNodeId(null);
+    setCompletion(null);
+    setView('personal');
+    setGenerationDialogOpen(false);
+    rememberGenerationSession(null);
+    void queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
   };
 
   if (publicCatalog.isPending) return <FullPageStatus message="正在读取公共技能树…" />;
@@ -288,6 +331,18 @@ export default function App() {
             )}
           </div>
 
+          {view === 'personal' &&
+            session &&
+            generationCapabilities?.enabled && (
+              <button
+                type="button"
+                onClick={openTreeGenerator}
+                className="mt-4 w-full rounded-xl border border-cyan-400/45 bg-cyan-400/10 px-3 py-2.5 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/15"
+              >
+                {generationSessionId ? '继续生成技能树' : '生成新技能树'}
+              </button>
+            )}
+
           {view === 'public' && selectedPublicTreeId && (
             <button
               type="button"
@@ -360,7 +415,39 @@ export default function App() {
           onComplete={() => setCompletion(null)}
         />
       )}
+
+      {generationDialogOpen &&
+        session &&
+        generationCapabilities?.enabled && (
+          <TreeGenerationDialog
+            capabilities={generationCapabilities}
+            csrfToken={session.csrfToken}
+            sessionId={generationSessionId}
+            onSessionIdChange={rememberGenerationSession}
+            onComplete={showGeneratedTree}
+            onClose={() => setGenerationDialogOpen(false)}
+          />
+        )}
     </div>
+  );
+}
+
+function readGenerationSessionId(): string | null {
+  const sessionId = new URLSearchParams(window.location.search).get(
+    'generationSession',
+  );
+  if (!sessionId || sessionId.length > 128) return null;
+  return sessionId;
+}
+
+function writeGenerationSessionId(sessionId: string | null) {
+  const url = new URL(window.location.href);
+  if (sessionId) url.searchParams.set('generationSession', sessionId);
+  else url.searchParams.delete('generationSession');
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${url.pathname}${url.search}${url.hash}`,
   );
 }
 

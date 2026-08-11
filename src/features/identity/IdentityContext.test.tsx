@@ -35,6 +35,12 @@ it('lets any child open the real dialog, observe registration, and log out', asy
   const user = userEvent.setup();
   api.fetchCapabilities.mockResolvedValue({
     identity: { registrationEnabled: true },
+    generation: {
+      enabled: true,
+      models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+      thinkingModes: ['enabled', 'disabled'],
+      reasoningEfforts: ['high', 'max'],
+    },
   });
   api.fetchCurrentSession.mockResolvedValue(null);
   api.registerIdentity.mockResolvedValue(authenticated);
@@ -43,6 +49,7 @@ it('lets any child open the real dialog, observe registration, and log out', asy
   renderIdentityProbe();
 
   expect(await screen.findByText('identity-enabled')).toBeInTheDocument();
+  expect(screen.getByText('generation-enabled')).toBeInTheDocument();
   expect(screen.getByText('anonymous')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'open identity dialog' }));
   expect(screen.getByRole('dialog')).toBeInTheDocument();
@@ -69,10 +76,21 @@ it('lets any child open the real dialog, observe registration, and log out', asy
 });
 
 function IdentityProbe() {
-  const { identityEnabled, session, openIdentityDialog, logout } = useIdentity();
+  const {
+    generationCapabilities,
+    identityEnabled,
+    session,
+    openIdentityDialog,
+    logout,
+  } = useIdentity();
   return (
     <div>
       <span>{identityEnabled ? 'identity-enabled' : 'identity-disabled'}</span>
+      <span>
+        {generationCapabilities?.enabled
+          ? 'generation-enabled'
+          : 'generation-disabled'}
+      </span>
       <span>{session?.account.username ?? 'anonymous'}</span>
       <button type="button" onClick={openIdentityDialog}>
         open identity dialog

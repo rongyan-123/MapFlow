@@ -14,7 +14,12 @@ import {
   logoutIdentity,
   registerIdentity,
 } from './identityClient';
-import type { IdentitySession, LoginInput, RegistrationInput } from './types';
+import type {
+  IdentityCapabilities,
+  IdentitySession,
+  LoginInput,
+  RegistrationInput,
+} from './types';
 
 export const CAPABILITIES_QUERY_KEY = ['identity', 'capabilities'] as const;
 export const SESSION_QUERY_KEY = ['identity', 'session'] as const;
@@ -25,6 +30,7 @@ type AuthenticationAction =
 
 interface IdentityContextValue {
   identityEnabled: boolean;
+  generationCapabilities: IdentityCapabilities['generation'] | null;
   session: IdentitySession | null;
   sessionPending: boolean;
   openIdentityDialog: () => void;
@@ -45,6 +51,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     retry: 1,
   });
   const identityEnabled = capabilities.data?.identity.registrationEnabled === true;
+  const generationCapabilities = capabilities.data?.generation ?? null;
   const sessionQuery = useQuery({
     queryKey: SESSION_QUERY_KEY,
     queryFn: fetchCurrentSession,
@@ -87,6 +94,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     <IdentityContext.Provider
       value={{
         identityEnabled,
+        generationCapabilities,
         session,
         sessionPending: capabilities.isPending || sessionQuery.isPending,
         openIdentityDialog,
