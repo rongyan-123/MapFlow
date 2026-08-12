@@ -374,8 +374,8 @@ describe('TreeGenerationDialog', () => {
         expect(screen.getByRole('button', { name: '免费重试生成' })).toBeInTheDocument(),
       { timeout: 3_500 },
     );
-    expect(screen.getByText('重新规划 3 次')).toBeInTheDocument();
-    expect(screen.getByText('细节调整 5 次')).toBeInTheDocument();
+    expect(screen.getByText('重新规划（剩余 3 次）')).toBeInTheDocument();
+    expect(screen.getByText('细节调整（剩余 5 次）')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '免费重试生成' }));
     await waitFor(() =>
       expect(generationApi.confirmPlatformTreeGeneration).toHaveBeenCalledWith(
@@ -385,6 +385,20 @@ describe('TreeGenerationDialog', () => {
         'csrf-secret',
       ),
     );
+  });
+
+  it('labels platform revision buttons with parenthesized server-owned remaining counts', async () => {
+    generationApi.readTreeGeneration.mockResolvedValue(platformPlanReadySession());
+    renderDialog({ sessionId: 'platform-session-1' });
+
+    expect(
+      await screen.findByRole('button', { name: '重新规划（剩余 3 次）' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '细节调整（剩余 5 次）' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重新规划 3 次' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '细节调整 5 次' })).not.toBeInTheDocument();
   });
 
   it('offers release after the first system failure and refreshes account entitlements', async () => {

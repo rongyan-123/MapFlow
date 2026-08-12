@@ -894,10 +894,10 @@ function SessionWorkflow({
         <div className="mt-4">
           <div className="mb-3 flex flex-wrap gap-2 text-[11px] text-slate-400">
             <span className="rounded-full border border-slate-700 px-3 py-1">
-              重新规划 {session.platformLimits?.replansRemaining ?? 0} 次
+              重新规划（剩余 {session.platformLimits?.replansRemaining ?? 0} 次）
             </span>
             <span className="rounded-full border border-slate-700 px-3 py-1">
-              细节调整 {session.platformLimits?.adjustmentsRemaining ?? 0} 次
+              细节调整（剩余 {session.platformLimits?.adjustmentsRemaining ?? 0} 次）
             </span>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
@@ -968,7 +968,7 @@ function SessionWorkflow({
             className={secondaryButtonClassName}
           >
             {session.fundingMode === 'platform'
-              ? `重新规划 ${session.platformLimits?.replansRemaining ?? 0} 次`
+              ? `重新规划（剩余 ${session.platformLimits?.replansRemaining ?? 0} 次）`
               : '重新规划'}
           </button>
           <button
@@ -982,7 +982,7 @@ function SessionWorkflow({
             className={secondaryButtonClassName}
           >
             {session.fundingMode === 'platform'
-              ? `细节调整 ${session.platformLimits?.adjustmentsRemaining ?? 0} 次`
+              ? `细节调整（剩余 ${session.platformLimits?.adjustmentsRemaining ?? 0} 次）`
               : '调整细节'}
           </button>
           {session.fundingMode === 'platform' && run?.status !== 'failed' && (
