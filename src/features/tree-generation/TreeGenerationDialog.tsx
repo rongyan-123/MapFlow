@@ -309,6 +309,13 @@ export default function TreeGenerationDialog({
     },
   });
 
+  const dismissTerminalSession = () => {
+    setCurrentSessionId(null);
+    setConfirmedRunId(null);
+    onSessionIdChange(null);
+    onClose();
+  };
+
   useEffect(() => {
     if (
       !activeRun ||
@@ -530,6 +537,7 @@ export default function TreeGenerationDialog({
                 onConfirm={confirm}
                 onAbandon={() => setConfirmationKind('abandon')}
                 onReleaseFailed={() => releaseFailedMutation.mutate()}
+                onDismissTerminal={dismissTerminalSession}
               />
             ) : (
               <WorkflowStatus message="生成会话暂时无法读取。" />
@@ -758,6 +766,7 @@ function SessionWorkflow({
   onConfirm,
   onAbandon,
   onReleaseFailed,
+  onDismissTerminal,
 }: {
   session: GenerationSession;
   run: GenerationRun | null;
@@ -773,6 +782,7 @@ function SessionWorkflow({
   onConfirm: () => void;
   onAbandon: () => void;
   onReleaseFailed: () => void;
+  onDismissTerminal: () => void;
 }) {
   if (session.state === 'succeeded') {
     return (
@@ -784,10 +794,19 @@ function SessionWorkflow({
   }
   if (session.state === 'failed') {
     return (
-      <WorkflowStatus
-        title="最终生成失败"
-        message="最终生成失败，本次次数已自动返还。"
-      />
+      <div>
+        <WorkflowStatus
+          title="最终生成失败"
+          message="最终生成失败，本次次数已自动返还。"
+        />
+        <button
+          type="button"
+          onClick={onDismissTerminal}
+          className={`${primaryButtonClassName} mt-4 w-full`}
+        >
+          关闭并重新开始
+        </button>
+      </div>
     );
   }
   if (session.state === 'abandoned') {

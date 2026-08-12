@@ -413,6 +413,7 @@ describe('TreeGenerationDialog', () => {
   });
 
   it('shows an automatically refunded terminal failure without retry or abandon actions', async () => {
+    const user = userEvent.setup();
     generationApi.readTreeGeneration.mockResolvedValue(platformTerminalFailureSession());
     const { props } = renderDialog({ sessionId: 'platform-session-1' });
 
@@ -427,6 +428,9 @@ describe('TreeGenerationDialog', () => {
     await waitFor(() =>
       expect(props.onPlatformEntitlementsChanged).toHaveBeenCalledTimes(1),
     );
+    await user.click(screen.getByRole('button', { name: '关闭并重新开始' }));
+    expect(props.onSessionIdChange).toHaveBeenCalledWith(null);
+    expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 
   it('keeps BYOK available when platform funding is disabled', () => {
