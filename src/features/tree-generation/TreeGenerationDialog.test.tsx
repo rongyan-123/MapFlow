@@ -291,6 +291,7 @@ function planReadySession(version = 1): GenerationSession {
   return {
     generationSessionId: 'session-1',
     input: generationInput,
+    fundingMode: 'byok',
     state: 'plan_ready',
     latestPlan: {
       version,
@@ -310,16 +311,19 @@ function planReadySession(version = 1): GenerationSession {
     latestRun: null,
     producedTreeId: null,
     producedLibraryEntryId: null,
+    platformLimits: null,
   };
 }
 
 function needsInputSession(): GenerationSession {
   const session = planReadySession();
+  const latestPlan = session.latestPlan;
+  if (!latestPlan) throw new Error('test fixture requires a plan');
   return {
     ...session,
     state: 'needs_input',
     latestPlan: {
-      ...session.latestPlan,
+      ...latestPlan,
       outcome: { outcome: 'needs_input', question: '每周可以投入多少时间？' },
     },
   };

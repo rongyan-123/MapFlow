@@ -2,12 +2,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   TreeGenerationApiError,
   adjustTreeGeneration,
+  abandonPlatformTreeGeneration,
+  adjustPlatformTreeGeneration,
   clarifyTreeGeneration,
+  clarifyPlatformTreeGeneration,
   confirmTreeGeneration,
+  confirmPlatformTreeGeneration,
+  createPlatformTreeGeneration,
   createTreeGeneration,
+  readPlatformGenerationEntitlements,
   readGenerationRun,
   readTreeGeneration,
+  releaseFailedPlatformTreeGeneration,
   replanTreeGeneration,
+  replanPlatformTreeGeneration,
 } from './treeGenerationClient';
 import type { GenerationInput, ModelAccess } from './types';
 
@@ -214,6 +222,162 @@ describe('treeGenerationClient', () => {
     expect(localStorage.getItem(modelAccess.apiKey)).toBeNull();
     expect(sessionStorage.getItem(modelAccess.apiKey)).toBeNull();
   });
+
+  it('creates and revises platform sessions without ever serializing model controls', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(platformPlanningSession(), 202))
+      .mockResolvedValueOnce(jsonResponse(platformPlanReadySession(2, 'replan')))
+      .mockResolvedValueOnce(jsonResponse(platformPlanReadySession(3, 'adjust')))
+      .mockResolvedValueOnce(jsonResponse(platformPlanReadySession(4, 'clarification')))
+      .mockResolvedValueOnce(jsonResponse(runDocument('queued'), 202));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      createPlatformTreeGeneration(input, 'csrf-token'),
+    ).resolves.toMatchObject({
+      fundingMode: 'platform',
+      state: 'planning',
+      latestPlan: null,
+    });
+    await replanPlatformTreeGeneration(
+      'session/id',
+      1,
+      '重新设计路线',
+      'csrf-token',
+    );
+    await adjustPlatformTreeGeneration(
+      'session/id',
+      2,
+      '提前部署',
+      'csrf-token',
+    );
+    await clarifyPlatformTreeGeneration(
+      'session/id',
+      3,
+      '每周八小时',
+      'csrf-token',
+    );
+    await confirmPlatformTreeGeneration(
+      'session/id',
+      4,
+      'platform-confirmation-0001',
+      'csrf-token',
+    );
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
+      ...input,
+      fundingMode: 'platform',
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({
+      expectedPlanVersion: 1,
+      feedback: '重新设计路线',
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[3][1]?.body))).toEqual({
+      expectedPlanVersion: 3,
+      answer: '每周八小时',
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[4][1]?.body))).toEqual({
+      expectedPlanVersion: 4,
+    });
+    for (const [, request] of fetchMock.mock.calls) {
+      const serialized = String(request?.body ?? '');
+      for (const forbidden of [
+        'apiKey',
+        'modelAccess',
+        'model',
+        'thinking',
+        'reasoningEffort',
+        modelAccess.apiKey,
+      ]) {
+        expect(serialized).not.toContain(forbidden);
+      }
+    }
+  });
+
+  it('reads strict entitlement summaries and sends explicit empty lifecycle commands', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          totalGranted: 3,
+          available: 2,
+          reserved: 1,
+          consumed: 0,
+          activePlatformSessionId: '71000000-0000-4000-8000-000000000001',
+          platformModeAvailable: true,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(platformAbandonedSession()))
+      .mockResolvedValueOnce(jsonResponse(platformFailedSession()));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(readPlatformGenerationEntitlements()).resolves.toEqual({
+      totalGranted: 3,
+      available: 2,
+      reserved: 1,
+      consumed: 0,
+      activePlatformSessionId: '71000000-0000-4000-8000-000000000001',
+      platformModeAvailable: true,
+    });
+    await expect(
+      abandonPlatformTreeGeneration('session/id', 'csrf-token'),
+    ).resolves.toMatchObject({ state: 'abandoned' });
+    await expect(
+      releaseFailedPlatformTreeGeneration('session/id', 'csrf-token'),
+    ).resolves.toMatchObject({ state: 'failed' });
+
+    expect(fetchMock.mock.calls[0]).toEqual([
+      '/api/me/platform-generation-entitlements',
+      { credentials: 'same-origin', headers: { Accept: 'application/json' } },
+    ]);
+    for (const call of fetchMock.mock.calls.slice(1)) {
+      expect(call[0]).toMatch(/session%2Fid\/(abandon|release-failed)$/);
+      expect(JSON.parse(String(call[1]?.body))).toEqual({});
+    }
+  });
+
+  it('accepts every recoverable platform state and rejects inconsistent funding payloads', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(platformPlanningSession()))
+      .mockResolvedValueOnce(jsonResponse(platformFailedSession()))
+      .mockResolvedValueOnce(jsonResponse(platformAbandonedSession()))
+      .mockResolvedValueOnce(
+        jsonResponse({ ...platformPlanningSession(), funding_mode: 'byok' }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ ...platformPlanReadySession(), platform_limits: null }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          totalGranted: 3,
+          available: 4,
+          reserved: 0,
+          consumed: 0,
+          activePlatformSessionId: null,
+          platformModeAvailable: true,
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(readTreeGeneration('planning')).resolves.toMatchObject({
+      state: 'planning',
+      latestPlan: null,
+    });
+    await expect(readTreeGeneration('failed')).resolves.toMatchObject({
+      state: 'failed',
+    });
+    await expect(readTreeGeneration('abandoned')).resolves.toMatchObject({
+      state: 'abandoned',
+    });
+    await expect(readTreeGeneration('bad-byok')).rejects.toMatchObject({
+      code: 'generation.invalid_response',
+    });
+    await expect(readTreeGeneration('missing-limits')).rejects.toMatchObject({
+      code: 'generation.invalid_response',
+    });
+    await expect(readPlatformGenerationEntitlements()).rejects.toMatchObject({
+      code: 'generation.invalid_response',
+    });
+  });
 });
 
 function planReadySession(version = 1, changeKind = 'initial') {
@@ -225,6 +389,7 @@ function planReadySession(version = 1, changeKind = 'initial') {
       goal_description: input.goalDescription,
       learner_context_summary: input.learnerContextSummary,
     },
+    funding_mode: 'byok',
     state: 'plan_ready',
     latest_plan: {
       version,
@@ -249,6 +414,50 @@ function planReadySession(version = 1, changeKind = 'initial') {
     latest_run: null,
     produced_tree_id: null,
     produced_library_entry_id: null,
+    platform_limits: null,
+  };
+}
+
+function platformPlanningSession() {
+  return {
+    ...planReadySession(),
+    funding_mode: 'platform',
+    state: 'planning',
+    latest_plan: null,
+    platform_limits: platformLimits(),
+  };
+}
+
+function platformPlanReadySession(version = 1, changeKind = 'initial') {
+  return {
+    ...planReadySession(version, changeKind),
+    funding_mode: 'platform',
+    platform_limits: platformLimits(),
+  };
+}
+
+function platformFailedSession() {
+  return {
+    ...platformPlanReadySession(),
+    state: 'failed',
+    latest_run: {
+      ...runDocument('failed'),
+      error_code: 'generation.provider_unavailable',
+    },
+    platform_limits: { ...platformLimits(), formal_run_attempts_remaining: 0 },
+  };
+}
+
+function platformAbandonedSession() {
+  return { ...platformPlanReadySession(), state: 'abandoned' };
+}
+
+function platformLimits() {
+  return {
+    replans_remaining: 3,
+    adjustments_remaining: 5,
+    clarification_questions_remaining: 1,
+    formal_run_attempts_remaining: 2,
   };
 }
 
@@ -264,14 +473,14 @@ function needsInputSession() {
   };
 }
 
-function runDocument(status: 'queued' | 'running') {
+function runDocument(status: 'queued' | 'running' | 'failed') {
   return {
     run_id: '72000000-0000-4000-8000-000000000001',
     status,
     stage: status === 'running' ? 'bridging' : null,
     message: status === 'running' ? '正在生成学习路径' : null,
     progress: status === 'running' ? 0.5 : 0,
-    error_code: null,
+    error_code: status === 'failed' ? 'generation.provider_unavailable' : null,
     usage: usageDocument(),
   };
 }

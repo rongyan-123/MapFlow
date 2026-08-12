@@ -129,7 +129,9 @@ export default function TreeGenerationDialog({
       kind: RevisionKind;
       feedback: string;
     }) => {
-      if (!session || !currentSessionId) throw new Error('生成会话尚未加载。');
+      if (!session?.latestPlan || !currentSessionId) {
+        throw new Error('生成规划尚未加载。');
+      }
       const access = modelAccess();
       return kind === 'replan'
         ? replanTreeGeneration(
@@ -156,7 +158,9 @@ export default function TreeGenerationDialog({
   });
   const clarificationMutation = useMutation({
     mutationFn: () => {
-      if (!session || !currentSessionId) throw new Error('生成会话尚未加载。');
+      if (!session?.latestPlan || !currentSessionId) {
+        throw new Error('生成规划尚未加载。');
+      }
       return clarifyTreeGeneration(
         currentSessionId,
         session.latestPlan.version,
@@ -173,7 +177,9 @@ export default function TreeGenerationDialog({
   });
   const confirmMutation = useMutation({
     mutationFn: () => {
-      if (!session || !currentSessionId) throw new Error('生成会话尚未加载。');
+      if (!session?.latestPlan || !currentSessionId) {
+        throw new Error('生成规划尚未加载。');
+      }
       return confirmTreeGeneration(
         currentSessionId,
         session.latestPlan.version,
@@ -603,6 +609,19 @@ function SessionWorkflow({
     return <RunProgress run={run} />;
   }
 
+  if (!session.latestPlan) {
+    return (
+      <WorkflowStatus
+        title={session.state === 'planning' ? '正在准备规划' : '规划不可用'}
+        message={
+          session.state === 'planning'
+            ? '服务器正在后台准备技能树规划，请稍候。'
+            : '当前生成会话没有可用的规划。'
+        }
+      />
+    );
+  }
+
   const outcome = session.latestPlan.outcome;
   if (outcome.outcome === 'needs_input') {
     return (
@@ -709,14 +728,16 @@ function SessionWorkflow({
 }
 
 function PlanCard({ session }: { session: GenerationSession }) {
-  const outcome = session.latestPlan.outcome;
+  const plan = session.latestPlan;
+  if (!plan) return null;
+  const outcome = plan.outcome;
   if (outcome.outcome !== 'plan_ready') return null;
   return (
     <section className="rounded-xl border border-cyan-400/25 bg-cyan-400/5 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">
-            第 {session.latestPlan.version} 版规划
+            第 {plan.version} 版规划
           </p>
           <h3 className="mt-1 text-base font-semibold text-slate-100">
             {outcome.normalizedSpec.topic} 学习路线

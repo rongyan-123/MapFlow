@@ -1,5 +1,6 @@
 import type {
   GenerationInput,
+  GenerationFundingMode,
   GenerationPlan,
   GenerationPlanStage,
   GenerationRun,
@@ -8,6 +9,8 @@ import type {
   GenerationSessionState,
   GenerationUsage,
   ModelAccess,
+  PlatformGenerationEntitlementSummary,
+  PlatformGenerationLimits,
   PlanningChangeKind,
   PlanningOutcome,
 } from './types';
@@ -44,6 +47,25 @@ export async function createTreeGeneration(
   return parseGenerationSession(await readJson(response));
 }
 
+export async function createPlatformTreeGeneration(
+  input: GenerationInput,
+  csrfToken: string,
+): Promise<GenerationSession> {
+  const response = await request(
+    '/api/me/tree-generations',
+    modelRequest(csrfToken, { ...input, fundingMode: 'platform' }),
+  );
+  return parseGenerationSession(await readJson(response));
+}
+
+export async function readPlatformGenerationEntitlements(): Promise<PlatformGenerationEntitlementSummary> {
+  const response = await request(
+    '/api/me/platform-generation-entitlements',
+    JSON_GET,
+  );
+  return parsePlatformGenerationEntitlements(await readJson(response));
+}
+
 export async function readTreeGeneration(
   generationSessionId: string,
 ): Promise<GenerationSession> {
@@ -67,6 +89,20 @@ export async function replanTreeGeneration(
   );
 }
 
+export async function replanPlatformTreeGeneration(
+  generationSessionId: string,
+  expectedPlanVersion: number,
+  feedback: string,
+  csrfToken: string,
+): Promise<GenerationSession> {
+  return revisePlatformTreeGeneration(
+    generationSessionId,
+    'replan',
+    { expectedPlanVersion, feedback },
+    csrfToken,
+  );
+}
+
 export async function adjustTreeGeneration(
   generationSessionId: string,
   expectedPlanVersion: number,
@@ -83,6 +119,20 @@ export async function adjustTreeGeneration(
   );
 }
 
+export async function adjustPlatformTreeGeneration(
+  generationSessionId: string,
+  expectedPlanVersion: number,
+  feedback: string,
+  csrfToken: string,
+): Promise<GenerationSession> {
+  return revisePlatformTreeGeneration(
+    generationSessionId,
+    'adjust',
+    { expectedPlanVersion, feedback },
+    csrfToken,
+  );
+}
+
 export async function clarifyTreeGeneration(
   generationSessionId: string,
   expectedPlanVersion: number,
@@ -95,6 +145,20 @@ export async function clarifyTreeGeneration(
     'clarify',
     { expectedPlanVersion, answer, modelAccess },
     modelAccess.apiKey,
+    csrfToken,
+  );
+}
+
+export async function clarifyPlatformTreeGeneration(
+  generationSessionId: string,
+  expectedPlanVersion: number,
+  answer: string,
+  csrfToken: string,
+): Promise<GenerationSession> {
+  return revisePlatformTreeGeneration(
+    generationSessionId,
+    'clarify',
+    { expectedPlanVersion, answer },
     csrfToken,
   );
 }
@@ -125,6 +189,41 @@ export async function confirmTreeGeneration(
   return parseGenerationRun(await readJson(response));
 }
 
+export async function confirmPlatformTreeGeneration(
+  generationSessionId: string,
+  expectedPlanVersion: number,
+  idempotencyKey: string,
+  csrfToken: string,
+): Promise<GenerationRun> {
+  const path = `/api/me/tree-generations/${encodeURIComponent(generationSessionId)}/confirm`;
+  const response = await request(path, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({ expectedPlanVersion }),
+  });
+  return parseGenerationRun(await readJson(response));
+}
+
+export async function abandonPlatformTreeGeneration(
+  generationSessionId: string,
+  csrfToken: string,
+): Promise<GenerationSession> {
+  return platformLifecycleCommand(generationSessionId, 'abandon', csrfToken);
+}
+
+export async function releaseFailedPlatformTreeGeneration(
+  generationSessionId: string,
+  csrfToken: string,
+): Promise<GenerationSession> {
+  return platformLifecycleCommand(generationSessionId, 'release-failed', csrfToken);
+}
+
 export async function readGenerationRun(
   generationSessionId: string,
   runId: string,
@@ -145,6 +244,29 @@ async function reviseTreeGeneration(
   const session = encodeURIComponent(generationSessionId);
   const path = `/api/me/tree-generations/${session}/${action}`;
   const response = await request(path, modelRequest(csrfToken, body), [apiKey]);
+  return parseGenerationSession(await readJson(response));
+}
+
+async function revisePlatformTreeGeneration(
+  generationSessionId: string,
+  action: 'replan' | 'adjust' | 'clarify',
+  body: object,
+  csrfToken: string,
+): Promise<GenerationSession> {
+  const session = encodeURIComponent(generationSessionId);
+  const path = `/api/me/tree-generations/${session}/${action}`;
+  const response = await request(path, modelRequest(csrfToken, body));
+  return parseGenerationSession(await readJson(response));
+}
+
+async function platformLifecycleCommand(
+  generationSessionId: string,
+  action: 'abandon' | 'release-failed',
+  csrfToken: string,
+): Promise<GenerationSession> {
+  const session = encodeURIComponent(generationSessionId);
+  const path = `/api/me/tree-generations/${session}/${action}`;
+  const response = await request(path, modelRequest(csrfToken, {}));
   return parseGenerationSession(await readJson(response));
 }
 
@@ -228,20 +350,83 @@ function parseGenerationSession(value: unknown): GenerationSession {
   if (
     !isRecord(value) ||
     typeof value.generation_session_id !== 'string' ||
+    !isGenerationFundingMode(value.funding_mode) ||
     !isGenerationSessionState(value.state) ||
     !isNullableString(value.produced_tree_id) ||
     !isNullableString(value.produced_library_entry_id)
   ) {
     throw invalidResponseError();
   }
+  const latestPlan =
+    value.latest_plan === null ? null : parseGenerationPlan(value.latest_plan);
+  const platformLimits =
+    value.platform_limits === null
+      ? null
+      : parsePlatformGenerationLimits(value.platform_limits);
+  if (
+    (value.funding_mode === 'byok' && platformLimits !== null) ||
+    (value.funding_mode === 'platform' && platformLimits === null) ||
+    (value.state === 'planning' &&
+      (value.funding_mode !== 'platform' || latestPlan !== null)) ||
+    (!['planning', 'failed'].includes(value.state) && latestPlan === null)
+  ) {
+    throw invalidResponseError();
+  }
   return {
     generationSessionId: value.generation_session_id,
     input: parseGenerationInput(value.input),
+    fundingMode: value.funding_mode,
     state: value.state,
-    latestPlan: parseGenerationPlan(value.latest_plan),
+    latestPlan,
     latestRun: value.latest_run === null ? null : parseGenerationRun(value.latest_run),
     producedTreeId: value.produced_tree_id,
     producedLibraryEntryId: value.produced_library_entry_id,
+    platformLimits,
+  };
+}
+
+function parsePlatformGenerationEntitlements(
+  value: unknown,
+): PlatformGenerationEntitlementSummary {
+  if (
+    !isRecord(value) ||
+    !isNonNegativeInteger(value.totalGranted) ||
+    !isNonNegativeInteger(value.available) ||
+    !isNonNegativeInteger(value.reserved) ||
+    !isNonNegativeInteger(value.consumed) ||
+    !isNullableString(value.activePlatformSessionId) ||
+    typeof value.platformModeAvailable !== 'boolean' ||
+    value.reserved > 1 ||
+    value.available + value.reserved + value.consumed !== value.totalGranted ||
+    (value.reserved === 1) !== (value.activePlatformSessionId !== null)
+  ) {
+    throw invalidResponseError();
+  }
+  return {
+    totalGranted: value.totalGranted,
+    available: value.available,
+    reserved: value.reserved,
+    consumed: value.consumed,
+    activePlatformSessionId: value.activePlatformSessionId,
+    platformModeAvailable: value.platformModeAvailable,
+  };
+}
+
+function parsePlatformGenerationLimits(value: unknown): PlatformGenerationLimits {
+  if (
+    !isRecord(value) ||
+    !isBoundedInteger(value.replans_remaining, 3) ||
+    !isBoundedInteger(value.adjustments_remaining, 5) ||
+    !isBoundedInteger(value.clarification_questions_remaining, 1) ||
+    !isBoundedInteger(value.formal_run_attempts_remaining, 2)
+  ) {
+    throw invalidResponseError();
+  }
+  return {
+    replansRemaining: value.replans_remaining,
+    adjustmentsRemaining: value.adjustments_remaining,
+    clarificationQuestionsRemaining: value.clarification_questions_remaining,
+    formalRunAttemptsRemaining: value.formal_run_attempts_remaining,
   };
 }
 
@@ -397,6 +582,10 @@ function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }
 
+function isBoundedInteger(value: unknown, maximum: number): value is number {
+  return isNonNegativeInteger(value) && value <= maximum;
+}
+
 function isFiniteProgress(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
 }
@@ -412,12 +601,19 @@ function isPlanningChangeKind(value: unknown): value is PlanningChangeKind {
 
 function isGenerationSessionState(value: unknown): value is GenerationSessionState {
   return (
+    value === 'planning' ||
     value === 'needs_input' ||
     value === 'plan_ready' ||
     value === 'queued' ||
     value === 'running' ||
-    value === 'succeeded'
+    value === 'succeeded' ||
+    value === 'failed' ||
+    value === 'abandoned'
   );
+}
+
+function isGenerationFundingMode(value: unknown): value is GenerationFundingMode {
+  return value === 'byok' || value === 'platform';
 }
 
 function isGenerationRunStatus(value: unknown): value is GenerationRunStatus {

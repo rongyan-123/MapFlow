@@ -1,6 +1,7 @@
 export type DeepSeekModel = 'deepseek-v4-flash' | 'deepseek-v4-pro';
 export type ThinkingMode = 'enabled' | 'disabled';
 export type ReasoningEffort = 'low' | 'high' | 'max';
+export type GenerationFundingMode = 'byok' | 'platform';
 
 export interface ModelAccess {
   apiKey: string;
@@ -64,19 +65,40 @@ export interface GenerationRun {
   usage: GenerationUsage;
 }
 
+export interface PlatformGenerationLimits {
+  replansRemaining: number;
+  adjustmentsRemaining: number;
+  clarificationQuestionsRemaining: number;
+  formalRunAttemptsRemaining: number;
+}
+
+export interface PlatformGenerationEntitlementSummary {
+  totalGranted: number;
+  available: number;
+  reserved: number;
+  consumed: number;
+  activePlatformSessionId: string | null;
+  platformModeAvailable: boolean;
+}
+
 export type GenerationSessionState =
+  | 'planning'
   | 'needs_input'
   | 'plan_ready'
   | 'queued'
   | 'running'
-  | 'succeeded';
+  | 'succeeded'
+  | 'failed'
+  | 'abandoned';
 
 export interface GenerationSession {
   generationSessionId: string;
   input: GenerationInput;
+  fundingMode: GenerationFundingMode;
   state: GenerationSessionState;
-  latestPlan: GenerationPlan;
+  latestPlan: GenerationPlan | null;
   latestRun: GenerationRun | null;
   producedTreeId: string | null;
   producedLibraryEntryId: string | null;
+  platformLimits: PlatformGenerationLimits | null;
 }
