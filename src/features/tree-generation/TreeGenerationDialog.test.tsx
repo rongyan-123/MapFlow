@@ -25,8 +25,8 @@ vi.mock('./treeGenerationClient', () => generationApi);
 const capabilities: IdentityCapabilities['generation'] = {
   enabled: true,
   models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
-  thinkingModes: ['enabled', 'disabled'],
-  reasoningEfforts: ['high', 'max'],
+  thinkingModes: ['disabled', 'enabled'],
+  reasoningEfforts: ['low', 'high', 'max'],
 };
 
 const generationInput: GenerationInput = {
@@ -57,6 +57,17 @@ describe('TreeGenerationDialog', () => {
     expect(
       screen.getByRole('option', { name: 'deepseek-v4-pro' }),
     ).toBeInTheDocument();
+    const apiKeyInput = screen.getByLabelText('DeepSeek API Key');
+    expect(apiKeyInput).toHaveValue('');
+    expect(apiKeyInput).toHaveAttribute('autocomplete', 'new-password');
+    expect(apiKeyInput).toHaveAttribute('name', 'mapflow-deepseek-api-key');
+    expect(screen.getByLabelText('思考模式')).toHaveValue('disabled');
+    expect(screen.getByLabelText('思考强度')).toHaveValue('low');
+    expect(screen.getByLabelText('思考强度')).toBeDisabled();
+    expect(
+      screen.getByText(/职业或应用方向会调整节点重点、先后顺序和建议学习深度/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/High 和 Max 通常更慢、消耗更多 Token/)).toBeInTheDocument();
 
     await fillGenerationForm(user);
     await user.type(screen.getByLabelText('DeepSeek API Key'), 'sk-memory-only');
@@ -68,8 +79,8 @@ describe('TreeGenerationDialog', () => {
         {
           apiKey: 'sk-memory-only',
           model: 'deepseek-v4-flash',
-          thinking: 'enabled',
-          reasoningEffort: 'high',
+          thinking: 'disabled',
+          reasoningEffort: 'low',
         },
         'csrf-secret',
       ),
@@ -84,6 +95,19 @@ describe('TreeGenerationDialog', () => {
     renderDialog({ sessionId: 'session-1' });
     expect(await screen.findByText('基础阶段')).toBeInTheDocument();
     expect(screen.getByLabelText('DeepSeek API Key')).toHaveValue('');
+  });
+
+  it('rejects an empty API key locally with a specific explanation', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await fillGenerationForm(user);
+    await user.click(screen.getByRole('button', { name: '生成规划' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '请输入 DeepSeek API Key。',
+    );
+    expect(generationApi.createTreeGeneration).not.toHaveBeenCalled();
   });
 
   it('keeps replan and detail adjustment as distinct versioned actions', async () => {
@@ -190,6 +214,39 @@ describe('TreeGenerationDialog', () => {
       expect(props.onComplete).toHaveBeenCalledWith('library-entry-1'),
     );
   });
+
+  it('shows animated background progress and minimizes without implying cancellation', async () => {
+    const user = userEvent.setup();
+    generationApi.readTreeGeneration.mockResolvedValue(runningSession());
+    generationApi.readGenerationRun.mockResolvedValue(run('running'));
+    const { props } = renderDialog({ sessionId: 'session-1' });
+
+    expect(await screen.findByRole('status', { name: '技能树生成处理中' })).toBeInTheDocument();
+    expect(screen.getByText(/预计需要 3–5 分钟/)).toBeInTheDocument();
+    expect(screen.getByLabelText('生成进度动画')).toHaveClass('animate-spin');
+    expect(screen.queryByLabelText(/关闭技能树生成器/)).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', {
+        name: '最小化技能树生成器（后台任务继续）',
+      }),
+    );
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('translates a failed background run into an actionable API-key message', async () => {
+    const failedRun = { ...run('failed'), errorCode: 'generation.api_key_invalid' };
+    generationApi.readTreeGeneration.mockResolvedValue(
+      failedSession('generation.api_key_invalid'),
+    );
+    generationApi.readGenerationRun.mockResolvedValue(failedRun);
+    renderDialog({ sessionId: 'session-1' });
+
+    expect(
+      await screen.findByText('DeepSeek API Key 无效或已失效，请检查后重新确认生成。'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/generation\.api_key_invalid/)).not.toBeInTheDocument();
+  });
 });
 
 function renderDialog({ sessionId = null }: { sessionId?: string | null } = {}) {
@@ -275,6 +332,21 @@ function succeededSession(): GenerationSession {
     latestRun: run('succeeded'),
     producedTreeId: 'tree-1',
     producedLibraryEntryId: 'library-entry-1',
+  };
+}
+
+function runningSession(): GenerationSession {
+  return {
+    ...planReadySession(),
+    state: 'running',
+    latestRun: run('running'),
+  };
+}
+
+function failedSession(errorCode: string): GenerationSession {
+  return {
+    ...planReadySession(),
+    latestRun: { ...run('failed'), errorCode },
   };
 }
 

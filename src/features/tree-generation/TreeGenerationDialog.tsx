@@ -60,10 +60,14 @@ export default function TreeGenerationDialog({
     capabilities.models[0] ?? 'deepseek-v4-flash',
   );
   const [thinking, setThinking] = useState<ThinkingMode>(
-    capabilities.thinkingModes[0] ?? 'enabled',
+    capabilities.thinkingModes.includes('disabled')
+      ? 'disabled'
+      : (capabilities.thinkingModes[0] ?? 'disabled'),
   );
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>(
-    capabilities.reasoningEfforts[0] ?? 'high',
+    capabilities.reasoningEfforts.includes('low')
+      ? 'low'
+      : (capabilities.reasoningEfforts[0] ?? 'high'),
   );
   const [clarification, setClarification] = useState('');
   const [revisionKind, setRevisionKind] = useState<RevisionKind | null>(null);
@@ -307,12 +311,13 @@ export default function TreeGenerationDialog({
           </div>
           <button
             type="button"
-            aria-label="关闭技能树生成器"
+            aria-label="最小化技能树生成器（后台任务继续）"
+            title="最小化；已提交的后台任务会继续运行"
             disabled={synchronousPending}
             onClick={onClose}
             className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40"
           >
-            ×
+            −
           </button>
         </header>
 
@@ -408,7 +413,14 @@ function ModelConfiguration({
         <Field label="DeepSeek API Key">
           <input
             type="password"
-            autoComplete="off"
+            name="mapflow-deepseek-api-key"
+            autoComplete="new-password"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            data-1p-ignore="true"
+            data-lpignore="true"
+            placeholder="未填写"
             maxLength={512}
             value={apiKey}
             onChange={(event) => onApiKeyChange(event.target.value)}
@@ -443,6 +455,7 @@ function ModelConfiguration({
         </Field>
         <Field label="思考强度">
           <select
+            disabled={thinking === 'disabled'}
             value={reasoningEffort}
             onChange={(event) =>
               onReasoningEffortChange(event.target.value as ReasoningEffort)
@@ -457,6 +470,10 @@ function ModelConfiguration({
           </select>
         </Field>
       </div>
+      <p className="mt-3 text-[11px] leading-5 text-slate-500">
+        默认关闭思考以缩短等待时间；开启后可选 Low、High、Max。High 和 Max
+        通常更慢、消耗更多 Token。
+      </p>
     </section>
   );
 }
@@ -479,8 +496,12 @@ function InitialGenerationForm({
         <p className="mt-1 text-xs text-slate-500">四项资料会一次性提交给规划模型。</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="想学习什么知识？">
+        <Field
+          label="想学习什么知识？"
+          description="用于确定技能树的主题边界，避免范围过宽或过窄。"
+        >
           <textarea
+            aria-label="想学习什么知识？"
             required
             maxLength={2000}
             rows={3}
@@ -489,8 +510,12 @@ function InitialGenerationForm({
             className={inputClassName}
           />
         </Field>
-        <Field label="希望走什么职业或应用方向？">
+        <Field
+          label="希望走什么职业或应用方向？"
+          description="职业或应用方向会调整节点重点、先后顺序和建议学习深度。"
+        >
           <textarea
+            aria-label="希望走什么职业或应用方向？"
             required
             maxLength={2000}
             rows={3}
@@ -499,8 +524,12 @@ function InitialGenerationForm({
             className={inputClassName}
           />
         </Field>
-        <Field label="希望最终达到什么目标？">
+        <Field
+          label="希望最终达到什么目标？"
+          description="用于设定路线终点、可交付成果和完成标准。"
+        >
           <textarea
+            aria-label="希望最终达到什么目标？"
             required
             maxLength={2000}
             rows={4}
@@ -511,8 +540,12 @@ function InitialGenerationForm({
             className={inputClassName}
           />
         </Field>
-        <Field label="当前基础、限制和学习偏好是什么？">
+        <Field
+          label="当前基础、限制和学习偏好是什么？"
+          description="用于跳过已掌握内容，并适配你的时间、前置知识和练习方式。"
+        >
           <textarea
+            aria-label="当前基础、限制和学习偏好是什么？"
             required
             maxLength={2000}
             rows={4}
@@ -603,7 +636,7 @@ function SessionWorkflow({
     <div>
       {run?.status === 'failed' && (
         <p role="alert" className="mb-4 rounded-lg border border-rose-500/25 bg-rose-500/5 p-3 text-xs text-rose-300">
-          上一次正式生成失败（{run.errorCode ?? 'generation.failed'}）。你可以重新输入密钥后再次确认。
+          {generationRunErrorMessage(run.errorCode)}
         </p>
       )}
       <PlanCard session={session} />
@@ -720,16 +753,31 @@ function PlanCard({ session }: { session: GenerationSession }) {
 function RunProgress({ run }: { run: GenerationRun | null }) {
   const progress = Math.round((run?.progress ?? 0) * 100);
   return (
-    <section className="rounded-xl border border-cyan-400/25 bg-cyan-400/5 p-5">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">
-        {run?.status === 'running' ? '正在生成' : '已进入队列'}
-      </p>
-      <h3 className="mt-2 text-base font-semibold text-slate-100">
-        {run?.message ?? '服务器正在后台处理，关闭页面不会中断任务。'}
-      </h3>
+    <section
+      role="status"
+      aria-label="技能树生成处理中"
+      className="rounded-xl border border-cyan-400/25 bg-cyan-400/5 p-5"
+    >
+      <div className="flex items-start gap-3">
+        <span
+          aria-label="生成进度动画"
+          className="mt-0.5 inline-block h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-cyan-300/25 border-t-cyan-300"
+        />
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">
+            {run?.status === 'running' ? '正在生成' : '已进入队列'}
+          </p>
+          <h3 className="mt-2 text-base font-semibold text-slate-100">
+            {run?.message ?? '服务器正在后台处理，最小化或关闭页面不会中断任务。'}
+          </h3>
+          <p className="mt-2 text-xs leading-5 text-slate-500">
+            预计需要 3–5 分钟；复杂主题、High 或 Max 思考强度可能需要更久。
+          </p>
+        </div>
+      </div>
       <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
         <div
-          className="h-full rounded-full bg-cyan-300 transition-all"
+          className="h-full animate-pulse rounded-full bg-gradient-to-r from-cyan-500 via-cyan-200 to-cyan-400 transition-all duration-700"
           style={{ width: `${progress}%` }}
         />
       </div>
@@ -758,10 +806,23 @@ function WorkflowStatus({
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  description,
+  children,
+}: {
+  label: string;
+  description?: string;
+  children: ReactNode;
+}) {
   return (
     <label className="block text-xs font-medium text-slate-300">
-      {label}
+      <span className="block">{label}</span>
+      {description && (
+        <span className="mt-1 block text-[11px] font-normal leading-5 text-slate-500">
+          （{description}）
+        </span>
+      )}
       {children}
     </label>
   );
@@ -785,6 +846,21 @@ function normalizeInput(input: GenerationInput): GenerationInput {
     goalDescription: input.goalDescription.trim(),
     learnerContextSummary: input.learnerContextSummary.trim(),
   };
+}
+
+function generationRunErrorMessage(errorCode: string | null): string {
+  switch (errorCode) {
+    case 'generation.api_key_invalid':
+      return 'DeepSeek API Key 无效或已失效，请检查后重新确认生成。';
+    case 'generation.insufficient_balance':
+      return 'DeepSeek 账户余额不足，请充值或更换 API Key 后重新确认生成。';
+    case 'generation.rate_limited':
+      return 'DeepSeek 请求过于频繁，请稍后重新确认生成。';
+    case 'generation.invalid_model_output':
+      return 'DeepSeek 返回的内容格式异常，请重新确认生成。';
+    default:
+      return '上一次正式生成失败，请检查模型配置后重新确认生成。';
+  }
 }
 
 function generationSessionQueryKey(sessionId: string | null) {

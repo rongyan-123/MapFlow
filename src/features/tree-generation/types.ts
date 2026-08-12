@@ -1,6 +1,6 @@
 export type DeepSeekModel = 'deepseek-v4-flash' | 'deepseek-v4-pro';
 export type ThinkingMode = 'enabled' | 'disabled';
-export type ReasoningEffort = 'high' | 'max';
+export type ReasoningEffort = 'low' | 'high' | 'max';
 
 export interface ModelAccess {
   apiKey: string;

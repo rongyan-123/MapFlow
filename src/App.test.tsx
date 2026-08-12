@@ -146,8 +146,8 @@ beforeEach(() => {
     generation: {
       enabled: true,
       models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
-      thinkingModes: ['enabled', 'disabled'],
-      reasoningEfforts: ['high', 'max'],
+      thinkingModes: ['disabled', 'enabled'],
+      reasoningEfforts: ['low', 'high', 'max'],
     },
   });
   identityApi.fetchCurrentSession.mockResolvedValue(null);
@@ -354,6 +354,28 @@ describe('MapFlow tree library', () => {
       await screen.findByRole('dialog', { name: 'mock tree generator' }),
     ).toBeInTheDocument();
     expect(screen.getByText('generation-session-1')).toBeInTheDocument();
+  });
+
+  it('keeps an unfinished generation session available after minimizing', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    renderApp();
+
+    expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '生成新技能树' }));
+    await user.click(screen.getByRole('button', { name: '保存生成会话' }));
+    await user.click(screen.getByRole('button', { name: '关闭生成器' }));
+
+    expect(screen.queryByRole('dialog', { name: 'mock tree generator' })).not.toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).get('generationSession')).toBe(
+      'generation-session-1',
+    );
+    const restore = screen.getByRole('button', { name: '查看技能树生成任务' });
+    expect(restore.querySelector('[data-generation-pulse]')).toHaveClass('animate-pulse');
+
+    await user.click(restore);
+    expect(screen.getByRole('dialog', { name: 'mock tree generator' })).toBeInTheDocument();
   });
 });
 

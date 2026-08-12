@@ -40,8 +40,8 @@ export async function fetchCapabilities(): Promise<IdentityCapabilities> {
       'deepseek-v4-flash',
       'deepseek-v4-pro',
     ]) ||
-    !isExactStringArray(body.generation.thinkingModes, ['enabled', 'disabled']) ||
-    !isExactStringArray(body.generation.reasoningEfforts, ['high', 'max'])
+    !isExactStringArray(body.generation.thinkingModes, ['disabled', 'enabled']) ||
+    !isExactStringArray(body.generation.reasoningEfforts, ['low', 'high', 'max'])
   ) {
     throw invalidResponseError();
   }
@@ -50,8 +50,8 @@ export async function fetchCapabilities(): Promise<IdentityCapabilities> {
     generation: {
       enabled: body.generation.enabled,
       models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
-      thinkingModes: ['enabled', 'disabled'],
-      reasoningEfforts: ['high', 'max'],
+      thinkingModes: ['disabled', 'enabled'],
+      reasoningEfforts: ['low', 'high', 'max'],
     },
   };
 }

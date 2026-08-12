@@ -336,10 +336,20 @@ export default function App() {
             generationCapabilities?.enabled && (
               <button
                 type="button"
+                aria-label={
+                  generationSessionId ? '查看技能树生成任务' : '生成新技能树'
+                }
                 onClick={openTreeGenerator}
-                className="mt-4 w-full rounded-xl border border-cyan-400/45 bg-cyan-400/10 px-3 py-2.5 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/15"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/45 bg-cyan-400/10 px-3 py-2.5 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/15"
               >
-                {generationSessionId ? '继续生成技能树' : '生成新技能树'}
+                {generationSessionId && (
+                  <span
+                    data-generation-pulse
+                    aria-hidden="true"
+                    className="h-2 w-2 animate-pulse rounded-full bg-cyan-300"
+                  />
+                )}
+                {generationSessionId ? '生成任务进行中 · 点击查看' : '生成新技能树'}
               </button>
             )}
 

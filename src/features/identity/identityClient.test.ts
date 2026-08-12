@@ -22,8 +22,8 @@ describe('identityClient', () => {
         generation: {
           enabled: true,
           models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
-          thinkingModes: ['enabled', 'disabled'],
-          reasoningEfforts: ['high', 'max'],
+          thinkingModes: ['disabled', 'enabled'],
+          reasoningEfforts: ['low', 'high', 'max'],
         },
       }),
     );
@@ -34,8 +34,8 @@ describe('identityClient', () => {
       generation: {
         enabled: true,
         models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
-        thinkingModes: ['enabled', 'disabled'],
-        reasoningEfforts: ['high', 'max'],
+        thinkingModes: ['disabled', 'enabled'],
+        reasoningEfforts: ['low', 'high', 'max'],
       },
     });
     expect(fetchMock).toHaveBeenCalledWith('/api/capabilities', {
