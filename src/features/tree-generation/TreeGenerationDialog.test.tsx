@@ -116,6 +116,7 @@ describe('TreeGenerationDialog', () => {
       '请输入 DeepSeek API Key。',
     );
     expect(generationApi.createTreeGeneration).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '查看诊断信息' })).not.toBeInTheDocument();
   });
 
   it('keeps replan and detail adjustment as distinct versioned actions', async () => {
@@ -399,6 +400,111 @@ describe('TreeGenerationDialog', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '重新规划 3 次' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '细节调整 5 次' })).not.toBeInTheDocument();
+  });
+
+  it('shows and copies a closed diagnostic for a failed platform adjustment', async () => {
+    const user = userEvent.setup();
+    const clipboardWrite = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: clipboardWrite },
+    });
+    generationApi.readTreeGeneration.mockResolvedValue(platformPlanReadySession());
+    generationApi.adjustPlatformTreeGeneration.mockRejectedValue(
+      Object.assign(new Error('MODEL-FREEDOM-SENTINEL'), {
+        name: 'TreeGenerationApiError',
+        status: 502,
+        code: 'generation.planning_follow_up_not_allowed',
+        traceId: '81000000-0000-4000-8000-000000000001',
+      }),
+    );
+    renderDialog({ sessionId: '71000000-0000-4000-8000-000000000001' });
+
+    await user.click(
+      await screen.findByRole('button', { name: '细节调整（剩余 5 次）' }),
+    );
+    await user.type(screen.getByLabelText('细节调整要求'), 'USER-FEEDBACK-SENTINEL');
+    await user.click(screen.getByRole('button', { name: '提交细节调整' }));
+    expect(
+      await screen.findByText(
+        'DeepSeek 未按当前规划阶段返回结果，本次修改未保存，请重试。',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('MODEL-FREEDOM-SENTINEL')).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: '查看诊断信息' }));
+    await user.click(screen.getByRole('button', { name: '复制诊断信息' }));
+
+    expect(clipboardWrite).toHaveBeenCalledTimes(1);
+    const copied = String(clipboardWrite.mock.calls[0][0]);
+    expect(JSON.parse(copied)).toMatchObject({
+      operation: 'adjust',
+      httpStatus: 502,
+      errorCode: 'generation.planning_follow_up_not_allowed',
+      traceId: '81000000-0000-4000-8000-000000000001',
+      sessionId: '71000000-0000-4000-8000-000000000001',
+      planVersion: 1,
+    });
+    expect(copied).not.toContain('MODEL-FREEDOM-SENTINEL');
+    expect(copied).not.toContain('USER-FEEDBACK-SENTINEL');
+    expect(copied).not.toContain('csrf-secret');
+    expect(screen.getByText('诊断信息已复制。')).toBeInTheDocument();
+  });
+
+  it('keeps the safe diagnostic selectable when clipboard access fails', async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error('clipboard denied')) },
+    });
+    generationApi.readTreeGeneration.mockRejectedValue(
+      Object.assign(new Error('private server detail'), {
+        name: 'TreeGenerationApiError',
+        status: 503,
+        code: 'generation.temporarily_unavailable',
+        traceId: '83000000-0000-4000-8000-000000000001',
+      }),
+    );
+    renderDialog({ sessionId: '73000000-0000-4000-8000-000000000001' });
+
+    await user.click(await screen.findByRole('button', { name: '查看诊断信息' }));
+    await user.click(screen.getByRole('button', { name: '复制诊断信息' }));
+
+    expect(await screen.findByText('复制失败，请手动选择诊断信息。')).toBeInTheDocument();
+    expect(screen.getByText(/generation\.temporarily_unavailable/)).toBeInTheDocument();
+  });
+
+  it('clears a previous diagnostic after the same adjustment succeeds on retry', async () => {
+    const user = userEvent.setup();
+    const revised = platformPlanReadySession();
+    revised.latestPlan = { ...revised.latestPlan!, version: 2 };
+    generationApi.readTreeGeneration.mockResolvedValue(platformPlanReadySession());
+    generationApi.adjustPlatformTreeGeneration
+      .mockRejectedValueOnce(
+        Object.assign(new Error('provider details must stay private'), {
+          name: 'TreeGenerationApiError',
+          status: 502,
+          code: 'generation.invalid_model_output',
+          traceId: '82000000-0000-4000-8000-000000000001',
+        }),
+      )
+      .mockResolvedValueOnce(revised);
+    renderDialog({ sessionId: '72000000-0000-4000-8000-000000000001' });
+
+    await user.click(
+      await screen.findByRole('button', { name: '细节调整（剩余 5 次）' }),
+    );
+    await user.type(screen.getByLabelText('细节调整要求'), '第一次尝试');
+    await user.click(screen.getByRole('button', { name: '提交细节调整' }));
+    expect(await screen.findByRole('button', { name: '查看诊断信息' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '提交细节调整' }));
+
+    await waitFor(() =>
+      expect(generationApi.adjustPlatformTreeGeneration).toHaveBeenCalledTimes(2),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: '查看诊断信息' })).not.toBeInTheDocument(),
+    );
   });
 
   it('offers release after the first system failure and refreshes account entitlements', async () => {

@@ -8,6 +8,13 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { IdentityCapabilities } from '../identity/types';
 import GenerationFundingSelector from './GenerationFundingSelector';
+import {
+  createGenerationDiagnostic,
+  readableGenerationError,
+  serializeGenerationDiagnostic,
+  type GenerationDiagnostic,
+  type GenerationDiagnosticOperation,
+} from './generationDiagnostics';
 import PlatformGenerationConfirmation, {
   PLATFORM_GENERATION_WARNING,
 } from './PlatformGenerationConfirmation';
@@ -92,6 +99,7 @@ export default function TreeGenerationDialog({
   const [revisionFeedback, setRevisionFeedback] = useState('');
   const [confirmedRunId, setConfirmedRunId] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [diagnostic, setDiagnostic] = useState<GenerationDiagnostic | null>(null);
   const [confirmationKind, setConfirmationKind] = useState<
     'start' | 'abandon' | null
   >(null);
@@ -101,6 +109,7 @@ export default function TreeGenerationDialog({
   useEffect(() => {
     setCurrentSessionId(sessionId);
     setConfirmedRunId(null);
+    setDiagnostic(null);
     completedEntryRef.current = null;
     refreshedTerminalPlatformSessionRef.current = null;
   }, [sessionId]);
@@ -372,6 +381,46 @@ export default function TreeGenerationDialog({
     readableError(sessionQuery.error) ??
     readableError(runQuery.error);
 
+  useEffect(() => {
+    const candidates: Array<[GenerationDiagnosticOperation, unknown]> = [
+      ['create_plan', createMutation.error],
+      ['create_plan', platformCreateMutation.error],
+      [revisionKind === 'replan' ? 'replan' : 'adjust', revisionMutation.error],
+      ['clarify_plan', clarificationMutation.error],
+      ['confirm_generation', confirmMutation.error],
+      ['abandon_session', abandonMutation.error],
+      ['release_failed_session', releaseFailedMutation.error],
+      ['read_session', sessionQuery.error],
+      ['read_run', runQuery.error],
+    ];
+    const failed = candidates.find(([, error]) => error !== null);
+    if (!failed) {
+      setDiagnostic(null);
+      return;
+    }
+    setDiagnostic(
+      createGenerationDiagnostic({
+        operation: failed[0],
+        error: failed[1],
+        sessionId: currentSessionId,
+        planVersion: session?.latestPlan?.version ?? null,
+      }),
+    );
+  }, [
+    abandonMutation.error,
+    clarificationMutation.error,
+    confirmMutation.error,
+    createMutation.error,
+    currentSessionId,
+    platformCreateMutation.error,
+    releaseFailedMutation.error,
+    revisionKind,
+    revisionMutation.error,
+    runQuery.error,
+    session?.latestPlan?.version,
+    sessionQuery.error,
+  ]);
+
   function modelAccess(): ModelAccess {
     if (!apiKey.trim()) throw new Error('请输入 DeepSeek API Key。');
     return { apiKey, model, thinking, reasoningEffort };
@@ -544,7 +593,7 @@ export default function TreeGenerationDialog({
             )}
           </div>
 
-          <StatusMessage message={visibleError} />
+          <StatusMessage message={visibleError} diagnostic={diagnostic} />
         </div>
       </section>
       {confirmationKind && (
@@ -1162,13 +1211,57 @@ function Field({
   );
 }
 
-function StatusMessage({ message }: { message: string | null }) {
+function StatusMessage({
+  message,
+  diagnostic,
+}: {
+  message: string | null;
+  diagnostic: GenerationDiagnostic | null;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const serialized = serializeGenerationDiagnostic(diagnostic);
+
+  const copyDiagnostic = async () => {
+    try {
+      await navigator.clipboard.writeText(serialized);
+      setCopyStatus('诊断信息已复制。');
+    } catch {
+      setCopyStatus('复制失败，请手动选择诊断信息。');
+    }
+  };
+
   return (
-    <div
-      role={message ? 'alert' : undefined}
-      className="mt-3 min-h-5 text-xs leading-5 text-rose-300"
-    >
-      {message}
+    <div className="mt-3 min-h-5 text-xs leading-5">
+      <div role={message ? 'alert' : undefined} className="text-rose-300">
+        {message}
+      </div>
+      {diagnostic && (
+        <div className="mt-2 rounded-lg border border-slate-700 bg-slate-950/60 p-3 text-slate-300">
+          <button
+            type="button"
+            onClick={() => setExpanded((value) => !value)}
+            className="font-medium text-cyan-300 hover:text-cyan-200"
+          >
+            {expanded ? '收起诊断信息' : '查看诊断信息'}
+          </button>
+          {expanded && (
+            <div className="mt-3">
+              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-950 p-3 text-[11px] text-slate-400">
+                {serialized}
+              </pre>
+              <button
+                type="button"
+                onClick={() => void copyDiagnostic()}
+                className={`${secondaryButtonClassName} mt-3`}
+              >
+                复制诊断信息
+              </button>
+              {copyStatus && <p className="mt-2 text-slate-400">{copyStatus}</p>}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1213,7 +1306,7 @@ function createIdempotencyKey(): string {
 }
 
 function readableError(error: unknown): string | null {
-  return error instanceof Error ? error.message : null;
+  return readableGenerationError(error);
 }
 
 const inputClassName =
