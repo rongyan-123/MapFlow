@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IdentityCapabilities } from '../identity/types';
@@ -12,18 +12,26 @@ import type {
 
 const generationApi = vi.hoisted(() => ({
   adjustTreeGeneration: vi.fn(),
+  abandonPlatformTreeGeneration: vi.fn(),
+  adjustPlatformTreeGeneration: vi.fn(),
   clarifyTreeGeneration: vi.fn(),
+  clarifyPlatformTreeGeneration: vi.fn(),
   confirmTreeGeneration: vi.fn(),
+  confirmPlatformTreeGeneration: vi.fn(),
+  createPlatformTreeGeneration: vi.fn(),
   createTreeGeneration: vi.fn(),
   readGenerationRun: vi.fn(),
   readTreeGeneration: vi.fn(),
+  releaseFailedPlatformTreeGeneration: vi.fn(),
   replanTreeGeneration: vi.fn(),
+  replanPlatformTreeGeneration: vi.fn(),
 }));
 
 vi.mock('./treeGenerationClient', () => generationApi);
 
 const capabilities: IdentityCapabilities['generation'] = {
   enabled: true,
+  platformFundedEnabled: true,
   models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
   thinkingModes: ['disabled', 'enabled'],
   reasoningEfforts: ['low', 'high', 'max'],
@@ -180,6 +188,66 @@ describe('TreeGenerationDialog', () => {
     expect(await screen.findByRole('button', { name: '确认生成' })).toBeInTheDocument();
   });
 
+  it('shows the single platform clarification allowance and permits abandoning needs-input', async () => {
+    const user = userEvent.setup();
+    generationApi.readTreeGeneration.mockResolvedValue(platformNeedsInputSession());
+    generationApi.clarifyPlatformTreeGeneration.mockResolvedValue(
+      platformPlanReadySession(),
+    );
+    renderDialog({ sessionId: 'platform-session-1' });
+
+    expect(await screen.findByText('每周可以投入多少时间？')).toBeInTheDocument();
+    expect(screen.getByText('AI 追问剩余 1 次')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '放弃本次生成' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('补充信息'), {
+      target: { value: '每周八小时' },
+    });
+    await user.click(screen.getByRole('button', { name: '提交补充信息' }));
+
+    await waitFor(() =>
+      expect(generationApi.clarifyPlatformTreeGeneration).toHaveBeenCalledWith(
+        'platform-session-1',
+        1,
+        '每周八小时',
+        'csrf-secret',
+      ),
+    );
+  });
+
+  it('does not apply platform revision ceilings to a sixth BYOK adjustment', async () => {
+    const user = userEvent.setup();
+    let version = 1;
+    generationApi.readTreeGeneration.mockResolvedValue(planReadySession(version));
+    generationApi.adjustTreeGeneration.mockImplementation(() =>
+      Promise.resolve(planReadySession(++version)),
+    );
+    renderDialog({ sessionId: 'session-1' });
+
+    await screen.findByText('基础阶段');
+    fireEvent.change(screen.getByLabelText('DeepSeek API Key'), {
+      target: { value: 'sk-user-funded' },
+    });
+    for (let adjustment = 1; adjustment <= 6; adjustment += 1) {
+      await user.click(screen.getByRole('button', { name: '调整细节' }));
+      fireEvent.change(screen.getByLabelText('细节调整要求'), {
+        target: { value: `调整第 ${adjustment} 个细节` },
+      });
+      await user.click(screen.getByRole('button', { name: '提交细节调整' }));
+      await waitFor(() =>
+        expect(generationApi.adjustTreeGeneration).toHaveBeenCalledTimes(adjustment),
+      );
+    }
+
+    expect(generationApi.adjustTreeGeneration).toHaveBeenLastCalledWith(
+      'session-1',
+      6,
+      '调整第 6 个细节',
+      expect.objectContaining({ apiKey: 'sk-user-funded' }),
+      'csrf-secret',
+    );
+    expect(generationApi.adjustPlatformTreeGeneration).not.toHaveBeenCalled();
+  });
+
   it('starts the expensive run only after confirmation, polls it, and reports the personal entry', async () => {
     const user = userEvent.setup();
     generationApi.readTreeGeneration
@@ -247,17 +315,175 @@ describe('TreeGenerationDialog', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/generation\.api_key_invalid/)).not.toBeInTheDocument();
   });
+
+  it('uses platform mode without rendering model controls and requires exact second confirmation', async () => {
+    const user = userEvent.setup();
+    generationApi.createPlatformTreeGeneration.mockResolvedValue(
+      platformPlanningSession(),
+    );
+    renderDialog();
+
+    expect(await screen.findByText('平台免费体验 · 剩余 3 次')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '选择平台免费体验' }));
+    expect(screen.queryByLabelText('DeepSeek API Key')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('模型')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('思考模式')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('思考强度')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        '确认后将消耗 1 次生成次数；中途主动放弃将不返还。请务必确认所有信息填写完整后，再点击生成。',
+      ),
+    ).toBeInTheDocument();
+
+    await fillGenerationForm(user);
+    await user.click(screen.getByRole('button', { name: '生成规划' }));
+    expect(generationApi.createPlatformTreeGeneration).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: '确认消耗 1 次生成次数？' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '返回检查' }));
+    expect(generationApi.createPlatformTreeGeneration).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: '生成规划' }));
+    await user.click(screen.getByRole('button', { name: '确认并开始' }));
+
+    await waitFor(() =>
+      expect(generationApi.createPlatformTreeGeneration).toHaveBeenCalledWith(
+        generationInput,
+        'csrf-secret',
+      ),
+    );
+    expect(generationApi.createTreeGeneration).not.toHaveBeenCalled();
+  });
+
+  it('shows platform planning progress, operation counters and free formal retry', async () => {
+    const user = userEvent.setup();
+    generationApi.readTreeGeneration
+      .mockResolvedValueOnce(platformPlanningSession())
+      .mockResolvedValueOnce(platformRetrySession());
+    generationApi.confirmPlatformTreeGeneration.mockResolvedValue(run('queued'));
+    generationApi.readGenerationRun.mockResolvedValue(run('running'));
+    renderDialog({ sessionId: 'platform-session-1' });
+
+    expect(
+      await screen.findByRole('status', { name: '技能树规划处理中' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/预计需要 3–5 分钟/)).toBeInTheDocument();
+
+    generationApi.readTreeGeneration.mockResolvedValue(platformRetrySession());
+    await waitFor(
+      () =>
+        expect(screen.getByRole('button', { name: '免费重试生成' })).toBeInTheDocument(),
+      { timeout: 3_500 },
+    );
+    expect(screen.getByText('重新规划 3 次')).toBeInTheDocument();
+    expect(screen.getByText('细节调整 5 次')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '免费重试生成' }));
+    await waitFor(() =>
+      expect(generationApi.confirmPlatformTreeGeneration).toHaveBeenCalledWith(
+        'platform-session-1',
+        1,
+        expect.any(String),
+        'csrf-secret',
+      ),
+    );
+  });
+
+  it('offers release after the first system failure and refreshes account entitlements', async () => {
+    const user = userEvent.setup();
+    generationApi.readTreeGeneration.mockResolvedValue(platformRetrySession());
+    generationApi.releaseFailedPlatformTreeGeneration.mockResolvedValue(
+      platformTerminalFailureSession(),
+    );
+    const { props } = renderDialog({ sessionId: 'platform-session-1' });
+
+    expect(
+      await screen.findByText('本次由系统原因失败，尚未扣除次数，可免费重试 1 次。'),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: '结束失败会话并返还次数' }),
+    );
+
+    await waitFor(() =>
+      expect(generationApi.releaseFailedPlatformTreeGeneration).toHaveBeenCalledWith(
+        'platform-session-1',
+        'csrf-secret',
+      ),
+    );
+    expect(props.onPlatformEntitlementsChanged).toHaveBeenCalledTimes(1);
+    expect(props.onSessionIdChange).toHaveBeenCalledWith(null);
+  });
+
+  it('shows an automatically refunded terminal failure without retry or abandon actions', async () => {
+    generationApi.readTreeGeneration.mockResolvedValue(platformTerminalFailureSession());
+    const { props } = renderDialog({ sessionId: 'platform-session-1' });
+
+    expect(
+      await screen.findByText('最终生成失败，本次次数已自动返还。'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '免费重试生成' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '放弃本次生成' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '结束失败会话并返还次数' }),
+    ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(props.onPlatformEntitlementsChanged).toHaveBeenCalledTimes(1),
+    );
+  });
+
+  it('keeps BYOK available when platform funding is disabled', () => {
+    renderDialog({
+      generationCapabilities: { ...capabilities, platformFundedEnabled: false },
+      entitlements: null,
+    });
+
+    expect(screen.getByLabelText('DeepSeek API Key')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '选择平台免费体验' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '选择使用自己的 API Key' })).toBeEnabled();
+  });
+
+  it('abandons only after a separate warning and invalidates entitlement state', async () => {
+    const user = userEvent.setup();
+    generationApi.readTreeGeneration.mockResolvedValue(platformPlanReadySession());
+    generationApi.abandonPlatformTreeGeneration.mockResolvedValue(
+      platformAbandonedSession(),
+    );
+    renderDialog({ sessionId: 'platform-session-1' });
+
+    await screen.findByText('基础阶段');
+    await user.click(screen.getByRole('button', { name: '放弃本次生成' }));
+    expect(
+      screen.getByRole('dialog', { name: '确认放弃平台生成' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/中途主动放弃将不返还/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '确认放弃且不返还' }));
+
+    await waitFor(() =>
+      expect(generationApi.abandonPlatformTreeGeneration).toHaveBeenCalledWith(
+        'platform-session-1',
+        'csrf-secret',
+      ),
+    );
+  });
 });
 
-function renderDialog({ sessionId = null }: { sessionId?: string | null } = {}) {
+function renderDialog({
+  sessionId = null,
+  generationCapabilities = capabilities,
+  entitlements = entitlementSummary(),
+}: {
+  sessionId?: string | null;
+  generationCapabilities?: IdentityCapabilities['generation'];
+  entitlements?: ReturnType<typeof entitlementSummary> | null;
+} = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const props = {
-    capabilities,
+    capabilities: generationCapabilities,
     csrfToken: 'csrf-secret',
     sessionId,
+    platformEntitlements: entitlements,
     onSessionIdChange: vi.fn(),
+    onPlatformEntitlementsChanged: vi.fn(),
     onComplete: vi.fn(),
     onClose: vi.fn(),
   };
@@ -363,6 +589,73 @@ function run(status: GenerationRun['status']): GenerationRun {
     progress: status === 'succeeded' ? 1 : 0,
     errorCode: null,
     usage: usage(),
+  };
+}
+
+function entitlementSummary() {
+  return {
+    totalGranted: 3,
+    available: 3,
+    reserved: 0,
+    consumed: 0,
+    activePlatformSessionId: null,
+    platformModeAvailable: true,
+  };
+}
+
+function platformLimits(formalRunAttemptsRemaining = 2) {
+  return {
+    replansRemaining: 3,
+    adjustmentsRemaining: 5,
+    clarificationQuestionsRemaining: 1,
+    formalRunAttemptsRemaining,
+  };
+}
+
+function platformPlanReadySession(): GenerationSession {
+  return {
+    ...planReadySession(),
+    generationSessionId: 'platform-session-1',
+    fundingMode: 'platform',
+    platformLimits: platformLimits(),
+  };
+}
+
+function platformPlanningSession(): GenerationSession {
+  return {
+    ...platformPlanReadySession(),
+    state: 'planning',
+    latestPlan: null,
+  };
+}
+
+function platformNeedsInputSession(): GenerationSession {
+  const session = needsInputSession();
+  return {
+    ...session,
+    generationSessionId: 'platform-session-1',
+    fundingMode: 'platform',
+    platformLimits: platformLimits(),
+  };
+}
+
+function platformRetrySession(): GenerationSession {
+  return {
+    ...platformPlanReadySession(),
+    latestRun: { ...run('failed'), errorCode: 'generation.provider_unavailable' },
+    platformLimits: platformLimits(1),
+  };
+}
+
+function platformAbandonedSession(): GenerationSession {
+  return { ...platformPlanReadySession(), state: 'abandoned' };
+}
+
+function platformTerminalFailureSession(): GenerationSession {
+  return {
+    ...platformRetrySession(),
+    state: 'failed',
+    platformLimits: platformLimits(0),
   };
 }
 

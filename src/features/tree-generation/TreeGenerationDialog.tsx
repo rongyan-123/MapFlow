@@ -7,21 +7,34 @@ import {
 } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { IdentityCapabilities } from '../identity/types';
+import GenerationFundingSelector from './GenerationFundingSelector';
+import PlatformGenerationConfirmation, {
+  PLATFORM_GENERATION_WARNING,
+} from './PlatformGenerationConfirmation';
 import {
+  abandonPlatformTreeGeneration,
+  adjustPlatformTreeGeneration,
   adjustTreeGeneration,
+  clarifyPlatformTreeGeneration,
   clarifyTreeGeneration,
+  confirmPlatformTreeGeneration,
   confirmTreeGeneration,
+  createPlatformTreeGeneration,
   createTreeGeneration,
   readGenerationRun,
   readTreeGeneration,
+  releaseFailedPlatformTreeGeneration,
+  replanPlatformTreeGeneration,
   replanTreeGeneration,
 } from './treeGenerationClient';
 import type {
   DeepSeekModel,
+  GenerationFundingMode,
   GenerationInput,
   GenerationRun,
   GenerationSession,
   ModelAccess,
+  PlatformGenerationEntitlementSummary,
   ReasoningEffort,
   ThinkingMode,
 } from './types';
@@ -30,7 +43,9 @@ interface TreeGenerationDialogProps {
   capabilities: IdentityCapabilities['generation'];
   csrfToken: string;
   sessionId: string | null;
+  platformEntitlements: PlatformGenerationEntitlementSummary | null;
   onSessionIdChange: (sessionId: string | null) => void;
+  onPlatformEntitlementsChanged: () => void | Promise<unknown>;
   onComplete: (libraryEntryId: string) => void;
   onClose: () => void;
 }
@@ -48,12 +63,15 @@ export default function TreeGenerationDialog({
   capabilities,
   csrfToken,
   sessionId,
+  platformEntitlements,
   onSessionIdChange,
+  onPlatformEntitlementsChanged,
   onComplete,
   onClose,
 }: TreeGenerationDialogProps) {
   const queryClient = useQueryClient();
   const [currentSessionId, setCurrentSessionId] = useState(sessionId);
+  const [fundingMode, setFundingMode] = useState<GenerationFundingMode>('byok');
   const [input, setInput] = useState<GenerationInput>(EMPTY_INPUT);
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState<DeepSeekModel>(
@@ -74,12 +92,17 @@ export default function TreeGenerationDialog({
   const [revisionFeedback, setRevisionFeedback] = useState('');
   const [confirmedRunId, setConfirmedRunId] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [confirmationKind, setConfirmationKind] = useState<
+    'start' | 'abandon' | null
+  >(null);
   const completedEntryRef = useRef<string | null>(null);
+  const refreshedTerminalPlatformSessionRef = useRef<string | null>(null);
 
   useEffect(() => {
     setCurrentSessionId(sessionId);
     setConfirmedRunId(null);
     completedEntryRef.current = null;
+    refreshedTerminalPlatformSessionRef.current = null;
   }, [sessionId]);
 
   const sessionQuery = useQuery({
@@ -88,13 +111,22 @@ export default function TreeGenerationDialog({
     enabled: currentSessionId !== null,
     staleTime: 30_000,
     retry: false,
+    refetchInterval: (query) =>
+      query.state.data?.state === 'planning' ? 2_000 : false,
   });
   const session = sessionQuery.data ?? null;
+  const activeFundingMode = session?.fundingMode ??
+    (currentSessionId === null ? fundingMode : null);
   const runId = confirmedRunId ?? session?.latestRun?.runId ?? null;
   const runQuery = useQuery({
     queryKey: generationRunQueryKey(currentSessionId, runId),
     queryFn: () => readGenerationRun(currentSessionId ?? '', runId ?? ''),
-    enabled: currentSessionId !== null && runId !== null,
+    enabled:
+      currentSessionId !== null &&
+      runId !== null &&
+      (confirmedRunId !== null ||
+        session?.latestRun?.status === 'queued' ||
+        session?.latestRun?.status === 'running'),
     retry: false,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
@@ -121,6 +153,16 @@ export default function TreeGenerationDialog({
       rememberSession(created);
     },
   });
+  const platformCreateMutation = useMutation({
+    mutationFn: () =>
+      createPlatformTreeGeneration(normalizeInput(input), csrfToken),
+    onSuccess: (created) => {
+      setLocalError(null);
+      setConfirmationKind(null);
+      rememberSession(created);
+      void onPlatformEntitlementsChanged();
+    },
+  });
   const revisionMutation = useMutation({
     mutationFn: async ({
       kind,
@@ -131,6 +173,21 @@ export default function TreeGenerationDialog({
     }) => {
       if (!session?.latestPlan || !currentSessionId) {
         throw new Error('生成规划尚未加载。');
+      }
+      if (session.fundingMode === 'platform') {
+        return kind === 'replan'
+          ? replanPlatformTreeGeneration(
+              currentSessionId,
+              session.latestPlan.version,
+              feedback.trim(),
+              csrfToken,
+            )
+          : adjustPlatformTreeGeneration(
+              currentSessionId,
+              session.latestPlan.version,
+              feedback.trim(),
+              csrfToken,
+            );
       }
       const access = modelAccess();
       return kind === 'replan'
@@ -161,13 +218,20 @@ export default function TreeGenerationDialog({
       if (!session?.latestPlan || !currentSessionId) {
         throw new Error('生成规划尚未加载。');
       }
-      return clarifyTreeGeneration(
-        currentSessionId,
-        session.latestPlan.version,
-        clarification.trim(),
-        modelAccess(),
-        csrfToken,
-      );
+      return session.fundingMode === 'platform'
+        ? clarifyPlatformTreeGeneration(
+            currentSessionId,
+            session.latestPlan.version,
+            clarification.trim(),
+            csrfToken,
+          )
+        : clarifyTreeGeneration(
+            currentSessionId,
+            session.latestPlan.version,
+            clarification.trim(),
+            modelAccess(),
+            csrfToken,
+          );
     },
     onSuccess: (clarified) => {
       setLocalError(null);
@@ -180,13 +244,21 @@ export default function TreeGenerationDialog({
       if (!session?.latestPlan || !currentSessionId) {
         throw new Error('生成规划尚未加载。');
       }
-      return confirmTreeGeneration(
-        currentSessionId,
-        session.latestPlan.version,
-        createIdempotencyKey(),
-        modelAccess(),
-        csrfToken,
-      );
+      const idempotencyKey = createIdempotencyKey();
+      return session.fundingMode === 'platform'
+        ? confirmPlatformTreeGeneration(
+            currentSessionId,
+            session.latestPlan.version,
+            idempotencyKey,
+            csrfToken,
+          )
+        : confirmTreeGeneration(
+            currentSessionId,
+            session.latestPlan.version,
+            idempotencyKey,
+            modelAccess(),
+            csrfToken,
+          );
     },
     onSuccess: (createdRun) => {
       setLocalError(null);
@@ -201,6 +273,39 @@ export default function TreeGenerationDialog({
           { ...session, state: 'queued', latestRun: createdRun },
         );
       }
+    },
+  });
+  const abandonMutation = useMutation({
+    mutationFn: () => {
+      if (!currentSessionId) throw new Error('生成会话尚未加载。');
+      return abandonPlatformTreeGeneration(currentSessionId, csrfToken);
+    },
+    onSuccess: (abandoned) => {
+      setConfirmationKind(null);
+      queryClient.setQueryData(
+        generationSessionQueryKey(abandoned.generationSessionId),
+        abandoned,
+      );
+      setCurrentSessionId(null);
+      onSessionIdChange(null);
+      void onPlatformEntitlementsChanged();
+      onClose();
+    },
+  });
+  const releaseFailedMutation = useMutation({
+    mutationFn: () => {
+      if (!currentSessionId) throw new Error('生成会话尚未加载。');
+      return releaseFailedPlatformTreeGeneration(currentSessionId, csrfToken);
+    },
+    onSuccess: (released) => {
+      queryClient.setQueryData(
+        generationSessionQueryKey(released.generationSessionId),
+        released,
+      );
+      setCurrentSessionId(null);
+      onSessionIdChange(null);
+      void onPlatformEntitlementsChanged();
+      onClose();
     },
   });
 
@@ -222,20 +327,41 @@ export default function TreeGenerationDialog({
     if (session?.state !== 'succeeded' || !entryId) return;
     if (completedEntryRef.current === entryId) return;
     completedEntryRef.current = entryId;
+    if (session.fundingMode === 'platform') {
+      void onPlatformEntitlementsChanged();
+    }
     onComplete(entryId);
-  }, [onComplete, session?.producedLibraryEntryId, session?.state]);
+  }, [onComplete, onPlatformEntitlementsChanged, session]);
+
+  useEffect(() => {
+    if (
+      session?.fundingMode !== 'platform' ||
+      (session.state !== 'failed' && session.state !== 'abandoned') ||
+      refreshedTerminalPlatformSessionRef.current === session.generationSessionId
+    ) {
+      return;
+    }
+    refreshedTerminalPlatformSessionRef.current = session.generationSessionId;
+    void onPlatformEntitlementsChanged();
+  }, [onPlatformEntitlementsChanged, session]);
 
   const synchronousPending =
     createMutation.isPending ||
+    platformCreateMutation.isPending ||
     revisionMutation.isPending ||
     clarificationMutation.isPending ||
-    confirmMutation.isPending;
+    confirmMutation.isPending ||
+    abandonMutation.isPending ||
+    releaseFailedMutation.isPending;
   const visibleError =
     localError ??
     readableError(createMutation.error) ??
+    readableError(platformCreateMutation.error) ??
     readableError(revisionMutation.error) ??
     readableError(clarificationMutation.error) ??
     readableError(confirmMutation.error) ??
+    readableError(abandonMutation.error) ??
+    readableError(releaseFailedMutation.error) ??
     readableError(sessionQuery.error) ??
     readableError(runQuery.error);
 
@@ -250,18 +376,26 @@ export default function TreeGenerationDialog({
       setLocalError('请完整填写四项学习需求。');
       return;
     }
-    if (!apiKey.trim()) {
+    if (fundingMode === 'byok' && !apiKey.trim()) {
       setLocalError('请输入 DeepSeek API Key。');
       return;
     }
     setLocalError(null);
+    if (fundingMode === 'platform') {
+      setConfirmationKind('start');
+      return;
+    }
     createMutation.mutate();
   };
 
   const submitClarification = (event: FormEvent) => {
     event.preventDefault();
-    if (!clarification.trim() || !apiKey.trim()) {
-      setLocalError('请填写补充信息，并重新输入 DeepSeek API Key。');
+    if (!clarification.trim()) {
+      setLocalError('请填写补充信息。');
+      return;
+    }
+    if (session?.fundingMode !== 'platform' && !apiKey.trim()) {
+      setLocalError('请重新输入 DeepSeek API Key。');
       return;
     }
     setLocalError(null);
@@ -270,8 +404,12 @@ export default function TreeGenerationDialog({
 
   const submitRevision = (event: FormEvent) => {
     event.preventDefault();
-    if (!revisionKind || !revisionFeedback.trim() || !apiKey.trim()) {
-      setLocalError('请填写修改要求，并重新输入 DeepSeek API Key。');
+    if (!revisionKind || !revisionFeedback.trim()) {
+      setLocalError('请填写修改要求。');
+      return;
+    }
+    if (session?.fundingMode !== 'platform' && !apiKey.trim()) {
+      setLocalError('请重新输入 DeepSeek API Key。');
       return;
     }
     setLocalError(null);
@@ -279,7 +417,7 @@ export default function TreeGenerationDialog({
   };
 
   const confirm = () => {
-    if (!apiKey.trim()) {
+    if (session?.fundingMode !== 'platform' && !apiKey.trim()) {
       setLocalError('确认前请重新输入 DeepSeek API Key。');
       return;
     }
@@ -328,23 +466,45 @@ export default function TreeGenerationDialog({
         </header>
 
         <div className="min-h-0 overflow-y-auto p-5">
-          <ModelConfiguration
-            apiKey={apiKey}
-            capabilities={capabilities}
-            model={model}
-            thinking={thinking}
-            reasoningEffort={reasoningEffort}
-            onApiKeyChange={setApiKey}
-            onModelChange={setModel}
-            onThinkingChange={setThinking}
-            onReasoningEffortChange={setReasoningEffort}
-          />
+          {!currentSessionId && (
+            <>
+              <GenerationFundingSelector
+                value={fundingMode}
+                platformEntitlements={platformEntitlements}
+                onChange={(mode) => {
+                  setFundingMode(mode);
+                  setLocalError(null);
+                }}
+              />
+              {fundingMode === 'platform' && (
+                <p className="mt-3 rounded-lg border border-amber-400/25 bg-amber-400/5 p-3 text-xs leading-5 text-amber-100/85">
+                  {PLATFORM_GENERATION_WARNING}
+                </p>
+              )}
+            </>
+          )}
+
+          {activeFundingMode === 'byok' && (
+            <div className={currentSessionId ? '' : 'mt-4'}>
+              <ModelConfiguration
+                apiKey={apiKey}
+                capabilities={capabilities}
+                model={model}
+                thinking={thinking}
+                reasoningEffort={reasoningEffort}
+                onApiKeyChange={setApiKey}
+                onModelChange={setModel}
+                onThinkingChange={setThinking}
+                onReasoningEffortChange={setReasoningEffort}
+              />
+            </div>
+          )}
 
           <div className="mt-5">
             {!currentSessionId ? (
               <InitialGenerationForm
                 input={input}
-                pending={createMutation.isPending}
+                pending={createMutation.isPending || platformCreateMutation.isPending}
                 onChange={setInput}
                 onSubmit={submitInitial}
               />
@@ -368,6 +528,8 @@ export default function TreeGenerationDialog({
                 onRevisionFeedbackChange={setRevisionFeedback}
                 onSubmitRevision={submitRevision}
                 onConfirm={confirm}
+                onAbandon={() => setConfirmationKind('abandon')}
+                onReleaseFailed={() => releaseFailedMutation.mutate()}
               />
             ) : (
               <WorkflowStatus message="生成会话暂时无法读取。" />
@@ -377,6 +539,17 @@ export default function TreeGenerationDialog({
           <StatusMessage message={visibleError} />
         </div>
       </section>
+      {confirmationKind && (
+        <PlatformGenerationConfirmation
+          kind={confirmationKind}
+          pending={platformCreateMutation.isPending || abandonMutation.isPending}
+          onCancel={() => setConfirmationKind(null)}
+          onConfirm={() => {
+            if (confirmationKind === 'start') platformCreateMutation.mutate();
+            else abandonMutation.mutate();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -583,6 +756,8 @@ function SessionWorkflow({
   onRevisionFeedbackChange,
   onSubmitRevision,
   onConfirm,
+  onAbandon,
+  onReleaseFailed,
 }: {
   session: GenerationSession;
   run: GenerationRun | null;
@@ -596,6 +771,8 @@ function SessionWorkflow({
   onRevisionFeedbackChange: (value: string) => void;
   onSubmitRevision: (event: FormEvent) => void;
   onConfirm: () => void;
+  onAbandon: () => void;
+  onReleaseFailed: () => void;
 }) {
   if (session.state === 'succeeded') {
     return (
@@ -605,19 +782,32 @@ function SessionWorkflow({
       />
     );
   }
+  if (session.state === 'failed') {
+    return (
+      <WorkflowStatus
+        title="最终生成失败"
+        message="最终生成失败，本次次数已自动返还。"
+      />
+    );
+  }
+  if (session.state === 'abandoned') {
+    return (
+      <WorkflowStatus
+        title="本次生成已放弃"
+        message="本次平台生成次数已消耗，当前会话不能继续。"
+      />
+    );
+  }
   if (session.state === 'queued' || session.state === 'running') {
     return <RunProgress run={run} />;
   }
 
   if (!session.latestPlan) {
+    if (session.state === 'planning') return <PlanningProgress />;
     return (
       <WorkflowStatus
-        title={session.state === 'planning' ? '正在准备规划' : '规划不可用'}
-        message={
-          session.state === 'planning'
-            ? '服务器正在后台准备技能树规划，请稍候。'
-            : '当前生成会话没有可用的规划。'
-        }
+        title="规划不可用"
+        message="当前生成会话没有可用的规划。"
       />
     );
   }
@@ -632,6 +822,11 @@ function SessionWorkflow({
         <h3 className="mt-2 text-base font-semibold text-slate-100">
           {outcome.question}
         </h3>
+        {session.fundingMode === 'platform' && (
+          <p className="mt-2 text-xs text-amber-200/70">
+            AI 追问剩余 {session.platformLimits?.clarificationQuestionsRemaining ?? 0} 次
+          </p>
+        )}
         <form className="mt-4" onSubmit={onSubmitClarification}>
           <Field label="补充信息">
             <textarea
@@ -647,19 +842,65 @@ function SessionWorkflow({
             {pending ? '正在更新规划…' : '提交补充信息'}
           </button>
         </form>
+        {session.fundingMode === 'platform' && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={onAbandon}
+            className={`${dangerButtonClassName} mt-3 w-full`}
+          >
+            放弃本次生成
+          </button>
+        )}
       </section>
     );
   }
+
+  const retryablePlatformFailure =
+    session.fundingMode === 'platform' &&
+    run?.status === 'failed' &&
+    session.platformLimits?.formalRunAttemptsRemaining === 1;
 
   return (
     <div>
       {run?.status === 'failed' && (
         <p role="alert" className="mb-4 rounded-lg border border-rose-500/25 bg-rose-500/5 p-3 text-xs text-rose-300">
-          {generationRunErrorMessage(run.errorCode)}
+          {retryablePlatformFailure
+            ? '本次由系统原因失败，尚未扣除次数，可免费重试 1 次。'
+            : generationRunErrorMessage(run.errorCode)}
         </p>
       )}
       <PlanCard session={session} />
-      {revisionKind ? (
+      {retryablePlatformFailure ? (
+        <div className="mt-4">
+          <div className="mb-3 flex flex-wrap gap-2 text-[11px] text-slate-400">
+            <span className="rounded-full border border-slate-700 px-3 py-1">
+              重新规划 {session.platformLimits?.replansRemaining ?? 0} 次
+            </span>
+            <span className="rounded-full border border-slate-700 px-3 py-1">
+              细节调整 {session.platformLimits?.adjustmentsRemaining ?? 0} 次
+            </span>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={onReleaseFailed}
+              className={secondaryButtonClassName}
+            >
+              结束失败会话并返还次数
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={onConfirm}
+              className={primaryInlineButtonClassName}
+            >
+              {pending ? '正在提交…' : '免费重试生成'}
+            </button>
+          </div>
+        </div>
+      ) : revisionKind ? (
         <form
           className="mt-4 rounded-xl border border-slate-700 bg-slate-950/45 p-4"
           onSubmit={onSubmitRevision}
@@ -699,20 +940,42 @@ function SessionWorkflow({
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button
             type="button"
-            disabled={pending}
+            disabled={
+              pending ||
+              (session.fundingMode === 'platform' &&
+                session.platformLimits?.replansRemaining === 0)
+            }
             onClick={() => onRevisionKindChange('replan')}
             className={secondaryButtonClassName}
           >
-            重新规划
+            {session.fundingMode === 'platform'
+              ? `重新规划 ${session.platformLimits?.replansRemaining ?? 0} 次`
+              : '重新规划'}
           </button>
           <button
             type="button"
-            disabled={pending}
+            disabled={
+              pending ||
+              (session.fundingMode === 'platform' &&
+                session.platformLimits?.adjustmentsRemaining === 0)
+            }
             onClick={() => onRevisionKindChange('adjust')}
             className={secondaryButtonClassName}
           >
-            调整细节
+            {session.fundingMode === 'platform'
+              ? `细节调整 ${session.platformLimits?.adjustmentsRemaining ?? 0} 次`
+              : '调整细节'}
           </button>
+          {session.fundingMode === 'platform' && run?.status !== 'failed' && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={onAbandon}
+              className={dangerButtonClassName}
+            >
+              放弃本次生成
+            </button>
+          )}
           <button
             type="button"
             disabled={pending}
@@ -724,6 +987,37 @@ function SessionWorkflow({
         </div>
       )}
     </div>
+  );
+}
+
+function PlanningProgress() {
+  return (
+    <section
+      role="status"
+      aria-label="技能树规划处理中"
+      className="rounded-xl border border-cyan-400/25 bg-cyan-400/5 p-5"
+    >
+      <div className="flex items-start gap-3">
+        <span
+          aria-label="规划进度动画"
+          className="mt-0.5 inline-block h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-cyan-300/25 border-t-cyan-300"
+        />
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">
+            正在准备技能树规划
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            任务已在服务器后台运行，最小化或关闭页面不会中断。
+          </p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            预计需要 3–5 分钟，请稍候查看规划结果。
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
+        <div className="h-full w-2/3 animate-pulse rounded-full bg-gradient-to-r from-cyan-500 via-cyan-200 to-cyan-400" />
+      </div>
+    </section>
   );
 }
 
@@ -911,3 +1205,5 @@ const primaryInlineButtonClassName =
   'rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-wait disabled:opacity-60';
 const secondaryButtonClassName =
   'rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-slate-600 hover:text-white disabled:opacity-50';
+const dangerButtonClassName =
+  'rounded-lg border border-rose-500/40 bg-rose-500/5 px-4 py-2 text-sm font-medium text-rose-300 transition hover:border-rose-400 hover:bg-rose-500/10 disabled:opacity-50';

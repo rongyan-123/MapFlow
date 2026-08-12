@@ -7,6 +7,7 @@ import SkillTreeCanvas from './features/skill-tree/SkillTreeCanvas';
 import IdentityAccess from './features/identity/IdentityAccess';
 import { useIdentity } from './features/identity/IdentityContext';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
+import { readPlatformGenerationEntitlements } from './features/tree-generation/treeGenerationClient';
 import {
   addTreeToPersonalLibrary,
   fetchPersonalLibrary,
@@ -47,6 +48,11 @@ export default function App() {
     accountPlayerId,
     'tree-library',
   ] as const;
+  const platformEntitlementsQueryKey = [
+    'me',
+    accountPlayerId,
+    'platform-generation-entitlements',
+  ] as const;
 
   const publicCatalog = useQuery({
     queryKey: ['trees', 'public'],
@@ -75,6 +81,15 @@ export default function App() {
       view === 'personal' &&
       accountPlayerId !== null &&
       selectedLibraryEntryId !== null,
+    staleTime: 15 * 1000,
+    retry: false,
+  });
+  const platformEntitlements = useQuery({
+    queryKey: platformEntitlementsQueryKey,
+    queryFn: readPlatformGenerationEntitlements,
+    enabled:
+      accountPlayerId !== null &&
+      generationCapabilities?.platformFundedEnabled === true,
     staleTime: 15 * 1000,
     retry: false,
   });
@@ -126,6 +141,26 @@ export default function App() {
       setGenerationDialogOpen(true);
     }
   }, [generationCapabilities?.enabled, generationSessionId, session]);
+
+  useEffect(() => {
+    const activeSessionId =
+      platformEntitlements.data?.activePlatformSessionId ?? null;
+    if (
+      !session ||
+      !generationCapabilities?.enabled ||
+      generationSessionId ||
+      !activeSessionId
+    ) {
+      return;
+    }
+    setGenerationSessionId(activeSessionId);
+    writeGenerationSessionId(activeSessionId);
+  }, [
+    generationCapabilities?.enabled,
+    generationSessionId,
+    platformEntitlements.data?.activePlatformSessionId,
+    session,
+  ]);
 
   const activeGraph =
     view === 'public' ? publicTree.data?.graph : personalTree.data?.graph;
@@ -334,23 +369,31 @@ export default function App() {
           {view === 'personal' &&
             session &&
             generationCapabilities?.enabled && (
-              <button
-                type="button"
-                aria-label={
-                  generationSessionId ? '查看技能树生成任务' : '生成新技能树'
-                }
-                onClick={openTreeGenerator}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/45 bg-cyan-400/10 px-3 py-2.5 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/15"
-              >
-                {generationSessionId && (
-                  <span
-                    data-generation-pulse
-                    aria-hidden="true"
-                    className="h-2 w-2 animate-pulse rounded-full bg-cyan-300"
-                  />
-                )}
-                {generationSessionId ? '生成任务进行中 · 点击查看' : '生成新技能树'}
-              </button>
+              <div className="mt-4">
+                {generationCapabilities.platformFundedEnabled &&
+                  platformEntitlements.data && (
+                    <p className="mb-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-center text-[11px] font-medium text-amber-200">
+                      平台免费生成剩余 {platformEntitlements.data.available} 次
+                    </p>
+                  )}
+                <button
+                  type="button"
+                  aria-label={
+                    generationSessionId ? '查看技能树生成任务' : '生成新技能树'
+                  }
+                  onClick={openTreeGenerator}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/45 bg-cyan-400/10 px-3 py-2.5 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/15"
+                >
+                  {generationSessionId && (
+                    <span
+                      data-generation-pulse
+                      aria-hidden="true"
+                      className="h-2 w-2 animate-pulse rounded-full bg-cyan-300"
+                    />
+                  )}
+                  {generationSessionId ? '生成任务进行中 · 点击查看' : '生成新技能树'}
+                </button>
+              </div>
             )}
 
           {view === 'public' && selectedPublicTreeId && (
@@ -433,7 +476,9 @@ export default function App() {
             capabilities={generationCapabilities}
             csrfToken={session.csrfToken}
             sessionId={generationSessionId}
+            platformEntitlements={platformEntitlements.data ?? null}
             onSessionIdChange={rememberGenerationSession}
+            onPlatformEntitlementsChanged={() => platformEntitlements.refetch()}
             onComplete={showGeneratedTree}
             onClose={() => setGenerationDialogOpen(false)}
           />

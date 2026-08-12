@@ -36,6 +36,7 @@ export async function fetchCapabilities(): Promise<IdentityCapabilities> {
     typeof body.identity.registrationEnabled !== 'boolean' ||
     !isRecord(body.generation) ||
     typeof body.generation.enabled !== 'boolean' ||
+    typeof body.generation.platformFundedEnabled !== 'boolean' ||
     !isExactStringArray(body.generation.models, [
       'deepseek-v4-flash',
       'deepseek-v4-pro',
@@ -49,6 +50,7 @@ export async function fetchCapabilities(): Promise<IdentityCapabilities> {
     identity: { registrationEnabled: body.identity.registrationEnabled },
     generation: {
       enabled: body.generation.enabled,
+      platformFundedEnabled: body.generation.platformFundedEnabled,
       models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
       thinkingModes: ['disabled', 'enabled'],
       reasoningEfforts: ['low', 'high', 'max'],

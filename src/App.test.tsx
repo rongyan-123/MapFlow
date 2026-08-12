@@ -22,10 +22,15 @@ const treeApi = vi.hoisted(() => ({
   setNodeCompletion: vi.fn(),
 }));
 
+const generationApi = vi.hoisted(() => ({
+  readPlatformGenerationEntitlements: vi.fn(),
+}));
+
 const legacyApi = vi.hoisted(() => ({ fetchLearningTree: vi.fn() }));
 
 vi.mock('./features/identity/identityClient', () => identityApi);
 vi.mock('./features/tree-library/treeLibraryClient', () => treeApi);
+vi.mock('./features/tree-generation/treeGenerationClient', () => generationApi);
 vi.mock('./lib/api', () => legacyApi);
 vi.mock('./features/tree-generation/TreeGenerationDialog', () => ({
   default: ({
@@ -145,6 +150,7 @@ beforeEach(() => {
     identity: { registrationEnabled: true },
     generation: {
       enabled: true,
+      platformFundedEnabled: true,
       models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
       thinkingModes: ['disabled', 'enabled'],
       reasoningEfforts: ['low', 'high', 'max'],
@@ -159,6 +165,14 @@ beforeEach(() => {
     }),
   );
   treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [] });
+  generationApi.readPlatformGenerationEntitlements.mockResolvedValue({
+    totalGranted: 3,
+    available: 3,
+    reserved: 0,
+    consumed: 0,
+    activePlatformSessionId: null,
+    platformModeAvailable: true,
+  });
   legacyApi.fetchLearningTree.mockResolvedValue(legacySnapshot);
   window.history.replaceState({}, '', '/');
 });
@@ -376,6 +390,47 @@ describe('MapFlow tree library', () => {
 
     await user.click(restore);
     expect(screen.getByRole('dialog', { name: 'mock tree generator' })).toBeInTheDocument();
+  });
+
+  it('shows platform balance and restores the server active session without URL state', async () => {
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    generationApi.readPlatformGenerationEntitlements.mockResolvedValue({
+      totalGranted: 3,
+      available: 2,
+      reserved: 1,
+      consumed: 0,
+      activePlatformSessionId: 'server-platform-session-1',
+      platformModeAvailable: true,
+    });
+    renderApp();
+
+    expect(await screen.findByText('平台免费生成剩余 2 次')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('dialog', { name: 'mock tree generator' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('server-platform-session-1')).toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).get('generationSession')).toBe(
+      'server-platform-session-1',
+    );
+  });
+
+  it('does not request platform entitlements when the server disables that mode', async () => {
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    identityApi.fetchCapabilities.mockResolvedValue({
+      identity: { registrationEnabled: true },
+      generation: {
+        enabled: true,
+        platformFundedEnabled: false,
+        models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+        thinkingModes: ['disabled', 'enabled'],
+        reasoningEfforts: ['low', 'high', 'max'],
+      },
+    });
+    renderApp();
+
+    expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
+    expect(generationApi.readPlatformGenerationEntitlements).not.toHaveBeenCalled();
+    expect(screen.queryByText(/平台免费生成剩余/)).not.toBeInTheDocument();
   });
 });
 

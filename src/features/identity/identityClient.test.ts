@@ -21,6 +21,7 @@ describe('identityClient', () => {
         identity: { registrationEnabled: true },
         generation: {
           enabled: true,
+          platformFundedEnabled: true,
           models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
           thinkingModes: ['disabled', 'enabled'],
           reasoningEfforts: ['low', 'high', 'max'],
@@ -33,6 +34,7 @@ describe('identityClient', () => {
       identity: { registrationEnabled: true },
       generation: {
         enabled: true,
+        platformFundedEnabled: true,
         models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
         thinkingModes: ['disabled', 'enabled'],
         reasoningEfforts: ['low', 'high', 'max'],

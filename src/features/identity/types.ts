@@ -10,6 +10,7 @@ export interface IdentityCapabilities {
   };
   generation: {
     enabled: boolean;
+    platformFundedEnabled: boolean;
     models: DeepSeekModel[];
     thinkingModes: ThinkingMode[];
     reasoningEfforts: ReasoningEffort[];
