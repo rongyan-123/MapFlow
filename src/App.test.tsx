@@ -441,6 +441,50 @@ describe('MapFlow tree library', () => {
     expect(screen.queryByRole('dialog', { name: 'mock tree generator' })).not.toBeInTheDocument();
   });
 
+  it('keeps the completion barrier while the first entitlement read is still pending', async () => {
+    const user = userEvent.setup();
+    let resolveEntitlements!: (value: {
+      totalGranted: number;
+      available: number;
+      reserved: number;
+      consumed: number;
+      activePlatformSessionId: string | null;
+      platformModeAvailable: boolean;
+    }) => void;
+    generationApi.readPlatformGenerationEntitlements.mockReturnValue(
+      new Promise((resolve) => {
+        resolveEntitlements = resolve;
+      }),
+    );
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    window.history.replaceState(
+      {},
+      '',
+      '/?generationSession=server-platform-session-1',
+    );
+    renderApp();
+
+    expect(
+      await screen.findByRole('dialog', { name: 'mock tree generator' }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByTestId('complete-generation'));
+    expect(new URLSearchParams(window.location.search).has('generationSession')).toBe(false);
+
+    resolveEntitlements({
+      totalGranted: 3,
+      available: 1,
+      reserved: 1,
+      consumed: 1,
+      activePlatformSessionId: 'server-platform-session-1',
+      platformModeAvailable: true,
+    });
+    expect(await screen.findByText('平台免费生成剩余 1 次')).toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).has('generationSession')).toBe(false);
+    expect(screen.queryByRole('dialog', { name: 'mock tree generator' })).not.toBeInTheDocument();
+  });
+
   it('does not request platform entitlements when the server disables that mode', async () => {
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     identityApi.fetchCapabilities.mockResolvedValue({

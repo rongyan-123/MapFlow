@@ -147,7 +147,6 @@ export default function App() {
     const activeSessionId =
       platformEntitlements.data?.activePlatformSessionId ?? null;
     if (!activeSessionId) {
-      completedGenerationSessionIdRef.current = null;
       return;
     }
     if (
