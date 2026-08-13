@@ -289,16 +289,14 @@ export default function TreeGenerationDialog({
       if (!currentSessionId) throw new Error('生成会话尚未加载。');
       return abandonPlatformTreeGeneration(currentSessionId, csrfToken);
     },
-    onSuccess: (abandoned) => {
+    onSuccess: async (abandoned) => {
       setConfirmationKind(null);
       queryClient.setQueryData(
         generationSessionQueryKey(abandoned.generationSessionId),
         abandoned,
       );
-      setCurrentSessionId(null);
-      onSessionIdChange(null);
-      void onPlatformEntitlementsChanged();
-      onClose();
+      await refreshPlatformEntitlements();
+      dismissTerminalSession();
     },
   });
   const releaseFailedMutation = useMutation({
@@ -324,6 +322,14 @@ export default function TreeGenerationDialog({
     onSessionIdChange(null);
     onClose();
   };
+
+  async function refreshPlatformEntitlements() {
+    try {
+      await onPlatformEntitlementsChanged();
+    } catch {
+      // The terminal session must still be releasable if the summary refresh is unavailable.
+    }
+  }
 
   useEffect(() => {
     if (
@@ -353,13 +359,16 @@ export default function TreeGenerationDialog({
     if (
       session?.fundingMode !== 'platform' ||
       (session.state !== 'failed' && session.state !== 'abandoned') ||
+      abandonMutation.isPending ||
       refreshedTerminalPlatformSessionRef.current === session.generationSessionId
     ) {
       return;
     }
     refreshedTerminalPlatformSessionRef.current = session.generationSessionId;
-    void onPlatformEntitlementsChanged();
-  }, [onPlatformEntitlementsChanged, session]);
+    void refreshPlatformEntitlements().then(() => {
+      if (session.state === 'abandoned') dismissTerminalSession();
+    });
+  }, [abandonMutation.isPending, onPlatformEntitlementsChanged, session]);
 
   const synchronousPending =
     createMutation.isPending ||

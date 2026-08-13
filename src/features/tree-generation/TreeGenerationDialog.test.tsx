@@ -566,11 +566,13 @@ describe('TreeGenerationDialog', () => {
 
   it('abandons only after a separate warning and invalidates entitlement state', async () => {
     const user = userEvent.setup();
+    const entitlementRefresh = deferred<void>();
     generationApi.readTreeGeneration.mockResolvedValue(platformPlanReadySession());
     generationApi.abandonPlatformTreeGeneration.mockResolvedValue(
       platformAbandonedSession(),
     );
-    renderDialog({ sessionId: 'platform-session-1' });
+    const { props } = renderDialog({ sessionId: 'platform-session-1' });
+    props.onPlatformEntitlementsChanged.mockReturnValue(entitlementRefresh.promise);
 
     await screen.findByText('基础阶段');
     await user.click(screen.getByRole('button', { name: '放弃本次生成' }));
@@ -586,6 +588,34 @@ describe('TreeGenerationDialog', () => {
         'csrf-secret',
       ),
     );
+    await waitFor(() =>
+      expect(props.onPlatformEntitlementsChanged).toHaveBeenCalledTimes(1),
+    );
+    expect(props.onSessionIdChange).not.toHaveBeenCalledWith(null);
+    expect(props.onClose).not.toHaveBeenCalled();
+
+    entitlementRefresh.resolve();
+
+    await waitFor(() => expect(props.onSessionIdChange).toHaveBeenCalledWith(null));
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases an abandoned session restored from the URL after refreshing entitlements', async () => {
+    const entitlementRefresh = deferred<void>();
+    generationApi.readTreeGeneration.mockResolvedValue(platformAbandonedSession());
+    const { props } = renderDialog({ sessionId: 'platform-session-1' });
+    props.onPlatformEntitlementsChanged.mockReturnValue(entitlementRefresh.promise);
+
+    expect(await screen.findByText('本次生成已放弃')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(props.onPlatformEntitlementsChanged).toHaveBeenCalledTimes(1),
+    );
+    expect(props.onSessionIdChange).not.toHaveBeenCalledWith(null);
+
+    entitlementRefresh.resolve();
+
+    await waitFor(() => expect(props.onSessionIdChange).toHaveBeenCalledWith(null));
+    expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -790,4 +820,14 @@ function usage() {
     cacheHitInputTokens: 8,
     cacheMissInputTokens: 12,
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
