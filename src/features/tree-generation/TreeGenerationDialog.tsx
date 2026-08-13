@@ -851,11 +851,16 @@ function SessionWorkflow({
     );
   }
   if (session.state === 'failed') {
+    const failedBeforeFirstPlan = session.latestPlan === null;
     return (
       <div>
         <WorkflowStatus
-          title="最终生成失败"
-          message="最终生成失败，本次次数已自动返还。"
+          title={failedBeforeFirstPlan ? '首次规划失败' : '最终生成失败'}
+          message={
+            failedBeforeFirstPlan
+              ? '首次规划失败，本次次数已自动返还。'
+              : '最终生成失败，本次次数已自动返还。'
+          }
         />
         <button
           type="button"

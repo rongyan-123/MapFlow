@@ -532,14 +532,12 @@ describe('TreeGenerationDialog', () => {
     expect(props.onSessionIdChange).toHaveBeenCalledWith(null);
   });
 
-  it('shows an automatically refunded terminal failure without retry or abandon actions', async () => {
+  it('labels an automatically refunded pre-plan failure as an initial planning failure', async () => {
     const user = userEvent.setup();
-    generationApi.readTreeGeneration.mockResolvedValue(platformTerminalFailureSession());
+    generationApi.readTreeGeneration.mockResolvedValue(platformInitialPlanningFailureSession());
     const { props } = renderDialog({ sessionId: 'platform-session-1' });
 
-    expect(
-      await screen.findByText('最终生成失败，本次次数已自动返还。'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('首次规划失败，本次次数已自动返还。')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '免费重试生成' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '放弃本次生成' })).not.toBeInTheDocument();
     expect(
@@ -551,6 +549,15 @@ describe('TreeGenerationDialog', () => {
     await user.click(screen.getByRole('button', { name: '关闭并重新开始' }));
     expect(props.onSessionIdChange).toHaveBeenCalledWith(null);
     expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the final generation failure copy after a formal run exists', async () => {
+    generationApi.readTreeGeneration.mockResolvedValue(platformTerminalFailureSession());
+    renderDialog({ sessionId: 'platform-session-1' });
+
+    expect(
+      await screen.findByText('最终生成失败，本次次数已自动返还。'),
+    ).toBeInTheDocument();
   });
 
   it('keeps BYOK available when platform funding is disabled', () => {
@@ -808,6 +815,14 @@ function platformAbandonedSession(): GenerationSession {
 function platformTerminalFailureSession(): GenerationSession {
   return {
     ...platformRetrySession(),
+    state: 'failed',
+    platformLimits: platformLimits(0),
+  };
+}
+
+function platformInitialPlanningFailureSession(): GenerationSession {
+  return {
+    ...platformPlanningSession(),
     state: 'failed',
     platformLimits: platformLimits(0),
   };
