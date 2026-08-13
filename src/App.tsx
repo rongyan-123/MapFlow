@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import CompletionFlash from './features/skill-tree/CompletionFlash';
 import NodeDetailPanel from './features/skill-tree/NodeDetailPanel';
@@ -42,6 +42,7 @@ export default function App() {
   const [generationSessionId, setGenerationSessionId] = useState<string | null>(
     readGenerationSessionId,
   );
+  const completedGenerationSessionIdRef = useRef<string | null>(null);
   const accountPlayerId = session?.account.playerId ?? null;
   const personalTreeLibraryQueryKey = [
     'me',
@@ -145,11 +146,15 @@ export default function App() {
   useEffect(() => {
     const activeSessionId =
       platformEntitlements.data?.activePlatformSessionId ?? null;
+    if (!activeSessionId) {
+      completedGenerationSessionIdRef.current = null;
+      return;
+    }
     if (
       !session ||
       !generationCapabilities?.enabled ||
       generationSessionId ||
-      !activeSessionId
+      activeSessionId === completedGenerationSessionIdRef.current
     ) {
       return;
     }
@@ -255,6 +260,7 @@ export default function App() {
     writeGenerationSessionId(nextSessionId);
   };
   const showGeneratedTree = (libraryEntryId: string) => {
+    completedGenerationSessionIdRef.current = generationSessionId;
     setSelectedLibraryEntryId(libraryEntryId);
     setSelectedNodeId(null);
     setCompletion(null);

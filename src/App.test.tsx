@@ -51,6 +51,7 @@ vi.mock('./features/tree-generation/TreeGenerationDialog', () => ({
       </button>
       <button
         type="button"
+        data-testid="complete-generation"
         onClick={() => onComplete('33333333-3333-4333-8333-333333333333')}
       >
         完成生成
@@ -412,6 +413,32 @@ describe('MapFlow tree library', () => {
     expect(new URLSearchParams(window.location.search).get('generationSession')).toBe(
       'server-platform-session-1',
     );
+  });
+
+  it('does not restore a completed session from stale platform entitlements', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    generationApi.readPlatformGenerationEntitlements.mockResolvedValue({
+      totalGranted: 3,
+      available: 1,
+      reserved: 1,
+      consumed: 1,
+      activePlatformSessionId: 'server-platform-session-1',
+      platformModeAvailable: true,
+    });
+    renderApp();
+
+    expect(
+      await screen.findByRole('dialog', { name: 'mock tree generator' }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByTestId('complete-generation'));
+
+    await waitFor(() =>
+      expect(new URLSearchParams(window.location.search).has('generationSession')).toBe(false),
+    );
+    expect(screen.queryByRole('dialog', { name: 'mock tree generator' })).not.toBeInTheDocument();
   });
 
   it('does not request platform entitlements when the server disables that mode', async () => {
