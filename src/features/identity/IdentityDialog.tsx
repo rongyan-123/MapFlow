@@ -1,9 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { LoginInput, RegistrationInput } from './types';
 import {
   validateRegistration,
   type RegistrationFormValues,
 } from './identityValidation';
+import { IdentityApiError, type ClaimedInvitation } from './identityClient';
+import TurnstileVerifier from './TurnstileVerifier';
 
 interface IdentityDialogProps {
   pending: boolean;
@@ -12,7 +14,14 @@ interface IdentityDialogProps {
   onResetError: () => void;
   onLogin: (input: LoginInput) => Promise<unknown>;
   onRegister: (input: RegistrationInput) => Promise<unknown>;
+  onClaimInvitation: (turnstileToken?: string) => Promise<ClaimedInvitation>;
 }
+
+function readTurnstileSiteKey(): string {
+  return import.meta.env.VITE_TURNSTILE_SITE_KEY ?? '';
+}
+
+type ClaimStatus = 'idle' | 'verifying' | 'claiming' | 'claimed';
 
 const EMPTY_REGISTRATION: RegistrationFormValues = {
   username: '',
@@ -30,12 +39,49 @@ export default function IdentityDialog({
   onResetError,
   onLogin,
   onRegister,
+  onClaimInvitation,
 }: IdentityDialogProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [registration, setRegistration] =
     useState<RegistrationFormValues>(EMPTY_REGISTRATION);
   const [login, setLogin] = useState<LoginInput>({ username: '', password: '' });
   const [localError, setLocalError] = useState<string | null>(null);
+  const [claimStatus, setClaimStatus] = useState<ClaimStatus>('idle');
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const [claimedCode, setClaimedCode] = useState<string | null>(null);
+
+  const requestClaim = useCallback(
+    async (turnstileToken?: string) => {
+      setClaimError(null);
+      setClaimStatus('claiming');
+      try {
+        const claimed = await onClaimInvitation(turnstileToken);
+        setRegistration((current) => ({
+          ...current,
+          invitationCode: claimed.invitationCode,
+        }));
+        setClaimedCode(claimed.invitationCode);
+        setClaimStatus('claimed');
+      } catch (caught) {
+        setClaimStatus('idle');
+        setClaimError(
+          caught instanceof IdentityApiError
+            ? caught.message
+            : '邀请码领取失败，请稍后再试。',
+        );
+      }
+    },
+    [onClaimInvitation],
+  );
+
+  const startClaim = useCallback(() => {
+    setClaimError(null);
+    if (readTurnstileSiteKey()) {
+      setClaimStatus('verifying');
+    } else {
+      void requestClaim();
+    }
+  }, [requestClaim]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -48,6 +94,9 @@ export default function IdentityDialog({
   const changeMode = (nextMode: 'login' | 'register') => {
     setMode(nextMode);
     setLocalError(null);
+    setClaimStatus('idle');
+    setClaimError(null);
+    setClaimedCode(null);
     onResetError();
   };
 
@@ -222,6 +271,45 @@ export default function IdentityDialog({
                 className={`${inputClassName} font-mono uppercase tracking-[0.3em]`}
               />
             </Field>
+            {claimStatus === 'claimed' && claimedCode ? (
+              <div className="rounded-lg border border-emerald-700/60 bg-emerald-950/40 px-3 py-2.5 text-xs leading-5 text-emerald-300">
+                已领取邀请码{' '}
+                <span className="font-mono font-semibold tracking-[0.2em]">{claimedCode}</span>
+                ，已填入上方输入框，请完成注册。
+              </div>
+            ) : (
+              <div className="rounded-lg border border-slate-700/60 bg-slate-950/50 px-3 py-2.5">
+                <p className="text-xs leading-5 text-slate-400">
+                  还没有邀请码？每 24 小时每个网络可领取一个。
+                </p>
+                {claimStatus === 'verifying' && readTurnstileSiteKey() ? (
+                  <div className="mt-2">
+                    <TurnstileVerifier
+                      siteKey={readTurnstileSiteKey()}
+                      onVerified={(token) => void requestClaim(token)}
+                      onError={() => {
+                        setClaimStatus('idle');
+                        setClaimError('人机验证加载失败，请重试。');
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={pending || claimStatus === 'claiming'}
+                    onClick={startClaim}
+                    className="mt-2 rounded-lg border border-cyan-400/40 px-3 py-1.5 text-xs font-medium text-cyan-300 transition hover:bg-cyan-400/10 disabled:cursor-wait disabled:opacity-50"
+                  >
+                    {claimStatus === 'claiming' ? '正在领取…' : '点击领取邀请码'}
+                  </button>
+                )}
+                {claimError && (
+                  <p role="alert" className="mt-2 text-xs text-rose-300">
+                    {claimError}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="邮箱（可选）">
                 <input

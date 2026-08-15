@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   IdentityApiError,
+  claimInvitation,
   fetchCapabilities,
   fetchCurrentSession,
   loginIdentity,
@@ -151,6 +152,73 @@ describe('identityClient', () => {
       message: '请求过于频繁，请稍后再试。',
       traceId: 'trace-123',
     });
+  });
+
+  it('claims one invitation without a turnstile token when none is configured', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ invitationCode: 'EYOSBF' }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(claimInvitation()).resolves.toEqual({
+      invitationCode: 'EYOSBF',
+    });
+    const [path, request] = fetchMock.mock.calls[0];
+    expect(path).toBe('/api/invitations/claim');
+    expect(JSON.parse(String(request?.body))).toEqual({});
+  });
+
+  it('forwards the turnstile token with the claim request', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ invitationCode: 'ITCJNJ' }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(claimInvitation('turnstile-widget-token')).resolves.toEqual({
+      invitationCode: 'ITCJNJ',
+    });
+    const [, request] = fetchMock.mock.calls[0];
+    expect(JSON.parse(String(request?.body))).toEqual({
+      turnstileToken: 'turnstile-widget-token',
+    });
+  });
+
+  it('surfaces the server claim rejection envelope and status', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          error: {
+            code: 'invitation.claim_rate_limited',
+            message: '您 24 小时内已领取过邀请码，请使用已领取的邀请码完成注册。',
+            traceId: 'trace-claim',
+          },
+        },
+        429,
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const error = await claimInvitation('turnstile-widget-token').catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(IdentityApiError);
+    expect(error).toMatchObject({
+      status: 429,
+      code: 'invitation.claim_rate_limited',
+      message: '您 24 小时内已领取过邀请码，请使用已领取的邀请码完成注册。',
+      traceId: 'trace-claim',
+    });
+  });
+
+  it('rejects a claim response without the six-letter invitation format', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ invitationCode: 'short' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const error = await claimInvitation().catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(IdentityApiError);
+    expect(error).toMatchObject({ status: 502, code: 'identity.invalid_response' });
   });
 
   it('requires the in-memory CSRF token when logging out', async () => {

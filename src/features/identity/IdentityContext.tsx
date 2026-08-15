@@ -8,6 +8,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import IdentityDialog from './IdentityDialog';
 import {
+  claimInvitation,
   fetchCapabilities,
   fetchCurrentSession,
   loginIdentity,
@@ -113,6 +114,9 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
           onLogin={(input) => authentication.mutateAsync({ kind: 'login', input })}
           onRegister={(input) =>
             authentication.mutateAsync({ kind: 'register', input })
+          }
+          onClaimInvitation={(turnstileToken) =>
+            claimInvitation(turnstileToken)
           }
         />
       )}

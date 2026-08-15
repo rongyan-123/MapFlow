@@ -93,6 +93,30 @@ export async function loginIdentity(input: LoginInput): Promise<IdentitySession>
   return parseSession(await readJson(response));
 }
 
+export interface ClaimedInvitation {
+  invitationCode: string;
+}
+
+export async function claimInvitation(
+  turnstileToken?: string,
+): Promise<ClaimedInvitation> {
+  const response = await request('/api/invitations/claim', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(turnstileToken ? { turnstileToken } : {}),
+  });
+  const body = await readJson(response);
+  if (
+    !isRecord(body) ||
+    typeof body.invitationCode !== 'string' ||
+    !/^[A-Z]{6}$/.test(body.invitationCode)
+  ) {
+    throw invalidResponseError();
+  }
+  return { invitationCode: body.invitationCode };
+}
+
 export async function logoutIdentity(csrfToken: string): Promise<void> {
   await request('/api/auth/logout', {
     method: 'POST',
