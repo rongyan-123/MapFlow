@@ -23,6 +23,19 @@ describe('validateRegistration', () => {
     expect(validateRegistration(form)).toBe(message);
   });
 
+  it.each([
+    [
+      { ...valid, password: '12345678', confirmPassword: '12345678' },
+      '密码过于常见，请更换一个更复杂的密码。',
+    ],
+    [
+      { ...valid, password: 'FIRSTUSER2026', confirmPassword: 'FIRSTUSER2026' },
+      '密码不能包含用户名。',
+    ],
+  ])('rejects passwords the server policy would refuse', (form, message) => {
+    expect(validateRegistration(form)).toBe(message);
+  });
+
   it('accepts either a valid email or a digits-only phone locator', () => {
     expect(validateRegistration(valid)).toBeNull();
     expect(

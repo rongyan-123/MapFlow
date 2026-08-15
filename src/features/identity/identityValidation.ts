@@ -7,6 +7,22 @@ export interface RegistrationFormValues {
   phone: string;
 }
 
+// Mirrors the server-side PasswordPolicy common-password allowlist in src/runtime.rs.
+const COMMON_PASSWORDS = [
+  '00000000',
+  '11111111',
+  '123123123',
+  '12345678',
+  '123456789',
+  '1q2w3e4r',
+  'abc12345',
+  'admin123',
+  'iloveyou',
+  'password',
+  'password123',
+  'qwerty123',
+];
+
 export function validateRegistration(form: RegistrationFormValues): string | null {
   const usernameLength = Array.from(form.username).length;
   if (
@@ -19,6 +35,14 @@ export function validateRegistration(form: RegistrationFormValues): string | nul
   const passwordLength = Array.from(form.password).length;
   if (passwordLength < 8) return '密码至少需要 8 位。';
   if (passwordLength > 128) return '密码最多允许 128 位。';
+  const weakPasswordKey = form.password.normalize('NFKC').toLowerCase();
+  if (COMMON_PASSWORDS.includes(weakPasswordKey)) {
+    return '密码过于常见，请更换一个更复杂的密码。';
+  }
+  const usernameKey = form.username.normalize('NFKC').toLowerCase();
+  if (weakPasswordKey.includes(usernameKey)) {
+    return '密码不能包含用户名。';
+  }
   if (form.password !== form.confirmPassword) return '两次输入的密码不一致。';
   if (!/^[A-Z]{6}$/.test(form.invitationCode)) {
     return '邀请码必须是 6 位大写字母。';
