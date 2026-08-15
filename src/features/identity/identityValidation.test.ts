@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateRegistration } from './identityValidation';
+import { passwordRules, validateRegistration } from './identityValidation';
 
 const valid = {
   username: 'firstuser',
@@ -41,5 +41,34 @@ describe('validateRegistration', () => {
     expect(
       validateRegistration({ ...valid, email: '', phone: '13800138000' }),
     ).toBeNull();
+  });
+});
+
+describe('passwordRules', () => {
+  const satisfied = (rules: ReturnType<typeof passwordRules>) =>
+    rules.filter((rule) => rule.satisfied).map((rule) => rule.key);
+
+  it('lights no rules for an empty password', () => {
+    expect(satisfied(passwordRules('firstuser', ''))).toEqual([]);
+  });
+
+  it('lights all rules for a long safe password', () => {
+    const rules = satisfied(passwordRules('firstuser', 'abcdefgh'));
+    expect(rules).toEqual(['length', 'not-common', 'no-username']);
+  });
+
+  it('keeps the common-password rule dark for blocklisted passwords', () => {
+    const rules = satisfied(passwordRules('firstuser', '12345678'));
+    expect(rules).not.toContain('not-common');
+  });
+
+  it('keeps the username rule dark when the password contains the username', () => {
+    const rules = satisfied(passwordRules('firstuser', 'firstuser2026'));
+    expect(rules).not.toContain('no-username');
+  });
+
+  it('treats the username rule as satisfied while the username is empty', () => {
+    const rules = satisfied(passwordRules('', 'abcdefgh'));
+    expect(rules).toContain('no-username');
   });
 });

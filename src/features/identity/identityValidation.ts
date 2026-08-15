@@ -23,6 +23,35 @@ const COMMON_PASSWORDS = [
   'qwerty123',
 ];
 
+export interface PasswordRule {
+  key: string;
+  label: string;
+  satisfied: boolean;
+}
+
+export function passwordRules(username: string, password: string): PasswordRule[] {
+  const length = Array.from(password).length;
+  const weakPasswordKey = password.normalize('NFKC').toLowerCase();
+  const usernameKey = username.normalize('NFKC').toLowerCase();
+  return [
+    {
+      key: 'length',
+      label: '8～128 位',
+      satisfied: length >= 8 && length <= 128,
+    },
+    {
+      key: 'not-common',
+      label: '不使用常见密码',
+      satisfied: !!password && !COMMON_PASSWORDS.includes(weakPasswordKey),
+    },
+    {
+      key: 'no-username',
+      label: '不包含用户名',
+      satisfied: !!password && (!usernameKey || !weakPasswordKey.includes(usernameKey)),
+    },
+  ];
+}
+
 export function validateRegistration(form: RegistrationFormValues): string | null {
   const usernameLength = Array.from(form.username).length;
   if (

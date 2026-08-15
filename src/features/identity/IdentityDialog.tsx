@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { LoginInput, RegistrationInput } from './types';
 import {
+  passwordRules,
   validateRegistration,
   type RegistrationFormValues,
 } from './identityValidation';
@@ -238,6 +239,10 @@ export default function IdentityDialog({
                   className={inputClassName}
                 />
               </Field>
+              <PasswordRuleList
+                username={registration.username}
+                password={registration.password}
+              />
               <Field label="确认密码">
                 <input
                   type="password"
@@ -356,6 +361,30 @@ function Field({ label, children }: { label: string; children: React.ReactElemen
       {label}
       {children}
     </label>
+  );
+}
+
+function PasswordRuleList({
+  username,
+  password,
+}: {
+  username: string;
+  password: string;
+}) {
+  const rules = passwordRules(username, password);
+  return (
+    <ul className="mt-1.5 space-y-0.5">
+      {rules.map((rule) => (
+        <li
+          key={rule.key}
+          className={`text-[11px] leading-4 ${
+            rule.satisfied ? 'text-emerald-400' : 'text-slate-600'
+          }`}
+        >
+          {rule.satisfied ? '✓' : '·'} {rule.label}
+        </li>
+      ))}
+    </ul>
   );
 }
 
