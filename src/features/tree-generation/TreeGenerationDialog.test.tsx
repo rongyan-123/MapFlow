@@ -71,7 +71,7 @@ describe('TreeGenerationDialog', () => {
     expect(apiKeyInput).toHaveAttribute('name', 'mapflow-deepseek-api-key');
     expect(screen.getByLabelText('思考模式')).toHaveValue('disabled');
     expect(screen.getByLabelText('思考强度')).toHaveValue('low');
-    expect(screen.getByLabelText('思考强度')).toBeDisabled();
+    expect(screen.getByLabelText('思考强度')).toBeEnabled();
     expect(
       screen.getByText(/职业或应用方向会调整节点重点、先后顺序和建议学习深度/),
     ).toBeInTheDocument();
@@ -79,6 +79,7 @@ describe('TreeGenerationDialog', () => {
 
     await fillGenerationForm(user);
     await user.type(screen.getByLabelText('DeepSeek API Key'), 'sk-memory-only');
+    await user.selectOptions(screen.getByLabelText('思考强度'), 'high');
     await user.click(screen.getByRole('button', { name: '生成规划' }));
 
     await waitFor(() =>
@@ -88,7 +89,7 @@ describe('TreeGenerationDialog', () => {
           apiKey: 'sk-memory-only',
           model: 'deepseek-v4-flash',
           thinking: 'disabled',
-          reasoningEffort: 'low',
+          reasoningEffort: 'high',
         },
         'csrf-secret',
       ),

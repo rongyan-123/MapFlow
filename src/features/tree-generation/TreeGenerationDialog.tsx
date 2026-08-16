@@ -700,7 +700,6 @@ function ModelConfiguration({
         </Field>
         <Field label="思考强度">
           <select
-            disabled={thinking === 'disabled'}
             value={reasoningEffort}
             onChange={(event) =>
               onReasoningEffortChange(event.target.value as ReasoningEffort)
@@ -716,8 +715,8 @@ function ModelConfiguration({
         </Field>
       </div>
       <p className="mt-3 text-[11px] leading-5 text-slate-500">
-        默认关闭思考以缩短等待时间；开启后可选 Low、High、Max。High 和 Max
-        通常更慢、消耗更多 Token。
+        默认关闭思考以缩短等待时间。思考强度随时可选，但仅在开启思考时生效；High
+        和 Max 通常更慢、消耗更多 Token。
       </p>
     </section>
   );
