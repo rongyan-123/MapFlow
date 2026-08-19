@@ -32,14 +32,16 @@ function dashboard(): AdminDashboard {
     activeSessions: 7,
     platformConsumedUsages: 42,
     platformConsumedTokens: 123456,
+    // 第 3 天（08-15）是 7 日最大值 8，最后一天（08-19）只有 3 ——
+    // 刻意让「最后一天 ≠ 最大值」，以钉死「今日登录」取最后一天而非最高日的口径。
     loginTrend7d: [
       { date: '2026-08-13', activeAccounts: 2 },
       { date: '2026-08-14', activeAccounts: 4 },
-      { date: '2026-08-15', activeAccounts: 3 },
+      { date: '2026-08-15', activeAccounts: 8 },
       { date: '2026-08-16', activeAccounts: 5 },
       { date: '2026-08-17', activeAccounts: 4 },
       { date: '2026-08-18', activeAccounts: 6 },
-      { date: '2026-08-19', activeAccounts: 8 },
+      { date: '2026-08-19', activeAccounts: 3 },
     ],
   };
 }
@@ -174,18 +176,35 @@ describe('AdminPanel', () => {
     renderAdminPanel();
 
     expect(await screen.findByLabelText('注册总数 12')).toBeInTheDocument();
-    expect(screen.getByLabelText('今日登录 8')).toBeInTheDocument();
+    // 「今日登录」= 趋势最后一天（08-19），不是最高日。
+    expect(screen.getByLabelText('今日登录 3')).toBeInTheDocument();
     expect(screen.getByLabelText('活跃会话 7')).toBeInTheDocument();
     expect(screen.getByLabelText('剩余邀请码 3')).toBeInTheDocument();
     expect(screen.getByLabelText('平台消耗次数 42')).toBeInTheDocument();
     expect(screen.getByLabelText('平台消耗 token 123456')).toBeInTheDocument();
     expect(screen.getByText('最近 7 日登录趋势')).toBeInTheDocument();
 
-    const tallestBar = screen.getByLabelText('2026-08-19 8 人登录');
+    // 柱高按 7 日最大值归一化：最高日（08-15，8 人）柱高 100%；
+    // 最后一天（08-19，3 人）柱高 3/8 ≈ 38%，并非最高柱。
+    const tallestBar = screen.getByLabelText('2026-08-15 8 人登录');
     expect(tallestBar).toHaveStyle({ height: '100%' });
+    expect(screen.getByLabelText('2026-08-19 3 人登录')).toHaveStyle({
+      height: '38%',
+    });
     expect(screen.getByLabelText('2026-08-13 2 人登录')).toHaveStyle({
       height: '25%',
     });
+  });
+
+  it('overview shows 今日登录 0 without crashing when the trend is empty', async () => {
+    adminApi.fetchAdminDashboard.mockResolvedValue({
+      ...dashboard(),
+      loginTrend7d: [],
+    });
+    renderAdminPanel();
+
+    expect(await screen.findByLabelText('今日登录 0')).toBeInTheDocument();
+    expect(screen.getByText('最近 7 日登录趋势')).toBeInTheDocument();
   });
 
   it('accounts renders usernames and suspends an account after inline confirmation', async () => {
