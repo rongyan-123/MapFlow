@@ -644,6 +644,7 @@ function renderDialog({
     csrfToken: 'csrf-secret',
     sessionId,
     platformEntitlements: entitlements,
+    credit: null,
     onSessionIdChange: vi.fn(),
     onPlatformEntitlementsChanged: vi.fn(),
     onComplete: vi.fn(),

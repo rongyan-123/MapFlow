@@ -39,6 +39,33 @@ describe('GenerationFundingSelector', () => {
 
     expect(screen.getByRole('button', { name: '选择平台免费体验' })).toBeDisabled();
   });
+
+  it('shows credit pricing when free entitlement is exhausted and disables below price', () => {
+    render(
+      <GenerationFundingSelector
+        value="byok"
+        platformEntitlements={{ ...entitlements(0), platformModeAvailable: false }}
+        credit={{ balance: 2, signedInToday: false, freeRemaining: 0, pricePerTree: 3 }}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('积分生成 · 需 3 积分')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '选择平台免费体验' })).toBeDisabled();
+  });
+
+  it('enables platform mode with enough credits even without free entitlement', () => {
+    render(
+      <GenerationFundingSelector
+        value="platform"
+        platformEntitlements={{ ...entitlements(0), platformModeAvailable: false }}
+        credit={{ balance: 5, signedInToday: false, freeRemaining: 0, pricePerTree: 3 }}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: '选择平台免费体验' })).toBeEnabled();
+  });
 });
 
 function entitlements(available: number) {

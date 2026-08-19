@@ -45,12 +45,14 @@ import type {
   ReasoningEffort,
   ThinkingMode,
 } from './types';
+import type { CreditSummary } from '../credit/creditClient';
 
 interface TreeGenerationDialogProps {
   capabilities: IdentityCapabilities['generation'];
   csrfToken: string;
   sessionId: string | null;
   platformEntitlements: PlatformGenerationEntitlementSummary | null;
+  credit: CreditSummary | null;
   onSessionIdChange: (sessionId: string | null) => void;
   onPlatformEntitlementsChanged: () => void | Promise<unknown>;
   onComplete: (libraryEntryId: string) => void;
@@ -71,6 +73,7 @@ export default function TreeGenerationDialog({
   csrfToken,
   sessionId,
   platformEntitlements,
+  credit,
   onSessionIdChange,
   onPlatformEntitlementsChanged,
   onComplete,
@@ -536,6 +539,7 @@ export default function TreeGenerationDialog({
               <GenerationFundingSelector
                 value={fundingMode}
                 platformEntitlements={platformEntitlements}
+                credit={credit}
                 onChange={(mode) => {
                   setFundingMode(mode);
                   setLocalError(null);

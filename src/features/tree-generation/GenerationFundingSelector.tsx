@@ -2,10 +2,12 @@ import type {
   GenerationFundingMode,
   PlatformGenerationEntitlementSummary,
 } from './types';
+import type { CreditSummary } from '../credit/creditClient';
 
 interface GenerationFundingSelectorProps {
   value: GenerationFundingMode;
   platformEntitlements: PlatformGenerationEntitlementSummary | null;
+  credit?: CreditSummary | null;
   onChange: (mode: GenerationFundingMode) => void;
   disabled?: boolean;
 }
@@ -13,19 +15,36 @@ interface GenerationFundingSelectorProps {
 export default function GenerationFundingSelector({
   value,
   platformEntitlements,
+  credit,
   onChange,
   disabled = false,
 }: GenerationFundingSelectorProps) {
-  const platformAvailable =
+  const freeAvailable =
     platformEntitlements?.platformModeAvailable === true &&
     platformEntitlements.available > 0;
+  const creditEnough =
+    credit !== null && credit !== undefined && credit.balance >= credit.pricePerTree;
+  const platformAvailable = freeAvailable || creditEnough;
 
   return (
     <section aria-label="技能树生成方式" className="grid gap-3 sm:grid-cols-2">
       <FundingCard
         label="选择平台免费体验"
-        title={`平台免费体验 · 剩余 ${platformEntitlements?.available ?? 0} 次`}
-        description="无需填写 API Key；模型和参数由服务器固定。"
+        title={
+          freeAvailable
+            ? `平台免费体验 · 剩余 ${platformEntitlements?.available ?? 0} 次`
+            : credit
+              ? `积分生成 · 需 ${credit.pricePerTree} 积分`
+              : '平台免费体验 · 剩余 0 次'
+        }
+        description={
+          freeAvailable
+            ? '无需填写 API Key；模型和参数由服务器固定。'
+            : credit
+              ? `当前积分 ${credit.balance}${creditEnough ? '' : '，余额不足'}` +
+                (platformEntitlements?.platformModeAvailable === false ? '' : '，可用积分支付')
+              : '无需填写 API Key；模型和参数由服务器固定。'
+        }
         selected={value === 'platform'}
         disabled={disabled || !platformAvailable}
         onClick={() => onChange('platform')}

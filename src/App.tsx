@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import AdminPanel from './features/admin/AdminPanel';
+import CreditPill from './features/credit/CreditPill';
+import { readCreditSummary } from './features/credit/creditClient';
 import CompletionFlash from './features/skill-tree/CompletionFlash';
 import NodeDetailPanel from './features/skill-tree/NodeDetailPanel';
 import ProgressOverview from './features/skill-tree/ProgressOverview';
@@ -55,6 +57,7 @@ export default function App() {
     accountPlayerId,
     'platform-generation-entitlements',
   ] as const;
+  const creditQueryKey = ['me', accountPlayerId, 'credit'] as const;
 
   const publicCatalog = useQuery({
     queryKey: ['trees', 'public'],
@@ -89,6 +92,15 @@ export default function App() {
   const platformEntitlements = useQuery({
     queryKey: platformEntitlementsQueryKey,
     queryFn: readPlatformGenerationEntitlements,
+    enabled:
+      accountPlayerId !== null &&
+      generationCapabilities?.platformFundedEnabled === true,
+    staleTime: 15 * 1000,
+    retry: false,
+  });
+  const creditQuery = useQuery({
+    queryKey: creditQueryKey,
+    queryFn: readCreditSummary,
     enabled:
       accountPlayerId !== null &&
       generationCapabilities?.platformFundedEnabled === true,
@@ -344,7 +356,19 @@ export default function App() {
             </ViewButton>
           )}
         </nav>
-        <IdentityAccess />
+        <div className="flex shrink-0 items-center gap-2">
+          {session &&
+            generationCapabilities?.platformFundedEnabled === true && (
+              <CreditPill
+                credit={creditQuery.data ?? null}
+                onSignedIn={() => {
+                  void creditQuery.refetch();
+                  void platformEntitlements.refetch();
+                }}
+              />
+            )}
+          <IdentityAccess />
+        </div>
       </header>
 
       <main className="flex min-h-0 flex-1">
@@ -501,8 +525,12 @@ export default function App() {
             csrfToken={session.csrfToken}
             sessionId={generationSessionId}
             platformEntitlements={platformEntitlements.data ?? null}
+            credit={creditQuery.data ?? null}
             onSessionIdChange={rememberGenerationSession}
-            onPlatformEntitlementsChanged={() => platformEntitlements.refetch()}
+            onPlatformEntitlementsChanged={() => {
+              void platformEntitlements.refetch();
+              void creditQuery.refetch();
+            }}
             onComplete={showGeneratedTree}
             onClose={() => setGenerationDialogOpen(false)}
           />
