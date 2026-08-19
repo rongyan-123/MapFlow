@@ -6,6 +6,7 @@ import { IdentityApiError } from '../identity/identityClient';
 import AdminPanel from './AdminPanel';
 import type {
   AdminAccount,
+  AdminAnnouncement,
   AdminAuditEventsPage,
   AdminDashboard,
   AdminInvitationsResponse,
@@ -126,6 +127,18 @@ function auditPage(
   total: number,
 ): AdminAuditEventsPage {
   return { events, total };
+}
+
+function announcements(): AdminAnnouncement[] {
+  return [
+    {
+      announcementId: 'ann-1',
+      title: '系统维护通知',
+      content: '本周六 22:00 停机维护。',
+      createdAt: '2026-08-18T10:00:00Z',
+      readCount: 3,
+    },
+  ];
 }
 
 beforeEach(() => {
@@ -454,5 +467,59 @@ describe('AdminPanel', () => {
     // 未知事件类型：标题回退原字符串；未知 outcome：回退原字符串。
     expect(await screen.findByText('custom.event')).toBeInTheDocument();
     expect(screen.getByText('unknown-outcome')).toBeInTheDocument();
+  });
+
+  it('announcements deletes an announcement only after inline confirmation', async () => {
+    const user = userEvent.setup();
+    adminApi.fetchAdminAnnouncements.mockResolvedValue(announcements());
+    adminApi.deleteAdminAnnouncement.mockResolvedValue(undefined);
+    renderAdminPanel();
+
+    await user.click(screen.getByRole('tab', { name: '公告' }));
+    expect(await screen.findByText('系统维护通知')).toBeInTheDocument();
+
+    // 第一次点击只进入确认态，不发起删除。
+    await user.click(screen.getByRole('button', { name: '删除' }));
+    expect(adminApi.deleteAdminAnnouncement).not.toHaveBeenCalled();
+    expect(screen.getByText('确认删除？')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '确认删除' })).toBeInTheDocument();
+
+    // 取消按钮可退出确认态，恢复为普通删除按钮。
+    await user.click(screen.getByRole('button', { name: '取消' }));
+    expect(screen.queryByText('确认删除？')).not.toBeInTheDocument();
+
+    // 再次进入确认态后点确认才真正删除。
+    await user.click(screen.getByRole('button', { name: '删除' }));
+    await user.click(screen.getByRole('button', { name: '确认删除' }));
+    await waitFor(() =>
+      expect(adminApi.deleteAdminAnnouncement).toHaveBeenCalledWith(
+        'ann-1',
+        'csrf-secret',
+      ),
+    );
+    await waitFor(() =>
+      expect(adminApi.fetchAdminAnnouncements).toHaveBeenCalledTimes(2),
+    );
+  });
+
+  it('announcements shows the error banner when deletion fails', async () => {
+    const user = userEvent.setup();
+    adminApi.fetchAdminAnnouncements.mockResolvedValue(announcements());
+    adminApi.deleteAdminAnnouncement.mockRejectedValue(
+      new IdentityApiError(
+        409,
+        'admin.announcement_not_found',
+        '公告不存在，可能已被删除。',
+      ),
+    );
+    renderAdminPanel();
+
+    await user.click(screen.getByRole('tab', { name: '公告' }));
+    await screen.findByText('系统维护通知');
+    await user.click(screen.getByRole('button', { name: '删除' }));
+    await user.click(screen.getByRole('button', { name: '确认删除' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('公告不存在，可能已被删除。');
   });
 });

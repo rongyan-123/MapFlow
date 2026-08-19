@@ -11,6 +11,7 @@ export default function AnnouncementsTab({ csrfToken }: { csrfToken: string }) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const query = useQuery({
     queryKey: ['admin', 'announcements'],
     queryFn: () => fetchAdminAnnouncements(csrfToken),
@@ -28,6 +29,8 @@ export default function AnnouncementsTab({ csrfToken }: { csrfToken: string }) {
   const remove = useMutation({
     mutationFn: (announcementId: string) =>
       deleteAdminAnnouncement(announcementId, csrfToken),
+    // 无论成败都退出确认态：失败由顶部横幅提示，成功由列表刷新体现。
+    onSettled: () => setConfirmingId(null),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'announcements'] });
     },
@@ -45,6 +48,14 @@ export default function AnnouncementsTab({ csrfToken }: { csrfToken: string }) {
 
   return (
     <section>
+      {remove.error && (
+        <p
+          role="alert"
+          className="rounded-lg border border-rose-500/25 bg-rose-500/5 p-3 text-sm leading-6 text-rose-300"
+        >
+          {readableError(remove.error)}
+        </p>
+      )}
       <form
         onSubmit={submitForm}
         className="mb-4 rounded-xl border border-slate-800 bg-slate-950/55 p-4"
@@ -106,14 +117,35 @@ export default function AnnouncementsTab({ csrfToken }: { csrfToken: string }) {
                     {new Date(item.createdAt).toLocaleString('zh-CN')} · {item.readCount} 人已读
                   </p>
                 </div>
-                <button
-                  type="button"
-                  disabled={remove.isPending}
-                  onClick={() => remove.mutate(item.announcementId)}
-                  className="shrink-0 rounded-lg border border-rose-500/40 bg-rose-500/5 px-3 py-1 text-xs font-medium text-rose-300 transition hover:border-rose-400 hover:bg-rose-500/10 disabled:opacity-50"
-                >
-                  删除
-                </button>
+                {confirmingId === item.announcementId ? (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-xs text-rose-300">确认删除？</span>
+                    <button
+                      type="button"
+                      disabled={remove.isPending}
+                      onClick={() => remove.mutate(item.announcementId)}
+                      className="rounded-lg bg-rose-500/80 px-3 py-1 text-xs font-semibold text-white transition hover:bg-rose-500 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {remove.isPending ? '删除中…' : '确认删除'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={remove.isPending}
+                      onClick={() => setConfirmingId(null)}
+                      className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-medium text-slate-300 transition hover:border-slate-600 disabled:opacity-50"
+                    >
+                      取消
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingId(item.announcementId)}
+                    className="shrink-0 rounded-lg border border-rose-500/40 bg-rose-500/5 px-3 py-1 text-xs font-medium text-rose-300 transition hover:border-rose-400 hover:bg-rose-500/10"
+                  >
+                    删除
+                  </button>
+                )}
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">
                 {item.content}
@@ -124,4 +156,8 @@ export default function AnnouncementsTab({ csrfToken }: { csrfToken: string }) {
       )}
     </section>
   );
+}
+
+function readableError(error: unknown): string {
+  return error instanceof Error ? error.message : '管理服务暂时不可用，请稍后再试。';
 }
