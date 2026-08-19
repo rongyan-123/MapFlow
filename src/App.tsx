@@ -9,6 +9,8 @@ import ProgressOverview from './features/skill-tree/ProgressOverview';
 import SkillTreeCanvas from './features/skill-tree/SkillTreeCanvas';
 import IdentityAccess from './features/identity/IdentityAccess';
 import { useIdentity } from './features/identity/IdentityContext';
+import AnnouncementsButton from './features/announcements/AnnouncementsButton';
+import FeedbackButton from './features/feedback/FeedbackButton';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
 import { readPlatformGenerationEntitlements } from './features/tree-generation/treeGenerationClient';
 import {
@@ -357,6 +359,7 @@ export default function App() {
           )}
         </nav>
         <div className="flex shrink-0 items-center gap-2">
+          <AnnouncementsButton />
           {session &&
             generationCapabilities?.platformFundedEnabled === true && (
               <CreditPill
@@ -535,6 +538,8 @@ export default function App() {
             onClose={() => setGenerationDialogOpen(false)}
           />
         )}
+
+      <FeedbackButton />
     </div>
   );
 }
