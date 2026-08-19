@@ -3,7 +3,10 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
-import { IdentityProvider } from './features/identity/IdentityContext';
+import {
+  IdentityProvider,
+  SESSION_QUERY_KEY,
+} from './features/identity/IdentityContext';
 
 const identityApi = vi.hoisted(() => ({
   fetchCapabilities: vi.fn(),
@@ -28,9 +31,20 @@ const generationApi = vi.hoisted(() => ({
 
 const legacyApi = vi.hoisted(() => ({ fetchLearningTree: vi.fn() }));
 
+const adminApi = vi.hoisted(() => ({
+  fetchAdminDashboard: vi.fn(),
+  fetchAdminAccounts: vi.fn(),
+  fetchAdminInvitations: vi.fn(),
+  fetchAdminAuditEvents: vi.fn(),
+  fetchAdminAuditEventsPage: vi.fn(),
+  suspendAdminAccount: vi.fn(),
+  revokeAdminInvitation: vi.fn(),
+}));
+
 vi.mock('./features/identity/identityClient', () => identityApi);
 vi.mock('./features/tree-library/treeLibraryClient', () => treeApi);
 vi.mock('./features/tree-generation/treeGenerationClient', () => generationApi);
+vi.mock('./features/admin/adminClient', () => adminApi);
 vi.mock('./lib/api', () => legacyApi);
 vi.mock('./features/tree-generation/TreeGenerationDialog', () => ({
   default: ({
@@ -144,10 +158,31 @@ const secondAccount = {
   csrfToken: 'second-csrf-secret',
 };
 
+const adminAccount = {
+  account: {
+    playerId: 'MF-9JX4-QK7M-W2BZ',
+    username: 'adminuser',
+    status: 'active' as const,
+    isAdmin: true,
+  },
+  csrfToken: 'admin-csrf-secret',
+};
+
 beforeEach(() => {
   for (const mock of Object.values(identityApi)) mock.mockReset();
   for (const mock of Object.values(treeApi)) mock.mockReset();
+  for (const mock of Object.values(adminApi)) mock.mockReset();
   legacyApi.fetchLearningTree.mockReset();
+  adminApi.fetchAdminDashboard.mockResolvedValue({
+    registeredAccounts: 12,
+    availableInvites: 3,
+    redeemedInvites: 9,
+    revokedInvites: 1,
+    activeSessions: 7,
+    platformConsumedUsages: 42,
+    platformConsumedTokens: 123456,
+    loginTrend7d: [{ date: '2026-08-19', activeAccounts: 3 }],
+  });
 
   identityApi.fetchCapabilities.mockResolvedValue({
     identity: { registrationEnabled: true },
@@ -507,17 +542,85 @@ describe('MapFlow tree library', () => {
   });
 });
 
+describe('管理面板入口', () => {
+  it('only shows the admin entry to admins and opens the panel with a working back button', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(adminAccount);
+    renderApp();
+
+    await user.click(await screen.findByRole('button', { name: '管理面板' }));
+    expect(
+      await screen.findByRole('heading', { name: '管理面板' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '概览' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(await screen.findByLabelText('注册总数 12')).toBeInTheDocument();
+    expect(adminApi.fetchAdminDashboard).toHaveBeenCalledWith(
+      'admin-csrf-secret',
+    );
+
+    await user.click(screen.getByRole('button', { name: '返回' }));
+    expect(screen.getByRole('button', { name: '我的学习' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(
+      await screen.findByText('还没有技能树，先从公共树池加入一棵吧。'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: '管理面板' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not show the admin entry to a non-admin account', async () => {
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    renderApp();
+
+    expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '管理面板' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('falls back to the public view when the session disappears inside the admin view', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(adminAccount);
+    const { queryClient } = renderApp();
+
+    await user.click(await screen.findByRole('button', { name: '管理面板' }));
+    expect(
+      await screen.findByRole('heading', { name: '管理面板' }),
+    ).toBeInTheDocument();
+
+    identityApi.fetchCurrentSession.mockResolvedValue(null);
+    await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
+
+    expect(await screen.findByRole('button', { name: '公共树库' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(
+      screen.queryByRole('heading', { name: '管理面板' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 function renderApp() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <IdentityProvider>
-        <App />
-      </IdentityProvider>
-    </QueryClientProvider>,
-  );
+  return {
+    queryClient,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <IdentityProvider>
+          <App />
+        </IdentityProvider>
+      </QueryClientProvider>,
+    ),
+  };
 }
 
 const nestjsTree = {

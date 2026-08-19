@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import AdminPanel from './features/admin/AdminPanel';
 import CompletionFlash from './features/skill-tree/CompletionFlash';
 import NodeDetailPanel from './features/skill-tree/NodeDetailPanel';
 import ProgressOverview from './features/skill-tree/ProgressOverview';
@@ -23,7 +24,7 @@ import type {
   TreeDisplayMode,
 } from './types/learning';
 
-type AppView = 'public' | 'personal';
+type AppView = 'public' | 'personal' | 'admin';
 
 export default function App() {
   const queryClient = useQueryClient();
@@ -123,7 +124,7 @@ export default function App() {
   }, [accountPlayerId]);
 
   useEffect(() => {
-    if (!session && !sessionPending && view === 'personal') {
+    if (!session && !sessionPending && view !== 'public') {
       setView('public');
     }
   }, [session, sessionPending, view]);
@@ -269,6 +270,19 @@ export default function App() {
     void queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
   };
 
+  // admin 视图整体替换页面（卸载个人/公共内容，返回时重新挂载）；
+  // 放在公共树库加载分支之前，避免树库重试失败时把管理员踢出面板。
+  if (view === 'admin' && session) {
+    return (
+      <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
+        <AdminPanel
+          onBack={() => setView('personal')}
+          csrfToken={session.csrfToken}
+        />
+      </div>
+    );
+  }
+
   if (publicCatalog.isPending) return <FullPageStatus message="正在读取公共技能树…" />;
   if (publicCatalog.isError || !publicCatalog.data) {
     return (
@@ -324,6 +338,11 @@ export default function App() {
           <ViewButton active={view === 'personal'} onClick={showPersonalLibrary}>
             我的学习
           </ViewButton>
+          {session?.account.isAdmin && (
+            <ViewButton active={view === 'admin'} onClick={() => setView('admin')}>
+              管理面板
+            </ViewButton>
+          )}
         </nav>
         <IdentityAccess />
       </header>
