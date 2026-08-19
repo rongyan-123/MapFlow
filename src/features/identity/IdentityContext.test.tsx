@@ -19,6 +19,7 @@ const authenticated = {
     playerId: 'MF-7K3P-9D2Q-X8CW',
     username: 'firstuser',
     status: 'active' as const,
+    isAdmin: false,
   },
   csrfToken: 'csrf-secret',
 };

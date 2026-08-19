@@ -54,6 +54,44 @@ describe('identityClient', () => {
     await expect(fetchCurrentSession()).resolves.toBeNull();
   });
 
+  it('parses the admin flag from the current session account', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        account: {
+          playerId: 'MF-7K3P-9D2Q-X8CW',
+          username: 'adminuser',
+          status: 'active',
+          isAdmin: true,
+        },
+        csrfToken: 'csrf-secret',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchCurrentSession()).resolves.toMatchObject({
+      account: { isAdmin: true },
+    });
+  });
+
+  it('rejects a session response without the admin flag', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        account: {
+          playerId: 'MF-7K3P-9D2Q-X8CW',
+          username: 'firstuser',
+          status: 'active',
+        },
+        csrfToken: 'csrf-secret',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const error = await fetchCurrentSession().catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(IdentityApiError);
+    expect(error).toMatchObject({ status: 502, code: 'identity.invalid_response' });
+  });
+
   it('registers with only the server-approved fields', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse(
@@ -62,6 +100,7 @@ describe('identityClient', () => {
             playerId: 'MF-7K3P-9D2Q-X8CW',
             username: 'firstuser',
             status: 'active',
+            isAdmin: false,
           },
           csrfToken: 'csrf-secret',
         },
@@ -78,6 +117,7 @@ describe('identityClient', () => {
     });
 
     expect(session.account.playerId).toBe('MF-7K3P-9D2Q-X8CW');
+    expect(session.account.isAdmin).toBe(false);
     const [path, request] = fetchMock.mock.calls[0];
     expect(path).toBe('/api/auth/register');
     expect(request).toMatchObject({
@@ -103,6 +143,7 @@ describe('identityClient', () => {
           playerId: 'MF-7K3P-9D2Q-X8CW',
           username: 'firstuser',
           status: 'active',
+          isAdmin: false,
         },
         csrfToken: 'csrf-secret',
       }),
@@ -111,7 +152,7 @@ describe('identityClient', () => {
 
     await expect(
       loginIdentity({ username: 'firstuser', password: 'safe-password-2026' }),
-    ).resolves.toMatchObject({ account: { username: 'firstuser' } });
+    ).resolves.toMatchObject({ account: { username: 'firstuser', isAdmin: false } });
     expect(fetchMock).toHaveBeenCalledWith('/api/auth/login', {
       method: 'POST',
       credentials: 'same-origin',

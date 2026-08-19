@@ -21,6 +21,7 @@ export interface PublicAccount {
   playerId: string;
   username: string;
   status: 'active';
+  isAdmin: boolean;
 }
 
 export interface IdentitySession {

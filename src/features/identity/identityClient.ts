@@ -186,6 +186,7 @@ function parseSession(body: unknown): IdentitySession {
     typeof body.account.playerId !== 'string' ||
     typeof body.account.username !== 'string' ||
     body.account.status !== 'active' ||
+    typeof body.account.isAdmin !== 'boolean' ||
     typeof body.csrfToken !== 'string' ||
     body.csrfToken.length === 0
   ) {
@@ -196,6 +197,7 @@ function parseSession(body: unknown): IdentitySession {
       playerId: body.account.playerId,
       username: body.account.username,
       status: 'active',
+      isAdmin: body.account.isAdmin,
     },
     csrfToken: body.csrfToken,
   };

@@ -129,6 +129,7 @@ const authenticated = {
     playerId: 'MF-7K3P-9D2Q-X8CW',
     username: 'firstuser',
     status: 'active' as const,
+    isAdmin: false,
   },
   csrfToken: 'csrf-secret',
 };
@@ -138,6 +139,7 @@ const secondAccount = {
     playerId: 'MF-2B4N-6Q8R-T1VX',
     username: 'seconduser',
     status: 'active' as const,
+    isAdmin: false,
   },
   csrfToken: 'second-csrf-secret',
 };
