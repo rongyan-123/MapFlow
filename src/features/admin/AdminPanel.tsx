@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import AccountsTab from './AccountsTab';
+import AnnouncementsTab from './AnnouncementsTab';
 import AuditLogTab from './AuditLogTab';
+import FeedbackTab from './FeedbackTab';
 import InvitationsTab from './InvitationsTab';
 import OverviewTab from './OverviewTab';
 
@@ -9,13 +11,15 @@ export interface AdminPanelProps {
   csrfToken: string;
 }
 
-type AdminTab = 'overview' | 'accounts' | 'invitations' | 'audit';
+type AdminTab = 'overview' | 'accounts' | 'invitations' | 'audit' | 'feedback' | 'announcements';
 
 const TABS: { id: AdminTab; label: string }[] = [
   { id: 'overview', label: '概览' },
   { id: 'accounts', label: '用户' },
   { id: 'invitations', label: '邀请码' },
   { id: 'audit', label: '审计日志' },
+  { id: 'feedback', label: '反馈' },
+  { id: 'announcements', label: '公告' },
 ];
 
 export default function AdminPanel({ onBack, csrfToken }: AdminPanelProps) {
@@ -66,6 +70,8 @@ export default function AdminPanel({ onBack, csrfToken }: AdminPanelProps) {
         {activeTab === 'accounts' && <AccountsTab csrfToken={csrfToken} />}
         {activeTab === 'invitations' && <InvitationsTab csrfToken={csrfToken} />}
         {activeTab === 'audit' && <AuditLogTab csrfToken={csrfToken} />}
+        {activeTab === 'feedback' && <FeedbackTab csrfToken={csrfToken} />}
+        {activeTab === 'announcements' && <AnnouncementsTab csrfToken={csrfToken} />}
       </main>
     </div>
   );

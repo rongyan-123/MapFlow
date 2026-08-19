@@ -64,6 +64,7 @@ export default function AccountsTab({ csrfToken }: AccountsTabProps) {
               <th className="px-4 py-3 font-semibold">BYOK 次数</th>
               <th className="px-4 py-3 font-semibold">平台次数</th>
               <th className="px-4 py-3 font-semibold">平台消耗次数</th>
+              <th className="px-4 py-3 font-semibold">积分余额</th>
               <th className="px-4 py-3 font-semibold">总 Token</th>
               <th className="px-4 py-3 font-semibold">停留时长</th>
               <th className="px-4 py-3 font-semibold">操作</th>
@@ -102,6 +103,9 @@ export default function AccountsTab({ csrfToken }: AccountsTabProps) {
                 <td className="px-4 py-3 text-slate-400">
                   {account.platformConsumedUsages}
                 </td>
+                <td className="px-4 py-3 text-slate-400">
+                  {account.creditBalance}
+                </td>
                 <td className="px-4 py-3 text-slate-400">{account.totalTokens}</td>
                 <td className="px-4 py-3 text-slate-400">
                   {formatMinutes(account.activeMinutes)}
@@ -120,7 +124,7 @@ export default function AccountsTab({ csrfToken }: AccountsTabProps) {
             ))}
             {accounts.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={11} className="px-4 py-8 text-center text-slate-500">
                   暂无用户。
                 </td>
               </tr>

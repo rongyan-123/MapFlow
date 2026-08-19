@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { IdentityApiError } from '../identity/identityClient';
 import {
+  createAdminAnnouncement,
+  deleteAdminAnnouncement,
   fetchAdminAccounts,
   fetchAdminAuditEvents,
   fetchAdminAuditEventsPage,
   fetchAdminDashboard,
+  fetchAdminFeedback,
   fetchAdminInvitations,
   revokeAdminInvitation,
   suspendAdminAccount,
@@ -93,6 +96,7 @@ describe('adminClient', () => {
             totalTokens: 9000,
             platformConsumedUsages: 4,
             activeMinutes: 150,
+            creditBalance: 0,
           },
           {
             accountId: '7a1b2c3d-4e5f-4a0e-9d0f-0e6d8f6b7c2b',
@@ -105,6 +109,7 @@ describe('adminClient', () => {
             totalTokens: 0,
             platformConsumedUsages: 0,
             activeMinutes: 0,
+            creditBalance: 0,
           },
         ],
       }),
@@ -123,6 +128,7 @@ describe('adminClient', () => {
         totalTokens: 9000,
         platformConsumedUsages: 4,
         activeMinutes: 150,
+        creditBalance: 0,
       },
       {
         accountId: '7a1b2c3d-4e5f-4a0e-9d0f-0e6d8f6b7c2b',
@@ -135,6 +141,7 @@ describe('adminClient', () => {
         totalTokens: 0,
         platformConsumedUsages: 0,
         activeMinutes: 0,
+        creditBalance: 0,
       },
     ]);
   });
@@ -438,6 +445,50 @@ describe('adminClient', () => {
 
     expect(error).toBeInstanceOf(IdentityApiError);
     expect(error).toMatchObject({ status: 502, code: 'admin.invalid_response' });
+  });
+
+  it('lists admin feedback', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          items: [
+            {
+              feedbackId: 'fb-1',
+              username: 'user1',
+              content: '希望支持暗色主题',
+              createdAt: '2026-08-19T00:00:00Z',
+            },
+          ],
+          total: 1,
+        }),
+      ),
+    );
+
+    const page = await fetchAdminFeedback('csrf-admin', 50, 0);
+    expect(page.total).toBe(1);
+    expect(page.items[0].content).toBe('希望支持暗色主题');
+  });
+
+  it('creates and deletes announcements', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ announcementId: 'ann-1' })),
+    );
+    await expect(
+      createAdminAnnouncement('标题', '内容', 'csrf-1'),
+    ).resolves.toBe('ann-1');
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+    await expect(
+      deleteAdminAnnouncement('ann-1', 'csrf-2'),
+    ).resolves.toBeUndefined();
+    const [path, init] = vi.mocked(fetch).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(path).toBe('/api/admin/announcements/ann-1');
+    expect(init.method).toBe('DELETE');
   });
 });
 

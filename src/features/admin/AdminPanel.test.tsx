@@ -19,6 +19,10 @@ const adminApi = vi.hoisted(() => ({
   fetchAdminAuditEventsPage: vi.fn(),
   suspendAdminAccount: vi.fn(),
   revokeAdminInvitation: vi.fn(),
+  fetchAdminFeedback: vi.fn(),
+  fetchAdminAnnouncements: vi.fn(),
+  createAdminAnnouncement: vi.fn(),
+  deleteAdminAnnouncement: vi.fn(),
 }));
 
 vi.mock('./adminClient', () => adminApi);
@@ -73,6 +77,7 @@ function accounts(): AdminAccount[] {
       totalTokens: 9000,
       platformConsumedUsages: 11,
       activeMinutes: 95,
+      creditBalance: 0,
     },
     {
       accountId: 'acc-2',
@@ -85,6 +90,7 @@ function accounts(): AdminAccount[] {
       totalTokens: 0,
       platformConsumedUsages: 0,
       activeMinutes: 0,
+      creditBalance: 0,
     },
   ];
 }
@@ -150,6 +156,8 @@ beforeEach(() => {
       2,
     ),
   );
+  adminApi.fetchAdminFeedback.mockResolvedValue({ items: [], total: 0 });
+  adminApi.fetchAdminAnnouncements.mockResolvedValue([]);
 });
 
 function renderAdminPanel() {
@@ -168,7 +176,7 @@ function renderAdminPanel() {
 }
 
 describe('AdminPanel', () => {
-  it('renders the four tabs, opens the overview by default, and goes back', async () => {
+  it('renders the six tabs, opens the overview by default, and goes back', async () => {
     const user = userEvent.setup();
     const { props } = renderAdminPanel();
 
@@ -179,6 +187,8 @@ describe('AdminPanel', () => {
     expect(screen.getByRole('tab', { name: '用户' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '邀请码' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '审计日志' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '反馈' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '公告' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '返回' })).toBeInTheDocument();
 
     await waitFor(() =>
@@ -187,6 +197,8 @@ describe('AdminPanel', () => {
     expect(adminApi.fetchAdminAccounts).not.toHaveBeenCalled();
     expect(adminApi.fetchAdminInvitations).not.toHaveBeenCalled();
     expect(adminApi.fetchAdminAuditEventsPage).not.toHaveBeenCalled();
+    expect(adminApi.fetchAdminFeedback).not.toHaveBeenCalled();
+    expect(adminApi.fetchAdminAnnouncements).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: '返回' }));
     expect(props.onBack).toHaveBeenCalledTimes(1);

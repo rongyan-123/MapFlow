@@ -1,9 +1,12 @@
 import { IdentityApiError } from '../identity/identityClient';
 import type {
   AdminAccount,
+  AdminAnnouncement,
   AdminAuditEvent,
   AdminAuditEventsPage,
   AdminDashboard,
+  AdminFeedback,
+  AdminFeedbackPage,
   AdminInvitation,
   AdminInvitationSummary,
   AdminInvitationsResponse,
@@ -153,6 +156,100 @@ export async function revokeAdminInvitation(
   );
 }
 
+export async function fetchAdminFeedback(
+  csrfToken: string,
+  limit: number,
+  offset: number,
+): Promise<AdminFeedbackPage> {
+  void csrfToken;
+  const response = await request(
+    `/api/admin/feedback?limit=${limit}&offset=${offset}`,
+    {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    },
+  );
+  const body = await readJson(response);
+  if (
+    !isRecord(body) ||
+    !isExactArray(
+      body.items,
+      (item): item is AdminFeedback =>
+        isRecord(item) &&
+        typeof item.feedbackId === 'string' &&
+        typeof item.username === 'string' &&
+        typeof item.content === 'string' &&
+        typeof item.createdAt === 'string',
+    ) ||
+    typeof body.total !== 'number'
+  ) {
+    throw invalidResponseError();
+  }
+  return { items: body.items, total: body.total };
+}
+
+export async function fetchAdminAnnouncements(
+  csrfToken: string,
+): Promise<AdminAnnouncement[]> {
+  void csrfToken;
+  const response = await request('/api/admin/announcements', {
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' },
+  });
+  const body = await readJson(response);
+  if (
+    !isRecord(body) ||
+    !isExactArray(
+      body.items,
+      (item): item is AdminAnnouncement =>
+        isRecord(item) &&
+        typeof item.announcementId === 'string' &&
+        typeof item.title === 'string' &&
+        typeof item.content === 'string' &&
+        typeof item.createdAt === 'string' &&
+        typeof item.readCount === 'number',
+    )
+  ) {
+    throw invalidResponseError();
+  }
+  return body.items;
+}
+
+export async function createAdminAnnouncement(
+  title: string,
+  content: string,
+  csrfToken: string,
+): Promise<string> {
+  const response = await request('/api/admin/announcements', {
+    ...mutationInit(csrfToken),
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify({ title, content }),
+  });
+  const body = await readJson(response);
+  if (!isRecord(body) || typeof body.announcementId !== 'string') {
+    throw invalidResponseError();
+  }
+  return body.announcementId;
+}
+
+export async function deleteAdminAnnouncement(
+  announcementId: string,
+  csrfToken: string,
+): Promise<void> {
+  await request(`/api/admin/announcements/${announcementId}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+  });
+}
+
 function mutationInit(csrfToken: string): RequestInit {
   return {
     method: 'POST',
@@ -204,7 +301,8 @@ function isAdminAccount(value: unknown): value is AdminAccount {
     typeof value.platformSessions === 'number' &&
     typeof value.totalTokens === 'number' &&
     typeof value.platformConsumedUsages === 'number' &&
-    typeof value.activeMinutes === 'number'
+    typeof value.activeMinutes === 'number' &&
+    typeof value.creditBalance === 'number'
   );
 }
 

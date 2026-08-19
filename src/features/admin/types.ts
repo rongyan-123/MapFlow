@@ -27,6 +27,8 @@ export interface AdminAccount {
   // v2 统计增强
   platformConsumedUsages: number;
   activeMinutes: number;
+  // 积分余额（T9：管理端列表新增列）
+  creditBalance: number;
 }
 
 /** 绝不包含邀请码明文或摘要字段（后端响应类型编译期保证）。 */
@@ -77,4 +79,27 @@ export interface AuditFilter {
   to?: string;
   limit?: number;
   offset?: number;
+}
+
+/** 单条用户反馈（GET /api/admin/feedback 列表项）。 */
+export interface AdminFeedback {
+  feedbackId: string;
+  username: string;
+  content: string;
+  createdAt: string;
+}
+
+/** GET /api/admin/feedback 响应信封：列表 + 全量总数（供分页）。 */
+export interface AdminFeedbackPage {
+  items: AdminFeedback[];
+  total: number;
+}
+
+/** 单条公告（GET /api/admin/announcements 列表项）。 */
+export interface AdminAnnouncement {
+  announcementId: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  readCount: number;
 }
