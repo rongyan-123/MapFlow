@@ -3,6 +3,7 @@ import { IdentityApiError } from '../identity/identityClient';
 import {
   fetchAdminAccounts,
   fetchAdminAuditEvents,
+  fetchAdminAuditEventsPage,
   fetchAdminDashboard,
   fetchAdminInvitations,
   revokeAdminInvitation,
@@ -132,10 +133,11 @@ describe('adminClient', () => {
     expect(error).toMatchObject({ status: 502, code: 'admin.invalid_response' });
   });
 
-  it('unwraps the invitations list without ever reading a code field', async () => {
+  it('unwraps the invitation summary and items without ever reading a code field', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
-        invitations: [
+        summary: { available: 38, redeemed: 17, revoked: 0 },
+        items: [
           {
             inviteId: '9c1a2b3c-4d5e-4f0e-8d0f-0e6d8f6b7c3c',
             status: 'available',
@@ -159,26 +161,55 @@ describe('adminClient', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(fetchAdminInvitations('csrf-secret')).resolves.toEqual([
-      {
-        inviteId: '9c1a2b3c-4d5e-4f0e-8d0f-0e6d8f6b7c3c',
-        status: 'available',
-        createdAt: '2026-08-01T08:00:00Z',
-        claimedIp: null,
-        claimedAt: null,
-        redeemedBy: null,
-        redeemedAt: null,
-      },
-      {
-        inviteId: '8b2c3d4e-5f6a-4b0e-9d0f-0e6d8f6b7c4d',
-        status: 'redeemed',
-        createdAt: '2026-08-02T08:00:00Z',
-        claimedIp: '192.0.2.10',
-        claimedAt: '2026-08-02T09:00:00Z',
-        redeemedBy: 'firstuser',
-        redeemedAt: '2026-08-02T09:05:00Z',
-      },
-    ]);
+    await expect(fetchAdminInvitations('csrf-secret')).resolves.toEqual({
+      summary: { available: 38, redeemed: 17, revoked: 0 },
+      items: [
+        {
+          inviteId: '9c1a2b3c-4d5e-4f0e-8d0f-0e6d8f6b7c3c',
+          status: 'available',
+          createdAt: '2026-08-01T08:00:00Z',
+          claimedIp: null,
+          claimedAt: null,
+          redeemedBy: null,
+          redeemedAt: null,
+        },
+        {
+          inviteId: '8b2c3d4e-5f6a-4b0e-9d0f-0e6d8f6b7c4d',
+          status: 'redeemed',
+          createdAt: '2026-08-02T08:00:00Z',
+          claimedIp: '192.0.2.10',
+          claimedAt: '2026-08-02T09:00:00Z',
+          redeemedBy: 'firstuser',
+          redeemedAt: '2026-08-02T09:05:00Z',
+        },
+      ],
+    });
+  });
+
+  it('rejects an invitations response that misses the summary envelope', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        items: [
+          {
+            inviteId: '9c1a2b3c-4d5e-4f0e-8d0f-0e6d8f6b7c3c',
+            status: 'available',
+            createdAt: '2026-08-01T08:00:00Z',
+            claimedIp: null,
+            claimedAt: null,
+            redeemedBy: null,
+            redeemedAt: null,
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const error = await fetchAdminInvitations('csrf-secret').catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(IdentityApiError);
+    expect(error).toMatchObject({ status: 502, code: 'admin.invalid_response' });
   });
 
   it('unwraps audit events and forwards the filter as snake_case query parameters', async () => {
@@ -200,6 +231,7 @@ describe('adminClient', () => {
             occurredAt: '2026-08-18T11:00:00Z',
           },
         ],
+        total: 27,
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -237,8 +269,41 @@ describe('adminClient', () => {
     );
   });
 
+  it('exposes the audit total through the page-shaped fetch', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        events: [
+          {
+            eventId: '5d4e5f6a-7b8c-4d0e-9d0f-0e6d8f6b7c5e',
+            eventType: 'login',
+            outcome: 'success',
+            playerId: 'MF-7K3P-9D2Q-X8CW',
+            occurredAt: '2026-08-18T10:00:00Z',
+          },
+        ],
+        total: 27,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      fetchAdminAuditEventsPage('csrf-secret', { limit: 1 }),
+    ).resolves.toEqual({
+      events: [
+        {
+          eventId: '5d4e5f6a-7b8c-4d0e-9d0f-0e6d8f6b7c5e',
+          eventType: 'login',
+          outcome: 'success',
+          playerId: 'MF-7K3P-9D2Q-X8CW',
+          occurredAt: '2026-08-18T10:00:00Z',
+        },
+      ],
+      total: 27,
+    });
+  });
+
   it('omits absent audit filter fields from the query string', async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ events: [] }));
+    fetchMock.mockResolvedValueOnce(jsonResponse({ events: [], total: 0 }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(
@@ -326,11 +391,24 @@ describe('adminClient', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         events: [{ eventId: 'x', eventType: 'login' }],
+        total: 1,
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
     const error = await fetchAdminAuditEvents('csrf-secret', {}).catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(IdentityApiError);
+    expect(error).toMatchObject({ status: 502, code: 'admin.invalid_response' });
+  });
+
+  it('rejects an audit events response that misses the total', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ events: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const error = await fetchAdminAuditEventsPage('csrf-secret', {}).catch(
       (caught: unknown) => caught,
     );
 

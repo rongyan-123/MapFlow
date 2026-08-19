@@ -2,8 +2,11 @@ import { IdentityApiError } from '../identity/identityClient';
 import type {
   AdminAccount,
   AdminAuditEvent,
+  AdminAuditEventsPage,
   AdminDashboard,
   AdminInvitation,
+  AdminInvitationSummary,
+  AdminInvitationsResponse,
   AuditFilter,
 } from './types';
 
@@ -59,23 +62,43 @@ export async function fetchAdminAccounts(
 
 export async function fetchAdminInvitations(
   csrfToken: string,
-): Promise<AdminInvitation[]> {
+): Promise<AdminInvitationsResponse> {
   void csrfToken;
   const response = await request('/api/admin/invitations', {
     credentials: 'same-origin',
     headers: { Accept: 'application/json' },
   });
   const body = await readJson(response);
-  if (!isRecord(body) || !isExactArray(body.invitations, isAdminInvitation)) {
+  if (
+    !isRecord(body) ||
+    !isAdminInvitationSummary(body.summary) ||
+    !isExactArray(body.items, isAdminInvitation)
+  ) {
     throw invalidResponseError();
   }
-  return body.invitations;
+  return {
+    summary: {
+      available: body.summary.available,
+      redeemed: body.summary.redeemed,
+      revoked: body.summary.revoked,
+    },
+    items: body.items,
+  };
 }
 
+/** brief 签名不变：仅返回事件列表。需要 total 的调用方用 fetchAdminAuditEventsPage。 */
 export async function fetchAdminAuditEvents(
   csrfToken: string,
   filter: AuditFilter,
 ): Promise<AdminAuditEvent[]> {
+  return (await fetchAdminAuditEventsPage(csrfToken, filter)).events;
+}
+
+/** 返回 `{ events, total }`，供需要全量总数（分页）的 UI 使用。 */
+export async function fetchAdminAuditEventsPage(
+  csrfToken: string,
+  filter: AuditFilter,
+): Promise<AdminAuditEventsPage> {
   void csrfToken;
   const query = new URLSearchParams();
   // 后端拒绝未知查询参数，且字段名为 snake_case（event_type）。
@@ -93,10 +116,14 @@ export async function fetchAdminAuditEvents(
     headers: { Accept: 'application/json' },
   });
   const body = await readJson(response);
-  if (!isRecord(body) || !isExactArray(body.events, isAdminAuditEvent)) {
+  if (
+    !isRecord(body) ||
+    !isExactArray(body.events, isAdminAuditEvent) ||
+    typeof body.total !== 'number'
+  ) {
     throw invalidResponseError();
   }
-  return body.events;
+  return { events: body.events, total: body.total };
 }
 
 export async function suspendAdminAccount(
@@ -152,6 +179,17 @@ function isAdminAccount(value: unknown): value is AdminAccount {
     typeof value.byokSessions === 'number' &&
     typeof value.platformSessions === 'number' &&
     typeof value.totalTokens === 'number'
+  );
+}
+
+function isAdminInvitationSummary(
+  value: unknown,
+): value is AdminInvitationSummary {
+  return (
+    isRecord(value) &&
+    typeof value.available === 'number' &&
+    typeof value.redeemed === 'number' &&
+    typeof value.revoked === 'number'
   );
 }
 

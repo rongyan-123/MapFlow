@@ -31,12 +31,31 @@ export interface AdminInvitation {
   redeemedAt: string | null;
 }
 
+/** GET /api/admin/invitations 的汇总数字。 */
+export interface AdminInvitationSummary {
+  available: number;
+  redeemed: number;
+  revoked: number;
+}
+
+/** GET /api/admin/invitations 响应信封：汇总 + 列表。 */
+export interface AdminInvitationsResponse {
+  summary: AdminInvitationSummary;
+  items: AdminInvitation[];
+}
+
 export interface AdminAuditEvent {
   eventId: string;
   eventType: string;
   outcome: string;
   playerId: string | null;
   occurredAt: string;
+}
+
+/** GET /api/admin/audit-events 响应信封：事件列表 + 全量总数（含分页时）。 */
+export interface AdminAuditEventsPage {
+  events: AdminAuditEvent[];
+  total: number;
 }
 
 /** 审计日志筛选条件；发给后端时映射为 snake_case 查询参数。 */
