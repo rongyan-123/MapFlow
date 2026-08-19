@@ -162,7 +162,8 @@ function TabError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
 
 function formatIsoDateTime(iso: string | null): string {
   if (!iso) return '—';
-  return iso.replace('T', ' ').slice(0, 16);
+  // 后端输出 RFC3339 UTC，操作员通常在东八区：显式标注 UTC 避免误读
+  return `${iso.replace('T', ' ').slice(0, 16)} UTC`;
 }
 
 function readableError(error: unknown): string {

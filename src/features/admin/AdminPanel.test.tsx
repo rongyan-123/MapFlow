@@ -215,6 +215,9 @@ describe('AdminPanel', () => {
     await user.click(screen.getByRole('tab', { name: '用户' }));
     expect(await screen.findByText('firstuser')).toBeInTheDocument();
     expect(screen.getByText('seconduser')).toBeInTheDocument();
+    // 后端输出 RFC3339 UTC，界面必须显式标注 UTC，避免东八区操作员误读
+    expect(screen.getByText('2026-08-01 08:00 UTC')).toBeInTheDocument();
+    expect(screen.getByText('2026-08-19 08:00 UTC')).toBeInTheDocument();
     expect(screen.getByText('正常')).toBeInTheDocument();
     expect(screen.getByText('已封禁')).toBeInTheDocument();
 
@@ -247,6 +250,8 @@ describe('AdminPanel', () => {
     // 汇总：可用 2 / 已兑换 1 / 已作废 0；列表项展示状态与兑换信息。
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('兑换人 焦糖牛之角')).toBeInTheDocument();
+    expect(screen.getByText('创建于 2026-08-15 10:00 UTC')).toBeInTheDocument();
+    expect(screen.getByText('兑换于 2026-08-16 03:40 UTC')).toBeInTheDocument();
     expect(screen.getAllByText('可用').length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText('已兑换').length).toBeGreaterThanOrEqual(1);
 
@@ -298,6 +303,7 @@ describe('AdminPanel', () => {
     await user.click(screen.getByRole('tab', { name: '审计日志' }));
     expect(await screen.findAllByText('identity.registered')).not.toHaveLength(0);
     expect(screen.getAllByText('identity.logged_in')).not.toHaveLength(0);
+    expect(screen.getByText('2026-08-16 03:40 UTC')).toBeInTheDocument();
     await waitFor(() =>
       expect(adminApi.fetchAdminAuditEventsPage).toHaveBeenCalledWith(
         'csrf-secret',
