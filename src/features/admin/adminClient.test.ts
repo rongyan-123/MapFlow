@@ -31,6 +31,11 @@ describe('adminClient', () => {
           { date: '2026-08-13', activeAccounts: 2 },
           { date: '2026-08-14', activeAccounts: 5 },
         ],
+        currentOnline: 3,
+        consecutive3dLogins: 1,
+        totalActiveMinutes: 120,
+        avgActiveMinutes: 40,
+        dailyConsumed7d: [{ date: '2026-08-13', consumed: 2 }],
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -47,6 +52,11 @@ describe('adminClient', () => {
         { date: '2026-08-13', activeAccounts: 2 },
         { date: '2026-08-14', activeAccounts: 5 },
       ],
+      currentOnline: 3,
+      consecutive3dLogins: 1,
+      totalActiveMinutes: 120,
+      avgActiveMinutes: 40,
+      dailyConsumed7d: [{ date: '2026-08-13', consumed: 2 }],
     });
     expect(fetchMock).toHaveBeenCalledWith('/api/admin/dashboard', {
       credentials: 'same-origin',
@@ -81,6 +91,8 @@ describe('adminClient', () => {
             byokSessions: 2,
             platformSessions: 5,
             totalTokens: 9000,
+            platformConsumedUsages: 4,
+            activeMinutes: 150,
           },
           {
             accountId: '7a1b2c3d-4e5f-4a0e-9d0f-0e6d8f6b7c2b',
@@ -91,6 +103,8 @@ describe('adminClient', () => {
             byokSessions: 0,
             platformSessions: 0,
             totalTokens: 0,
+            platformConsumedUsages: 0,
+            activeMinutes: 0,
           },
         ],
       }),
@@ -107,6 +121,8 @@ describe('adminClient', () => {
         byokSessions: 2,
         platformSessions: 5,
         totalTokens: 9000,
+        platformConsumedUsages: 4,
+        activeMinutes: 150,
       },
       {
         accountId: '7a1b2c3d-4e5f-4a0e-9d0f-0e6d8f6b7c2b',
@@ -117,6 +133,8 @@ describe('adminClient', () => {
         byokSessions: 0,
         platformSessions: 0,
         totalTokens: 0,
+        platformConsumedUsages: 0,
+        activeMinutes: 0,
       },
     ]);
   });
@@ -222,6 +240,7 @@ describe('adminClient', () => {
             outcome: 'success',
             playerId: 'MF-7K3P-9D2Q-X8CW',
             occurredAt: '2026-08-18T10:00:00Z',
+            details: { client_ip: '203.0.113.9' },
           },
           {
             eventId: '4c3d4e5f-6a7b-4c0e-9d0f-0e6d8f6b7c6f',
@@ -229,6 +248,7 @@ describe('adminClient', () => {
             outcome: 'rejected',
             playerId: null,
             occurredAt: '2026-08-18T11:00:00Z',
+            details: {},
           },
         ],
         total: 27,
@@ -251,6 +271,7 @@ describe('adminClient', () => {
         outcome: 'success',
         playerId: 'MF-7K3P-9D2Q-X8CW',
         occurredAt: '2026-08-18T10:00:00Z',
+        details: { client_ip: '203.0.113.9' },
       },
       {
         eventId: '4c3d4e5f-6a7b-4c0e-9d0f-0e6d8f6b7c6f',
@@ -258,6 +279,7 @@ describe('adminClient', () => {
         outcome: 'rejected',
         playerId: null,
         occurredAt: '2026-08-18T11:00:00Z',
+        details: {},
       },
     ]);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -279,6 +301,7 @@ describe('adminClient', () => {
             outcome: 'success',
             playerId: 'MF-7K3P-9D2Q-X8CW',
             occurredAt: '2026-08-18T10:00:00Z',
+            details: { client_ip: '203.0.113.9' },
           },
         ],
         total: 27,
@@ -296,6 +319,7 @@ describe('adminClient', () => {
           outcome: 'success',
           playerId: 'MF-7K3P-9D2Q-X8CW',
           occurredAt: '2026-08-18T10:00:00Z',
+          details: { client_ip: '203.0.113.9' },
         },
       ],
       total: 27,

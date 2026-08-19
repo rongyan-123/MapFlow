@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IdentityApiError } from '../identity/identityClient';
@@ -43,6 +43,20 @@ function dashboard(): AdminDashboard {
       { date: '2026-08-18', activeAccounts: 6 },
       { date: '2026-08-19', activeAccounts: 3 },
     ],
+    // 消耗图同理：第 3 天（08-15）是 7 日最高 6 次，最后一天（08-19）2 次。
+    currentOnline: 5,
+    consecutive3dLogins: 2,
+    totalActiveMinutes: 390,
+    avgActiveMinutes: 65,
+    dailyConsumed7d: [
+      { date: '2026-08-13', consumed: 1 },
+      { date: '2026-08-14', consumed: 2 },
+      { date: '2026-08-15', consumed: 6 },
+      { date: '2026-08-16', consumed: 4 },
+      { date: '2026-08-17', consumed: 3 },
+      { date: '2026-08-18', consumed: 5 },
+      { date: '2026-08-19', consumed: 2 },
+    ],
   };
 }
 
@@ -57,6 +71,8 @@ function accounts(): AdminAccount[] {
       byokSessions: 2,
       platformSessions: 5,
       totalTokens: 9000,
+      platformConsumedUsages: 11,
+      activeMinutes: 95,
     },
     {
       accountId: 'acc-2',
@@ -67,6 +83,8 @@ function accounts(): AdminAccount[] {
       byokSessions: 0,
       platformSessions: 0,
       totalTokens: 0,
+      platformConsumedUsages: 0,
+      activeMinutes: 0,
     },
   ];
 }
@@ -118,6 +136,7 @@ beforeEach(() => {
           outcome: 'succeeded',
           playerId: 'MF-AAAA-AAAA',
           occurredAt: '2026-08-16T03:40:11Z',
+          details: { client_ip: '203.0.113.7' },
         },
         {
           eventId: 'ev-2',
@@ -125,6 +144,7 @@ beforeEach(() => {
           outcome: 'succeeded',
           playerId: 'MF-BBBB-BBBB',
           occurredAt: '2026-08-17T03:40:11Z',
+          details: { client_ip: '198.51.100.23' },
         },
       ],
       2,
@@ -182,6 +202,11 @@ describe('AdminPanel', () => {
     expect(screen.getByLabelText('剩余邀请码 3')).toBeInTheDocument();
     expect(screen.getByLabelText('平台消耗次数 42')).toBeInTheDocument();
     expect(screen.getByLabelText('平台消耗 token 123456')).toBeInTheDocument();
+    // v2 新指标卡片：当前在线 / 连续 3 天在线 / 总停留时长 / 人均停留时长（分钟经 formatMinutes）。
+    expect(screen.getByLabelText('当前在线 5')).toBeInTheDocument();
+    expect(screen.getByLabelText('连续 3 天在线 2')).toBeInTheDocument();
+    expect(screen.getByLabelText('总停留时长 6h 30m')).toBeInTheDocument();
+    expect(screen.getByLabelText('人均停留时长 1h 5m')).toBeInTheDocument();
     expect(screen.getByText('最近 7 日登录趋势')).toBeInTheDocument();
 
     // 柱高按 7 日最大值归一化：最高日（08-15，8 人）柱高 100%；
@@ -194,17 +219,30 @@ describe('AdminPanel', () => {
     expect(screen.getByLabelText('2026-08-13 2 人登录')).toHaveStyle({
       height: '25%',
     });
+
+    // 每日消耗次数图：最高日（08-15，6 次）柱高 100%，08-19（2 次）2/6 ≈ 33%。
+    expect(screen.getByText('每日消耗次数')).toBeInTheDocument();
+    expect(screen.getByLabelText('2026-08-15 消耗 6 次')).toHaveStyle({
+      height: '100%',
+    });
+    expect(screen.getByLabelText('2026-08-19 消耗 2 次')).toHaveStyle({
+      height: '33%',
+    });
   });
 
   it('overview shows 今日登录 0 without crashing when the trend is empty', async () => {
     adminApi.fetchAdminDashboard.mockResolvedValue({
       ...dashboard(),
       loginTrend7d: [],
+      dailyConsumed7d: [],
     });
     renderAdminPanel();
 
     expect(await screen.findByLabelText('今日登录 0')).toBeInTheDocument();
     expect(screen.getByText('最近 7 日登录趋势')).toBeInTheDocument();
+    // 消耗图空数组显示空态文案。
+    expect(screen.getByText('每日消耗次数')).toBeInTheDocument();
+    expect(screen.getByText('近 7 日暂无平台消耗记录。')).toBeInTheDocument();
   });
 
   it('accounts renders usernames and suspends an account after inline confirmation', async () => {
@@ -220,6 +258,12 @@ describe('AdminPanel', () => {
     expect(screen.getByText('2026-08-19 08:00 UTC')).toBeInTheDocument();
     expect(screen.getByText('正常')).toBeInTheDocument();
     expect(screen.getByText('已封禁')).toBeInTheDocument();
+    // v2 新列：平台消耗次数（11 / 0）与停留时长（95 分钟 → 1h 35m；0 → 0m）。
+    expect(screen.getByText('平台消耗次数')).toBeInTheDocument();
+    expect(screen.getByText('停留时长')).toBeInTheDocument();
+    expect(screen.getByText('11')).toBeInTheDocument();
+    expect(screen.getByText('1h 35m')).toBeInTheDocument();
+    expect(screen.getByText('0m')).toBeInTheDocument();
 
     // 只有 active 账号出现封禁按钮；已封禁账号不出现。
     const suspendButtons = screen.getAllByRole('button', { name: '封禁' });
@@ -296,14 +340,23 @@ describe('AdminPanel', () => {
     );
   });
 
-  it('audit renders event types and re-requests when the type filter changes', async () => {
+  it('audit renders Chinese event titles, outcomes, and IPs, and re-requests when the type filter changes', async () => {
     const user = userEvent.setup();
     renderAdminPanel();
 
     await user.click(screen.getByRole('tab', { name: '审计日志' }));
-    expect(await screen.findAllByText('identity.registered')).not.toHaveLength(0);
-    expect(screen.getAllByText('identity.logged_in')).not.toHaveLength(0);
-    expect(screen.getByText('2026-08-16 03:40 UTC')).toBeInTheDocument();
+    // 事件列渲染中文标题 + 描述（下拉里也有同名选项，故用 within 限定表格范围）。
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('注册账号')).toBeInTheDocument();
+    expect(within(table).getByText('新用户通过邀请码注册')).toBeInTheDocument();
+    expect(within(table).getByText('用户登录')).toBeInTheDocument();
+    expect(within(table).getByText('用户登录系统')).toBeInTheDocument();
+    // outcome 映射为中文：两条 succeeded → 两个「成功」徽标。
+    expect(within(table).getAllByText('成功')).toHaveLength(2);
+    // details JSONB 的 snake_case `client_ip` 透出为 IP 列。
+    expect(within(table).getByText('203.0.113.7')).toBeInTheDocument();
+    expect(within(table).getByText('198.51.100.23')).toBeInTheDocument();
+    expect(within(table).getByText('2026-08-16 03:40 UTC')).toBeInTheDocument();
     await waitFor(() =>
       expect(adminApi.fetchAdminAuditEventsPage).toHaveBeenCalledWith(
         'csrf-secret',
@@ -334,6 +387,7 @@ describe('AdminPanel', () => {
             outcome: 'succeeded',
             playerId: 'MF-AAAA-AAAA',
             occurredAt: '2026-08-17T03:40:11Z',
+            details: { client_ip: '203.0.113.7' },
           },
         ],
         120,
@@ -363,5 +417,30 @@ describe('AdminPanel', () => {
     );
     expect(await screen.findByText('第 3 / 3 页 · 共 120 条')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '下一页' })).toBeDisabled();
+  });
+
+  it('audit falls back to raw strings for unknown event types and outcomes', async () => {
+    const user = userEvent.setup();
+    adminApi.fetchAdminAuditEventsPage.mockResolvedValue(
+      auditPage(
+        [
+          {
+            eventId: 'ev-9',
+            eventType: 'custom.event',
+            outcome: 'unknown-outcome',
+            playerId: null,
+            occurredAt: '2026-08-18T12:00:00Z',
+            details: {},
+          },
+        ],
+        1,
+      ),
+    );
+    renderAdminPanel();
+
+    await user.click(screen.getByRole('tab', { name: '审计日志' }));
+    // 未知事件类型：标题回退原字符串；未知 outcome：回退原字符串。
+    expect(await screen.findByText('custom.event')).toBeInTheDocument();
+    expect(screen.getByText('unknown-outcome')).toBeInTheDocument();
   });
 });

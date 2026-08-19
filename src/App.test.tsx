@@ -182,6 +182,11 @@ beforeEach(() => {
     platformConsumedUsages: 42,
     platformConsumedTokens: 123456,
     loginTrend7d: [{ date: '2026-08-19', activeAccounts: 3 }],
+    currentOnline: 1,
+    consecutive3dLogins: 0,
+    totalActiveMinutes: 60,
+    avgActiveMinutes: 60,
+    dailyConsumed7d: [{ date: '2026-08-19', consumed: 1 }],
   });
 
   identityApi.fetchCapabilities.mockResolvedValue({

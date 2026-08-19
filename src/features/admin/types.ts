@@ -7,6 +7,12 @@ export interface AdminDashboard {
   platformConsumedUsages: number;
   platformConsumedTokens: number;
   loginTrend7d: { date: string; activeAccounts: number }[];
+  // v2 统计增强（与后端 AdminDashboard 响应 camelCase 一致）
+  currentOnline: number;
+  consecutive3dLogins: number;
+  totalActiveMinutes: number;
+  avgActiveMinutes: number;
+  dailyConsumed7d: { date: string; consumed: number }[];
 }
 
 export interface AdminAccount {
@@ -18,6 +24,9 @@ export interface AdminAccount {
   byokSessions: number;
   platformSessions: number;
   totalTokens: number;
+  // v2 统计增强
+  platformConsumedUsages: number;
+  activeMinutes: number;
 }
 
 /** 绝不包含邀请码明文或摘要字段（后端响应类型编译期保证）。 */
@@ -50,6 +59,8 @@ export interface AdminAuditEvent {
   outcome: string;
   playerId: string | null;
   occurredAt: string;
+  /** JSONB 透出；键为 snake_case（如 `client_ip`），前端按原键读取。 */
+  details: Record<string, unknown>;
 }
 
 /** GET /api/admin/audit-events 响应信封：事件列表 + 全量总数（含分页时）。 */

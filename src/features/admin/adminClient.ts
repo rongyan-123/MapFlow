@@ -29,7 +29,12 @@ export async function fetchAdminDashboard(
     typeof body.activeSessions !== 'number' ||
     typeof body.platformConsumedUsages !== 'number' ||
     typeof body.platformConsumedTokens !== 'number' ||
-    !isLoginTrend7d(body.loginTrend7d)
+    !isLoginTrend7d(body.loginTrend7d) ||
+    typeof body.currentOnline !== 'number' ||
+    typeof body.consecutive3dLogins !== 'number' ||
+    typeof body.totalActiveMinutes !== 'number' ||
+    typeof body.avgActiveMinutes !== 'number' ||
+    !isDailyConsumed7d(body.dailyConsumed7d)
   ) {
     throw invalidResponseError();
   }
@@ -42,6 +47,11 @@ export async function fetchAdminDashboard(
     platformConsumedUsages: body.platformConsumedUsages,
     platformConsumedTokens: body.platformConsumedTokens,
     loginTrend7d: body.loginTrend7d,
+    currentOnline: body.currentOnline,
+    consecutive3dLogins: body.consecutive3dLogins,
+    totalActiveMinutes: body.totalActiveMinutes,
+    avgActiveMinutes: body.avgActiveMinutes,
+    dailyConsumed7d: body.dailyConsumed7d,
   };
 }
 
@@ -168,6 +178,20 @@ function isLoginTrend7d(
   );
 }
 
+function isDailyConsumed7d(
+  value: unknown,
+): value is { date: string; consumed: number }[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        isRecord(item) &&
+        typeof item.date === 'string' &&
+        typeof item.consumed === 'number',
+    )
+  );
+}
+
 function isAdminAccount(value: unknown): value is AdminAccount {
   return (
     isRecord(value) &&
@@ -178,7 +202,9 @@ function isAdminAccount(value: unknown): value is AdminAccount {
     isStringOrNull(value.lastSeenAt) &&
     typeof value.byokSessions === 'number' &&
     typeof value.platformSessions === 'number' &&
-    typeof value.totalTokens === 'number'
+    typeof value.totalTokens === 'number' &&
+    typeof value.platformConsumedUsages === 'number' &&
+    typeof value.activeMinutes === 'number'
   );
 }
 
@@ -213,7 +239,8 @@ function isAdminAuditEvent(value: unknown): value is AdminAuditEvent {
     typeof value.eventType === 'string' &&
     typeof value.outcome === 'string' &&
     isStringOrNull(value.playerId) &&
-    typeof value.occurredAt === 'string'
+    typeof value.occurredAt === 'string' &&
+    isRecord(value.details)
   );
 }
 

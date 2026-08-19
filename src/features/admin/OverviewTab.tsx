@@ -43,10 +43,71 @@ export default function OverviewTab({ csrfToken }: OverviewTabProps) {
         <MetricCard label="剩余邀请码" value={data.availableInvites} />
         <MetricCard label="平台消耗次数" value={data.platformConsumedUsages} />
         <MetricCard label="平台消耗 token" value={data.platformConsumedTokens} />
+        <MetricCard label="当前在线" value={data.currentOnline} />
+        <MetricCard label="连续 3 天在线" value={data.consecutive3dLogins} />
+        <MetricCard
+          label="总停留时长"
+          value={formatMinutes(data.totalActiveMinutes)}
+        />
+        <MetricCard
+          label="人均停留时长"
+          value={formatMinutes(data.avgActiveMinutes)}
+        />
       </div>
 
-      <LoginTrendChart trend={trend} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <LoginTrendChart trend={trend} />
+        <DailyConsumedChart consumed={data.dailyConsumed7d} />
+      </div>
     </div>
+  );
+}
+
+function DailyConsumedChart({
+  consumed,
+}: {
+  consumed: AdminDashboard['dailyConsumed7d'];
+}) {
+  if (consumed.length === 0) {
+    return (
+      <section className="rounded-xl border border-slate-800 bg-slate-900/65 p-4">
+        <h2 className="text-sm font-semibold text-slate-100">每日消耗次数</h2>
+        <p className="mt-4 rounded-lg border border-dashed border-slate-800 px-4 py-8 text-center text-xs text-slate-500">
+          近 7 日暂无平台消耗记录。
+        </p>
+      </section>
+    );
+  }
+  const max = Math.max(...consumed.map((day) => day.consumed), 1);
+  return (
+    <section className="rounded-xl border border-slate-800 bg-slate-900/65 p-4">
+      <h2 className="text-sm font-semibold text-slate-100">每日消耗次数</h2>
+      <p className="mt-1 text-[11px] text-slate-500">
+        每日平台消耗次数；柱高按当日次数占 7 日最高值的比例绘制。
+      </p>
+      <div className="mt-4 flex h-40 items-end gap-2">
+        {consumed.map((day) => (
+          <div
+            key={day.date}
+            className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1"
+          >
+            <span className="text-[10px] leading-none text-slate-500">
+              {day.consumed}
+            </span>
+            <div
+              aria-label={`${day.date} 消耗 ${day.consumed} 次`}
+              className="w-full max-w-12 rounded-t bg-gradient-to-t from-amber-700 to-amber-300"
+              style={{
+                height: `${Math.round((day.consumed / max) * 100)}%`,
+              }}
+            />
+            <span className="text-[10px] leading-none text-slate-500">
+              {day.date.slice(5)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -84,13 +145,19 @@ function LoginTrendChart({ trend }: { trend: AdminDashboard['loginTrend7d'] }) {
   );
 }
 
+/** 分钟数格式化为可读时长；本仓库惯例每文件保留本地副本，不跨文件导出。 */
+function formatMinutes(minutes: number): string {
+  if (minutes >= 60) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  return `${minutes}m`;
+}
+
 function MetricCard({
   label,
   value,
   hint,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   hint?: string;
 }) {
   return (

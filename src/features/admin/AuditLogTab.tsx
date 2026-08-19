@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { fetchAdminAuditEventsPage } from './adminClient';
-import type { AuditFilter } from './types';
+import type { AdminAuditEvent, AuditFilter } from './types';
 
 interface AuditLogTabProps {
   csrfToken: string;
@@ -9,8 +9,21 @@ interface AuditLogTabProps {
 
 const PAGE_SIZE = 50;
 
+/** 事件类型 → 可读标题/描述；未知事件类型回退原字符串。 */
+const EVENT_META: Record<string, { title: string; description: string }> = {
+  'identity.registered': { title: '注册账号', description: '新用户通过邀请码注册' },
+  'identity.logged_in': { title: '用户登录', description: '用户登录系统' },
+};
+
+/** outcome → 中文；未知 outcome 回退原字符串。 */
+const OUTCOME_META: Record<string, string> = {
+  succeeded: '成功',
+  rejected: '拒绝',
+  failed: '失败',
+};
+
 const EVENT_TYPE_OPTIONS = [
-  { value: '', label: '全部' },
+  { value: '', label: '全部事件' },
   { value: 'identity.registered', label: 'identity.registered' },
   { value: 'identity.logged_in', label: 'identity.logged_in' },
   { value: 'admin.account_suspended', label: 'admin.account_suspended' },
@@ -58,7 +71,9 @@ export default function AuditLogTab({ csrfToken }: AuditLogTabProps) {
           >
             {EVENT_TYPE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.label}
+                {option.value === ''
+                  ? option.label
+                  : (EVENT_META[option.value]?.title ?? option.value)}
               </option>
             ))}
           </select>
@@ -76,29 +91,43 @@ export default function AuditLogTab({ csrfToken }: AuditLogTabProps) {
               <th className="px-4 py-3 font-semibold">结果</th>
               <th className="px-4 py-3 font-semibold">时间</th>
               <th className="px-4 py-3 font-semibold">玩家</th>
+              <th className="px-4 py-3 font-semibold">IP</th>
             </tr>
           </thead>
           <tbody>
-            {events.map((event) => (
-              <tr
-                key={event.eventId}
-                className="border-b border-slate-800/60 last:border-b-0"
-              >
-                <td className="px-4 py-3 font-medium text-slate-100">
-                  {event.eventType}
-                </td>
-                <td className="px-4 py-3 text-slate-400">{event.outcome}</td>
-                <td className="px-4 py-3 text-slate-400">
-                  {formatIsoDateTime(event.occurredAt)}
-                </td>
-                <td className="px-4 py-3 text-slate-400">
-                  {event.playerId ?? '—'}
-                </td>
-              </tr>
-            ))}
+            {events.map((event) => {
+              const meta = EVENT_META[event.eventType];
+              return (
+                <tr
+                  key={event.eventId}
+                  className="border-b border-slate-800/60 last:border-b-0"
+                >
+                  <td className="px-4 py-3 font-medium text-slate-100">
+                    <span className="block">{meta?.title ?? event.eventType}</span>
+                    {meta?.description && (
+                      <span className="block text-[11px] font-normal text-slate-500">
+                        {meta.description}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <OutcomeBadge outcome={event.outcome} />
+                  </td>
+                  <td className="px-4 py-3 text-slate-400">
+                    {formatIsoDateTime(event.occurredAt)}
+                  </td>
+                  <td className="px-4 py-3 text-slate-400">
+                    {event.playerId ?? '—'}
+                  </td>
+                  <td className="px-4 py-3 text-slate-400">
+                    {clientIpOf(event)}
+                  </td>
+                </tr>
+              );
+            })}
             {events.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
                   暂无审计事件。
                 </td>
               </tr>
@@ -127,6 +156,31 @@ export default function AuditLogTab({ csrfToken }: AuditLogTabProps) {
       </div>
     </div>
   );
+}
+
+function OutcomeBadge({ outcome }: { outcome: string }) {
+  const label = OUTCOME_META[outcome] ?? outcome;
+  const tone =
+    outcome === 'succeeded'
+      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+      : outcome === 'rejected'
+        ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+        : outcome === 'failed'
+          ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+          : 'text-slate-400';
+  return (
+    <span
+      className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${tone}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+/** details JSONB 键为 snake_case `client_ip`；非空字符串才展示。 */
+function clientIpOf(event: AdminAuditEvent): string {
+  const ip = event.details?.['client_ip'];
+  return typeof ip === 'string' && ip.length > 0 ? ip : '—';
 }
 
 function auditFilter(eventType: string, pageIndex: number): AuditFilter {

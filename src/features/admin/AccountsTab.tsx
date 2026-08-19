@@ -63,7 +63,9 @@ export default function AccountsTab({ csrfToken }: AccountsTabProps) {
               <th className="px-4 py-3 font-semibold">最后活跃</th>
               <th className="px-4 py-3 font-semibold">BYOK 次数</th>
               <th className="px-4 py-3 font-semibold">平台次数</th>
+              <th className="px-4 py-3 font-semibold">平台消耗次数</th>
               <th className="px-4 py-3 font-semibold">总 Token</th>
+              <th className="px-4 py-3 font-semibold">停留时长</th>
               <th className="px-4 py-3 font-semibold">操作</th>
             </tr>
           </thead>
@@ -97,7 +99,13 @@ export default function AccountsTab({ csrfToken }: AccountsTabProps) {
                 <td className="px-4 py-3 text-slate-400">
                   {account.platformSessions}
                 </td>
+                <td className="px-4 py-3 text-slate-400">
+                  {account.platformConsumedUsages}
+                </td>
                 <td className="px-4 py-3 text-slate-400">{account.totalTokens}</td>
+                <td className="px-4 py-3 text-slate-400">
+                  {formatMinutes(account.activeMinutes)}
+                </td>
                 <td className="px-4 py-3">
                   <SuspendControl
                     account={account}
@@ -112,7 +120,7 @@ export default function AccountsTab({ csrfToken }: AccountsTabProps) {
             ))}
             {accounts.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
                   暂无用户。
                 </td>
               </tr>
@@ -199,6 +207,12 @@ function TabError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
       </button>
     </div>
   );
+}
+
+/** 分钟数格式化为可读时长；本仓库惯例每文件保留本地副本，不跨文件导出。 */
+function formatMinutes(minutes: number): string {
+  if (minutes >= 60) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  return `${minutes}m`;
 }
 
 function formatIsoDateTime(iso: string | null): string {
