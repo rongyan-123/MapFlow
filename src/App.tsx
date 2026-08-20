@@ -517,6 +517,7 @@ export default function App() {
         >
           {snapshot ? (
             <SkillTreeCanvas
+              key={mobileView}
               snapshot={snapshot}
               displayMode={displayMode}
               selectedNodeId={selectedNodeId}
