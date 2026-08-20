@@ -47,6 +47,7 @@ export default function App() {
   const [generationSessionId, setGenerationSessionId] = useState<string | null>(
     readGenerationSessionId,
   );
+  const [mobileView, setMobileView] = useState<'list' | 'graph' | 'detail'>('list');
   const completedGenerationSessionIdRef = useRef<string | null>(null);
   const accountPlayerId = session?.account.playerId ?? null;
   const personalTreeLibraryQueryKey = [
@@ -135,6 +136,7 @@ export default function App() {
     setSelectedLibraryEntryId(null);
     setSelectedNodeId(null);
     setCompletion(null);
+    setMobileView('list');
   }, [accountPlayerId]);
 
   useEffect(() => {
@@ -238,11 +240,13 @@ export default function App() {
     setSelectedPublicTreeId(treeId);
     setSelectedNodeId(null);
     setCompletion(null);
+    setMobileView('graph');
   };
   const selectPersonalTree = (libraryEntryId: string) => {
     setSelectedLibraryEntryId(libraryEntryId);
     setSelectedNodeId(null);
     setCompletion(null);
+    setMobileView('graph');
   };
   const showPersonalLibrary = () => {
     if (!session) {
@@ -290,7 +294,10 @@ export default function App() {
     return (
       <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
         <AdminPanel
-          onBack={() => setView('personal')}
+          onBack={() => {
+            setView('personal');
+            setMobileView('list');
+          }}
           csrfToken={session.csrfToken}
         />
       </div>
@@ -328,15 +335,27 @@ export default function App() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
       <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-2 sm:px-5">
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-bold tracking-tight sm:text-lg">
-            {activeTitle}
-          </h1>
-          <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">
-            {view === 'public'
-              ? '公共示例树 · 全亮预览，不代表你的学习进度'
-              : '我的学习树 · 进度仅保存在当前账号'}
-          </p>
+        <div className="flex min-w-0 items-center gap-2">
+          {mobileView !== 'list' && (
+            <button
+              type="button"
+              aria-label="返回上一级"
+              onClick={() => setMobileView(mobileView === 'detail' ? 'graph' : 'list')}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 lg:hidden"
+            >
+              ←
+            </button>
+          )}
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-bold tracking-tight sm:text-lg">
+              {activeTitle}
+            </h1>
+            <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">
+              {view === 'public'
+                ? '公共示例树 · 全亮预览，不代表你的学习进度'
+                : '我的学习树 · 进度仅保存在当前账号'}
+            </p>
+          </div>
         </div>
         <nav className="flex shrink-0 items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/80 p-1 text-xs">
           <ViewButton
@@ -374,8 +393,13 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex min-h-0 flex-1">
-        <aside className="w-64 shrink-0 overflow-y-auto border-r border-slate-800 bg-slate-950/95 p-3">
+      <main className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <aside
+          data-testid="mobile-list"
+          className={`${
+            mobileView === 'list' ? 'flex' : 'hidden'
+          } w-full min-h-0 flex-1 flex-col overflow-y-auto border-b border-slate-800 bg-slate-950/95 p-3 lg:flex lg:w-64 lg:flex-none lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r`}
+        >
           <div className="mb-3 px-1">
             <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
               {view === 'public' ? '公共树池' : '个人树库'}
@@ -461,13 +485,19 @@ export default function App() {
           {completionMutation.error && <MutationError error={completionMutation.error} />}
         </aside>
 
-        <section className="relative min-w-0 flex-1">
+        <section
+          data-testid="mobile-graph"
+          className={`${mobileView === 'graph' ? 'block' : 'hidden'} relative min-w-0 flex-1 lg:block`}
+        >
           {snapshot ? (
             <SkillTreeCanvas
               snapshot={snapshot}
               displayMode={displayMode}
               selectedNodeId={selectedNodeId}
-              onSelectNode={setSelectedNodeId}
+              onSelectNode={(nodeId) => {
+                setSelectedNodeId(nodeId);
+                setMobileView('detail');
+              }}
             />
           ) : treePending ? (
             <InlineStatus message="正在加载完整技能树…" />
@@ -485,20 +515,32 @@ export default function App() {
         </section>
 
         {snapshot ? (
-          <NodeDetailPanel
-            snapshot={snapshot}
-            displayMode={displayMode}
-            selectedNodeId={selectedNodeId}
-            completionPending={completionMutation.isPending}
-            onSetCompleted={
-              view === 'personal'
-                ? (nodeId, completed) =>
-                    completionMutation.mutate({ nodeId, completed })
-                : undefined
-            }
-          />
+          <div
+            data-testid="mobile-detail"
+            className={`${
+              mobileView === 'detail' ? 'flex' : 'hidden'
+            } min-h-0 flex-1 flex-col lg:flex lg:w-80 lg:flex-none`}
+          >
+            <NodeDetailPanel
+              snapshot={snapshot}
+              displayMode={displayMode}
+              selectedNodeId={selectedNodeId}
+              completionPending={completionMutation.isPending}
+              onSetCompleted={
+                view === 'personal'
+                  ? (nodeId, completed) =>
+                      completionMutation.mutate({ nodeId, completed })
+                  : undefined
+              }
+            />
+          </div>
         ) : (
-          <aside className="flex w-80 shrink-0 items-center justify-center border-l border-slate-800 bg-slate-950/95 p-6 text-center text-sm text-slate-600">
+          <aside
+            data-testid="mobile-detail"
+            className={`${
+              mobileView === 'detail' ? 'flex' : 'hidden'
+            } w-full min-h-0 flex-1 flex-col items-center justify-center border-t border-slate-800 bg-slate-950/95 p-6 text-center text-sm text-slate-600 lg:flex lg:w-80 lg:flex-none lg:border-l lg:border-t-0`}
+          >
             选择并加载技能树后，可在这里查看节点详情。
           </aside>
         )}

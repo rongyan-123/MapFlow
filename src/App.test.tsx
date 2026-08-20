@@ -612,6 +612,56 @@ describe('管理面板入口', () => {
   });
 });
 
+describe('手机端视图栈', () => {
+  it('初始显示列表页：列表可见、图与详情隐藏、无返回按钮', async () => {
+    renderApp();
+    await screen.findByText('NestJS 完整学习树');
+
+    expect(screen.getByTestId('mobile-list').className).not.toContain('hidden');
+    expect(screen.getByTestId('mobile-graph').className).toContain('hidden');
+    expect(screen.getByTestId('mobile-detail').className).toContain('hidden');
+    expect(
+      screen.queryByRole('button', { name: '返回上一级' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('点树项进入图页：图可见、列表隐藏、返回按钮出现', async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
+    expect(screen.getByTestId('mobile-graph').className).not.toContain('hidden');
+    expect(screen.getByTestId('mobile-list').className).toContain('hidden');
+    expect(screen.getByRole('button', { name: '返回上一级' })).toBeInTheDocument();
+  });
+
+  it('点节点进入详情页，返回按钮先回图页再回列表', async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: '查看节点 基础节点' }),
+    );
+    expect(screen.getByTestId('mobile-detail').className).not.toContain('hidden');
+    expect(screen.getByTestId('mobile-graph').className).toContain('hidden');
+
+    await user.click(screen.getByRole('button', { name: '返回上一级' }));
+    expect(screen.getByTestId('mobile-graph').className).not.toContain('hidden');
+    expect(screen.getByTestId('mobile-detail').className).toContain('hidden');
+
+    await user.click(screen.getByRole('button', { name: '返回上一级' }));
+    expect(screen.getByTestId('mobile-list').className).not.toContain('hidden');
+    expect(
+      screen.queryByRole('button', { name: '返回上一级' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 function renderApp() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },

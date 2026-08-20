@@ -34,7 +34,7 @@ export default function NodeDetailPanel({
   const node = snapshot.nodes.find((item) => item.id === selectedNodeId);
   if (!node) {
     return (
-      <aside className="flex w-80 shrink-0 items-center justify-center border-l border-slate-800 bg-slate-950/95 p-6">
+      <aside className="flex w-full shrink-0 items-center justify-center border-t border-slate-800 bg-slate-950/95 p-6 lg:w-80 lg:border-l lg:border-t-0">
         <p className="text-center text-sm text-slate-500">点击节点查看学习目标与掌握证据</p>
       </aside>
     );
@@ -59,7 +59,7 @@ export default function NodeDetailPanel({
   };
 
   return (
-    <aside className="w-80 shrink-0 overflow-y-auto border-l border-slate-800 bg-slate-950/95 p-5">
+    <aside className="w-full shrink-0 overflow-y-auto border-t border-slate-800 bg-slate-950/95 p-5 lg:w-80 lg:border-l lg:border-t-0">
       <div className="mb-4 flex items-start gap-3">
         <span className="text-3xl">{ICON_EMOJI[node.icon] ?? '📖'}</span>
         <div>
