@@ -38,6 +38,8 @@ export default function App() {
   const {
     identityEnabled,
     generationCapabilities,
+    capabilitiesPending,
+    capabilitiesError,
     session,
     sessionPending,
     openIdentityDialog,
@@ -469,9 +471,11 @@ export default function App() {
 
           {view === 'personal' &&
             session &&
-            generationCapabilities?.enabled && (
+            (capabilitiesPending ||
+              capabilitiesError ||
+              generationCapabilities?.enabled === true) && (
               <div className="mt-4">
-                {generationCapabilities.platformFundedEnabled &&
+                {generationCapabilities?.platformFundedEnabled &&
                   platformEntitlements.data && (
                     <p className="mb-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-center text-[11px] font-medium text-amber-200">
                       平台免费生成剩余 {platformEntitlements.data.available} 次
@@ -483,7 +487,8 @@ export default function App() {
                     generationSessionId ? '查看技能树生成任务' : '生成新技能树'
                   }
                   onClick={openTreeGenerator}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/45 bg-cyan-400/10 px-3 py-2.5 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/15"
+                  disabled={!generationCapabilities?.enabled}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/45 bg-cyan-400/10 px-3 py-2.5 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/15 disabled:cursor-wait disabled:opacity-60"
                 >
                   {generationSessionId && (
                     <span
@@ -492,7 +497,13 @@ export default function App() {
                       className="h-2 w-2 animate-pulse rounded-full bg-cyan-300"
                     />
                   )}
-                  {generationSessionId ? '生成任务进行中 · 点击查看' : '生成新技能树'}
+                  {generationSessionId
+                    ? '生成任务进行中 · 点击查看'
+                    : capabilitiesPending
+                    ? '正在检查生成能力…'
+                    : capabilitiesError
+                    ? '生成能力暂不可用'
+                    : '生成新技能树'}
                 </button>
               </div>
             )}
@@ -609,7 +620,7 @@ export default function App() {
         )}
 
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        {identityEnabled && (
+        {(identityEnabled || session) && (
           <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2.5">
             {session ? (
               <div className="min-w-0">
@@ -628,7 +639,7 @@ export default function App() {
                 type="button"
                 aria-label="退出登录"
                 disabled={logoutPending}
-                onClick={() => void logout()}
+                onClick={() => void logout().catch(() => undefined)}
                 className="shrink-0 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 transition hover:border-rose-400/60 hover:text-rose-300 disabled:opacity-50"
               >
                 退出

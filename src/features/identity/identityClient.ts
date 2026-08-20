@@ -24,38 +24,48 @@ export class IdentityApiError extends Error {
   }
 }
 
+const CAPABILITIES_TIMEOUT_MS = 8_000;
+
 export async function fetchCapabilities(): Promise<IdentityCapabilities> {
-  const response = await request('/api/capabilities', {
-    credentials: 'same-origin',
-    headers: { Accept: 'application/json' },
-  });
-  const body = await readJson(response);
-  if (
-    !isRecord(body) ||
-    !isRecord(body.identity) ||
-    typeof body.identity.registrationEnabled !== 'boolean' ||
-    !isRecord(body.generation) ||
-    typeof body.generation.enabled !== 'boolean' ||
-    typeof body.generation.platformFundedEnabled !== 'boolean' ||
-    !isExactStringArray(body.generation.models, [
-      'deepseek-v4-flash',
-      'deepseek-v4-pro',
-    ]) ||
-    !isExactStringArray(body.generation.thinkingModes, ['disabled', 'enabled']) ||
-    !isExactStringArray(body.generation.reasoningEfforts, ['low', 'high', 'max'])
-  ) {
-    throw invalidResponseError();
+  // 弱网下接口可能挂起十几秒；超时后中止，让调用方尽快进入「能力不可用」兜底态。
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CAPABILITIES_TIMEOUT_MS);
+  try {
+    const response = await request('/api/capabilities', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+    const body = await readJson(response);
+    if (
+      !isRecord(body) ||
+      !isRecord(body.identity) ||
+      typeof body.identity.registrationEnabled !== 'boolean' ||
+      !isRecord(body.generation) ||
+      typeof body.generation.enabled !== 'boolean' ||
+      typeof body.generation.platformFundedEnabled !== 'boolean' ||
+      !isExactStringArray(body.generation.models, [
+        'deepseek-v4-flash',
+        'deepseek-v4-pro',
+      ]) ||
+      !isExactStringArray(body.generation.thinkingModes, ['disabled', 'enabled']) ||
+      !isExactStringArray(body.generation.reasoningEfforts, ['low', 'high', 'max'])
+    ) {
+      throw invalidResponseError();
+    }
+    return {
+      identity: { registrationEnabled: body.identity.registrationEnabled },
+      generation: {
+        enabled: body.generation.enabled,
+        platformFundedEnabled: body.generation.platformFundedEnabled,
+        models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+        thinkingModes: ['disabled', 'enabled'],
+        reasoningEfforts: ['low', 'high', 'max'],
+      },
+    };
+  } finally {
+    clearTimeout(timeout);
   }
-  return {
-    identity: { registrationEnabled: body.identity.registrationEnabled },
-    generation: {
-      enabled: body.generation.enabled,
-      platformFundedEnabled: body.generation.platformFundedEnabled,
-      models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
-      thinkingModes: ['disabled', 'enabled'],
-      reasoningEfforts: ['low', 'high', 'max'],
-    },
-  };
 }
 
 export async function fetchCurrentSession(): Promise<IdentitySession | null> {

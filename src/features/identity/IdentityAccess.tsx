@@ -11,8 +11,9 @@ export default function IdentityAccess() {
     logoutError,
   } = useIdentity();
 
-  if (!identityEnabled) return null;
-  if (sessionPending) {
+  // session 已知时优先显示账号区：能力接口失败/挂起不应把已登录用户踢回匿名态
+  if (!identityEnabled && !session) return null;
+  if (sessionPending && !session) {
     return <span className="text-xs text-slate-600">账号状态同步中…</span>;
   }
 
@@ -31,7 +32,7 @@ export default function IdentityAccess() {
           type="button"
           aria-label="退出登录"
           disabled={logoutPending}
-          onClick={() => void logout()}
+          onClick={() => void logout().catch(() => undefined)}
           className="rounded-lg border border-slate-700 px-2 py-1 text-[11px] text-slate-400 transition hover:border-rose-400/60 hover:text-rose-300 disabled:opacity-50"
         >
           退出

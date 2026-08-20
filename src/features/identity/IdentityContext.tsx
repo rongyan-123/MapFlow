@@ -32,6 +32,8 @@ type AuthenticationAction =
 interface IdentityContextValue {
   identityEnabled: boolean;
   generationCapabilities: IdentityCapabilities['generation'] | null;
+  capabilitiesPending: boolean;
+  capabilitiesError: boolean;
   session: IdentitySession | null;
   sessionPending: boolean;
   openIdentityDialog: () => void;
@@ -53,10 +55,12 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   });
   const identityEnabled = capabilities.data?.identity.registrationEnabled === true;
   const generationCapabilities = capabilities.data?.generation ?? null;
+  // session 查询不依赖 capabilities：弱网下能力接口挂起时，
+  // 已登录用户仍应立即看到自己的学习视图（生成按钮以禁用态占位）。
+  // 服务端 /api/auth/session 路由恒存在，匿名请求返回 401 → null。
   const sessionQuery = useQuery({
     queryKey: SESSION_QUERY_KEY,
     queryFn: fetchCurrentSession,
-    enabled: identityEnabled,
     staleTime: 60 * 1000,
     retry: false,
   });
@@ -96,6 +100,8 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
       value={{
         identityEnabled,
         generationCapabilities,
+        capabilitiesPending: capabilities.isPending,
+        capabilitiesError: capabilities.isError,
         session,
         sessionPending: capabilities.isPending || sessionQuery.isPending,
         openIdentityDialog,

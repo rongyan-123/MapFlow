@@ -41,10 +41,41 @@ describe('identityClient', () => {
         reasoningEfforts: ['low', 'high', 'max'],
       },
     });
-    expect(fetchMock).toHaveBeenCalledWith('/api/capabilities', {
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json' },
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/capabilities',
+      expect.objectContaining({
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it('aborts the capabilities fetch after eight seconds instead of hanging', async () => {
+    vi.useFakeTimers();
+    try {
+      let capturedSignal: AbortSignal | null | undefined;
+      fetchMock.mockImplementationOnce(
+        (_input, init) =>
+          new Promise((_resolve, reject) => {
+            capturedSignal = init?.signal;
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('aborted', 'AbortError')),
+            );
+          }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const settled = fetchCapabilities().catch((caught: unknown) => caught);
+      await vi.advanceTimersByTimeAsync(8_000);
+
+      const error = await settled;
+      expect(error).toBeInstanceOf(IdentityApiError);
+      expect(error).toMatchObject({ status: 0, code: 'network.unavailable' });
+      expect(capturedSignal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('treats an unauthorized session lookup as an anonymous visitor', async () => {

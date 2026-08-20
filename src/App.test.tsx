@@ -404,6 +404,41 @@ describe('MapFlow tree library', () => {
     expect(new URLSearchParams(window.location.search).has('generationSession')).toBe(false);
   });
 
+  it('keeps the generation button visible and disabled while capabilities are still loading', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCapabilities.mockImplementation(() => new Promise(() => {}));
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp();
+
+    expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+
+    const button = await screen.findByRole('button', { name: '生成新技能树' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent('正在检查生成能力…');
+  });
+
+  it('keeps the generation button visible and disabled when capabilities fail', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCapabilities.mockRejectedValue(new Error('network down'));
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp();
+
+    expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+
+    const button = await screen.findByRole('button', { name: '生成新技能树' });
+    expect(button).toBeDisabled();
+    await waitFor(
+      () => expect(button).toHaveTextContent('生成能力暂不可用'),
+      { timeout: 3000 },
+    );
+  });
+
   it('restores an unfinished generation dialog from the URL after reload', async () => {
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     window.history.replaceState(

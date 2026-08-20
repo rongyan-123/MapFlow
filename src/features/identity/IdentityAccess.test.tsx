@@ -38,14 +38,25 @@ describe('IdentityAccess', () => {
     api.fetchCapabilities.mockResolvedValue({
       identity: { registrationEnabled: false },
     });
+    api.fetchCurrentSession.mockResolvedValue(null);
 
     renderIdentityAccess();
 
     await waitFor(() => expect(api.fetchCapabilities).toHaveBeenCalledOnce());
-    expect(api.fetchCurrentSession).not.toHaveBeenCalled();
+    expect(api.fetchCurrentSession).toHaveBeenCalled();
     expect(
       screen.queryByRole('button', { name: '登录 / 激活账号' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows an existing session even while capabilities are unavailable', async () => {
+    api.fetchCapabilities.mockRejectedValue(new Error('network down'));
+    api.fetchCurrentSession.mockResolvedValue(authenticated);
+
+    renderIdentityAccess();
+
+    expect(await screen.findByText('MF-7K3P-9D2Q-X8CW')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '退出登录' })).toBeInTheDocument();
   });
 
   it('registers through the modal, shows the server player ID, and logs out with CSRF', async () => {
