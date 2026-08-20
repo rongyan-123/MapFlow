@@ -49,6 +49,21 @@ describe('IdentityAccess', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('keeps the login entry visible when capabilities fail', async () => {
+    api.fetchCapabilities.mockRejectedValue(new Error('network down'));
+    api.fetchCurrentSession.mockResolvedValue(null);
+
+    renderIdentityAccess();
+
+    expect(
+      await screen.findByRole(
+        'button',
+        { name: '登录 / 激活账号' },
+        { timeout: 5_000 },
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('shows an existing session even while capabilities are unavailable', async () => {
     api.fetchCapabilities.mockRejectedValue(new Error('network down'));
     api.fetchCurrentSession.mockResolvedValue(authenticated);

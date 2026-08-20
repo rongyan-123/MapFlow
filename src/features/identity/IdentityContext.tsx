@@ -53,7 +53,11 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
-  const identityEnabled = capabilities.data?.identity.registrationEnabled === true;
+  // capabilities 失败时乐观视为启用：否则登录入口/我的学习切换静默失效，
+  // 匿名用户永远无法登录（死锁）。登录接口本身不依赖 capabilities。
+  const identityEnabled =
+    capabilities.isError ||
+    capabilities.data?.identity.registrationEnabled === true;
   const generationCapabilities = capabilities.data?.generation ?? null;
   // session 查询不依赖 capabilities：弱网下能力接口挂起时，
   // 已登录用户仍应立即看到自己的学习视图（生成按钮以禁用态占位）。
