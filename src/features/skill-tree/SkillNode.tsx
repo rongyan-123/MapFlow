@@ -35,8 +35,8 @@ function SkillNodeComponent({ data, selected }: NodeProps<SkillFlowNode>) {
       className={cn(
         'relative min-w-[150px] max-w-[200px] cursor-pointer select-none rounded-xl border-2 px-4 py-3 transition-all duration-500',
         isShowcase &&
-          // 不透明底色兜底：移动端合成层下渐变瓦片偶尔失效，露出底色而非全黑
-          'border-cyan-200/80 bg-cyan-400 bg-gradient-to-br from-cyan-400 via-sky-400 to-violet-400 text-slate-950 shadow-[0_0_30px_rgba(34,211,238,0.48)]',
+          // 兜底底色 + 强制独立合成层：移动端渐变瓦片不稳定时露出亮蓝且纹理不随缩放重绘
+          'border-cyan-200/80 bg-cyan-400 bg-gradient-to-br from-cyan-400 to-violet-400 text-slate-950 shadow-[0_0_30px_rgba(34,211,238,0.48)] will-change-transform',
         !isShowcase && status === 'not_started' &&
           'border-slate-700 bg-slate-900/85 text-slate-400',
         !isShowcase && isInProgress &&

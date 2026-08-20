@@ -59,6 +59,18 @@ describe('SkillNode 渲染', () => {
     expect(node.className).toContain('bg-gradient-to-br');
   });
 
+  it('showcase 节点强制独立合成层，渐变纹理不随缩放重绘', () => {
+    const node = renderNode('showcase');
+    expect(node.className).toContain('will-change-transform');
+  });
+
+  it('showcase 节点渐变简化为两端色，减少瓦片复杂度', () => {
+    const node = renderNode('showcase');
+    expect(node.className).toContain('from-cyan-400');
+    expect(node.className).not.toContain('via-sky-400');
+    expect(node.className).toContain('to-violet-400');
+  });
+
   it('showcase 节点不使用未开始节点的深色样式', () => {
     const node = renderNode('showcase');
     expect(node.className).not.toContain('bg-slate-900/85');
