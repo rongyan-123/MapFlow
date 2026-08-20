@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -46,6 +46,10 @@ vi.mock('./features/tree-library/treeLibraryClient', () => treeApi);
 vi.mock('./features/tree-generation/treeGenerationClient', () => generationApi);
 vi.mock('./features/admin/adminClient', () => adminApi);
 vi.mock('./lib/api', () => legacyApi);
+
+const announcementsApi = vi.hoisted(() => ({ getAnnouncements: vi.fn() }));
+
+vi.mock('./features/announcements/announcementsClient', () => announcementsApi);
 vi.mock('./features/tree-generation/TreeGenerationDialog', () => ({
   default: ({
     sessionId,
@@ -173,6 +177,8 @@ beforeEach(() => {
   for (const mock of Object.values(treeApi)) mock.mockReset();
   for (const mock of Object.values(adminApi)) mock.mockReset();
   legacyApi.fetchLearningTree.mockReset();
+  announcementsApi.getAnnouncements.mockReset();
+  announcementsApi.getAnnouncements.mockResolvedValue({ items: [], unreadCount: 0 });
   adminApi.fetchAdminDashboard.mockResolvedValue({
     registeredAccounts: 12,
     availableInvites: 3,
@@ -659,6 +665,75 @@ describe('手机端视图栈', () => {
     expect(
       screen.queryByRole('button', { name: '返回上一级' }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('手机端抽屉', () => {
+  it('点 ☰ 打开抽屉，点「我的学习」进入个人视图并关闭抽屉', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    renderApp();
+    await screen.findByText(authenticated.account.playerId);
+
+    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    const drawer = screen.getByRole('dialog', { name: '功能菜单' });
+    await user.click(within(drawer).getByRole('button', { name: '我的学习' }));
+
+    expect(
+      screen.queryByRole('dialog', { name: '功能菜单' }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByText('从公共树池加入一棵技能树后，就可以从零记录进度。'),
+    ).toBeInTheDocument();
+  });
+
+  it('管理员可在抽屉打开管理面板', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(adminAccount);
+    renderApp();
+    await screen.findByText(adminAccount.account.playerId);
+
+    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    await user.click(
+      within(screen.getByRole('dialog', { name: '功能菜单' })).getByRole('button', {
+        name: '管理面板',
+      }),
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: '管理面板' }),
+    ).toBeInTheDocument();
+  });
+
+  it('未登录时抽屉提供登录入口', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByText('NestJS 完整学习树');
+
+    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    await user.click(
+      within(screen.getByRole('dialog', { name: '功能菜单' })).getByRole('button', {
+        name: '登录 / 激活账号',
+      }),
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('登录后抽屉的公告入口打开公告列表', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    renderApp();
+    await screen.findByText(authenticated.account.playerId);
+
+    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    await user.click(
+      within(screen.getByRole('dialog', { name: '功能菜单' })).getByRole('button', {
+        name: '公告',
+      }),
+    );
+    expect(
+      await screen.findByRole('dialog', { name: '全部公告' }),
+    ).toBeInTheDocument();
   });
 });
 

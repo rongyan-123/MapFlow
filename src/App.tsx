@@ -10,7 +10,10 @@ import SkillTreeCanvas from './features/skill-tree/SkillTreeCanvas';
 import IdentityAccess from './features/identity/IdentityAccess';
 import { useIdentity } from './features/identity/IdentityContext';
 import AnnouncementsButton from './features/announcements/AnnouncementsButton';
+import AnnouncementsDialog from './features/announcements/AnnouncementsDialog';
 import FeedbackButton from './features/feedback/FeedbackButton';
+import FeedbackDialog from './features/feedback/FeedbackDialog';
+import MobileDrawer from './features/navigation/MobileDrawer';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
 import { readPlatformGenerationEntitlements } from './features/tree-generation/treeGenerationClient';
 import {
@@ -37,6 +40,8 @@ export default function App() {
     session,
     sessionPending,
     openIdentityDialog,
+    logout,
+    logoutPending,
   } = useIdentity();
   const [view, setView] = useState<AppView>('public');
   const [selectedPublicTreeId, setSelectedPublicTreeId] = useState<string | null>(null);
@@ -48,6 +53,9 @@ export default function App() {
     readGenerationSessionId,
   );
   const [mobileView, setMobileView] = useState<'list' | 'graph' | 'detail'>('list');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [announcementsOpen, setAnnouncementsOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const completedGenerationSessionIdRef = useRef<string | null>(null);
   const accountPlayerId = session?.account.playerId ?? null;
   const personalTreeLibraryQueryKey = [
@@ -336,6 +344,16 @@ export default function App() {
     <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
       <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-2 sm:px-5">
         <div className="flex min-w-0 items-center gap-2">
+          {mobileView === 'list' && (
+            <button
+              type="button"
+              aria-label="打开功能菜单"
+              onClick={() => setDrawerOpen(true)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 lg:hidden"
+            >
+              ☰
+            </button>
+          )}
           {mobileView !== 'list' && (
             <button
               type="button"
@@ -357,7 +375,7 @@ export default function App() {
             </p>
           </div>
         </div>
-        <nav className="flex shrink-0 items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/80 p-1 text-xs">
+        <nav className="hidden shrink-0 items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/80 p-1 text-xs lg:flex">
           <ViewButton
             active={view === 'public'}
             onClick={() => {
@@ -378,7 +396,9 @@ export default function App() {
           )}
         </nav>
         <div className="flex shrink-0 items-center gap-2">
-          <AnnouncementsButton />
+          <div className="hidden lg:block">
+            <AnnouncementsButton />
+          </div>
           {session &&
             generationCapabilities?.platformFundedEnabled === true && (
               <CreditPill
@@ -389,7 +409,9 @@ export default function App() {
                 }}
               />
             )}
-          <IdentityAccess />
+          <div className="hidden lg:block">
+            <IdentityAccess />
+          </div>
         </div>
       </header>
 
@@ -581,6 +603,109 @@ export default function App() {
           />
         )}
 
+      <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2.5">
+          {session ? (
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-slate-100">
+                {session.account.username}
+              </div>
+              <div className="font-mono text-[10px] text-cyan-300">
+                {session.account.playerId}
+              </div>
+            </div>
+          ) : (
+            <span className="text-sm text-slate-500">未登录</span>
+          )}
+          {session ? (
+            <button
+              type="button"
+              aria-label="退出登录"
+              disabled={logoutPending}
+              onClick={() => void logout()}
+              className="shrink-0 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 transition hover:border-rose-400/60 hover:text-rose-300 disabled:opacity-50"
+            >
+              退出
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                openIdentityDialog();
+                setDrawerOpen(false);
+              }}
+              className="shrink-0 rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/20"
+            >
+              登录 / 激活账号
+            </button>
+          )}
+        </div>
+
+        <nav className="flex flex-col gap-1">
+          <DrawerItem
+            active={view === 'public'}
+            onClick={() => {
+              setView('public');
+              setSelectedNodeId(null);
+              setCompletion(null);
+              setMobileView('list');
+              setDrawerOpen(false);
+            }}
+          >
+            公共树库
+          </DrawerItem>
+          <DrawerItem
+            active={view === 'personal'}
+            onClick={() => {
+              showPersonalLibrary();
+              setMobileView('list');
+              setDrawerOpen(false);
+            }}
+          >
+            我的学习
+          </DrawerItem>
+          {session?.account.isAdmin && (
+            <DrawerItem
+              active={view === 'admin'}
+              onClick={() => {
+                setView('admin');
+                setDrawerOpen(false);
+              }}
+            >
+              管理面板
+            </DrawerItem>
+          )}
+        </nav>
+
+        {session && (
+          <div className="mt-4 flex flex-col gap-1 border-t border-slate-800 pt-4">
+            <DrawerItem
+              onClick={() => {
+                setAnnouncementsOpen(true);
+                setDrawerOpen(false);
+              }}
+            >
+              公告
+            </DrawerItem>
+            <DrawerItem
+              onClick={() => {
+                setFeedbackOpen(true);
+                setDrawerOpen(false);
+              }}
+            >
+              意见反馈
+            </DrawerItem>
+          </div>
+        )}
+      </MobileDrawer>
+
+      {announcementsOpen && session && (
+        <AnnouncementsDialog onClose={() => setAnnouncementsOpen(false)} />
+      )}
+      {feedbackOpen && session && (
+        <FeedbackDialog onClose={() => setFeedbackOpen(false)} />
+      )}
+
       <FeedbackButton />
     </div>
   );
@@ -640,6 +765,30 @@ function ViewButton({
         active
           ? 'bg-cyan-300 text-slate-950'
           : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DrawerItem({
+  active,
+  onClick,
+  children,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  children: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
+        active
+          ? 'bg-cyan-300 text-slate-950'
+          : 'text-slate-300 hover:bg-slate-900 hover:text-white'
       }`}
     >
       {children}
