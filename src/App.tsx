@@ -519,7 +519,7 @@ export default function App() {
             data-testid="mobile-detail"
             className={`${
               mobileView === 'detail' ? 'flex' : 'hidden'
-            } min-h-0 flex-1 flex-col lg:flex lg:w-80 lg:flex-none`}
+            } min-h-0 flex-1 flex-col overflow-y-auto lg:flex lg:w-80 lg:flex-none`}
           >
             <NodeDetailPanel
               snapshot={snapshot}
