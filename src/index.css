@@ -394,3 +394,13 @@ select {
     transform: translate(4px, 3px);
   }
 }
+
+/* 手机端（<1024px）触摸目标 ≥44px（WCAG 2.5.5），PC 不受影响 */
+@media (max-width: 1023px) {
+  button,
+  input,
+  textarea,
+  select {
+    min-height: 44px;
+  }
+}

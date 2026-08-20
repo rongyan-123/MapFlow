@@ -12,7 +12,7 @@ export default function FeedbackButton() {
         type="button"
         aria-label="意见反馈"
         onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 rounded-full border border-slate-700 bg-slate-900/90 px-4 py-2.5 text-sm font-semibold text-slate-200 shadow-lg transition hover:border-cyan-600 hover:text-white"
+        className="fixed bottom-5 right-5 z-40 rounded-full border border-slate-700 bg-slate-900/90 px-4 py-2.5 text-sm font-semibold text-slate-200 shadow-lg transition hover:border-cyan-600 hover:text-white max-lg:bottom-[calc(1.25rem+env(safe-area-inset-bottom))]"
       >
         意见反馈
       </button>

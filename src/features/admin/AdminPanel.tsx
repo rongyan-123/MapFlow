@@ -44,7 +44,7 @@ export default function AdminPanel({ onBack, csrfToken }: AdminPanelProps) {
         <nav
           role="tablist"
           aria-label="管理面板分区"
-          className="ml-auto flex shrink-0 items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/80 p-1 text-xs"
+          className="ml-auto flex max-w-full shrink-0 items-center gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/80 p-1 text-xs"
         >
           {TABS.map((tab) => (
             <button
@@ -53,7 +53,7 @@ export default function AdminPanel({ onBack, csrfToken }: AdminPanelProps) {
               role="tab"
               aria-selected={activeTab === tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`rounded-lg px-3 py-1.5 font-semibold transition ${
+              className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 font-semibold transition ${
                 activeTab === tab.id
                   ? 'bg-cyan-300 text-slate-950'
                   : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'

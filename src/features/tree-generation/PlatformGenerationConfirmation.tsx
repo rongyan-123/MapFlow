@@ -26,7 +26,7 @@ export default function PlatformGenerationConfirmation({
         role="dialog"
         aria-modal="true"
         aria-labelledby="platform-generation-confirmation-title"
-        className="w-full max-w-md rounded-2xl border border-amber-400/30 bg-slate-900 p-5 shadow-2xl"
+        className="w-full max-w-[min(28rem,calc(100vw-2rem))] rounded-2xl border border-amber-400/30 bg-slate-900 p-5 shadow-2xl"
       >
         <h2
           id="platform-generation-confirmation-title"

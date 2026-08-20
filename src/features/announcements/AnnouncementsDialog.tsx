@@ -21,7 +21,7 @@ export default function AnnouncementsDialog({ onClose }: { onClose: () => void }
         role="dialog"
         aria-modal="true"
         aria-labelledby="announcements-dialog-title"
-        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-[min(32rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
       >
         <header className="flex items-start justify-between border-b border-slate-800 px-5 py-4">
           <div>

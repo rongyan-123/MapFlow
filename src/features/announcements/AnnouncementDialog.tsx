@@ -28,7 +28,7 @@ export default function AnnouncementDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="announcement-dialog-title"
-        className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+        className="w-full max-w-[min(28rem,calc(100vw-2rem))] rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
       >
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-300">
           公告 · 剩余 {remaining} 条未读

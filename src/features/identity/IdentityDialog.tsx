@@ -151,7 +151,7 @@ export default function IdentityDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="identity-dialog-title"
-        className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl shadow-cyan-950/40"
+        className="w-full max-w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl shadow-cyan-950/40"
       >
         <div className="flex items-start justify-between border-b border-slate-800 px-5 py-4">
           <div>

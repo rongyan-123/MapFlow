@@ -39,7 +39,7 @@ export default function FeedbackDialog({ onClose }: { onClose: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="feedback-dialog-title"
-        className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+        className="w-full max-w-[min(28rem,calc(100vw-2rem))] rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
       >
         <h2 id="feedback-dialog-title" className="text-base font-semibold text-white">
           意见反馈

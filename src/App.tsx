@@ -342,7 +342,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
-      <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-2 sm:px-5">
+      <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-2 sm:px-5 max-lg:pt-[max(0.5rem,env(safe-area-inset-top))]">
         <div className="flex min-w-0 items-center gap-2">
           {mobileView === 'list' && (
             <button
@@ -862,7 +862,7 @@ function FullPageStatus({
 }) {
   return (
     <main className="grid h-screen place-items-center bg-slate-950 p-6 text-slate-300">
-      <div className="max-w-md rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-center">
+      <div className="max-w-[min(28rem,calc(100vw-2rem))] rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-center">
         {title && <h1 className="text-lg font-semibold text-slate-100">{title}</h1>}
         <p className="mt-2 text-sm leading-6 text-slate-400">{message}</p>
         {actionLabel && onAction && (

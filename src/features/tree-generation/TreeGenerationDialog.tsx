@@ -504,7 +504,7 @@ export default function TreeGenerationDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="tree-generation-dialog-title"
-        className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl shadow-cyan-950/40"
+        className="flex max-h-[94vh] w-full max-w-[min(56rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl shadow-cyan-950/40"
       >
         <header className="flex shrink-0 items-start justify-between border-b border-slate-800 px-5 py-4">
           <div>

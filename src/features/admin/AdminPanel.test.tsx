@@ -202,6 +202,7 @@ describe('AdminPanel', () => {
     expect(screen.getByRole('tab', { name: '审计日志' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '反馈' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '公告' })).toBeInTheDocument();
+    expect(screen.getByRole('tablist')).toHaveClass('overflow-x-auto');
     expect(screen.getByRole('button', { name: '返回' })).toBeInTheDocument();
 
     await waitFor(() =>
