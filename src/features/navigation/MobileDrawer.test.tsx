@@ -11,7 +11,9 @@ describe('MobileDrawer', () => {
         <button type="button">抽屉条目</button>
       </MobileDrawer>,
     );
-    expect(screen.getByRole('dialog', { name: '功能菜单' })).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: '功能菜单' });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.className).toContain('overflow-y-auto');
     expect(screen.getByRole('button', { name: '抽屉条目' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: 'Escape' });

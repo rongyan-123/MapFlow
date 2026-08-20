@@ -36,12 +36,14 @@ type AppView = 'public' | 'personal' | 'admin';
 export default function App() {
   const queryClient = useQueryClient();
   const {
+    identityEnabled,
     generationCapabilities,
     session,
     sessionPending,
     openIdentityDialog,
     logout,
     logoutPending,
+    logoutError,
   } = useIdentity();
   const [view, setView] = useState<AppView>('public');
   const [selectedPublicTreeId, setSelectedPublicTreeId] = useState<string | null>(null);
@@ -155,6 +157,8 @@ export default function App() {
 
   useEffect(() => {
     if (!session && !sessionPending) {
+      setAnnouncementsOpen(false);
+      setFeedbackOpen(false);
       setGenerationDialogOpen(false);
       setGenerationSessionId(null);
       writeGenerationSessionId(null);
@@ -604,42 +608,49 @@ export default function App() {
         )}
 
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2.5">
-          {session ? (
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold text-slate-100">
-                {session.account.username}
+        {identityEnabled && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2.5">
+            {session ? (
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-slate-100">
+                  {session.account.username}
+                </div>
+                <div className="font-mono text-[10px] text-cyan-300">
+                  {session.account.playerId}
+                </div>
               </div>
-              <div className="font-mono text-[10px] text-cyan-300">
-                {session.account.playerId}
-              </div>
-            </div>
-          ) : (
-            <span className="text-sm text-slate-500">未登录</span>
-          )}
-          {session ? (
-            <button
-              type="button"
-              aria-label="退出登录"
-              disabled={logoutPending}
-              onClick={() => void logout()}
-              className="shrink-0 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 transition hover:border-rose-400/60 hover:text-rose-300 disabled:opacity-50"
-            >
-              退出
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                openIdentityDialog();
-                setDrawerOpen(false);
-              }}
-              className="shrink-0 rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/20"
-            >
-              登录 / 激活账号
-            </button>
-          )}
-        </div>
+            ) : (
+              <span className="text-sm text-slate-500">未登录</span>
+            )}
+            {session ? (
+              <button
+                type="button"
+                aria-label="退出登录"
+                disabled={logoutPending}
+                onClick={() => void logout()}
+                className="shrink-0 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 transition hover:border-rose-400/60 hover:text-rose-300 disabled:opacity-50"
+              >
+                退出
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  openIdentityDialog();
+                  setDrawerOpen(false);
+                }}
+                className="shrink-0 rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/20"
+              >
+                登录 / 激活账号
+              </button>
+            )}
+            {logoutError && (
+              <span className="sr-only" role="alert">
+                {logoutError instanceof Error ? logoutError.message : '退出失败'}
+              </span>
+            )}
+          </div>
+        )}
 
         <nav className="flex flex-col gap-1">
           <DrawerItem

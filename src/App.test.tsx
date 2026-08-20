@@ -735,6 +735,81 @@ describe('手机端抽屉', () => {
       await screen.findByRole('dialog', { name: '全部公告' }),
     ).toBeInTheDocument();
   });
+
+  it('identity 功能关闭时抽屉不渲染登录入口', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCapabilities.mockResolvedValue({
+      identity: { registrationEnabled: false },
+      generation: {
+        enabled: true,
+        platformFundedEnabled: true,
+        models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+        thinkingModes: ['disabled', 'enabled'],
+        reasoningEfforts: ['low', 'high', 'max'],
+      },
+    });
+    renderApp();
+    await screen.findByText('NestJS 完整学习树');
+
+    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    expect(screen.getByRole('dialog', { name: '功能菜单' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '登录 / 激活账号' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('未登录')).not.toBeInTheDocument();
+  });
+
+  it('抽屉退出失败时显示错误提示', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    identityApi.logoutIdentity.mockRejectedValue(new Error('登出失败'));
+    renderApp();
+    await screen.findByText(authenticated.account.playerId);
+
+    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    const drawer = screen.getByRole('dialog', { name: '功能菜单' });
+    await user.click(
+      within(drawer).getByRole('button', { name: '退出登录' }),
+    );
+
+    const alert = await within(drawer).findByRole('alert');
+    expect(alert).toHaveTextContent('登出失败');
+  });
+
+  it('session 失效后重新登录不自动弹出残留的公告弹窗', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    const { queryClient } = renderApp();
+    await screen.findByText(authenticated.account.playerId);
+
+    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    await user.click(
+      within(screen.getByRole('dialog', { name: '功能菜单' })).getByRole('button', {
+        name: '公告',
+      }),
+    );
+    expect(
+      await screen.findByRole('dialog', { name: '全部公告' }),
+    ).toBeInTheDocument();
+
+    // 模拟 session 失效：弹窗随之卸载但 state 残留
+    identityApi.fetchCurrentSession.mockResolvedValue(null);
+    await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: '全部公告' }),
+      ).not.toBeInTheDocument(),
+    );
+
+    // 重新登录后公告弹窗不应自动弹出
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
+    await screen.findByText(authenticated.account.playerId);
+
+    expect(
+      screen.queryByRole('dialog', { name: '全部公告' }),
+    ).not.toBeInTheDocument();
+  });
 });
 
 function renderApp() {

@@ -29,7 +29,7 @@ export default function MobileDrawer({ open, onClose, children }: MobileDrawerPr
         role="dialog"
         aria-modal="true"
         aria-label="功能菜单"
-        className="absolute inset-y-0 left-0 flex w-[85vw] max-w-xs flex-col border-r border-slate-800 bg-slate-950 p-4 shadow-2xl"
+        className="absolute inset-y-0 left-0 flex w-[85vw] max-w-xs flex-col overflow-y-auto border-r border-slate-800 bg-slate-950 p-4 shadow-2xl"
       >
         {children}
       </div>
