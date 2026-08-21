@@ -11,7 +11,6 @@ import IdentityAccess from './features/identity/IdentityAccess';
 import { useIdentity } from './features/identity/IdentityContext';
 import AnnouncementsButton from './features/announcements/AnnouncementsButton';
 import AnnouncementsDialog from './features/announcements/AnnouncementsDialog';
-import FeedbackButton from './features/feedback/FeedbackButton';
 import FeedbackDialog from './features/feedback/FeedbackDialog';
 import MobileDrawer from './features/navigation/MobileDrawer';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
@@ -405,6 +404,16 @@ export default function App() {
           <div className="hidden lg:block">
             <AnnouncementsButton />
           </div>
+          <div className="hidden lg:block">
+            <button
+              type="button"
+              aria-label="意见反馈"
+              onClick={() => setFeedbackOpen(true)}
+              className="rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-cyan-600 hover:text-white"
+            >
+              意见反馈
+            </button>
+          </div>
           {session &&
             generationCapabilities?.platformFundedEnabled === true && (
               <CreditPill
@@ -426,7 +435,7 @@ export default function App() {
           data-testid="mobile-list"
           className={`${
             mobileView === 'list' ? 'flex' : 'hidden'
-          } w-full min-h-0 flex-1 flex-col overflow-y-auto border-b border-slate-800 bg-slate-950/95 p-3 lg:flex lg:w-64 lg:flex-none lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r`}
+          } w-full min-h-0 flex-1 flex-col overflow-y-auto border-b border-slate-800 bg-slate-950/95 p-3 max-lg:pb-24 lg:flex lg:w-64 lg:flex-none lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r`}
         >
           <div className="mb-3 px-1">
             <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -729,7 +738,6 @@ export default function App() {
         <FeedbackDialog onClose={() => setFeedbackOpen(false)} />
       )}
 
-      <FeedbackButton />
     </div>
   );
 }
