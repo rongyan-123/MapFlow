@@ -762,6 +762,34 @@ describe('手机端视图栈', () => {
     expect(screen.getByTestId('mobile-detail').className).not.toContain('hidden');
     expect(screen.getByRole('heading', { name: '基础节点' })).toBeInTheDocument();
   });
+
+  it('关闭再打开同一棵树时保留聊天气泡，但切换树会隔离会话', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp();
+
+    await screen.findByText(authenticated.account.playerId);
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: '查看节点 基础节点' }),
+    );
+    await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
+
+    await user.type(screen.getByRole('textbox', { name: '输入问题' }), '保留这条消息');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    expect(await screen.findByText('测试回答')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '返回节点详情' }));
+    await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
+
+    expect(screen.getByText('保留这条消息')).toBeInTheDocument();
+    expect(screen.getByText('测试回答')).toBeInTheDocument();
+  });
 });
 
 describe('手机端抽屉', () => {

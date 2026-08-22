@@ -388,7 +388,7 @@ export default function App() {
               ☰
             </button>
           )}
-          {mobileView !== 'list' && (
+          {mobileView !== 'list' && mobileView !== 'chat' && (
             <button
               type="button"
               aria-label="返回上一级"
@@ -628,9 +628,10 @@ export default function App() {
           </aside>
         )}
 
-        {snapshot && chatOpen && session && selectedLibraryEntryId && (
+        {snapshot && view === 'personal' && session && selectedLibraryEntryId && (
           <div
             data-testid="knowledge-chat-panel"
+            hidden={!chatOpen}
             className={`${mobileView === 'chat' ? 'flex' : 'hidden'} min-h-0 w-full flex-1 flex-col overflow-hidden ${chatOpen ? 'lg:flex' : 'lg:hidden'} lg:w-80 lg:flex-none`}
           >
             <KnowledgeChatPanel

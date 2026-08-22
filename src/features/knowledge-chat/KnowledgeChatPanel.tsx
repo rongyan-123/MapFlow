@@ -96,7 +96,7 @@ export default function KnowledgeChatPanel({
           type="button"
           aria-label="返回节点详情"
           onClick={onClose}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-cyan-400/60 hover:text-white lg:hidden"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-cyan-400/60 hover:text-white"
         >
           ←
         </button>
