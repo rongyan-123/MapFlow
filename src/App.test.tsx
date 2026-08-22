@@ -31,6 +31,11 @@ const generationApi = vi.hoisted(() => ({
 
 const legacyApi = vi.hoisted(() => ({ fetchLearningTree: vi.fn() }));
 
+const chatApi = vi.hoisted(() => ({
+  resetKnowledgeChat: vi.fn(),
+  sendKnowledgeChatMessage: vi.fn(),
+}));
+
 const adminApi = vi.hoisted(() => ({
   fetchAdminDashboard: vi.fn(),
   fetchAdminAccounts: vi.fn(),
@@ -46,6 +51,7 @@ vi.mock('./features/tree-library/treeLibraryClient', () => treeApi);
 vi.mock('./features/tree-generation/treeGenerationClient', () => generationApi);
 vi.mock('./features/admin/adminClient', () => adminApi);
 vi.mock('./lib/api', () => legacyApi);
+vi.mock('./features/knowledge-chat/knowledgeChatClient', () => chatApi);
 
 const announcementsApi = vi.hoisted(() => ({ getAnnouncements: vi.fn() }));
 
@@ -177,6 +183,20 @@ beforeEach(() => {
   for (const mock of Object.values(treeApi)) mock.mockReset();
   for (const mock of Object.values(adminApi)) mock.mockReset();
   legacyApi.fetchLearningTree.mockReset();
+  chatApi.resetKnowledgeChat.mockReset();
+  chatApi.sendKnowledgeChatMessage.mockReset();
+  chatApi.resetKnowledgeChat.mockResolvedValue(undefined);
+  chatApi.sendKnowledgeChatMessage.mockResolvedValue({
+    answer: '测试回答',
+    usage: {
+      inputTokens: 10,
+      outputTokens: 5,
+      cacheHitInputTokens: 0,
+      cacheMissInputTokens: 10,
+    },
+    chargedCredits: 0.2,
+    sandboxRemainingUnits: 98,
+  });
   announcementsApi.getAnnouncements.mockReset();
   announcementsApi.getAnnouncements.mockResolvedValue({ items: [], unreadCount: 0 });
   adminApi.fetchAdminDashboard.mockResolvedValue({
@@ -700,6 +720,47 @@ describe('手机端视图栈', () => {
     expect(
       screen.queryByRole('button', { name: '返回上一级' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('公共树节点详情不显示知识聊天入口', async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: '查看节点 基础节点' }),
+    );
+
+    expect(screen.queryByRole('button', { name: '与这棵树聊天' })).not.toBeInTheDocument();
+    expect(chatApi.sendKnowledgeChatMessage).not.toHaveBeenCalled();
+  });
+
+  it('登录后的个人树打开聊天并可返回详情，选中节点保持不变', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp();
+
+    await screen.findByText(authenticated.account.playerId);
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: '查看节点 基础节点' }),
+    );
+    await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
+
+    expect(screen.getByTestId('knowledge-chat-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('mobile-detail').className).toContain('hidden');
+    expect(chatApi.sendKnowledgeChatMessage).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: '返回节点详情' }));
+    expect(screen.getByTestId('mobile-detail').className).not.toContain('hidden');
+    expect(screen.getByRole('heading', { name: '基础节点' })).toBeInTheDocument();
   });
 });
 

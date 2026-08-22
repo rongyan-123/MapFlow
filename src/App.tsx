@@ -7,6 +7,7 @@ import CompletionFlash from './features/skill-tree/CompletionFlash';
 import NodeDetailPanel from './features/skill-tree/NodeDetailPanel';
 import ProgressOverview from './features/skill-tree/ProgressOverview';
 import SkillTreeCanvas from './features/skill-tree/SkillTreeCanvas';
+import KnowledgeChatPanel from './features/knowledge-chat/KnowledgeChatPanel';
 import IdentityAccess from './features/identity/IdentityAccess';
 import { useIdentity } from './features/identity/IdentityContext';
 import AnnouncementsButton from './features/announcements/AnnouncementsButton';
@@ -31,6 +32,7 @@ import type {
 } from './types/learning';
 
 type AppView = 'public' | 'personal' | 'admin';
+type MobileView = 'list' | 'graph' | 'detail' | 'chat';
 
 export default function App() {
   const queryClient = useQueryClient();
@@ -55,7 +57,8 @@ export default function App() {
   const [generationSessionId, setGenerationSessionId] = useState<string | null>(
     readGenerationSessionId,
   );
-  const [mobileView, setMobileView] = useState<'list' | 'graph' | 'detail'>('list');
+  const [mobileView, setMobileView] = useState<MobileView>('list');
+  const [chatOpen, setChatOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [announcementsOpen, setAnnouncementsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -147,6 +150,7 @@ export default function App() {
     setSelectedLibraryEntryId(null);
     setSelectedNodeId(null);
     setCompletion(null);
+    setChatOpen(false);
     setMobileView('list');
   }, [accountPlayerId]);
 
@@ -253,12 +257,14 @@ export default function App() {
     setSelectedPublicTreeId(treeId);
     setSelectedNodeId(null);
     setCompletion(null);
+    setChatOpen(false);
     setMobileView('graph');
   };
   const selectPersonalTree = (libraryEntryId: string) => {
     setSelectedLibraryEntryId(libraryEntryId);
     setSelectedNodeId(null);
     setCompletion(null);
+    setChatOpen(false);
     setMobileView('graph');
   };
   const showPersonalLibrary = () => {
@@ -269,6 +275,7 @@ export default function App() {
     setView('personal');
     setSelectedNodeId(null);
     setCompletion(null);
+    setChatOpen(false);
   };
   const joinSelectedTree = () => {
     if (!session) {
@@ -295,10 +302,32 @@ export default function App() {
     setSelectedLibraryEntryId(libraryEntryId);
     setSelectedNodeId(null);
     setCompletion(null);
+    setChatOpen(false);
     setView('personal');
     setGenerationDialogOpen(false);
     rememberGenerationSession(null);
     void queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
+  };
+
+  const openKnowledgeChat = () => {
+    if (!session) {
+      openIdentityDialog();
+      return;
+    }
+    if (view !== 'personal' || !selectedLibraryEntryId) return;
+    setChatOpen(true);
+    setMobileView('chat');
+  };
+  const closeKnowledgeChat = () => {
+    setChatOpen(false);
+    setMobileView('detail');
+  };
+  const goBackOnMobile = () => {
+    if (mobileView === 'chat') {
+      closeKnowledgeChat();
+      return;
+    }
+    setMobileView(mobileView === 'detail' ? 'graph' : 'list');
   };
 
   // admin 视图整体替换页面（卸载个人/公共内容，返回时重新挂载）；
@@ -363,7 +392,7 @@ export default function App() {
             <button
               type="button"
               aria-label="返回上一级"
-              onClick={() => setMobileView(mobileView === 'detail' ? 'graph' : 'list')}
+              onClick={goBackOnMobile}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 lg:hidden"
             >
               ←
@@ -387,6 +416,8 @@ export default function App() {
               setView('public');
               setSelectedNodeId(null);
               setCompletion(null);
+              setChatOpen(false);
+              setMobileView('list');
             }}
           >
             公共树库
@@ -565,8 +596,8 @@ export default function App() {
           <div
             data-testid="mobile-detail"
             className={`${
-              mobileView === 'detail' ? 'flex' : 'hidden'
-            } min-h-0 flex-1 flex-col overflow-y-auto lg:flex lg:w-80 lg:flex-none`}
+              mobileView === 'detail' && !chatOpen ? 'flex' : 'hidden'
+            } min-h-0 flex-1 flex-col overflow-y-auto ${chatOpen ? 'lg:hidden' : 'lg:flex'} lg:w-80 lg:flex-none`}
           >
             <NodeDetailPanel
               snapshot={snapshot}
@@ -579,17 +610,36 @@ export default function App() {
                       completionMutation.mutate({ nodeId, completed })
                   : undefined
               }
+              onOpenChat={
+                view === 'personal' && session && selectedLibraryEntryId
+                  ? openKnowledgeChat
+                  : undefined
+              }
             />
           </div>
         ) : (
           <aside
             data-testid="mobile-detail"
             className={`${
-              mobileView === 'detail' ? 'flex' : 'hidden'
-            } w-full min-h-0 flex-1 flex-col items-center justify-center border-t border-slate-800 bg-slate-950/95 p-6 text-center text-sm text-slate-600 lg:flex lg:w-80 lg:flex-none lg:border-l lg:border-t-0`}
+              mobileView === 'detail' && !chatOpen ? 'flex' : 'hidden'
+            } w-full min-h-0 flex-1 flex-col items-center justify-center border-t border-slate-800 bg-slate-950/95 p-6 text-center text-sm text-slate-600 ${chatOpen ? 'lg:hidden' : 'lg:flex'} lg:w-80 lg:flex-none lg:border-l lg:border-t-0`}
           >
             选择并加载技能树后，可在这里查看节点详情。
           </aside>
+        )}
+
+        {snapshot && chatOpen && session && selectedLibraryEntryId && (
+          <div
+            data-testid="knowledge-chat-panel"
+            className={`${mobileView === 'chat' ? 'flex' : 'hidden'} min-h-0 w-full flex-1 flex-col overflow-hidden ${chatOpen ? 'lg:flex' : 'lg:hidden'} lg:w-80 lg:flex-none`}
+          >
+            <KnowledgeChatPanel
+              treeTitle={activeTitle}
+              libraryEntryId={selectedLibraryEntryId}
+              csrfToken={session.csrfToken}
+              onClose={closeKnowledgeChat}
+            />
+          </div>
         )}
       </main>
 

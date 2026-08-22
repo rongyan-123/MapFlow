@@ -10,6 +10,7 @@ interface NodeDetailPanelProps {
   displayMode: TreeDisplayMode;
   onSetCompleted?: (nodeId: string, completed: boolean) => void;
   completionPending?: boolean;
+  onOpenChat?: () => void;
 }
 
 function parseStringList(raw: string | null): string[] {
@@ -30,6 +31,7 @@ export default function NodeDetailPanel({
   displayMode,
   onSetCompleted,
   completionPending = false,
+  onOpenChat,
 }: NodeDetailPanelProps) {
   const node = snapshot.nodes.find((item) => item.id === selectedNodeId);
   if (!node) {
@@ -75,6 +77,17 @@ export default function NodeDetailPanel({
           </div>
         </div>
       </div>
+
+      {displayMode === 'personal' && onOpenChat && (
+        <button
+          type="button"
+          onClick={onOpenChat}
+          className="mb-5 flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/45 bg-cyan-400/10 px-3 py-2.5 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/15"
+        >
+          <span aria-hidden="true">💬</span>
+          与这棵树聊天
+        </button>
+      )}
 
       {node.description && <p className="mb-5 text-sm leading-6 text-slate-400">{node.description}</p>}
 
