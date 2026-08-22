@@ -53,6 +53,45 @@ describe('KnowledgeChatPanel', () => {
     expect(screen.getByText('沙箱剩余 9.8 积分')).toBeInTheDocument();
   });
 
+  it('renders common Markdown in an assistant answer without executing raw HTML', async () => {
+    const user = userEvent.setup();
+    chatApi.sendKnowledgeChatMessage.mockResolvedValueOnce({
+      answer: [
+        '先完成 **前置节点**。',
+        '',
+        '- `local-node-agent` 已完成',
+        '- 查阅 [官方文档](https://example.com/docs)',
+        '',
+        '```ts',
+        'const ready = true;',
+        '```',
+        '',
+        '<span data-testid="injected">不可执行</span>',
+      ].join('\n'),
+      usage: {
+        inputTokens: 10,
+        outputTokens: 20,
+        cacheHitInputTokens: 0,
+        cacheMissInputTokens: 10,
+      },
+      chargedCredits: 0.2,
+      sandboxRemainingUnits: 98,
+    });
+    renderPanel();
+
+    await user.type(screen.getByRole('textbox', { name: '输入问题' }), '怎么开始？');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+
+    expect(await screen.findByText('前置节点', { selector: 'strong' })).toBeInTheDocument();
+    expect(screen.getByText('local-node-agent', { selector: 'code' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '官方文档' })).toHaveAttribute(
+      'href',
+      'https://example.com/docs',
+    );
+    expect(screen.getByText('const ready = true;', { selector: 'code' })).toBeInTheDocument();
+    expect(screen.queryByTestId('injected')).not.toBeInTheDocument();
+  });
+
   it('does not send blank input, shows safe errors, and can reset the local conversation', async () => {
     const user = userEvent.setup();
     chatApi.sendKnowledgeChatMessage.mockRejectedValueOnce(

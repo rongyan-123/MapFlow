@@ -8,6 +8,9 @@ import NodeDetailPanel from './features/skill-tree/NodeDetailPanel';
 import ProgressOverview from './features/skill-tree/ProgressOverview';
 import SkillTreeCanvas from './features/skill-tree/SkillTreeCanvas';
 import KnowledgeChatPanel from './features/knowledge-chat/KnowledgeChatPanel';
+import ResizableChatPane, {
+  DEFAULT_CHAT_WIDTH,
+} from './features/knowledge-chat/ResizableChatPane';
 import IdentityAccess from './features/identity/IdentityAccess';
 import { useIdentity } from './features/identity/IdentityContext';
 import AnnouncementsButton from './features/announcements/AnnouncementsButton';
@@ -59,6 +62,7 @@ export default function App() {
   );
   const [mobileView, setMobileView] = useState<MobileView>('list');
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatWidth, setChatWidth] = useState(DEFAULT_CHAT_WIDTH);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [announcementsOpen, setAnnouncementsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -629,10 +633,12 @@ export default function App() {
         )}
 
         {snapshot && view === 'personal' && session && selectedLibraryEntryId && (
-          <div
-            data-testid="knowledge-chat-panel"
+          <ResizableChatPane
+            testId="knowledge-chat-panel"
             hidden={!chatOpen}
-            className={`${mobileView === 'chat' ? 'flex' : 'hidden'} min-h-0 w-full flex-1 flex-col overflow-hidden ${chatOpen ? 'lg:flex' : 'lg:hidden'} lg:w-80 lg:flex-none`}
+            width={chatWidth}
+            onWidthChange={setChatWidth}
+            className={`${mobileView === 'chat' ? 'flex' : 'hidden'} min-h-0 w-full flex-1 flex-col overflow-hidden ${chatOpen ? 'lg:flex' : 'lg:hidden'}`}
           >
             <KnowledgeChatPanel
               treeTitle={activeTitle}
@@ -640,7 +646,7 @@ export default function App() {
               csrfToken={session.csrfToken}
               onClose={closeKnowledgeChat}
             />
-          </div>
+          </ResizableChatPane>
         )}
       </main>
 

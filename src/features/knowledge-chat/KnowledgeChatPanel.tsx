@@ -4,6 +4,7 @@ import {
   sendKnowledgeChatMessage,
 } from './knowledgeChatClient';
 import type { KnowledgeChatMessage } from './types';
+import AssistantMarkdown from './AssistantMarkdown';
 
 const MAX_MESSAGE_CHARACTERS = 4_000;
 
@@ -135,13 +136,17 @@ export default function KnowledgeChatPanel({
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[90%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-6 shadow-sm ${
+                className={`min-w-0 max-w-[94%] rounded-2xl px-3.5 py-2.5 text-sm leading-6 shadow-sm ${
                   message.role === 'user'
-                    ? 'rounded-br-md bg-cyan-300 text-slate-950'
+                    ? 'whitespace-pre-wrap rounded-br-md bg-cyan-300 text-slate-950'
                     : 'rounded-bl-md border border-slate-800 bg-slate-900 text-slate-200'
                 }`}
               >
-                {message.content}
+                {message.role === 'assistant' ? (
+                  <AssistantMarkdown content={message.content} />
+                ) : (
+                  message.content
+                )}
               </div>
             </div>
           ))

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -761,6 +761,46 @@ describe('手机端视图栈', () => {
     await user.click(screen.getByRole('button', { name: '返回节点详情' }));
     expect(screen.getByTestId('mobile-detail').className).not.toContain('hidden');
     expect(screen.getByRole('heading', { name: '基础节点' })).toBeInTheDocument();
+  });
+
+  it('桌面端聊天面板默认较宽，并可通过分隔条拖拽到边界', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp();
+
+    await screen.findByText(authenticated.account.playerId);
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: '查看节点 基础节点' }),
+    );
+    await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
+
+    const chatPanel = screen.getByTestId('knowledge-chat-panel');
+    const resizeHandle = screen.getByRole('separator', {
+      name: '调整聊天面板宽度',
+    });
+    expect(chatPanel).toHaveStyle({ '--knowledge-chat-width': '460px' });
+    expect(resizeHandle).toHaveAttribute('aria-valuetext', '460px');
+
+    resizeHandle.focus();
+    await user.keyboard('{ArrowLeft}');
+    expect(chatPanel).toHaveStyle({ '--knowledge-chat-width': '476px' });
+    expect(resizeHandle).toHaveAttribute('aria-valuenow', '476');
+
+    fireEvent.mouseDown(resizeHandle, { clientX: 500, button: 0 });
+    fireEvent.mouseMove(window, { clientX: -500 });
+    fireEvent.mouseUp(window, { clientX: -500 });
+    expect(chatPanel).toHaveStyle({ '--knowledge-chat-width': '720px' });
+
+    fireEvent.mouseDown(resizeHandle, { clientX: 500, button: 0 });
+    fireEvent.mouseMove(window, { clientX: 2_000 });
+    fireEvent.mouseUp(window, { clientX: 2_000 });
+    expect(chatPanel).toHaveStyle({ '--knowledge-chat-width': '360px' });
   });
 
   it('关闭再打开同一棵树时保留聊天气泡，但切换树会隔离会话', async () => {
