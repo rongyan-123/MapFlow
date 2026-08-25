@@ -42,15 +42,15 @@ describe('KnowledgeChatPanel', () => {
         cacheHitInputTokens: 10,
         cacheMissInputTokens: 10,
       },
-      chargedCredits: 0.2,
-      sandboxRemainingUnits: 98,
+      chargedCredits: 0.000036,
+      sandboxRemainingUnits: 9_999_964,
     });
 
     expect(
       await screen.findByText('建议先掌握基础模块，再进入实践节点。'),
     ).toBeInTheDocument();
-    expect(screen.getByText('本次测试消耗 0.2 积分')).toBeInTheDocument();
-    expect(screen.getByText('沙箱剩余 9.8 积分')).toBeInTheDocument();
+    expect(screen.getByText('本次测试消耗 0.000036 积分')).toBeInTheDocument();
+    expect(screen.getByText('沙箱剩余 9.999964 积分')).toBeInTheDocument();
   });
 
   it('renders text deltas before the stream completes and replaces them with the final answer', async () => {
@@ -88,8 +88,8 @@ describe('KnowledgeChatPanel', () => {
         cacheHitInputTokens: 0,
         cacheMissInputTokens: 10,
       },
-      chargedCredits: 0.2,
-      sandboxRemainingUnits: 98,
+      chargedCredits: 0.000026,
+      sandboxRemainingUnits: 9_999_974,
     });
 
     expect(await screen.findByText('最终完整答案。')).toBeInTheDocument();
@@ -117,8 +117,8 @@ describe('KnowledgeChatPanel', () => {
         cacheHitInputTokens: 0,
         cacheMissInputTokens: 10,
       },
-      chargedCredits: 0.2,
-      sandboxRemainingUnits: 98,
+      chargedCredits: 0.00005,
+      sandboxRemainingUnits: 9_999_950,
     });
     renderPanel();
 
@@ -157,8 +157,8 @@ describe('KnowledgeChatPanel', () => {
         cacheHitInputTokens: 0,
         cacheMissInputTokens: 1,
       },
-      chargedCredits: 0.2,
-      sandboxRemainingUnits: 96,
+      chargedCredits: 0.000003,
+      sandboxRemainingUnits: 9_999_997,
     });
     await user.clear(screen.getByRole('textbox', { name: '输入问题' }));
     await user.type(screen.getByRole('textbox', { name: '输入问题' }), '再问一次');

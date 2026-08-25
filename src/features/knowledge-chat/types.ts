@@ -9,6 +9,7 @@ export interface KnowledgeChatResponse {
   answer: string;
   usage: KnowledgeChatUsage;
   chargedCredits: number;
+  /** Remaining sandbox balance in micro-credit units (1_000_000 units = 1 credit). */
   sandboxRemainingUnits: number;
 }
 

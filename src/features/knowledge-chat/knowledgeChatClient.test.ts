@@ -28,7 +28,7 @@ describe('knowledgeChatClient', () => {
           cacheMissInputTokens: 8,
         },
         chargedCredits: 0.2,
-        sandboxRemainingUnits: 98,
+        sandboxRemainingUnits: 9_800_000,
       }) + '\n\n',
     ];
     const stream = new ReadableStream<Uint8Array>({
@@ -64,7 +64,7 @@ describe('knowledgeChatClient', () => {
         cacheMissInputTokens: 8,
       },
       chargedCredits: 0.2,
-      sandboxRemainingUnits: 98,
+      sandboxRemainingUnits: 9_800_000,
     });
 
     expect(deltas).toEqual(['**前', '置**。']);
@@ -97,7 +97,7 @@ describe('knowledgeChatClient', () => {
           cacheMissInputTokens: 40,
         },
         chargedCredits: 0.2,
-        sandboxRemainingUnits: 98,
+        sandboxRemainingUnits: 9_800_000,
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -118,7 +118,7 @@ describe('knowledgeChatClient', () => {
         cacheMissInputTokens: 40,
       },
       chargedCredits: 0.2,
-      sandboxRemainingUnits: 98,
+      sandboxRemainingUnits: 9_800_000,
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -176,7 +176,7 @@ describe('knowledgeChatClient', () => {
         answer: '',
         usage: {},
         chargedCredits: 0.2,
-        sandboxRemainingUnits: 98,
+        sandboxRemainingUnits: 9_800_000,
       }),
     );
     vi.stubGlobal('fetch', fetchMock);

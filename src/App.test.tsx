@@ -204,7 +204,7 @@ beforeEach(() => {
           cacheMissInputTokens: 10,
         },
         chargedCredits: 0.2,
-        sandboxRemainingUnits: 98,
+        sandboxRemainingUnits: 9_800_000,
       });
     },
   );

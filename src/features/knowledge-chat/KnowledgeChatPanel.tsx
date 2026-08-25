@@ -251,9 +251,12 @@ function createTurnId(): string {
 }
 
 function formatCredits(value: number): string {
-  return value.toFixed(1).replace(/\.0$/u, '');
+  if (value === 0) {
+    return '0';
+  }
+  return value.toFixed(6).replace(/0+$/u, '').replace(/\.$/u, '');
 }
 
 function formatSandboxCredits(units: number): string {
-  return formatCredits(units / 10);
+  return formatCredits(units / 1_000_000);
 }
