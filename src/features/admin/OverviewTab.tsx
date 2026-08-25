@@ -40,7 +40,7 @@ export default function OverviewTab({ csrfToken }: OverviewTabProps) {
           hint={`${trend.length} 日趋势中的最新一天`}
         />
         <MetricCard label="活跃会话" value={data.activeSessions} />
-        <MetricCard label="剩余邀请码" value={data.availableInvites} />
+        <MetricCard label="未领取邀请码" value={data.availableInvites} />
         <MetricCard label="平台消耗次数" value={data.platformConsumedUsages} />
         <MetricCard label="平台消耗 token" value={data.platformConsumedTokens} />
         <MetricCard label="当前在线" value={data.currentOnline} />

@@ -225,7 +225,7 @@ describe('AdminPanel', () => {
     // 「今日登录」= 趋势最后一天（08-19），不是最高日。
     expect(screen.getByLabelText('今日登录 3')).toBeInTheDocument();
     expect(screen.getByLabelText('活跃会话 7')).toBeInTheDocument();
-    expect(screen.getByLabelText('剩余邀请码 3')).toBeInTheDocument();
+    expect(screen.getByLabelText('未领取邀请码 3')).toBeInTheDocument();
     expect(screen.getByLabelText('平台消耗次数 42')).toBeInTheDocument();
     expect(screen.getByLabelText('平台消耗 token 123456')).toBeInTheDocument();
     // v2 新指标卡片：当前在线 / 连续 3 天在线 / 总停留时长 / 人均停留时长（分钟经 formatMinutes）。
