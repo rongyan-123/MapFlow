@@ -4,14 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import KnowledgeChatPanel from './KnowledgeChatPanel';
 
 const chatApi = vi.hoisted(() => ({
-  sendKnowledgeChatMessage: vi.fn(),
+  sendKnowledgeChatMessageStream: vi.fn(),
   resetKnowledgeChat: vi.fn(),
 }));
 
 vi.mock('./knowledgeChatClient', () => chatApi);
 
 beforeEach(() => {
-  chatApi.sendKnowledgeChatMessage.mockReset();
+  chatApi.sendKnowledgeChatMessageStream.mockReset();
   chatApi.resetKnowledgeChat.mockReset();
   chatApi.resetKnowledgeChat.mockResolvedValue(undefined);
 });
@@ -20,7 +20,7 @@ describe('KnowledgeChatPanel', () => {
   it('shows the user turn, disables duplicate sends, and renders a charged answer', async () => {
     const user = userEvent.setup();
     let resolveTurn!: (value: unknown) => void;
-    chatApi.sendKnowledgeChatMessage.mockReturnValue(
+    chatApi.sendKnowledgeChatMessageStream.mockReturnValue(
       new Promise((resolve) => {
         resolveTurn = resolve;
       }),
@@ -53,9 +53,52 @@ describe('KnowledgeChatPanel', () => {
     expect(screen.getByText('沙箱剩余 9.8 积分')).toBeInTheDocument();
   });
 
+  it('renders text deltas before the stream completes and replaces them with the final answer', async () => {
+    const user = userEvent.setup();
+    let resolveTurn!: (value: unknown) => void;
+    let emitDelta!: (delta: string) => void;
+    chatApi.sendKnowledgeChatMessageStream.mockImplementation(
+      (
+        _libraryEntryId: string,
+        _message: string,
+        _clientTurnId: string,
+        _csrfToken: string,
+        onDelta: (delta: string) => void,
+      ) => {
+        emitDelta = onDelta;
+        return new Promise((resolve) => {
+          resolveTurn = resolve;
+        });
+      },
+    );
+    renderPanel();
+
+    await user.type(screen.getByRole('textbox', { name: '输入问题' }), '先显示增量');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    emitDelta('流式片段');
+
+    expect(await screen.findByText('流式片段')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '发送' })).toBeDisabled();
+
+    resolveTurn({
+      answer: '最终完整答案。',
+      usage: {
+        inputTokens: 10,
+        outputTokens: 8,
+        cacheHitInputTokens: 0,
+        cacheMissInputTokens: 10,
+      },
+      chargedCredits: 0.2,
+      sandboxRemainingUnits: 98,
+    });
+
+    expect(await screen.findByText('最终完整答案。')).toBeInTheDocument();
+    expect(screen.queryByText('流式片段')).not.toBeInTheDocument();
+  });
+
   it('renders common Markdown in an assistant answer without executing raw HTML', async () => {
     const user = userEvent.setup();
-    chatApi.sendKnowledgeChatMessage.mockResolvedValueOnce({
+    chatApi.sendKnowledgeChatMessageStream.mockResolvedValueOnce({
       answer: [
         '先完成 **前置节点**。',
         '',
@@ -94,19 +137,19 @@ describe('KnowledgeChatPanel', () => {
 
   it('does not send blank input, shows safe errors, and can reset the local conversation', async () => {
     const user = userEvent.setup();
-    chatApi.sendKnowledgeChatMessage.mockRejectedValueOnce(
+    chatApi.sendKnowledgeChatMessageStream.mockRejectedValueOnce(
       new Error('知识聊天服务暂时不可用。'),
     );
     renderPanel();
 
     await user.click(screen.getByRole('button', { name: '发送' }));
-    expect(chatApi.sendKnowledgeChatMessage).not.toHaveBeenCalled();
+    expect(chatApi.sendKnowledgeChatMessageStream).not.toHaveBeenCalled();
 
     await user.type(screen.getByRole('textbox', { name: '输入问题' }), '网络错误测试');
     await user.click(screen.getByRole('button', { name: '发送' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('知识聊天服务暂时不可用。');
 
-    chatApi.sendKnowledgeChatMessage.mockResolvedValueOnce({
+    chatApi.sendKnowledgeChatMessageStream.mockResolvedValueOnce({
       answer: '重新建立一轮对话。',
       usage: {
         inputTokens: 1,

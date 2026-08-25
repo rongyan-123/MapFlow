@@ -33,7 +33,7 @@ const legacyApi = vi.hoisted(() => ({ fetchLearningTree: vi.fn() }));
 
 const chatApi = vi.hoisted(() => ({
   resetKnowledgeChat: vi.fn(),
-  sendKnowledgeChatMessage: vi.fn(),
+  sendKnowledgeChatMessageStream: vi.fn(),
 }));
 
 const adminApi = vi.hoisted(() => ({
@@ -184,19 +184,30 @@ beforeEach(() => {
   for (const mock of Object.values(adminApi)) mock.mockReset();
   legacyApi.fetchLearningTree.mockReset();
   chatApi.resetKnowledgeChat.mockReset();
-  chatApi.sendKnowledgeChatMessage.mockReset();
+  chatApi.sendKnowledgeChatMessageStream.mockReset();
   chatApi.resetKnowledgeChat.mockResolvedValue(undefined);
-  chatApi.sendKnowledgeChatMessage.mockResolvedValue({
-    answer: '测试回答',
-    usage: {
-      inputTokens: 10,
-      outputTokens: 5,
-      cacheHitInputTokens: 0,
-      cacheMissInputTokens: 10,
+  chatApi.sendKnowledgeChatMessageStream.mockImplementation(
+    (
+      _libraryEntryId: string,
+      _message: string,
+      _clientTurnId: string,
+      _csrfToken: string,
+      onDelta: (delta: string) => void,
+    ) => {
+      onDelta('测试');
+      return Promise.resolve({
+        answer: '测试回答',
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          cacheHitInputTokens: 0,
+          cacheMissInputTokens: 10,
+        },
+        chargedCredits: 0.2,
+        sandboxRemainingUnits: 98,
+      });
     },
-    chargedCredits: 0.2,
-    sandboxRemainingUnits: 98,
-  });
+  );
   announcementsApi.getAnnouncements.mockReset();
   announcementsApi.getAnnouncements.mockResolvedValue({ items: [], unreadCount: 0 });
   adminApi.fetchAdminDashboard.mockResolvedValue({
@@ -734,7 +745,7 @@ describe('手机端视图栈', () => {
     );
 
     expect(screen.queryByRole('button', { name: '与这棵树聊天' })).not.toBeInTheDocument();
-    expect(chatApi.sendKnowledgeChatMessage).not.toHaveBeenCalled();
+    expect(chatApi.sendKnowledgeChatMessageStream).not.toHaveBeenCalled();
   });
 
   it('登录后的个人树打开聊天并可返回详情，选中节点保持不变', async () => {
@@ -756,7 +767,7 @@ describe('手机端视图栈', () => {
 
     expect(screen.getByTestId('knowledge-chat-panel')).toBeInTheDocument();
     expect(screen.getByTestId('mobile-detail').className).toContain('hidden');
-    expect(chatApi.sendKnowledgeChatMessage).not.toHaveBeenCalled();
+    expect(chatApi.sendKnowledgeChatMessageStream).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: '返回节点详情' }));
     expect(screen.getByTestId('mobile-detail').className).not.toContain('hidden');

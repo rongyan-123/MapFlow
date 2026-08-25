@@ -35,6 +35,84 @@ export async function sendKnowledgeChatMessage(
   return parseChatResponse(await readJson(response));
 }
 
+export async function sendKnowledgeChatMessageStream(
+  libraryEntryId: string,
+  message: string,
+  clientTurnId: string,
+  csrfToken: string,
+  onDelta: (delta: string) => void,
+): Promise<KnowledgeChatResponse> {
+  validatePathSegment(libraryEntryId);
+  validateMessage(message);
+  validateClientTurnId(clientTurnId);
+
+  const response = await request(
+    `/api/me/tree-library/${encodeURIComponent(libraryEntryId)}/knowledge-chat/messages/stream`,
+    {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'text/event-stream',
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken,
+      },
+      body: JSON.stringify({ message, clientTurnId }),
+    },
+  );
+
+  if (!response.body) throw invalidResponseError();
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalResponse: KnowledgeChatResponse | null = null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      while (true) {
+        const boundary = findSseFrameBoundary(buffer);
+        if (!boundary) break;
+        const frame = buffer.slice(0, boundary.index);
+        buffer = buffer.slice(boundary.index + boundary.length);
+        const parsed = parseSseFrame(frame);
+        if (!parsed) continue;
+
+        if (parsed.event === 'delta') {
+          const data = parseSseJson(parsed.data);
+          if (!isRecord(data) || typeof data.delta !== 'string') {
+            throw invalidResponseError();
+          }
+          onDelta(data.delta);
+        } else if (parsed.event === 'complete') {
+          finalResponse = parseChatResponse(parseSseJson(parsed.data));
+        } else if (parsed.event === 'error') {
+          throw parseSseError(parsed.data);
+        }
+      }
+    }
+
+    buffer += decoder.decode();
+    const trailingFrame = buffer.trim();
+    if (trailingFrame) {
+      const parsed = parseSseFrame(trailingFrame);
+      if (parsed?.event === 'complete') {
+        finalResponse = parseChatResponse(parseSseJson(parsed.data));
+      } else if (parsed?.event === 'error') {
+        throw parseSseError(parsed.data);
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!finalResponse) throw invalidResponseError();
+  return finalResponse;
+}
+
 export async function resetKnowledgeChat(
   libraryEntryId: string,
   csrfToken: string,
@@ -100,6 +178,55 @@ async function readJson(response: Response): Promise<unknown> {
   } catch {
     throw invalidResponseError();
   }
+}
+
+function findSseFrameBoundary(value: string): { index: number; length: number } | null {
+  const candidates = ['\n\n', '\r\n\r\n', '\r\r'];
+  let match: { index: number; length: number } | null = null;
+  for (const candidate of candidates) {
+    const index = value.indexOf(candidate);
+    if (index >= 0 && (!match || index < match.index)) {
+      match = { index, length: candidate.length };
+    }
+  }
+  return match;
+}
+
+function parseSseFrame(frame: string): { event: string; data: string } | null {
+  const normalizedFrame = frame.replace(/\r\n/gu, '\n').replace(/\r/gu, '\n');
+  let event = 'message';
+  const dataLines: string[] = [];
+  for (const line of normalizedFrame.split('\n')) {
+    if (!line || line.startsWith(':')) continue;
+    const separator = line.indexOf(':');
+    const field = separator < 0 ? line : line.slice(0, separator);
+    const rawValue = separator < 0 ? '' : line.slice(separator + 1);
+    const value = rawValue.startsWith(' ') ? rawValue.slice(1) : rawValue;
+    if (field === 'event') event = value;
+    if (field === 'data') dataLines.push(value);
+  }
+  return dataLines.length > 0 ? { event, data: dataLines.join('\n') } : null;
+}
+
+function parseSseJson(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    throw invalidResponseError();
+  }
+}
+
+function parseSseError(value: string): KnowledgeChatApiError {
+  const body = parseSseJson(value);
+  if (isRecord(body) && typeof body.code === 'string' && typeof body.message === 'string') {
+    return new KnowledgeChatApiError(
+      502,
+      body.code,
+      body.message,
+      typeof body.traceId === 'string' ? body.traceId : undefined,
+    );
+  }
+  return invalidResponseError();
 }
 
 function parseChatResponse(value: unknown): KnowledgeChatResponse {

@@ -3,6 +3,7 @@ import {
   KnowledgeChatApiError,
   resetKnowledgeChat,
   sendKnowledgeChatMessage,
+  sendKnowledgeChatMessageStream,
 } from './knowledgeChatClient';
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -13,6 +14,78 @@ afterEach(() => {
 });
 
 describe('knowledgeChatClient', () => {
+  it('parses fragmented SSE chat deltas and uses the final complete event as authority', async () => {
+    const chunks = [
+      'event: started\ndata: {}\n\nevent: del',
+      'ta\ndata: {"delta":"**前"}\n\nevent: status\ndata: {"message":"正在搜索"}\n\n',
+      'event: delta\ndata: {"delta":"置**。"}\n\nevent: complete\ndata: ',
+      JSON.stringify({
+        answer: '**前置**。',
+        usage: {
+          inputTokens: 20,
+          outputTokens: 8,
+          cacheHitInputTokens: 12,
+          cacheMissInputTokens: 8,
+        },
+        chargedCredits: 0.2,
+        sandboxRemainingUnits: 98,
+      }) + '\n\n',
+    ];
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        controller.close();
+      },
+    });
+    fetchMock.mockResolvedValueOnce(
+      new Response(stream, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const deltas: string[] = [];
+
+    await expect(
+      sendKnowledgeChatMessageStream(
+        'entry/id',
+        '请解释前置节点。',
+        'turn-stream',
+        'csrf-secret',
+        delta => deltas.push(delta),
+      ),
+    ).resolves.toEqual({
+      answer: '**前置**。',
+      usage: {
+        inputTokens: 20,
+        outputTokens: 8,
+        cacheHitInputTokens: 12,
+        cacheMissInputTokens: 8,
+      },
+      chargedCredits: 0.2,
+      sandboxRemainingUnits: 98,
+    });
+
+    expect(deltas).toEqual(['**前', '置**。']);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/me/tree-library/entry%2Fid/knowledge-chat/messages/stream',
+      {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'text/event-stream',
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': 'csrf-secret',
+        },
+        body: JSON.stringify({
+          message: '请解释前置节点。',
+          clientTurnId: 'turn-stream',
+        }),
+      },
+    );
+  });
+
   it('sends a personal-library scoped message and parses sandbox usage', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({

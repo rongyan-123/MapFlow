@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   resetKnowledgeChat,
-  sendKnowledgeChatMessage,
+  sendKnowledgeChatMessageStream,
 } from './knowledgeChatClient';
 import type { KnowledgeChatMessage } from './types';
 import AssistantMarkdown from './AssistantMarkdown';
@@ -24,6 +24,7 @@ export default function KnowledgeChatPanel({
   const [messages, setMessages] = useState<KnowledgeChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState(false);
+  const [streamingAnswer, setStreamingAnswer] = useState<string | null>(null);
   const [resetPending, setResetPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastCharge, setLastCharge] = useState<number | null>(null);
@@ -35,7 +36,7 @@ export default function KnowledgeChatPanel({
     if (messagesEnd && typeof messagesEnd.scrollIntoView === 'function') {
       messagesEnd.scrollIntoView({ block: 'nearest' });
     }
-  }, [messages, pending]);
+  }, [messages, pending, streamingAnswer]);
 
   async function handleSubmit() {
     const message = draft.trim();
@@ -48,22 +49,28 @@ export default function KnowledgeChatPanel({
     setDraft('');
     setError(null);
     setLastCharge(null);
+    setStreamingAnswer('');
     setPending(true);
 
     try {
-      const response = await sendKnowledgeChatMessage(
+      const response = await sendKnowledgeChatMessageStream(
         libraryEntryId,
         message,
         createTurnId(),
         csrfToken,
+        (delta) => {
+          setStreamingAnswer((current) => (current ?? '') + delta);
+        },
       );
       setMessages((current) => [
         ...current,
         { id: createMessageId(), role: 'assistant', content: response.answer },
       ]);
+      setStreamingAnswer(null);
       setLastCharge(response.chargedCredits);
       setRemainingUnits(response.sandboxRemainingUnits);
     } catch (caught: unknown) {
+      setStreamingAnswer(null);
       setError(caught instanceof Error ? caught.message : '知识聊天暂时不可用，请稍后重试。');
     } finally {
       setPending(false);
@@ -78,6 +85,7 @@ export default function KnowledgeChatPanel({
       await resetKnowledgeChat(libraryEntryId, csrfToken);
       setMessages([]);
       setDraft('');
+      setStreamingAnswer(null);
       setLastCharge(null);
       setRemainingUnits(null);
     } catch (caught: unknown) {
@@ -151,7 +159,14 @@ export default function KnowledgeChatPanel({
             </div>
           ))
         )}
-        {pending && (
+        {streamingAnswer !== null && streamingAnswer && (
+          <div className="flex justify-start" data-message-role="assistant">
+            <div className="min-w-0 max-w-[94%] rounded-2xl rounded-bl-md border border-slate-800 bg-slate-900 px-3.5 py-2.5 text-sm leading-6 text-slate-200 shadow-sm">
+              <AssistantMarkdown content={streamingAnswer} />
+            </div>
+          </div>
+        )}
+        {pending && !streamingAnswer && (
           <div className="flex justify-start" aria-label="正在生成回答">
             <div className="rounded-2xl rounded-bl-md border border-slate-800 bg-slate-900 px-3.5 py-2.5 text-sm text-slate-500">
               正在思考…
