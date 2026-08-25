@@ -28,7 +28,6 @@ export default function KnowledgeChatPanel({
   const [resetPending, setResetPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastCharge, setLastCharge] = useState<number | null>(null);
-  const [remainingUnits, setRemainingUnits] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -68,7 +67,6 @@ export default function KnowledgeChatPanel({
       ]);
       setStreamingAnswer(null);
       setLastCharge(response.chargedCredits);
-      setRemainingUnits(response.sandboxRemainingUnits);
     } catch (caught: unknown) {
       setStreamingAnswer(null);
       setError(caught instanceof Error ? caught.message : '知识聊天暂时不可用，请稍后重试。');
@@ -87,7 +85,6 @@ export default function KnowledgeChatPanel({
       setDraft('');
       setStreamingAnswer(null);
       setLastCharge(null);
-      setRemainingUnits(null);
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : '重置对话失败，请稍后重试。');
     } finally {
@@ -184,12 +181,7 @@ export default function KnowledgeChatPanel({
 
       {lastCharge !== null && (
         <p className="mx-4 mb-2 text-xs text-emerald-300">
-          本次测试消耗 {formatCredits(lastCharge)} 积分
-        </p>
-      )}
-      {remainingUnits !== null && (
-        <p className="mx-4 mb-2 text-xs text-slate-500">
-          沙箱剩余 {formatSandboxCredits(remainingUnits)} 积分
+          本次对话消耗 {formatCredits(lastCharge)} 积分
         </p>
       )}
 
@@ -255,8 +247,4 @@ function formatCredits(value: number): string {
     return '0';
   }
   return value.toFixed(6).replace(/0+$/u, '').replace(/\.$/u, '');
-}
-
-function formatSandboxCredits(units: number): string {
-  return formatCredits(units / 1_000_000);
 }

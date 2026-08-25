@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useIdentity } from '../identity/IdentityContext';
 import { signInForCredit, type CreditSummary } from './creditClient';
@@ -7,6 +7,8 @@ interface CreditPillProps {
   credit: CreditSummary | null;
   onSignedIn: () => void;
 }
+
+const SIGN_IN_NOTICE_DURATION_MS = 3_000;
 
 export default function CreditPill({ credit, onSignedIn }: CreditPillProps) {
   const { session } = useIdentity();
@@ -18,6 +20,12 @@ export default function CreditPill({ credit, onSignedIn }: CreditPillProps) {
       onSignedIn();
     },
   });
+
+  useEffect(() => {
+    if (!notice) return;
+    const timeoutId = window.setTimeout(() => setNotice(null), SIGN_IN_NOTICE_DURATION_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
 
   const signedInToday = credit?.signedInToday === true;
 

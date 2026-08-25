@@ -17,7 +17,7 @@ beforeEach(() => {
 });
 
 describe('KnowledgeChatPanel', () => {
-  it('shows the user turn, disables duplicate sends, and renders a charged answer', async () => {
+  it('shows the user turn, disables duplicate sends, and renders a production-safe charge notice', async () => {
     const user = userEvent.setup();
     let resolveTurn!: (value: unknown) => void;
     chatApi.sendKnowledgeChatMessageStream.mockReturnValue(
@@ -49,8 +49,9 @@ describe('KnowledgeChatPanel', () => {
     expect(
       await screen.findByText('建议先掌握基础模块，再进入实践节点。'),
     ).toBeInTheDocument();
-    expect(screen.getByText('本次测试消耗 0.000036 积分')).toBeInTheDocument();
-    expect(screen.getByText('沙箱剩余 9.999964 积分')).toBeInTheDocument();
+    expect(screen.getByText('本次对话消耗 0.000036 积分')).toBeInTheDocument();
+    expect(screen.queryByText(/本次测试消耗/u)).not.toBeInTheDocument();
+    expect(screen.queryByText(/沙箱剩余/u)).not.toBeInTheDocument();
   });
 
   it('renders text deltas before the stream completes and replaces them with the final answer', async () => {
