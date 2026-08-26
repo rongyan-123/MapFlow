@@ -54,6 +54,173 @@ select {
   overflow: hidden;
 }
 
+/* 技能树卡片：默认低调，悬停时通过右侧抽屉展示动作，避免操作按钮割裂内容。 */
+.mapflow-tree-choice {
+  --mapflow-tree-card-background: linear-gradient(
+    145deg,
+    rgba(15, 23, 42, 0.98),
+    rgba(15, 23, 42, 0.9) 58%,
+    rgba(8, 47, 73, 0.7)
+  );
+  --mapflow-tree-card-border: rgba(71, 85, 105, 0.82);
+  --mapflow-tree-card-shadow:
+    0 12px 30px -20px rgba(2, 6, 23, 0.98),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --mapflow-tree-card-hover-shadow:
+    0 18px 40px -20px rgba(34, 211, 238, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  --mapflow-tree-drawer-background: linear-gradient(
+    180deg,
+    rgba(15, 23, 42, 0.92),
+    rgba(2, 6, 23, 0.84)
+  );
+  --mapflow-tree-drawer-shadow: rgba(34, 211, 238, 0.56);
+  border-color: var(--mapflow-tree-card-border);
+  background: var(--mapflow-tree-card-background);
+  box-shadow: var(--mapflow-tree-card-shadow);
+  transition:
+    border-color 260ms ease,
+    box-shadow 260ms ease;
+}
+
+.mapflow-tree-choice:hover,
+.mapflow-tree-choice:focus-within {
+  --mapflow-tree-card-border: rgba(103, 232, 249, 0.72);
+  box-shadow: var(--mapflow-tree-card-hover-shadow);
+}
+
+.mapflow-tree-choice[data-mapflow-active='true'] {
+  --mapflow-tree-card-border: rgba(34, 211, 238, 0.72);
+  --mapflow-tree-card-background: linear-gradient(
+    145deg,
+    rgba(8, 47, 73, 0.96),
+    rgba(15, 23, 42, 0.92) 62%,
+    rgba(14, 116, 144, 0.32)
+  );
+}
+
+.mapflow-tree-choice__drawer {
+  background: var(--mapflow-tree-drawer-background);
+  box-shadow: inset 14px 0 26px -24px var(--mapflow-tree-drawer-shadow);
+}
+
+.mapflow-tree-action {
+  min-height: 2.75rem;
+  border: 1px solid transparent;
+}
+
+.mapflow-tree-action--export {
+  border-color: rgba(34, 211, 238, 0.48);
+  background: rgba(8, 145, 178, 0.18);
+  color: #a5f3fc;
+}
+
+.mapflow-tree-action--rename {
+  border-color: rgba(251, 191, 36, 0.42);
+  background: rgba(180, 83, 9, 0.16);
+  color: #fde68a;
+}
+
+.mapflow-tree-action--delete {
+  border-color: rgba(251, 113, 133, 0.42);
+  background: rgba(159, 18, 57, 0.16);
+  color: #fecdd3;
+}
+
+.mapflow-tree-action:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.mapflow-tree-action--export:not(:disabled):hover {
+  border-color: rgba(103, 232, 249, 0.9);
+  background: rgba(8, 145, 178, 0.32);
+}
+
+.mapflow-tree-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+html[data-mapflow-theme='light'] .mapflow-tree-choice,
+html[data-mapflow-theme='ivory'] .mapflow-tree-choice {
+  --mapflow-tree-card-background: linear-gradient(
+    145deg,
+    #ffffff,
+    #f8fafc 60%,
+    #ecfeff
+  );
+  --mapflow-tree-card-border: #cbd5e1;
+  --mapflow-tree-card-shadow:
+    0 12px 28px -20px rgba(15, 23, 42, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  --mapflow-tree-card-hover-shadow:
+    0 18px 34px -20px rgba(14, 116, 144, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+  --mapflow-tree-drawer-background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98),
+    rgba(236, 254, 255, 0.94)
+  );
+  --mapflow-tree-drawer-shadow: rgba(14, 116, 144, 0.42);
+}
+
+html[data-mapflow-theme='ivory'] .mapflow-tree-choice {
+  --mapflow-tree-card-background: linear-gradient(
+    145deg,
+    #fffdf5,
+    #fffbeb 62%,
+    #ecfdf5
+  );
+  --mapflow-tree-card-border: #d6d3d1;
+  --mapflow-tree-drawer-background: linear-gradient(
+    180deg,
+    rgba(255, 253, 245, 0.98),
+    rgba(255, 251, 235, 0.94)
+  );
+  --mapflow-tree-drawer-shadow: rgba(180, 83, 9, 0.38);
+}
+
+html[data-mapflow-theme='light'] .mapflow-tree-choice[data-mapflow-active='true'],
+html[data-mapflow-theme='ivory'] .mapflow-tree-choice[data-mapflow-active='true'] {
+  --mapflow-tree-card-background: linear-gradient(
+    145deg,
+    #ecfeff,
+    #f0fdfa 62%,
+    #ffffff
+  );
+  --mapflow-tree-card-border: #06b6d4;
+}
+
+html[data-mapflow-theme='light'] .mapflow-tree-action--export,
+html[data-mapflow-theme='ivory'] .mapflow-tree-action--export {
+  border-color: #67e8f9;
+  background: #ecfeff;
+  color: #0e7490;
+}
+
+html[data-mapflow-theme='light'] .mapflow-tree-action--rename,
+html[data-mapflow-theme='ivory'] .mapflow-tree-action--rename {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+html[data-mapflow-theme='light'] .mapflow-tree-action--delete,
+html[data-mapflow-theme='ivory'] .mapflow-tree-action--delete {
+  border-color: #fda4af;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mapflow-tree-choice,
+  .mapflow-tree-choice__drawer,
+  .mapflow-tree-action,
+  .mapflow-tree-choice button {
+    transition-duration: 0.01ms !important;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
 }

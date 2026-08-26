@@ -831,7 +831,19 @@ describe('手机端视图栈', () => {
     expect(exportTriggers).toHaveLength(2);
     expect(exportTriggers[0].closest('header')).toBeNull();
     expect(exportTriggers[0].closest('[data-testid="mobile-list"]')).not.toBeNull();
+    expect(exportTriggers[0].closest('[data-testid="tree-choice-actions"]')).not.toBeNull();
     expect(exportTriggers[1].closest('[data-testid="mobile-list"]')).not.toBeNull();
+
+    const renameTriggers = screen.getAllByRole('button', {
+      name: /重命名技能树：/,
+    });
+    const deleteTriggers = screen.getAllByRole('button', {
+      name: /删除技能树：/,
+    });
+    expect(renameTriggers).toHaveLength(2);
+    expect(deleteTriggers).toHaveLength(2);
+    renameTriggers.forEach((button) => expect(button).toBeDisabled());
+    deleteTriggers.forEach((button) => expect(button).toBeDisabled());
 
     await user.click(exportTriggers[1]);
     expect(treeApi.fetchPersonalTree).toHaveBeenCalledWith(

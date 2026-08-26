@@ -563,17 +563,31 @@ export default function App() {
                   subtitle={`${entry.completed_nodes}/${entry.tree.total_nodes} 已完成`}
                   active={entry.library_entry_id === selectedLibraryEntryId}
                   onClick={() => selectPersonalTree(entry.library_entry_id)}
-                  exportAction={
-                    <TreeExportMenu
-                      compact
-                      detail={
-                        personalTree.data?.library_entry_id === entry.library_entry_id
-                          ? personalTree.data
-                          : null
-                      }
-                      loadDetail={() => fetchPersonalTree(entry.library_entry_id)}
-                      triggerAriaLabel={`导出技能树：${entry.tree.title}`}
-                    />
+                  actions={
+                    <>
+                      <TreeExportMenu
+                        variant="drawer"
+                        detail={
+                          personalTree.data?.library_entry_id === entry.library_entry_id
+                            ? personalTree.data
+                            : null
+                        }
+                        loadDetail={() => fetchPersonalTree(entry.library_entry_id)}
+                        triggerAriaLabel={`导出技能树：${entry.tree.title}`}
+                      />
+                      <ReservedTreeAction
+                        icon="✎"
+                        label="重命名"
+                        title={entry.tree.title}
+                        tone="rename"
+                      />
+                      <ReservedTreeAction
+                        icon="×"
+                        label="删除"
+                        title={entry.tree.title}
+                        tone="delete"
+                      />
+                    </>
                   }
                 />
               ))
@@ -998,20 +1012,22 @@ function TreeChoice({
   subtitle,
   active,
   onClick,
-  exportAction,
+  actions,
 }: {
   title: string;
   subtitle: string;
   active: boolean;
   onClick: () => void;
-  exportAction?: ReactNode;
+  actions?: ReactNode;
 }) {
   return (
-    <div
-      className={`flex w-full overflow-hidden rounded-xl border transition ${
+    <article
+      data-testid="tree-choice"
+      data-mapflow-active={active ? 'true' : 'false'}
+      className={`mapflow-tree-choice group flex min-h-[9.25rem] w-full overflow-hidden rounded-2xl border ${
         active
-          ? 'border-cyan-400/70 bg-cyan-400/10 text-slate-100'
-          : 'border-slate-800 bg-slate-900/65 text-slate-400 hover:border-slate-700'
+          ? 'text-slate-100'
+          : 'text-slate-400'
       }`}
     >
       <button
@@ -1019,17 +1035,51 @@ function TreeChoice({
         aria-label={`查看 ${title}`}
         aria-current={active ? 'true' : undefined}
         onClick={onClick}
-        className="min-w-0 flex-1 px-3 py-3 text-left transition hover:bg-white/[0.03]"
+        className="min-w-0 flex-1 px-3.5 py-3.5 text-left transition-[padding,color] duration-300 group-hover:pr-2 group-focus-within:pr-2"
       >
         <span className="block text-sm font-semibold leading-5">{title}</span>
         <span className="mt-1 block text-[11px] text-slate-500">{subtitle}</span>
       </button>
-      {exportAction && (
-        <div className="flex shrink-0 items-end border-l border-slate-800/80 px-2 pb-2">
-          {exportAction}
+      {actions && (
+        <div
+          data-testid="tree-choice-actions"
+          role="group"
+          aria-label={`技能树操作：${title}`}
+          className="max-w-0 shrink-0 overflow-hidden opacity-0 transition-[max-width,opacity] duration-300 ease-out group-hover:max-w-[6.75rem] group-hover:opacity-100 group-focus-within:max-w-[6.75rem] group-focus-within:opacity-100 max-lg:max-w-[6.75rem] max-lg:opacity-100"
+        >
+          <div className="mapflow-tree-choice__drawer flex h-full w-[6.75rem] flex-col justify-center gap-1.5 p-1.5">
+            {actions}
+          </div>
         </div>
       )}
-    </div>
+    </article>
+  );
+}
+
+function ReservedTreeAction({
+  icon,
+  label,
+  title,
+  tone,
+}: {
+  icon: string;
+  label: string;
+  title: string;
+  tone: 'rename' | 'delete';
+}) {
+  return (
+    <button
+      type="button"
+      disabled
+      title="即将支持"
+      aria-label={`${label}技能树：${title}`}
+      className={`mapflow-tree-action mapflow-tree-action--${tone} flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-semibold leading-tight transition duration-200 disabled:cursor-not-allowed`}
+    >
+      <span aria-hidden="true" className="text-base leading-none">
+        {icon}
+      </span>
+      <span>{label}</span>
+    </button>
   );
 }
 
