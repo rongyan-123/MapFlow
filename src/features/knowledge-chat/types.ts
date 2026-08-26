@@ -9,8 +9,8 @@ export interface KnowledgeChatResponse {
   answer: string;
   usage: KnowledgeChatUsage;
   chargedCredits: number;
-  /** Remaining sandbox balance in micro-credit units (1_000_000 units = 1 credit). */
-  sandboxRemainingUnits: number;
+  /** Formal platform balance after this turn, when the request uses platform funding. */
+  creditBalance?: number;
 }
 
 export type KnowledgeChatMessageRole = 'user' | 'assistant';
@@ -19,6 +19,10 @@ export interface KnowledgeChatMessage {
   id: string;
   role: KnowledgeChatMessageRole;
   content: string;
+}
+
+export interface KnowledgeChatHistoryResponse {
+  messages: KnowledgeChatMessage[];
 }
 
 export class KnowledgeChatApiError extends Error {

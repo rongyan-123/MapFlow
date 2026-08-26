@@ -32,7 +32,7 @@ const generationApi = vi.hoisted(() => ({
 const legacyApi = vi.hoisted(() => ({ fetchLearningTree: vi.fn() }));
 
 const chatApi = vi.hoisted(() => ({
-  resetKnowledgeChat: vi.fn(),
+  fetchKnowledgeChatHistory: vi.fn(),
   sendKnowledgeChatMessageStream: vi.fn(),
 }));
 
@@ -183,9 +183,9 @@ beforeEach(() => {
   for (const mock of Object.values(treeApi)) mock.mockReset();
   for (const mock of Object.values(adminApi)) mock.mockReset();
   legacyApi.fetchLearningTree.mockReset();
-  chatApi.resetKnowledgeChat.mockReset();
+  chatApi.fetchKnowledgeChatHistory.mockReset();
+  chatApi.fetchKnowledgeChatHistory.mockResolvedValue({ messages: [] });
   chatApi.sendKnowledgeChatMessageStream.mockReset();
-  chatApi.resetKnowledgeChat.mockResolvedValue(undefined);
   chatApi.sendKnowledgeChatMessageStream.mockImplementation(
     (
       _libraryEntryId: string,
@@ -204,7 +204,6 @@ beforeEach(() => {
           cacheMissInputTokens: 10,
         },
         chargedCredits: 0.2,
-        sandboxRemainingUnits: 9_800_000,
       });
     },
   );
@@ -384,6 +383,12 @@ describe('MapFlow tree library', () => {
     expect(await screen.findByText('0/2 已完成')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '退出登录' }));
+    expect(screen.getByRole('dialog', { name: '确认退出登录' })).toBeInTheDocument();
+    expect(identityApi.logoutIdentity).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: '取消退出' }));
+    expect(screen.queryByRole('dialog', { name: '确认退出登录' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '退出登录' }));
+    await user.click(screen.getByRole('button', { name: '确认退出' }));
     expect(
       await screen.findByRole('button', { name: '登录 / 激活账号' }),
     ).toBeInTheDocument();
@@ -400,7 +405,7 @@ describe('MapFlow tree library', () => {
       await screen.findByText('从公共树池加入一棵技能树后，就可以从零记录进度。'),
     ).toBeInTheDocument();
     expect(screen.queryByText('0/2 已完成')).not.toBeInTheDocument();
-    expect(treeApi.fetchPersonalLibrary).toHaveBeenCalledTimes(2);
+    expect(treeApi.fetchPersonalLibrary).toHaveBeenCalledTimes(3);
   });
 
   it('opens generation only from an authenticated personal library and selects its result', async () => {
@@ -748,6 +753,95 @@ describe('手机端视图栈', () => {
     expect(chatApi.sendKnowledgeChatMessageStream).not.toHaveBeenCalled();
   });
 
+  it('默认展开的左右栏可以独立收起并恢复', async () => {
+    const user = userEvent.setup();
+    window.localStorage.removeItem('mapflow.layout.personal-sidebar-open');
+    window.localStorage.removeItem('mapflow.layout.node-detail-open');
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+
+    try {
+      renderApp();
+
+      await screen.findByText(authenticated.account.playerId);
+      await user.click(screen.getByRole('button', { name: '我的学习' }));
+      await user.click(
+        await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+      );
+      await user.click(
+        await screen.findByRole('button', { name: '查看节点 基础节点' }),
+      );
+
+      expect(screen.getAllByRole('button', { name: '收起左侧树库' })).toHaveLength(1);
+      expect(screen.getAllByRole('button', { name: '收起节点详情' })).toHaveLength(1);
+
+      await user.click(screen.getAllByRole('button', { name: '收起左侧树库' })[0]);
+      await user.click(screen.getAllByRole('button', { name: '收起节点详情' })[0]);
+
+      expect(screen.getByTestId('mobile-list').className).toContain('lg:hidden');
+      expect(screen.getByTestId('mobile-detail').className).toContain('lg:hidden');
+
+      await user.click(screen.getByRole('button', { name: '展开左侧树库' }));
+      await user.click(screen.getAllByRole('button', { name: '展开节点详情' })[0]);
+
+      expect(screen.getByTestId('mobile-list').className).not.toContain('lg:hidden');
+      expect(screen.getByTestId('mobile-detail').className).not.toContain('lg:hidden');
+    } finally {
+      window.localStorage.removeItem('mapflow.layout.personal-sidebar-open');
+      window.localStorage.removeItem('mapflow.layout.node-detail-open');
+    }
+  });
+
+  it('keeps an export action on every personal tree card, without duplicate desktop header controls', async () => {
+    const user = userEvent.setup();
+    const secondPersonalEntry = {
+      ...personalEntry,
+      library_entry_id: '44444444-4444-4444-8444-444444444444',
+      tree: agentTree,
+    };
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({
+      entries: [personalEntry, secondPersonalEntry],
+    });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp();
+
+    await screen.findByText(authenticated.account.playerId);
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
+
+    const header = document.querySelector('header');
+    expect(header).not.toBeNull();
+    expect(
+      within(header as HTMLElement).queryByRole('button', { name: '导出技能树' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(header as HTMLElement).queryByRole('button', { name: '收起左侧树库' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(header as HTMLElement).queryByRole('button', { name: '收起节点详情' }),
+    ).not.toBeInTheDocument();
+
+    const exportTriggers = screen.getAllByRole('button', {
+      name: /导出技能树：/,
+    });
+    expect(exportTriggers).toHaveLength(2);
+    expect(exportTriggers[0].closest('header')).toBeNull();
+    expect(exportTriggers[0].closest('[data-testid="mobile-list"]')).not.toBeNull();
+    expect(exportTriggers[1].closest('[data-testid="mobile-list"]')).not.toBeNull();
+
+    await user.click(exportTriggers[1]);
+    expect(treeApi.fetchPersonalTree).toHaveBeenCalledWith(
+      secondPersonalEntry.library_entry_id,
+    );
+    expect(
+      await screen.findByRole('dialog', { name: '导出技能树' }),
+    ).toBeInTheDocument();
+  });
+
   it('登录后的个人树打开聊天并可返回详情，选中节点保持不变', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
@@ -947,7 +1041,9 @@ describe('手机端抽屉', () => {
       within(drawer).getByRole('button', { name: '退出登录' }),
     );
 
-    const alert = await within(drawer).findByRole('alert');
+    const dialog = await screen.findByRole('dialog', { name: '确认退出登录' });
+    await user.click(within(dialog).getByRole('button', { name: '确认退出' }));
+    const alert = await within(dialog).findByRole('alert');
     expect(alert).toHaveTextContent('登出失败');
   });
 

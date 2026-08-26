@@ -20,7 +20,7 @@ describe('creditClient', () => {
           balance: 4,
           signedInToday: false,
           freeRemaining: 3,
-          pricePerTree: 3,
+          pricePerTree: 6,
         }),
       ),
     );
@@ -31,7 +31,7 @@ describe('creditClient', () => {
       balance: 4,
       signedInToday: false,
       freeRemaining: 3,
-      pricePerTree: 3,
+      pricePerTree: 6,
     });
     expect(fetch).toHaveBeenCalledWith('/api/credit/me', expect.anything());
   });

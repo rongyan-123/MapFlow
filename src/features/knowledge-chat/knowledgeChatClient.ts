@@ -1,4 +1,6 @@
 import type {
+  KnowledgeChatHistoryResponse,
+  KnowledgeChatMessage,
   KnowledgeChatResponse,
   KnowledgeChatUsage,
 } from './types';
@@ -8,6 +10,22 @@ export { KnowledgeChatApiError } from './types';
 
 const MAX_MESSAGE_CHARACTERS = 4_000;
 const MAX_CLIENT_TURN_ID_CHARACTERS = 128;
+
+export async function fetchKnowledgeChatHistory(
+  libraryEntryId: string,
+): Promise<KnowledgeChatHistoryResponse> {
+  validatePathSegment(libraryEntryId);
+  const response = await request(
+    `/api/me/tree-library/${encodeURIComponent(libraryEntryId)}/knowledge-chat/history`,
+    {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    },
+  );
+  const body = await readJson(response);
+  if (!isRecord(body) || !Array.isArray(body.messages)) throw invalidResponseError();
+  return { messages: body.messages.map(parseHistoryMessage) };
+}
 
 export async function sendKnowledgeChatMessage(
   libraryEntryId: string,
@@ -238,15 +256,36 @@ function parseChatResponse(value: unknown): KnowledgeChatResponse {
     typeof value.chargedCredits !== 'number' ||
     !Number.isFinite(value.chargedCredits) ||
     value.chargedCredits < 0 ||
-    !isNonNegativeInteger(value.sandboxRemainingUnits)
+    (value.creditBalance !== undefined &&
+      (typeof value.creditBalance !== 'number' ||
+        !Number.isFinite(value.creditBalance) ||
+        value.creditBalance < 0))
   ) {
     throw invalidResponseError();
   }
+  const creditBalance =
+    typeof value.creditBalance === 'number' ? value.creditBalance : undefined;
   return {
     answer: value.answer,
     usage,
     chargedCredits: value.chargedCredits,
-    sandboxRemainingUnits: value.sandboxRemainingUnits,
+    ...(creditBalance === undefined ? {} : { creditBalance }),
+  };
+}
+
+function parseHistoryMessage(value: unknown): KnowledgeChatMessage {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    (value.role !== 'user' && value.role !== 'assistant') ||
+    typeof value.content !== 'string'
+  ) {
+    throw invalidResponseError();
+  }
+  return {
+    id: value.id,
+    role: value.role,
+    content: value.content,
   };
 }
 

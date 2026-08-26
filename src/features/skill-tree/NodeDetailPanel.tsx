@@ -11,6 +11,7 @@ interface NodeDetailPanelProps {
   onSetCompleted?: (nodeId: string, completed: boolean) => void;
   completionPending?: boolean;
   onOpenChat?: () => void;
+  onTogglePanel?: () => void;
 }
 
 function parseStringList(raw: string | null): string[] {
@@ -32,12 +33,30 @@ export default function NodeDetailPanel({
   onSetCompleted,
   completionPending = false,
   onOpenChat,
+  onTogglePanel,
 }: NodeDetailPanelProps) {
   const node = snapshot.nodes.find((item) => item.id === selectedNodeId);
   if (!node) {
     return (
-      <aside className="flex w-full shrink-0 items-center justify-center border-t border-slate-800 bg-slate-950/95 p-6 lg:w-80 lg:border-l lg:border-t-0">
-        <p className="text-center text-sm text-slate-500">点击节点查看学习目标与掌握证据</p>
+      <aside className="flex w-full shrink-0 flex-col border-t border-slate-800 bg-slate-950/95 p-5 lg:w-80 lg:border-l lg:border-t-0">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            节点详情
+          </span>
+          {onTogglePanel && (
+            <button
+              type="button"
+              aria-label="收起节点详情"
+              onClick={onTogglePanel}
+              className="rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-500 transition hover:border-cyan-400/60 hover:text-cyan-200"
+            >
+              收起
+            </button>
+          )}
+        </div>
+        <p className="flex flex-1 items-center justify-center text-center text-sm text-slate-500">
+          点击节点查看学习目标与掌握证据
+        </p>
       </aside>
     );
   }
@@ -62,20 +81,32 @@ export default function NodeDetailPanel({
 
   return (
     <aside className="w-full shrink-0 overflow-y-auto border-t border-slate-800 bg-slate-950/95 p-5 lg:w-80 lg:border-l lg:border-t-0">
-      <div className="mb-4 flex items-start gap-3">
-        <span className="text-3xl">{ICON_EMOJI[node.icon] ?? '📖'}</span>
-        <div>
-          <h2 className="font-semibold leading-snug text-slate-100">{node.title}</h2>
-          <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-            <span className="rounded-full bg-slate-800 px-2 py-1 text-slate-300">{node.category}</span>
-            <span className="rounded-full bg-cyan-950 px-2 py-1 text-cyan-300">
-              {DEPTH_LABELS[node.recommended_depth]} · {node.recommended_depth}
-            </span>
-            <span className="rounded-full bg-slate-800 px-2 py-1 text-slate-300">
-              {displayMode === 'showcase' ? '示例节点' : statusLabels[status]}
-            </span>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="text-3xl">{ICON_EMOJI[node.icon] ?? '📖'}</span>
+          <div className="min-w-0">
+            <h2 className="font-semibold leading-snug text-slate-100">{node.title}</h2>
+            <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+              <span className="rounded-full bg-slate-800 px-2 py-1 text-slate-300">{node.category}</span>
+              <span className="rounded-full bg-cyan-950 px-2 py-1 text-cyan-300">
+                {DEPTH_LABELS[node.recommended_depth]} · {node.recommended_depth}
+              </span>
+              <span className="rounded-full bg-slate-800 px-2 py-1 text-slate-300">
+                {displayMode === 'showcase' ? '示例节点' : statusLabels[status]}
+              </span>
+            </div>
           </div>
         </div>
+        {onTogglePanel && (
+          <button
+            type="button"
+            aria-label="收起节点详情"
+            onClick={onTogglePanel}
+            className="shrink-0 rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-500 transition hover:border-cyan-400/60 hover:text-cyan-200"
+          >
+            收起
+          </button>
+        )}
       </div>
 
       {displayMode === 'personal' && onOpenChat && (

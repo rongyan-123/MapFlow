@@ -4,19 +4,58 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import KnowledgeChatPanel from './KnowledgeChatPanel';
 
 const chatApi = vi.hoisted(() => ({
+  fetchKnowledgeChatHistory: vi.fn(),
   sendKnowledgeChatMessageStream: vi.fn(),
-  resetKnowledgeChat: vi.fn(),
 }));
 
 vi.mock('./knowledgeChatClient', () => chatApi);
 
 beforeEach(() => {
+  chatApi.fetchKnowledgeChatHistory.mockReset();
+  chatApi.fetchKnowledgeChatHistory.mockResolvedValue({ messages: [] });
   chatApi.sendKnowledgeChatMessageStream.mockReset();
-  chatApi.resetKnowledgeChat.mockReset();
-  chatApi.resetKnowledgeChat.mockResolvedValue(undefined);
 });
 
 describe('KnowledgeChatPanel', () => {
+  it('restores persisted messages when a personal tree chat opens', async () => {
+    chatApi.fetchKnowledgeChatHistory.mockResolvedValueOnce({
+      messages: [
+        { id: 'history-user', role: 'user', content: '之前的问题' },
+        { id: 'history-assistant', role: 'assistant', content: '之前的回答' },
+      ],
+    });
+
+    renderPanel();
+
+    expect(await screen.findByText('之前的问题')).toBeInTheDocument();
+    expect(screen.getByText('之前的回答')).toBeInTheDocument();
+    expect(chatApi.fetchKnowledgeChatHistory).toHaveBeenCalledWith('entry-1');
+  });
+
+  it('refreshes the formal credit query after a successful answer', async () => {
+    const user = userEvent.setup();
+    const onCreditChanged = vi.fn();
+    chatApi.sendKnowledgeChatMessageStream.mockResolvedValueOnce({
+      answer: '已完成回答。',
+      usage: {
+        inputTokens: 1,
+        outputTokens: 1,
+        cacheHitInputTokens: 0,
+        cacheMissInputTokens: 1,
+      },
+      chargedCredits: 0.000003,
+      creditBalance: 4.999997,
+    });
+
+    renderPanel({ onCreditChanged });
+    await waitForHistoryReady();
+    await user.type(screen.getByRole('textbox', { name: '输入问题' }), '刷新积分');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+
+    expect(await screen.findByText('已完成回答。')).toBeInTheDocument();
+    expect(onCreditChanged).toHaveBeenCalledOnce();
+  });
+
   it('shows the user turn, disables duplicate sends, and renders a production-safe charge notice', async () => {
     const user = userEvent.setup();
     let resolveTurn!: (value: unknown) => void;
@@ -26,6 +65,7 @@ describe('KnowledgeChatPanel', () => {
       }),
     );
     renderPanel();
+    await waitForHistoryReady();
 
     const input = screen.getByRole('textbox', { name: '输入问题' });
     await user.type(input, '请解释这棵树的学习顺序。');
@@ -43,7 +83,6 @@ describe('KnowledgeChatPanel', () => {
         cacheMissInputTokens: 10,
       },
       chargedCredits: 0.000036,
-      sandboxRemainingUnits: 9_999_964,
     });
 
     expect(
@@ -73,6 +112,7 @@ describe('KnowledgeChatPanel', () => {
       },
     );
     renderPanel();
+    await waitForHistoryReady();
 
     await user.type(screen.getByRole('textbox', { name: '输入问题' }), '先显示增量');
     await user.click(screen.getByRole('button', { name: '发送' }));
@@ -90,7 +130,6 @@ describe('KnowledgeChatPanel', () => {
         cacheMissInputTokens: 10,
       },
       chargedCredits: 0.000026,
-      sandboxRemainingUnits: 9_999_974,
     });
 
     expect(await screen.findByText('最终完整答案。')).toBeInTheDocument();
@@ -119,9 +158,9 @@ describe('KnowledgeChatPanel', () => {
         cacheMissInputTokens: 10,
       },
       chargedCredits: 0.00005,
-      sandboxRemainingUnits: 9_999_950,
     });
     renderPanel();
+    await waitForHistoryReady();
 
     await user.type(screen.getByRole('textbox', { name: '输入问题' }), '怎么开始？');
     await user.click(screen.getByRole('button', { name: '发送' }));
@@ -136,12 +175,13 @@ describe('KnowledgeChatPanel', () => {
     expect(screen.queryByTestId('injected')).not.toBeInTheDocument();
   });
 
-  it('does not send blank input, shows safe errors, and can reset the local conversation', async () => {
+  it('does not send blank input and shows safe errors without a destructive reset action', async () => {
     const user = userEvent.setup();
     chatApi.sendKnowledgeChatMessageStream.mockRejectedValueOnce(
       new Error('知识聊天服务暂时不可用。'),
     );
     renderPanel();
+    await waitForHistoryReady();
 
     await user.click(screen.getByRole('button', { name: '发送' }));
     expect(chatApi.sendKnowledgeChatMessageStream).not.toHaveBeenCalled();
@@ -150,26 +190,7 @@ describe('KnowledgeChatPanel', () => {
     await user.click(screen.getByRole('button', { name: '发送' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('知识聊天服务暂时不可用。');
 
-    chatApi.sendKnowledgeChatMessageStream.mockResolvedValueOnce({
-      answer: '重新建立一轮对话。',
-      usage: {
-        inputTokens: 1,
-        outputTokens: 1,
-        cacheHitInputTokens: 0,
-        cacheMissInputTokens: 1,
-      },
-      chargedCredits: 0.000003,
-      sandboxRemainingUnits: 9_999_997,
-    });
-    await user.clear(screen.getByRole('textbox', { name: '输入问题' }));
-    await user.type(screen.getByRole('textbox', { name: '输入问题' }), '再问一次');
-    await user.click(screen.getByRole('button', { name: '发送' }));
-    expect(await screen.findByText('重新建立一轮对话。')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '重置对话' }));
-    await waitFor(() => expect(chatApi.resetKnowledgeChat).toHaveBeenCalledWith('entry-1', 'csrf-secret'));
-    expect(screen.queryByText('再问一次')).not.toBeInTheDocument();
-    expect(screen.queryByText('重新建立一轮对话。')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重置对话' })).not.toBeInTheDocument();
   });
 
   it('exposes a mobile-safe message area and a close action', async () => {
@@ -192,5 +213,11 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof KnowledgeCha
       onClose={vi.fn()}
       {...overrides}
     />,
+  );
+}
+
+async function waitForHistoryReady(): Promise<void> {
+  await waitFor(() =>
+    expect(screen.getByRole('textbox', { name: '输入问题' })).not.toBeDisabled(),
   );
 }

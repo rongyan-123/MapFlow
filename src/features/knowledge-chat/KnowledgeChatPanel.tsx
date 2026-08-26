@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  resetKnowledgeChat,
+  fetchKnowledgeChatHistory,
   sendKnowledgeChatMessageStream,
 } from './knowledgeChatClient';
 import type { KnowledgeChatMessage } from './types';
@@ -13,6 +13,7 @@ interface KnowledgeChatPanelProps {
   libraryEntryId: string;
   csrfToken: string;
   onClose: () => void;
+  onCreditChanged?: () => void | Promise<void>;
 }
 
 export default function KnowledgeChatPanel({
@@ -20,15 +21,43 @@ export default function KnowledgeChatPanel({
   libraryEntryId,
   csrfToken,
   onClose,
+  onCreditChanged,
 }: KnowledgeChatPanelProps) {
   const [messages, setMessages] = useState<KnowledgeChatMessage[]>([]);
   const [draft, setDraft] = useState('');
+  const [historyPending, setHistoryPending] = useState(true);
   const [pending, setPending] = useState(false);
   const [streamingAnswer, setStreamingAnswer] = useState<string | null>(null);
-  const [resetPending, setResetPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastCharge, setLastCharge] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setHistoryPending(true);
+    setMessages([]);
+    setDraft('');
+    setError(null);
+    setLastCharge(null);
+    setStreamingAnswer(null);
+    void fetchKnowledgeChatHistory(libraryEntryId)
+      .then((history) => {
+        if (active) setMessages(history.messages);
+      })
+      .catch((caught: unknown) => {
+        if (active) {
+          setError(
+            caught instanceof Error ? caught.message : '聊天历史暂时无法读取，请稍后重试。',
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setHistoryPending(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [libraryEntryId]);
 
   useEffect(() => {
     const messagesEnd = messagesEndRef.current;
@@ -39,7 +68,7 @@ export default function KnowledgeChatPanel({
 
   async function handleSubmit() {
     const message = draft.trim();
-    if (!message || pending || resetPending) return;
+    if (!message || pending) return;
 
     setMessages((current) => [
       ...current,
@@ -67,28 +96,12 @@ export default function KnowledgeChatPanel({
       ]);
       setStreamingAnswer(null);
       setLastCharge(response.chargedCredits);
+      await onCreditChanged?.();
     } catch (caught: unknown) {
       setStreamingAnswer(null);
       setError(caught instanceof Error ? caught.message : '知识聊天暂时不可用，请稍后重试。');
     } finally {
       setPending(false);
-    }
-  }
-
-  async function handleReset() {
-    if (pending || resetPending) return;
-    setResetPending(true);
-    setError(null);
-    try {
-      await resetKnowledgeChat(libraryEntryId, csrfToken);
-      setMessages([]);
-      setDraft('');
-      setStreamingAnswer(null);
-      setLastCharge(null);
-    } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : '重置对话失败，请稍后重试。');
-    } finally {
-      setResetPending(false);
     }
   }
 
@@ -110,15 +123,6 @@ export default function KnowledgeChatPanel({
           <h2 className="truncate text-sm font-semibold text-slate-100">知识聊天 Agent</h2>
           <p className="mt-1 truncate text-xs text-slate-500">当前树：{treeTitle}</p>
         </div>
-        <button
-          type="button"
-          aria-label="重置对话"
-          onClick={() => void handleReset()}
-          disabled={pending || resetPending}
-          className="shrink-0 rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs font-semibold text-slate-400 transition hover:border-cyan-400/60 hover:text-cyan-200 disabled:cursor-wait disabled:opacity-50"
-        >
-          {resetPending ? '重置中…' : '重置'}
-        </button>
       </header>
 
       <div
@@ -126,7 +130,11 @@ export default function KnowledgeChatPanel({
         data-testid="knowledge-chat-messages"
         className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
       >
-        {messages.length === 0 && !pending ? (
+        {historyPending ? (
+          <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-500">
+            正在读取历史对话…
+          </div>
+        ) : messages.length === 0 && !pending ? (
           <div className="rounded-xl border border-cyan-900/60 bg-cyan-950/20 p-4 text-sm leading-6 text-slate-400">
             <p className="font-semibold text-cyan-200">只读知识助手</p>
             <p className="mt-2">
@@ -210,7 +218,7 @@ export default function KnowledgeChatPanel({
           }}
           placeholder="问问这棵技能树…"
           rows={3}
-          disabled={pending || resetPending}
+          disabled={historyPending || pending}
           className="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm leading-6 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400/70 disabled:cursor-wait disabled:opacity-60"
         />
         <div className="mt-2 flex items-center justify-between gap-3">
@@ -220,7 +228,7 @@ export default function KnowledgeChatPanel({
           <button
             type="submit"
             aria-label="发送"
-            disabled={pending || resetPending || !draft.trim()}
+            disabled={historyPending || pending || !draft.trim()}
             className="rounded-xl bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {pending ? '生成中…' : '发送'}

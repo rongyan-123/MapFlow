@@ -45,12 +45,12 @@ describe('GenerationFundingSelector', () => {
       <GenerationFundingSelector
         value="byok"
         platformEntitlements={{ ...entitlements(0), platformModeAvailable: false }}
-        credit={{ balance: 2, signedInToday: false, freeRemaining: 0, pricePerTree: 3 }}
+        credit={{ balance: 2, signedInToday: false, freeRemaining: 0, pricePerTree: 6 }}
         onChange={vi.fn()}
       />,
     );
 
-    expect(screen.getByText('积分生成 · 需 3 积分')).toBeInTheDocument();
+    expect(screen.getByText('积分生成 · 需 6 积分')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '选择平台免费体验' })).toBeDisabled();
   });
 
@@ -59,7 +59,7 @@ describe('GenerationFundingSelector', () => {
       <GenerationFundingSelector
         value="platform"
         platformEntitlements={{ ...entitlements(0), platformModeAvailable: false }}
-        credit={{ balance: 5, signedInToday: false, freeRemaining: 0, pricePerTree: 3 }}
+        credit={{ balance: 6, signedInToday: false, freeRemaining: 0, pricePerTree: 6 }}
         onChange={vi.fn()}
       />,
     );

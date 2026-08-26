@@ -12,6 +12,11 @@ export interface CreditSigninResult {
   awarded: number;
 }
 
+export function formatCreditAmount(value: number): string {
+  if (!Number.isFinite(value) || value === 0) return '0';
+  return value.toFixed(6).replace(/0+$/u, '').replace(/\.$/u, '');
+}
+
 export async function readCreditSummary(): Promise<CreditSummary> {
   const response = await request('/api/credit/me', {
     credentials: 'same-origin',

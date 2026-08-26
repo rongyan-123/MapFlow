@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  fetchKnowledgeChatHistory,
   KnowledgeChatApiError,
   resetKnowledgeChat,
   sendKnowledgeChatMessage,
@@ -14,6 +15,32 @@ afterEach(() => {
 });
 
 describe('knowledgeChatClient', () => {
+  it('loads the complete persisted history for one personal tree', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        messages: [
+          { id: 'turn-1-user', role: 'user', content: '什么是所有权？' },
+          { id: 'turn-1-assistant', role: 'assistant', content: '所有权决定资源由谁负责。' },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchKnowledgeChatHistory('entry/id')).resolves.toEqual({
+      messages: [
+        { id: 'turn-1-user', role: 'user', content: '什么是所有权？' },
+        { id: 'turn-1-assistant', role: 'assistant', content: '所有权决定资源由谁负责。' },
+      ],
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/me/tree-library/entry%2Fid/knowledge-chat/history',
+      {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+      },
+    );
+  });
+
   it('parses fragmented SSE chat deltas and uses the final complete event as authority', async () => {
     const chunks = [
       'event: started\ndata: {}\n\nevent: del',
@@ -28,7 +55,6 @@ describe('knowledgeChatClient', () => {
           cacheMissInputTokens: 8,
         },
         chargedCredits: 0.2,
-        sandboxRemainingUnits: 9_800_000,
       }) + '\n\n',
     ];
     const stream = new ReadableStream<Uint8Array>({
@@ -64,7 +90,6 @@ describe('knowledgeChatClient', () => {
         cacheMissInputTokens: 8,
       },
       chargedCredits: 0.2,
-      sandboxRemainingUnits: 9_800_000,
     });
 
     expect(deltas).toEqual(['**前', '置**。']);
@@ -86,7 +111,7 @@ describe('knowledgeChatClient', () => {
     );
   });
 
-  it('sends a personal-library scoped message and parses sandbox usage', async () => {
+  it('sends a personal-library scoped message and parses formal credit usage', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         answer: '这是基于当前技能树的回答。',
@@ -97,7 +122,6 @@ describe('knowledgeChatClient', () => {
           cacheMissInputTokens: 40,
         },
         chargedCredits: 0.2,
-        sandboxRemainingUnits: 9_800_000,
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -118,7 +142,6 @@ describe('knowledgeChatClient', () => {
         cacheMissInputTokens: 40,
       },
       chargedCredits: 0.2,
-      sandboxRemainingUnits: 9_800_000,
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -176,7 +199,6 @@ describe('knowledgeChatClient', () => {
         answer: '',
         usage: {},
         chargedCredits: 0.2,
-        sandboxRemainingUnits: 9_800_000,
       }),
     );
     vi.stubGlobal('fetch', fetchMock);

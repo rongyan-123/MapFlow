@@ -75,4 +75,11 @@ describe('SkillNode 渲染', () => {
     const node = renderNode('showcase');
     expect(node.className).not.toContain('bg-slate-900/85');
   });
+
+  it('为主题对比度样式暴露节点状态标记', () => {
+    const node = renderNode('personal');
+
+    expect(node).toHaveAttribute('data-mapflow-skill-node', 'true');
+    expect(node).toHaveAttribute('data-mapflow-node-status', 'not_started');
+  });
 });

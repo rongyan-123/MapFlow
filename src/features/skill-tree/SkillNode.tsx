@@ -32,8 +32,11 @@ function SkillNodeComponent({ data, selected }: NodeProps<SkillFlowNode>) {
 
   return (
     <div
+      data-mapflow-skill-node="true"
+      data-mapflow-display-mode={displayMode}
+      data-mapflow-node-status={status}
       className={cn(
-        'relative min-w-[150px] max-w-[200px] cursor-pointer select-none rounded-xl border-2 px-4 py-3 transition-all duration-500',
+        'mapflow-skill-node relative min-w-[150px] max-w-[200px] cursor-pointer select-none rounded-xl border-2 px-4 py-3 transition-all duration-500',
         isShowcase &&
           // 兜底底色 + 强制独立合成层：移动端渐变瓦片不稳定时露出亮蓝且纹理不随缩放重绘
           'border-cyan-200/80 bg-cyan-400 bg-gradient-to-br from-cyan-400 to-violet-400 text-slate-950 shadow-[0_0_30px_rgba(34,211,238,0.48)] will-change-transform',

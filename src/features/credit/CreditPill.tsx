@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useIdentity } from '../identity/IdentityContext';
-import { signInForCredit, type CreditSummary } from './creditClient';
+import { formatCreditAmount, signInForCredit, type CreditSummary } from './creditClient';
 
 interface CreditPillProps {
   credit: CreditSummary | null;
@@ -40,7 +40,7 @@ export default function CreditPill({ credit, onSignedIn }: CreditPillProps) {
       >
         {signin.isPending
           ? '签到中…'
-          : `积分 ${credit?.balance ?? 0} · ${signedInToday ? '已签到' : '签到'}`}
+          : `积分 ${formatCreditAmount(credit?.balance ?? 0)} · ${signedInToday ? '已签到' : '签到'}`}
       </button>
       {notice && <p className="absolute right-0 top-full z-40 mt-1 whitespace-nowrap rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-emerald-300">{notice}</p>}
       {signin.error && (

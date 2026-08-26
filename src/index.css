@@ -67,6 +67,177 @@ select {
   background: #334155;
 }
 
+/* 主题切换：页面主体仍复用 Tailwind 类名，这里集中覆盖颜色，避免每个业务组件维护四套布局。 */
+html[data-mapflow-theme='light'],
+html[data-mapflow-theme='ivory'] {
+  color-scheme: light;
+}
+
+html[data-mapflow-theme='light'] .bg-slate-950,
+html[data-mapflow-theme='ivory'] .bg-slate-950 {
+  background-color: #f8fafc !important;
+}
+
+html[data-mapflow-theme='light'] .bg-slate-950\/95,
+html[data-mapflow-theme='ivory'] .bg-slate-950\/95 {
+  background-color: rgb(248 250 252 / 0.96) !important;
+}
+
+html[data-mapflow-theme='light'] .bg-slate-950\/80,
+html[data-mapflow-theme='ivory'] .bg-slate-950\/80 {
+  background-color: rgb(248 250 252 / 0.9) !important;
+}
+
+html[data-mapflow-theme='light'] .bg-slate-950\/70,
+html[data-mapflow-theme='ivory'] .bg-slate-950\/70 {
+  background-color: rgb(15 23 42 / 0.28) !important;
+}
+
+html[data-mapflow-theme='light'] .bg-slate-900,
+html[data-mapflow-theme='light'] .bg-slate-900\/80,
+html[data-mapflow-theme='light'] .bg-slate-900\/70,
+html[data-mapflow-theme='light'] .bg-slate-900\/65,
+html[data-mapflow-theme='ivory'] .bg-slate-900,
+html[data-mapflow-theme='ivory'] .bg-slate-900\/80,
+html[data-mapflow-theme='ivory'] .bg-slate-900\/70,
+html[data-mapflow-theme='ivory'] .bg-slate-900\/65 {
+  background-color: #ffffff !important;
+}
+
+html[data-mapflow-theme='ivory'] .bg-slate-950,
+html[data-mapflow-theme='ivory'] .bg-slate-950\/95,
+html[data-mapflow-theme='ivory'] .bg-slate-950\/80 {
+  background-color: #fffdf5 !important;
+}
+
+html[data-mapflow-theme='light'] .bg-slate-800,
+html[data-mapflow-theme='ivory'] .bg-slate-800 {
+  background-color: #e2e8f0 !important;
+}
+
+html[data-mapflow-theme='light'] .border-slate-800,
+html[data-mapflow-theme='ivory'] .border-slate-800 {
+  border-color: #cbd5e1 !important;
+}
+
+html[data-mapflow-theme='light'] .border-slate-700,
+html[data-mapflow-theme='ivory'] .border-slate-700 {
+  border-color: #94a3b8 !important;
+}
+
+html[data-mapflow-theme='light'] .text-slate-100,
+html[data-mapflow-theme='light'] .text-slate-200,
+html[data-mapflow-theme='ivory'] .text-slate-100,
+html[data-mapflow-theme='ivory'] .text-slate-200 {
+  color: #0f172a !important;
+}
+
+html[data-mapflow-theme='light'] .text-slate-300,
+html[data-mapflow-theme='light'] .text-slate-400,
+html[data-mapflow-theme='ivory'] .text-slate-300,
+html[data-mapflow-theme='ivory'] .text-slate-400 {
+  color: #334155 !important;
+}
+
+html[data-mapflow-theme='light'] .text-slate-500,
+html[data-mapflow-theme='light'] .text-slate-600,
+html[data-mapflow-theme='ivory'] .text-slate-500,
+html[data-mapflow-theme='ivory'] .text-slate-600 {
+  color: #64748b !important;
+}
+
+html[data-mapflow-theme='light'] .text-cyan-100,
+html[data-mapflow-theme='light'] .text-cyan-200,
+html[data-mapflow-theme='light'] .text-cyan-300,
+html[data-mapflow-theme='ivory'] .text-cyan-100,
+html[data-mapflow-theme='ivory'] .text-cyan-200,
+html[data-mapflow-theme='ivory'] .text-cyan-300 {
+  color: #0e7490 !important;
+}
+
+html[data-mapflow-theme='light'] .bg-cyan-950\/20,
+html[data-mapflow-theme='light'] .bg-cyan-950\/25,
+html[data-mapflow-theme='ivory'] .bg-cyan-950\/20,
+html[data-mapflow-theme='ivory'] .bg-cyan-950\/25 {
+  background-color: #ecfeff !important;
+}
+
+html[data-mapflow-theme='light'] .border-cyan-900\/60,
+html[data-mapflow-theme='light'] .border-cyan-900\/70,
+html[data-mapflow-theme='ivory'] .border-cyan-900\/60,
+html[data-mapflow-theme='ivory'] .border-cyan-900\/70 {
+  border-color: #a5f3fc !important;
+}
+
+/* 技能节点的状态色不能只依赖深色主题：浅色主题下未开始/进行中节点仍需保持足够对比度。 */
+html[data-mapflow-theme='light'] .mapflow-skill-node[data-mapflow-display-mode='personal'][data-mapflow-node-status='not_started'],
+html[data-mapflow-theme='ivory'] .mapflow-skill-node[data-mapflow-display-mode='personal'][data-mapflow-node-status='not_started'] {
+  border-color: #64748b !important;
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+
+html[data-mapflow-theme='light'] .mapflow-skill-node[data-mapflow-display-mode='personal'][data-mapflow-node-status='not_started'] .text-slate-500,
+html[data-mapflow-theme='ivory'] .mapflow-skill-node[data-mapflow-display-mode='personal'][data-mapflow-node-status='not_started'] .text-slate-500 {
+  color: #475569 !important;
+}
+
+html[data-mapflow-theme='light'] .mapflow-skill-node[data-mapflow-display-mode='personal'][data-mapflow-node-status='in_progress'],
+html[data-mapflow-theme='ivory'] .mapflow-skill-node[data-mapflow-display-mode='personal'][data-mapflow-node-status='in_progress'] {
+  border-color: #d97706 !important;
+  background-color: #fffbeb !important;
+  color: #78350f !important;
+}
+
+html[data-mapflow-theme='light'] .ring-offset-slate-950,
+html[data-mapflow-theme='ivory'] .ring-offset-slate-950 {
+  --tw-ring-offset-color: #f8fafc !important;
+}
+
+html[data-mapflow-theme='ivory'] .mapflow-skill-node[data-mapflow-display-mode='personal'][data-mapflow-node-status='not_started'] {
+  background-color: #f8fafc !important;
+}
+
+html[data-mapflow-theme='ivory'] .ring-offset-slate-950 {
+  --tw-ring-offset-color: #fffdf5 !important;
+}
+
+html[data-mapflow-theme='light'] .react-flow__pane,
+html[data-mapflow-theme='ivory'] .react-flow__pane {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(8, 145, 178, 0.1), transparent 38%),
+    #f8fafc;
+}
+
+html[data-mapflow-theme='ivory'] .react-flow__pane {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(180, 120, 40, 0.08), transparent 38%),
+    #fffdf5;
+}
+
+html[data-mapflow-theme='light'] .react-flow__controls button,
+html[data-mapflow-theme='ivory'] .react-flow__controls button {
+  border-bottom-color: #cbd5e1 !important;
+  background: #ffffff !important;
+  fill: #334155 !important;
+}
+
+html[data-mapflow-theme='light'] .react-flow__controls button:hover,
+html[data-mapflow-theme='ivory'] .react-flow__controls button:hover {
+  background: #e2e8f0 !important;
+}
+
+html[data-mapflow-theme='blue-gray'] .bg-slate-950 {
+  background-color: #111827 !important;
+}
+
+html[data-mapflow-theme='blue-gray'] .bg-slate-900,
+html[data-mapflow-theme='blue-gray'] .bg-slate-900\/80,
+html[data-mapflow-theme='blue-gray'] .bg-slate-900\/70,
+html[data-mapflow-theme='blue-gray'] .bg-slate-900\/65 {
+  background-color: #1e293b !important;
+}
+
 /* 节点完成特效：只狼斩杀感 + 青色科技感，低亮度不伤眼 */
 /* 时间线：开场(0-0.5s) → 背景压暗(0.55s) → 四字逐个压下(0.62-1.44s) → 斜斩(1.56s) → 分离散开(1.98s) → 淡出(2.7s) */
 .completion-flash {

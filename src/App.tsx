@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import AdminPanel from './features/admin/AdminPanel';
 import CreditPill from './features/credit/CreditPill';
@@ -13,10 +14,12 @@ import ResizableChatPane, {
 } from './features/knowledge-chat/ResizableChatPane';
 import IdentityAccess from './features/identity/IdentityAccess';
 import { useIdentity } from './features/identity/IdentityContext';
+import LogoutConfirmDialog from './features/identity/LogoutConfirmDialog';
 import AnnouncementsButton from './features/announcements/AnnouncementsButton';
 import AnnouncementsDialog from './features/announcements/AnnouncementsDialog';
 import FeedbackDialog from './features/feedback/FeedbackDialog';
 import MobileDrawer from './features/navigation/MobileDrawer';
+import ThemeSwitcher from './features/theme/ThemeSwitcher';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
 import { readPlatformGenerationEntitlements } from './features/tree-generation/treeGenerationClient';
 import {
@@ -28,6 +31,7 @@ import {
   setNodeCompletion,
 } from './features/tree-library/treeLibraryClient';
 import type { TreeGraph } from './features/tree-library/types';
+import TreeExportMenu from './features/tree-library/TreeExportMenu';
 import type {
   LearningTreeSnapshot,
   SkillNode,
@@ -66,6 +70,13 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [announcementsOpen, setAnnouncementsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [personalSidebarOpen, setPersonalSidebarOpen] = useState(() =>
+    readBooleanPreference('mapflow.layout.personal-sidebar-open', true),
+  );
+  const [nodeDetailOpen, setNodeDetailOpen] = useState(() =>
+    readBooleanPreference('mapflow.layout.node-detail-open', true),
+  );
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const completedGenerationSessionIdRef = useRef<string | null>(null);
   const accountPlayerId = session?.account.playerId ?? null;
   const personalTreeLibraryQueryKey = [
@@ -173,6 +184,17 @@ export default function App() {
       writeGenerationSessionId(null);
     }
   }, [session, sessionPending]);
+
+  useEffect(() => {
+    writeBooleanPreference(
+      'mapflow.layout.personal-sidebar-open',
+      personalSidebarOpen,
+    );
+  }, [personalSidebarOpen]);
+
+  useEffect(() => {
+    writeBooleanPreference('mapflow.layout.node-detail-open', nodeDetailOpen);
+  }, [nodeDetailOpen]);
 
   useEffect(() => {
     if (session && generationCapabilities?.enabled && generationSessionId) {
@@ -326,6 +348,17 @@ export default function App() {
     setChatOpen(false);
     setMobileView('detail');
   };
+  const requestLogout = () => {
+    if (session) setLogoutConfirmOpen(true);
+  };
+  const confirmLogout = async () => {
+    try {
+      await logout();
+      setLogoutConfirmOpen(false);
+    } catch {
+      // IdentityContext exposes the safe error inside the confirmation dialog.
+    }
+  };
   const goBackOnMobile = () => {
     if (mobileView === 'chat') {
       closeKnowledgeChat();
@@ -436,6 +469,7 @@ export default function App() {
           )}
         </nav>
         <div className="flex shrink-0 items-center gap-2">
+          <ThemeSwitcher />
           <div className="hidden lg:block">
             <AnnouncementsButton />
           </div>
@@ -460,27 +494,50 @@ export default function App() {
               />
             )}
           <div className="hidden lg:block">
-            <IdentityAccess />
+            <IdentityAccess onRequestLogout={requestLogout} />
           </div>
         </div>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <main className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
+        {!personalSidebarOpen && (
+          <button
+            type="button"
+            aria-label="展开左侧树库"
+            aria-expanded={personalSidebarOpen}
+            onClick={() => setPersonalSidebarOpen(true)}
+            className="hidden h-full w-9 shrink-0 items-start justify-center border-r border-slate-800 bg-slate-950/95 pt-4 text-xs text-slate-500 transition hover:text-cyan-200 lg:flex"
+          >
+            ›
+          </button>
+        )}
         <aside
           data-testid="mobile-list"
           className={`${
             mobileView === 'list' ? 'flex' : 'hidden'
-          } w-full min-h-0 flex-1 flex-col overflow-y-auto border-b border-slate-800 bg-slate-950/95 p-3 max-lg:pb-24 lg:flex lg:w-64 lg:flex-none lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r`}
+          } ${
+            personalSidebarOpen ? 'lg:flex' : 'lg:hidden'
+          } w-full min-h-0 flex-1 flex-col overflow-y-auto border-b border-slate-800 bg-slate-950/95 p-3 max-lg:pb-24 lg:w-64 lg:flex-none lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r`}
         >
-          <div className="mb-3 px-1">
-            <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-              {view === 'public' ? '公共树池' : '个人树库'}
-            </h2>
-            <p className="mt-1 text-[11px] leading-5 text-slate-600">
-              {view === 'public'
-                ? '所有人可浏览；加入后生成独立进度。'
-                : '这里只显示当前账号已加入的树。'}
-            </p>
+          <div className="mb-3 flex items-start justify-between gap-2 px-1">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                {view === 'public' ? '公共树池' : '个人树库'}
+              </h2>
+              <p className="mt-1 text-[11px] leading-5 text-slate-600">
+                {view === 'public'
+                  ? '所有人可浏览；加入后生成独立进度。'
+                  : '这里只显示当前账号已加入的树。'}
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-label="收起左侧树库"
+              onClick={() => setPersonalSidebarOpen(false)}
+              className="hidden h-8 shrink-0 items-center rounded-lg border border-slate-700 px-2 text-xs text-slate-500 transition hover:border-cyan-400/60 hover:text-cyan-200 lg:flex"
+            >
+              收起
+            </button>
           </div>
 
           <div className="space-y-2">
@@ -506,6 +563,18 @@ export default function App() {
                   subtitle={`${entry.completed_nodes}/${entry.tree.total_nodes} 已完成`}
                   active={entry.library_entry_id === selectedLibraryEntryId}
                   onClick={() => selectPersonalTree(entry.library_entry_id)}
+                  exportAction={
+                    <TreeExportMenu
+                      compact
+                      detail={
+                        personalTree.data?.library_entry_id === entry.library_entry_id
+                          ? personalTree.data
+                          : null
+                      }
+                      loadDetail={() => fetchPersonalTree(entry.library_entry_id)}
+                      triggerAriaLabel={`导出技能树：${entry.tree.title}`}
+                    />
+                  }
                 />
               ))
             ) : (
@@ -601,25 +670,39 @@ export default function App() {
             data-testid="mobile-detail"
             className={`${
               mobileView === 'detail' && !chatOpen ? 'flex' : 'hidden'
-            } min-h-0 flex-1 flex-col overflow-y-auto ${chatOpen ? 'lg:hidden' : 'lg:flex'} lg:w-80 lg:flex-none`}
+            } min-h-0 flex-1 flex-col overflow-y-auto ${
+              chatOpen || !nodeDetailOpen ? 'lg:hidden' : 'lg:flex'
+            } lg:w-80 lg:flex-none`}
           >
-            <NodeDetailPanel
-              snapshot={snapshot}
-              displayMode={displayMode}
-              selectedNodeId={selectedNodeId}
-              completionPending={completionMutation.isPending}
-              onSetCompleted={
-                view === 'personal'
-                  ? (nodeId, completed) =>
-                      completionMutation.mutate({ nodeId, completed })
-                  : undefined
-              }
-              onOpenChat={
-                view === 'personal' && session && selectedLibraryEntryId
-                  ? openKnowledgeChat
-                  : undefined
-              }
-            />
+            {nodeDetailOpen ? (
+              <NodeDetailPanel
+                snapshot={snapshot}
+                displayMode={displayMode}
+                selectedNodeId={selectedNodeId}
+                onTogglePanel={() => setNodeDetailOpen((current) => !current)}
+                completionPending={completionMutation.isPending}
+                onSetCompleted={
+                  view === 'personal'
+                    ? (nodeId, completed) =>
+                        completionMutation.mutate({ nodeId, completed })
+                    : undefined
+                }
+                onOpenChat={
+                  view === 'personal' && session && selectedLibraryEntryId
+                    ? openKnowledgeChat
+                    : undefined
+                }
+              />
+            ) : (
+              <button
+                type="button"
+                aria-label="展开节点详情"
+                onClick={() => setNodeDetailOpen(true)}
+                className="flex h-full min-h-16 w-full items-center justify-center border-t border-slate-800 bg-slate-950/95 px-3 text-xs font-semibold text-slate-500 transition hover:text-cyan-200 lg:border-l lg:border-t-0 lg:px-2"
+              >
+                展开节点详情
+              </button>
+            )}
           </div>
         ) : (
           <aside
@@ -630,6 +713,18 @@ export default function App() {
           >
             选择并加载技能树后，可在这里查看节点详情。
           </aside>
+        )}
+
+        {snapshot && !nodeDetailOpen && !chatOpen && (
+          <button
+            type="button"
+            aria-label="展开节点详情"
+            aria-expanded={nodeDetailOpen}
+            onClick={() => setNodeDetailOpen(true)}
+            className="hidden h-full w-9 shrink-0 items-start justify-center border-l border-slate-800 bg-slate-950/95 pt-4 text-xs text-slate-500 transition hover:text-cyan-200 lg:flex"
+          >
+            ‹
+          </button>
         )}
 
         {snapshot && view === 'personal' && session && selectedLibraryEntryId && (
@@ -645,6 +740,9 @@ export default function App() {
               libraryEntryId={selectedLibraryEntryId}
               csrfToken={session.csrfToken}
               onClose={closeKnowledgeChat}
+              onCreditChanged={() => {
+                void creditQuery.refetch();
+              }}
             />
           </ResizableChatPane>
         )}
@@ -705,7 +803,10 @@ export default function App() {
                 type="button"
                 aria-label="退出登录"
                 disabled={logoutPending}
-                onClick={() => void logout().catch(() => undefined)}
+                onClick={() => {
+                  setDrawerOpen(false);
+                  requestLogout();
+                }}
                 className="shrink-0 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 transition hover:border-rose-400/60 hover:text-rose-300 disabled:opacity-50"
               >
                 退出
@@ -794,6 +895,14 @@ export default function App() {
       {feedbackOpen && session && (
         <FeedbackDialog onClose={() => setFeedbackOpen(false)} />
       )}
+
+      <LogoutConfirmDialog
+        open={logoutConfirmOpen}
+        pending={logoutPending}
+        error={logoutError ? readableError(logoutError) : null}
+        onCancel={() => setLogoutConfirmOpen(false)}
+        onConfirm={() => void confirmLogout()}
+      />
 
     </div>
   );
@@ -889,27 +998,38 @@ function TreeChoice({
   subtitle,
   active,
   onClick,
+  exportAction,
 }: {
   title: string;
   subtitle: string;
   active: boolean;
   onClick: () => void;
+  exportAction?: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={`查看 ${title}`}
-      aria-current={active ? 'true' : undefined}
-      onClick={onClick}
-      className={`w-full rounded-xl border px-3 py-3 text-left transition ${
+    <div
+      className={`flex w-full overflow-hidden rounded-xl border transition ${
         active
           ? 'border-cyan-400/70 bg-cyan-400/10 text-slate-100'
           : 'border-slate-800 bg-slate-900/65 text-slate-400 hover:border-slate-700'
       }`}
     >
-      <span className="block text-sm font-semibold leading-5">{title}</span>
-      <span className="mt-1 block text-[11px] text-slate-500">{subtitle}</span>
-    </button>
+      <button
+        type="button"
+        aria-label={`查看 ${title}`}
+        aria-current={active ? 'true' : undefined}
+        onClick={onClick}
+        className="min-w-0 flex-1 px-3 py-3 text-left transition hover:bg-white/[0.03]"
+      >
+        <span className="block text-sm font-semibold leading-5">{title}</span>
+        <span className="mt-1 block text-[11px] text-slate-500">{subtitle}</span>
+      </button>
+      {exportAction && (
+        <div className="flex shrink-0 items-end border-l border-slate-800/80 px-2 pb-2">
+          {exportAction}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -969,4 +1089,21 @@ function FullPageStatus({
 
 function readableError(error: unknown): string {
   return error instanceof Error ? error.message : '技能树服务暂时不可用，请稍后重试。';
+}
+
+function readBooleanPreference(key: string, fallback: boolean): boolean {
+  try {
+    const value = window.localStorage.getItem(key);
+    return value === null ? fallback : value === 'true';
+  } catch {
+    return fallback;
+  }
+}
+
+function writeBooleanPreference(key: string, value: boolean): void {
+  try {
+    window.localStorage.setItem(key, String(value));
+  } catch {
+    // 隐私模式或禁用存储时仍保持当前页面可用。
+  }
 }

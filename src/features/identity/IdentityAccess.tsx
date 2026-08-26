@@ -1,6 +1,10 @@
 import { useIdentity } from './IdentityContext';
 
-export default function IdentityAccess() {
+interface IdentityAccessProps {
+  onRequestLogout?: () => void;
+}
+
+export default function IdentityAccess({ onRequestLogout }: IdentityAccessProps) {
   const {
     identityEnabled,
     session,
@@ -32,7 +36,13 @@ export default function IdentityAccess() {
           type="button"
           aria-label="退出登录"
           disabled={logoutPending}
-          onClick={() => void logout().catch(() => undefined)}
+          onClick={() => {
+            if (onRequestLogout) {
+              onRequestLogout();
+              return;
+            }
+            void logout().catch(() => undefined);
+          }}
           className="rounded-lg border border-slate-700 px-2 py-1 text-[11px] text-slate-400 transition hover:border-rose-400/60 hover:text-rose-300 disabled:opacity-50"
         >
           退出

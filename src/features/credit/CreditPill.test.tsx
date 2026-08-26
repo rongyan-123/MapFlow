@@ -5,7 +5,10 @@ import CreditPill from './CreditPill';
 
 const signInForCredit = vi.hoisted(() => vi.fn());
 
-vi.mock('./creditClient', () => ({ signInForCredit }));
+vi.mock('./creditClient', () => ({
+  formatCreditAmount: (amount: number) => String(amount),
+  signInForCredit,
+}));
 vi.mock('../identity/IdentityContext', () => ({
   useIdentity: () => ({ session: { csrfToken: 'csrf-token' } }),
 }));
@@ -46,7 +49,7 @@ function renderCreditPill() {
   return render(
     <QueryClientProvider client={queryClient}>
       <CreditPill
-        credit={{ balance: 5, signedInToday: false, freeRemaining: 1, pricePerTree: 3 }}
+        credit={{ balance: 5, signedInToday: false, freeRemaining: 1, pricePerTree: 6 }}
         onSignedIn={vi.fn()}
       />
     </QueryClientProvider>,
