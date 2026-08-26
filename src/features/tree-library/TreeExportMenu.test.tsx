@@ -66,6 +66,19 @@ describe('TreeExportMenu', () => {
     expect(screen.queryByRole('dialog', { name: '导出技能树' })).not.toBeInTheDocument();
   });
 
+  it('keeps the export overlay at the document layer when its trigger is in a card drawer', async () => {
+    const user = userEvent.setup();
+    render(
+      <div style={{ transform: 'rotate(1deg)' }}>
+        <TreeExportMenu detail={detail} variant="drawer" />
+      </div>,
+    );
+
+    await user.click(screen.getByRole('button', { name: '导出技能树' }));
+
+    expect(screen.getByTestId('tree-export-overlay').parentElement).toBe(document.body);
+  });
+
   it('loads the tree detail only after a card export action is opened', async () => {
     const user = userEvent.setup();
     const loadDetail = vi.fn().mockResolvedValue(detail);

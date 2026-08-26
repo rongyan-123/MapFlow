@@ -66,6 +66,21 @@ describe('generationDiagnostics', () => {
     expect(readableGenerationError(error)).not.toContain('SENTINEL');
   });
 
+  it('turns safe server validation details into a field-specific correction', () => {
+    const error = new TreeGenerationApiError(
+      400,
+      'generation.input_invalid',
+      'server detail must not render',
+      '84000000-0000-4000-8000-000000000001',
+      { field: 'goalDescription', reason: 'too_long', maxChars: 10_000 },
+    );
+
+    expect(readableGenerationError(error)).toBe(
+      '“希望最终达到什么目标？”不能超过 10000 个字，请缩短后再试。',
+    );
+    expect(readableGenerationError(error)).not.toContain('server detail');
+  });
+
   it('rejects free text smuggled through diagnostic scalar fields', () => {
     const error = new TreeGenerationApiError(
       999,

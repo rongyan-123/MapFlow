@@ -24,14 +24,28 @@ export class TreeGenerationApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly traceId?: string;
+  readonly details?: TreeGenerationErrorDetails;
 
-  constructor(status: number, code: string, message: string, traceId?: string) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    traceId?: string,
+    details?: TreeGenerationErrorDetails,
+  ) {
     super(message);
     this.name = 'TreeGenerationApiError';
     this.status = status;
     this.code = code;
     this.traceId = traceId;
+    this.details = details;
   }
+}
+
+export interface TreeGenerationErrorDetails {
+  readonly field: string;
+  readonly reason: string;
+  readonly maxChars?: number;
 }
 
 export async function createTreeGeneration(
@@ -319,6 +333,7 @@ async function parseError(
         body.error.code,
         redact(body.error.message, redactedValues),
         typeof body.error.traceId === 'string' ? body.error.traceId : undefined,
+        parseGenerationErrorDetails(body.error.details),
       );
     }
   } catch {
@@ -329,6 +344,24 @@ async function parseError(
     'generation.request_failed',
     '技能树生成请求失败，请稍后重试。',
   );
+}
+
+function parseGenerationErrorDetails(value: unknown): TreeGenerationErrorDetails | undefined {
+  if (!isRecord(value) || typeof value.field !== 'string' || typeof value.reason !== 'string') {
+    return undefined;
+  }
+  const maxChars = value.maxChars;
+  if (
+    maxChars !== undefined &&
+    (typeof maxChars !== 'number' || !Number.isInteger(maxChars) || maxChars <= 0)
+  ) {
+    return undefined;
+  }
+  return {
+    field: value.field,
+    reason: value.reason,
+    ...(maxChars === undefined ? {} : { maxChars }),
+  };
 }
 
 function redact(message: string, redactedValues: readonly string[]): string {

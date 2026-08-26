@@ -830,9 +830,14 @@ describe('手机端视图栈', () => {
     });
     expect(exportTriggers).toHaveLength(2);
     expect(exportTriggers[0].closest('header')).toBeNull();
-    expect(exportTriggers[0].closest('[data-testid="mobile-list"]')).not.toBeNull();
-    expect(exportTriggers[0].closest('[data-testid="tree-choice-actions"]')).not.toBeNull();
-    expect(exportTriggers[1].closest('[data-testid="mobile-list"]')).not.toBeNull();
+    expect(exportTriggers[0].closest('[data-testid="mobile-list"]')).toBeNull();
+    expect(exportTriggers[0].closest('[data-testid="tree-choice"]')).toBeNull();
+    expect(exportTriggers[0].closest('[data-mapflow-tree-action-portal="true"]')).not.toBeNull();
+    const firstTreeCard = screen.getAllByTestId('tree-choice')[0];
+    expect(firstTreeCard).toHaveClass('overflow-visible');
+    expect(firstTreeCard).toHaveClass('mapflow-tree-choice--with-actions');
+    expect(screen.getAllByTestId('tree-choice-actions')).toHaveLength(2);
+    expect(exportTriggers[1].closest('[data-testid="mobile-list"]')).toBeNull();
 
     const renameTriggers = screen.getAllByRole('button', {
       name: /重命名技能树：/,
@@ -840,6 +845,8 @@ describe('手机端视图栈', () => {
     const deleteTriggers = screen.getAllByRole('button', {
       name: /删除技能树：/,
     });
+    expect(renameTriggers[0]).toHaveClass('mapflow-tree-action--rename');
+    expect(deleteTriggers[0]).toHaveClass('mapflow-tree-action--delete');
     expect(renameTriggers).toHaveLength(2);
     expect(deleteTriggers).toHaveLength(2);
     renameTriggers.forEach((button) => expect(button).toBeDisabled());

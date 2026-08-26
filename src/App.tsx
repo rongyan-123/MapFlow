@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import AdminPanel from './features/admin/AdminPanel';
 import CreditPill from './features/credit/CreditPill';
@@ -513,11 +514,12 @@ export default function App() {
         )}
         <aside
           data-testid="mobile-list"
+          data-mapflow-tree-sidebar="true"
           className={`${
             mobileView === 'list' ? 'flex' : 'hidden'
           } ${
             personalSidebarOpen ? 'lg:flex' : 'lg:hidden'
-          } w-full min-h-0 flex-1 flex-col overflow-y-auto border-b border-slate-800 bg-slate-950/95 p-3 max-lg:pb-24 lg:w-64 lg:flex-none lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r`}
+          } mapflow-tree-sidebar w-full min-h-0 flex-1 flex-col overflow-y-auto border-b border-slate-800 bg-slate-950/95 p-3 max-lg:pb-24 lg:w-64 lg:flex-none lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r`}
         >
           <div className="mb-3 flex items-start justify-between gap-2 px-1">
             <div>
@@ -1020,39 +1022,157 @@ function TreeChoice({
   onClick: () => void;
   actions?: ReactNode;
 }) {
+  const cardRef = useRef<HTMLElement>(null);
+  const actionRef = useRef<HTMLDivElement>(null);
+  const hideTimerRef = useRef<number | null>(null);
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window === 'undefined' ? true : window.innerWidth >= 1024,
+  );
+  const [actionOpen, setActionOpen] = useState(false);
+  const [actionPosition, setActionPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const handleViewportChange = () => setIsDesktop(window.innerWidth >= 1024);
+    window.addEventListener('resize', handleViewportChange);
+    return () => window.removeEventListener('resize', handleViewportChange);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (hideTimerRef.current !== null) window.clearTimeout(hideTimerRef.current);
+    };
+  }, []);
+
+  const updateActionPosition = () => {
+    const cardRect = cardRef.current?.getBoundingClientRect();
+    if (!cardRect) return;
+    setActionPosition({
+      left: Math.round(cardRect.right + 12),
+      top: Math.round(cardRect.top + cardRect.height / 2),
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (actions && isDesktop) updateActionPosition();
+  }, [actions, isDesktop]);
+
+  useEffect(() => {
+    if (!actions || !isDesktop || !actionOpen) return;
+
+    const handleViewportChange = () => updateActionPosition();
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
+    };
+  }, [actions, actionOpen, isDesktop]);
+
+  const cancelHide = () => {
+    if (hideTimerRef.current !== null) {
+      window.clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  };
+
+  const showActions = () => {
+    if (!actions || !isDesktop) return;
+    cancelHide();
+    updateActionPosition();
+    setActionOpen(true);
+  };
+
+  const scheduleHide = () => {
+    if (!actions || !isDesktop) return;
+    cancelHide();
+    hideTimerRef.current = window.setTimeout(() => {
+      setActionOpen(false);
+      hideTimerRef.current = null;
+    }, 180);
+  };
+
+  const isInsideCardOrActions = (target: EventTarget | null) => {
+    if (!(target instanceof Node)) return false;
+    return Boolean(cardRef.current?.contains(target) || actionRef.current?.contains(target));
+  };
+
+  const actionStyle: CSSProperties = actionPosition
+    ? { left: `${actionPosition.left}px`, top: `${actionPosition.top}px` }
+    : { left: 0, top: 0 };
+
   return (
-    <article
-      data-testid="tree-choice"
-      data-mapflow-active={active ? 'true' : 'false'}
-      className={`mapflow-tree-choice group flex min-h-[9.25rem] w-full overflow-hidden rounded-2xl border ${
-        active
-          ? 'text-slate-100'
-          : 'text-slate-400'
-      }`}
-    >
-      <button
-        type="button"
-        aria-label={`查看 ${title}`}
-        aria-current={active ? 'true' : undefined}
-        onClick={onClick}
-        className="min-w-0 flex-1 px-3.5 py-3.5 text-left transition-[padding,color] duration-300 group-hover:pr-2 group-focus-within:pr-2"
+    <>
+      <article
+        ref={cardRef}
+        data-testid="tree-choice"
+        data-mapflow-active={active ? 'true' : 'false'}
+        onMouseEnter={showActions}
+        onMouseLeave={scheduleHide}
+        onFocusCapture={showActions}
+        onBlurCapture={(event) => {
+          if (!isInsideCardOrActions(event.relatedTarget)) scheduleHide();
+        }}
+        className={`mapflow-tree-choice group relative flex min-h-[9.25rem] w-full rounded-2xl border ${
+          actions ? 'mapflow-tree-choice--with-actions overflow-visible max-lg:flex-wrap' : 'overflow-hidden'
+        } ${
+          active
+            ? 'text-slate-100'
+            : 'text-slate-400'
+        }`}
       >
-        <span className="block text-sm font-semibold leading-5">{title}</span>
-        <span className="mt-1 block text-[11px] text-slate-500">{subtitle}</span>
-      </button>
-      {actions && (
-        <div
-          data-testid="tree-choice-actions"
-          role="group"
-          aria-label={`技能树操作：${title}`}
-          className="max-w-0 shrink-0 overflow-hidden opacity-0 transition-[max-width,opacity] duration-300 ease-out group-hover:max-w-[6.75rem] group-hover:opacity-100 group-focus-within:max-w-[6.75rem] group-focus-within:opacity-100 max-lg:max-w-[6.75rem] max-lg:opacity-100"
+        <button
+          type="button"
+          aria-label={`查看 ${title}`}
+          aria-current={active ? 'true' : undefined}
+          onClick={onClick}
+          className="min-w-0 flex-1 px-3.5 py-3.5 text-left transition-[color] duration-300"
         >
-          <div className="mapflow-tree-choice__drawer flex h-full w-[6.75rem] flex-col justify-center gap-1.5 p-1.5">
-            {actions}
+          <span className="block text-sm font-semibold leading-5">{title}</span>
+          <span className="mt-1 block text-[11px] text-slate-500">{subtitle}</span>
+        </button>
+        {actions && !isDesktop && (
+          <div
+            data-testid="tree-choice-actions"
+            role="group"
+            aria-label={`技能树操作：${title}`}
+            className="mapflow-tree-choice__actions mapflow-tree-choice__actions--inline"
+          >
+            <div className="mapflow-tree-choice__drawer">
+              {actions}
+            </div>
           </div>
-        </div>
-      )}
-    </article>
+        )}
+      </article>
+      {actions &&
+        isDesktop &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={actionRef}
+            data-testid="tree-choice-actions"
+            data-mapflow-tree-action-portal="true"
+            data-mapflow-action-visible={actionOpen ? 'true' : 'false'}
+            role="group"
+            aria-label={`技能树操作：${title}`}
+            className="mapflow-tree-choice__actions"
+            style={actionStyle}
+            onMouseEnter={cancelHide}
+            onMouseLeave={scheduleHide}
+            onFocusCapture={showActions}
+            onBlurCapture={(event) => {
+              if (!isInsideCardOrActions(event.relatedTarget)) scheduleHide();
+            }}
+          >
+            <div className="mapflow-tree-choice__drawer">
+              {actions}
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 

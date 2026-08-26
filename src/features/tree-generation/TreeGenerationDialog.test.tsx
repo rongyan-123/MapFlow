@@ -120,6 +120,39 @@ describe('TreeGenerationDialog', () => {
     expect(screen.queryByRole('button', { name: '查看诊断信息' })).not.toBeInTheDocument();
   });
 
+  it('identifies the exact oversized learning field before sending a request', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await fillGenerationForm(user);
+    fireEvent.change(screen.getByLabelText('想学习什么知识？'), {
+      target: { value: '学'.repeat(10_001) },
+    });
+    await user.type(screen.getByLabelText('DeepSeek API Key'), 'sk-local');
+    await user.click(screen.getByRole('button', { name: '生成规划' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '“想学习什么知识？”不能超过 10000 个字，请缩短后再试。',
+    );
+    expect(generationApi.createTreeGeneration).not.toHaveBeenCalled();
+  });
+
+  it('identifies an oversized API key before it reaches the request', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await fillGenerationForm(user);
+    fireEvent.change(screen.getByLabelText('DeepSeek API Key'), {
+      target: { value: 'k'.repeat(513) },
+    });
+    await user.click(screen.getByRole('button', { name: '生成规划' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'DeepSeek API Key 不能超过 512 个字符。',
+    );
+    expect(generationApi.createTreeGeneration).not.toHaveBeenCalled();
+  });
+
   it('keeps replan and detail adjustment as distinct versioned actions', async () => {
     const user = userEvent.setup();
     generationApi.readTreeGeneration.mockResolvedValue(planReadySession());

@@ -54,7 +54,7 @@ select {
   overflow: hidden;
 }
 
-/* 技能树卡片：默认低调，悬停时通过右侧抽屉展示动作，避免操作按钮割裂内容。 */
+/* 技能树卡片：正文宽度固定，动作卡片从右侧向外展开，不挤压标题。 */
 .mapflow-tree-choice {
   --mapflow-tree-card-background: linear-gradient(
     145deg,
@@ -80,13 +80,15 @@ select {
   box-shadow: var(--mapflow-tree-card-shadow);
   transition:
     border-color 260ms ease,
-    box-shadow 260ms ease;
+    box-shadow 260ms ease,
+    transform 260ms ease;
 }
 
 .mapflow-tree-choice:hover,
 .mapflow-tree-choice:focus-within {
   --mapflow-tree-card-border: rgba(103, 232, 249, 0.72);
   box-shadow: var(--mapflow-tree-card-hover-shadow);
+  transform: translateY(-1px);
 }
 
 .mapflow-tree-choice[data-mapflow-active='true'] {
@@ -99,14 +101,82 @@ select {
   );
 }
 
+.mapflow-tree-sidebar {
+  overflow-x: visible;
+}
+
+.mapflow-tree-choice__actions {
+  position: fixed;
+  top: 50%;
+  left: 0;
+  z-index: 40;
+  width: 8rem;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate3d(-0.9rem, -50%, 0);
+  transition:
+    opacity 220ms ease,
+    visibility 220ms ease,
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mapflow-tree-choice:hover .mapflow-tree-choice__actions,
+.mapflow-tree-choice:focus-within .mapflow-tree-choice__actions,
+.mapflow-tree-choice__actions[data-mapflow-action-visible='true'] {
+  pointer-events: auto;
+  opacity: 1;
+  visibility: visible;
+  transform: translate3d(0, -50%, 0);
+}
+
 .mapflow-tree-choice__drawer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.55rem;
+  padding: 0.4rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 1.15rem 0.45rem 1.15rem 0.65rem;
   background: var(--mapflow-tree-drawer-background);
-  box-shadow: inset 14px 0 26px -24px var(--mapflow-tree-drawer-shadow);
+  box-shadow:
+    0 16px 28px -18px rgba(2, 6, 23, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 14px 0 26px -24px var(--mapflow-tree-drawer-shadow);
+  transform: rotate(1deg);
+}
+
+.mapflow-tree-choice__drawer > .mapflow-tree-action {
+  width: 7.2rem;
+  transform: translate3d(-0.65rem, 0, 0) rotate(-1.5deg);
+  transition:
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 220ms ease;
+}
+
+.mapflow-tree-choice__drawer > .mapflow-tree-action:nth-of-type(2) {
+  width: 6.7rem;
+  transform: translate3d(-0.2rem, 0, 0) rotate(1.5deg);
+}
+
+.mapflow-tree-choice__drawer > .mapflow-tree-action:nth-of-type(3) {
+  width: 7.45rem;
+  transform: translate3d(-0.45rem, 0, 0) rotate(-2deg);
+}
+
+.mapflow-tree-choice:hover .mapflow-tree-choice__drawer > .mapflow-tree-action,
+.mapflow-tree-choice:focus-within .mapflow-tree-choice__drawer > .mapflow-tree-action,
+.mapflow-tree-choice__actions[data-mapflow-action-visible='true'] .mapflow-tree-action {
+  transform: translate3d(0, 0, 0) rotate(0deg);
+  filter: saturate(1.12);
 }
 
 .mapflow-tree-action {
   min-height: 2.75rem;
   border: 1px solid transparent;
+  box-shadow:
+    0 7px 14px -10px rgba(2, 6, 23, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .mapflow-tree-action--export {
@@ -212,8 +282,40 @@ html[data-mapflow-theme='ivory'] .mapflow-tree-action--delete {
   color: #be123c;
 }
 
+@media (max-width: 1023px) {
+  .mapflow-tree-choice__actions {
+    position: static;
+    width: 100%;
+    pointer-events: auto;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+  }
+
+  .mapflow-tree-choice__drawer {
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 0.55rem 0.4rem 0.4rem;
+    border-width: 1px 0 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .mapflow-tree-choice__drawer > .mapflow-tree-action,
+  .mapflow-tree-choice__drawer > .mapflow-tree-action:nth-of-type(2),
+  .mapflow-tree-choice__drawer > .mapflow-tree-action:nth-of-type(3) {
+    width: auto;
+    min-width: 4.5rem;
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mapflow-tree-choice,
+  .mapflow-tree-choice__actions,
   .mapflow-tree-choice__drawer,
   .mapflow-tree-action,
   .mapflow-tree-choice button {

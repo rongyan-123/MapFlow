@@ -46,6 +46,12 @@ import type {
   ThinkingMode,
 } from './types';
 import type { CreditSummary } from '../credit/creditClient';
+import {
+  GENERATION_TEXT_MAX_CHARS,
+  validateGenerationApiKey,
+  validateGenerationInput,
+  validateGenerationText,
+} from './generationValidation';
 
 interface TreeGenerationDialogProps {
   capabilities: IdentityCapabilities['generation'];
@@ -434,19 +440,24 @@ export default function TreeGenerationDialog({
   ]);
 
   function modelAccess(): ModelAccess {
-    if (!apiKey.trim()) throw new Error('请输入 DeepSeek API Key。');
-    return { apiKey, model, thinking, reasoningEffort };
+    const apiKeyError = validateGenerationApiKey(apiKey);
+    if (apiKeyError) throw new Error(apiKeyError);
+    return { apiKey: apiKey.trim(), model, thinking, reasoningEffort };
   }
 
   const submitInitial = (event: FormEvent) => {
     event.preventDefault();
-    if (Object.values(input).some((value) => !value.trim())) {
-      setLocalError('请完整填写四项学习需求。');
+    const inputError = validateGenerationInput(input);
+    if (inputError) {
+      setLocalError(inputError);
       return;
     }
-    if (fundingMode === 'byok' && !apiKey.trim()) {
-      setLocalError('请输入 DeepSeek API Key。');
-      return;
+    if (fundingMode === 'byok') {
+      const apiKeyError = validateGenerationApiKey(apiKey);
+      if (apiKeyError) {
+        setLocalError(apiKeyError);
+        return;
+      }
     }
     setLocalError(null);
     if (fundingMode === 'platform') {
@@ -458,13 +469,17 @@ export default function TreeGenerationDialog({
 
   const submitClarification = (event: FormEvent) => {
     event.preventDefault();
-    if (!clarification.trim()) {
-      setLocalError('请填写补充信息。');
+    const clarificationError = validateGenerationText(clarification, '补充信息');
+    if (clarificationError) {
+      setLocalError(clarificationError);
       return;
     }
-    if (session?.fundingMode !== 'platform' && !apiKey.trim()) {
-      setLocalError('请重新输入 DeepSeek API Key。');
-      return;
+    if (session?.fundingMode !== 'platform') {
+      const apiKeyError = validateGenerationApiKey(apiKey);
+      if (apiKeyError) {
+        setLocalError(`请重新输入 DeepSeek API Key：${apiKeyError}`);
+        return;
+      }
     }
     setLocalError(null);
     clarificationMutation.mutate();
@@ -472,22 +487,36 @@ export default function TreeGenerationDialog({
 
   const submitRevision = (event: FormEvent) => {
     event.preventDefault();
-    if (!revisionKind || !revisionFeedback.trim()) {
-      setLocalError('请填写修改要求。');
+    if (!revisionKind) {
+      setLocalError('请选择要执行的修改类型。');
       return;
     }
-    if (session?.fundingMode !== 'platform' && !apiKey.trim()) {
-      setLocalError('请重新输入 DeepSeek API Key。');
+    const revisionError = validateGenerationText(
+      revisionFeedback,
+      revisionKind === 'replan' ? '重新规划要求' : '细节调整要求',
+    );
+    if (revisionError) {
+      setLocalError(revisionError);
       return;
+    }
+    if (session?.fundingMode !== 'platform') {
+      const apiKeyError = validateGenerationApiKey(apiKey);
+      if (apiKeyError) {
+        setLocalError(`请重新输入 DeepSeek API Key：${apiKeyError}`);
+        return;
+      }
     }
     setLocalError(null);
     revisionMutation.mutate({ kind: revisionKind, feedback: revisionFeedback });
   };
 
   const confirm = () => {
-    if (session?.fundingMode !== 'platform' && !apiKey.trim()) {
-      setLocalError('确认前请重新输入 DeepSeek API Key。');
-      return;
+    if (session?.fundingMode !== 'platform') {
+      const apiKeyError = validateGenerationApiKey(apiKey);
+      if (apiKeyError) {
+        setLocalError(`确认前请重新输入 DeepSeek API Key：${apiKeyError}`);
+        return;
+      }
     }
     setLocalError(null);
     confirmMutation.mutate();
@@ -751,7 +780,7 @@ function InitialGenerationForm({
           <textarea
             aria-label="想学习什么知识？"
             required
-            maxLength={2000}
+            maxLength={GENERATION_TEXT_MAX_CHARS * 2}
             rows={3}
             value={input.topic}
             onChange={(event) => onChange({ ...input, topic: event.target.value })}
@@ -765,7 +794,7 @@ function InitialGenerationForm({
           <textarea
             aria-label="希望走什么职业或应用方向？"
             required
-            maxLength={2000}
+            maxLength={GENERATION_TEXT_MAX_CHARS * 2}
             rows={3}
             value={input.role}
             onChange={(event) => onChange({ ...input, role: event.target.value })}
@@ -779,7 +808,7 @@ function InitialGenerationForm({
           <textarea
             aria-label="希望最终达到什么目标？"
             required
-            maxLength={2000}
+            maxLength={GENERATION_TEXT_MAX_CHARS * 2}
             rows={4}
             value={input.goalDescription}
             onChange={(event) =>
@@ -795,7 +824,7 @@ function InitialGenerationForm({
           <textarea
             aria-label="当前基础、限制和学习偏好是什么？"
             required
-            maxLength={2000}
+            maxLength={GENERATION_TEXT_MAX_CHARS * 2}
             rows={4}
             value={input.learnerContextSummary}
             onChange={(event) =>
@@ -916,7 +945,7 @@ function SessionWorkflow({
           <Field label="补充信息">
             <textarea
               required
-              maxLength={2000}
+              maxLength={GENERATION_TEXT_MAX_CHARS * 2}
               rows={3}
               value={clarification}
               onChange={(event) => onClarificationChange(event.target.value)}
@@ -996,7 +1025,7 @@ function SessionWorkflow({
             <textarea
               autoFocus
               required
-              maxLength={2000}
+              maxLength={GENERATION_TEXT_MAX_CHARS * 2}
               rows={4}
               value={revisionFeedback}
               onChange={(event) => onRevisionFeedbackChange(event.target.value)}

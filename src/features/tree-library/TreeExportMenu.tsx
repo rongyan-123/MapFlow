@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { PersonalTreeDetail } from './types';
 import { downloadTreeExport } from './treeExport';
 
@@ -100,61 +101,64 @@ export default function TreeExportMenu({
           {loadError}
         </span>
       )}
-      {open && (
-        <div
-          data-testid="tree-export-overlay"
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setOpen(false);
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="tree-export-dialog-title"
-            className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+      {open &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            data-testid="tree-export-overlay"
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setOpen(false);
+            }}
           >
-            <header className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-300">
-                  MapFlow
-                </p>
-                <h2 id="tree-export-dialog-title" className="mt-1 text-base font-semibold text-slate-100">
-                  导出技能树
-                </h2>
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="tree-export-dialog-title"
+              className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+            >
+              <header className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-300">
+                    MapFlow
+                  </p>
+                  <h2 id="tree-export-dialog-title" className="mt-1 text-base font-semibold text-slate-100">
+                    导出技能树
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  aria-label="关闭导出窗口"
+                  autoFocus
+                  onClick={() => setOpen(false)}
+                  className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 transition hover:bg-slate-800 hover:text-slate-200"
+                >
+                  ×
+                </button>
+              </header>
+              <p className="mt-3 text-xs leading-5 text-slate-400">
+                选择一种格式下载当前技能树、节点关系和你的学习进度，不包含账号或平台私密信息。
+              </p>
+              <div className="mt-4 grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => startDownload('json')}
+                  className="rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-3 py-2.5 text-left text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/15"
+                >
+                  下载 JSON（完整结构）
+                </button>
+                <button
+                  type="button"
+                  onClick={() => startDownload('markdown')}
+                  className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-left text-sm font-semibold text-slate-300 transition hover:border-cyan-400/60 hover:text-white"
+                >
+                  下载 Markdown（便于阅读）
+                </button>
               </div>
-              <button
-                type="button"
-                aria-label="关闭导出窗口"
-                autoFocus
-                onClick={() => setOpen(false)}
-                className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 transition hover:bg-slate-800 hover:text-slate-200"
-              >
-                ×
-              </button>
-            </header>
-            <p className="mt-3 text-xs leading-5 text-slate-400">
-              选择一种格式下载当前技能树、节点关系和你的学习进度，不包含账号或平台私密信息。
-            </p>
-            <div className="mt-4 grid gap-2">
-              <button
-                type="button"
-                onClick={() => startDownload('json')}
-                className="rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-3 py-2.5 text-left text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/15"
-              >
-                下载 JSON（完整结构）
-              </button>
-              <button
-                type="button"
-                onClick={() => startDownload('markdown')}
-                className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2.5 text-left text-sm font-semibold text-slate-300 transition hover:border-cyan-400/60 hover:text-white"
-              >
-                下载 Markdown（便于阅读）
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
+            </section>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
