@@ -268,7 +268,7 @@ describe('MapFlow tree library', () => {
 
     expect(
       await screen.findByRole('heading', {
-        name: '把复杂知识，变成一条可执行的成长路径。',
+        name: /不想再看无聊的网课.*从你真正想学的地方开始/s,
       }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
@@ -288,7 +288,7 @@ describe('MapFlow tree library', () => {
     expect(window.location.pathname).toBe('/console');
     expect(
       screen.queryByRole('heading', {
-        name: '把复杂知识，变成一条可执行的成长路径。',
+        name: /不想再看无聊的网课.*从你真正想学的地方开始/s,
       }),
     ).not.toBeInTheDocument();
   });
@@ -300,7 +300,7 @@ describe('MapFlow tree library', () => {
 
     expect(
       await screen.findByRole('heading', {
-        name: '把复杂知识，变成一条可执行的成长路径。',
+        name: /不想再看无聊的网课.*从你真正想学的地方开始/s,
       }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
@@ -312,7 +312,7 @@ describe('MapFlow tree library', () => {
     renderApp('/');
 
     await screen.findByRole('heading', {
-      name: '把复杂知识，变成一条可执行的成长路径。',
+      name: /不想再看无聊的网课.*从你真正想学的地方开始/s,
     });
     await user.click(screen.getByRole('button', { name: '登录' }));
     const dialog = screen.getByRole('dialog', { name: '登录学习账号' });
