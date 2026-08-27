@@ -1,8 +1,13 @@
 import { Suspense, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Html, Line, OrbitControls, Sparkles } from '@react-three/drei';
+import { Edges, Html, Line, OrbitControls, RoundedBox, Sparkles } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { Group, Mesh } from 'three';
+import {
+  getNodeBodyDimensions,
+  getNodeLabelPosition,
+  getNodePlateDimensions,
+} from './skillTree3dPresentation';
 
 interface DemoSkillNode {
   id: string;
@@ -123,18 +128,21 @@ export default function SkillTree3D() {
 
         {canRenderWebGL ? (
           <Canvas
-            camera={{ position: [0, 0.2, 8.6], fov: 42 }}
+            camera={{ position: [0.7, 0.3, 8.6], fov: 42 }}
             dpr={[1, 1.75]}
             gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
             fallback={<SkillTreeFallback />}
           >
             <color attach="background" args={['#081827']} />
+            <fog attach="fog" args={['#081827', 7, 16]} />
             <ambientLight intensity={1.2} />
             <pointLight position={[2, 4, 5]} intensity={18} distance={12} color="#67e8f9" />
             <pointLight position={[-4, -2, 2]} intensity={10} distance={10} color="#6366f1" />
             <Suspense fallback={null}>
+              <SceneAtmosphere />
               <TreeGraphModel selectedNodeId={selectedNodeId} onSelect={setSelectedNodeId} />
-              <Sparkles count={45} scale={[7, 5, 4]} size={1.4} speed={0.22} color="#67e8f9" opacity={0.45} />
+              <Sparkles count={62} scale={[7, 5, 4]} size={1.4} speed={0.22} color="#67e8f9" opacity={0.42} />
+              <Sparkles count={18} scale={[4.5, 3.5, 2]} size={2.2} speed={0.12} color="#a78bfa" opacity={0.2} />
             </Suspense>
             <OrbitControls
               ref={controlsRef}
@@ -223,6 +231,30 @@ function TreeGraphModel({
   );
 }
 
+function SceneAtmosphere() {
+  const atmosphereRef = useRef<Group>(null);
+
+  useFrame(({ clock }) => {
+    if (!atmosphereRef.current) return;
+    const elapsed = clock.getElapsedTime();
+    atmosphereRef.current.rotation.y = Math.sin(elapsed * 0.12) * 0.06;
+    atmosphereRef.current.rotation.z = elapsed * 0.018;
+  });
+
+  return (
+    <group ref={atmosphereRef} position={[0, 0, -1.45]}>
+      <mesh rotation={[Math.PI / 2.35, 0.08, 0]}>
+        <torusGeometry args={[3.1, 0.014, 8, 96]} />
+        <meshBasicMaterial color="#2dd4bf" transparent opacity={0.24} />
+      </mesh>
+      <mesh rotation={[Math.PI / 2.1, -0.12, 0.24]} scale={0.76}>
+        <torusGeometry args={[3.1, 0.01, 8, 96]} />
+        <meshBasicMaterial color="#818cf8" transparent opacity={0.24} />
+      </mesh>
+    </group>
+  );
+}
+
 function SkillNode3D({
   node,
   selected,
@@ -234,16 +266,35 @@ function SkillNode3D({
 }) {
   const groupRef = useRef<Group>(null);
   const haloRef = useRef<Mesh>(null);
+  const bodyRef = useRef<Mesh>(null);
+  const plateRef = useRef<Mesh>(null);
+  const bodyDimensions = getNodeBodyDimensions(node.size);
+  const plateDimensions = getNodePlateDimensions(node.size);
+  const labelPosition = getNodeLabelPosition(node.size);
+  const platePosition: [number, number, number] = [
+    0,
+    labelPosition[1],
+    bodyDimensions[2] * 0.34,
+  ];
 
   useFrame(({ clock }) => {
     const group = groupRef.current;
+    const elapsed = clock.getElapsedTime();
     if (group) {
-      const pulse = selected ? Math.sin(clock.getElapsedTime() * 2.2 + node.position[0]) * 0.035 : 0;
+      const pulse = selected ? Math.sin(elapsed * 2.2 + node.position[0]) * 0.035 : 0;
       group.scale.setScalar(1 + pulse);
     }
     if (haloRef.current) {
-      const haloScale = selected ? 1.04 + Math.sin(clock.getElapsedTime() * 1.8) * 0.08 : 0.82;
+      const haloScale = selected ? 1.04 + Math.sin(elapsed * 1.8) * 0.08 : 0.82;
       haloRef.current.scale.setScalar(haloScale);
+    }
+    if (bodyRef.current) {
+      bodyRef.current.rotation.y = Math.sin(elapsed * 0.8 + node.position[1]) * (selected ? 0.06 : 0.025);
+      bodyRef.current.rotation.x = Math.cos(elapsed * 0.65 + node.position[0]) * 0.018;
+    }
+    if (plateRef.current) {
+      plateRef.current.rotation.y = bodyRef.current?.rotation.y ?? 0;
+      plateRef.current.rotation.x = bodyRef.current?.rotation.x ?? 0;
     }
   });
 
@@ -267,17 +318,54 @@ function SkillNode3D({
         <sphereGeometry args={[node.size * 1.8, 20, 20]} />
         <meshBasicMaterial color={node.color} transparent opacity={selected ? 0.12 : 0.04} />
       </mesh>
-      <mesh>
-        <icosahedronGeometry args={[node.size, 2]} />
+      <RoundedBox
+        position={[0, 0, -bodyDimensions[2] * 0.38]}
+        args={[bodyDimensions[0] * 1.04, bodyDimensions[1] * 1.08, bodyDimensions[2] * 0.5]}
+        radius={node.size * 0.16}
+        smoothness={4}
+        bevelSegments={4}
+      >
+        <meshStandardMaterial
+          color="#071525"
+          emissive={node.color}
+          emissiveIntensity={selected ? 0.24 : 0.07}
+          metalness={0.78}
+          roughness={0.3}
+        />
+        <Edges color={node.color} threshold={15} lineWidth={selected ? 1.4 : 0.75} />
+      </RoundedBox>
+      <RoundedBox ref={bodyRef} args={bodyDimensions} radius={node.size * 0.16} smoothness={4} bevelSegments={4}>
         <meshStandardMaterial
           color={node.color}
           emissive={node.color}
-          emissiveIntensity={selected ? 0.95 : 0.45}
-          metalness={0.35}
-          roughness={0.24}
+          emissiveIntensity={selected ? 1.05 : 0.62}
+          metalness={0.22}
+          roughness={0.2}
         />
+        <Edges color={selected ? '#ecfeff' : node.color} threshold={15} lineWidth={selected ? 2 : 1} />
+      </RoundedBox>
+      <mesh position={[0, 0, bodyDimensions[2] * 0.52]}>
+        <planeGeometry args={[bodyDimensions[0] * 0.72, bodyDimensions[1] * 0.48]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={selected ? 0.1 : 0.035} />
       </mesh>
-      <Html center distanceFactor={8} position={[0, -node.size - 0.18, 0]}>
+      <RoundedBox
+        ref={plateRef}
+        position={platePosition}
+        args={plateDimensions}
+        radius={node.size * 0.12}
+        smoothness={4}
+        bevelSegments={3}
+      >
+        <meshStandardMaterial
+          color="#071525"
+          emissive={node.color}
+          emissiveIntensity={selected ? 0.16 : 0.04}
+          metalness={0.68}
+          roughness={0.34}
+        />
+        <Edges color={node.color} threshold={15} lineWidth={selected ? 1.1 : 0.6} />
+      </RoundedBox>
+      <Html transform sprite={false} center distanceFactor={8} position={labelPosition}>
         <button
           type="button"
           aria-label={`选择技能节点：${node.label}`}
@@ -285,14 +373,14 @@ function SkillNode3D({
             event.stopPropagation();
             onSelect(node.id);
           }}
-          className={`min-w-[5.8rem] rounded-xl border px-2.5 py-1.5 text-center shadow-lg backdrop-blur-md transition ${
+          className={`min-w-[6.2rem] rounded-xl border px-2.5 py-1.5 text-center shadow-lg transition ${
             selected
               ? 'border-cyan-200/80 bg-cyan-300/20 text-cyan-50 shadow-cyan-300/20'
-              : 'border-white/15 bg-slate-950/75 text-slate-300 hover:border-cyan-300/60 hover:text-cyan-100'
+              : 'border-white/25 bg-transparent text-slate-200 hover:border-cyan-300/60 hover:text-cyan-100'
           }`}
         >
           <span className="block whitespace-nowrap text-[10px] font-bold">{node.label}</span>
-          <span className="mt-0.5 block whitespace-nowrap text-[9px] text-slate-500">{node.detail}</span>
+          <span className="mt-0.5 block whitespace-nowrap text-[9px] text-slate-300/80">{node.detail}</span>
         </button>
       </Html>
     </group>

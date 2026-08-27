@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import type { IdentitySession } from '../identity/types';
+import LandingStory from './LandingStory';
 
 const SkillTree3D = lazy(() => import('./SkillTree3D'));
 
@@ -140,25 +141,7 @@ export default function LandingPage({
           </div>
         </section>
 
-        <section id="workflow" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-28" aria-labelledby="workflow-title">
-          <div className="max-w-2xl">
-            <p className="text-[11px] font-bold tracking-[0.18em] text-cyan-300">把学习变成一条可以走的路</p>
-            <h2 id="workflow-title" className="mt-4 text-3xl font-black tracking-[-0.04em] text-white sm:text-5xl">
-              不追着课程跑，沿着能力前进。
-            </h2>
-            <p className="mt-5 text-base leading-8 text-slate-400">
-              从一个模糊目标，到一个个清晰节点，再到可以证明自己会了。整个过程都看得见，也随时可以回头复盘。
-            </p>
-          </div>
-
-          <div className="relative mt-14 grid gap-4 md:grid-cols-4">
-            <div className="pointer-events-none absolute left-[10%] right-[10%] top-9 hidden h-px bg-gradient-to-r from-cyan-300/10 via-cyan-300/60 to-cyan-300/10 md:block" aria-hidden="true" />
-            <WorkflowStep index="01" title="说出你想学会什么" detail="告诉 MapFlow 你想解决的问题，或者想达到的能力深度。" />
-            <WorkflowStep index="02" title="把大问题拆成小节点" detail="把一门技术拆成可以理解、可以练习、可以完成的单元。" />
-            <WorkflowStep index="03" title="沿着前置关系推进" detail="知道先学什么、下一步是什么，不再靠感觉在资料里乱撞。" />
-            <WorkflowStep index="04" title="完成并留下证据" detail="每个节点都有学习目标和完成状态，进步不再只凭感觉。" />
-          </div>
-        </section>
+        <LandingStory />
 
         <section id="features" className="border-y border-white/10 bg-[#0a1728]/75" aria-labelledby="features-title">
           <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-28">
@@ -257,18 +240,6 @@ function ReasonCard({ number, title, detail }: { number: string; title: string; 
         <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.9)]" aria-hidden="true" />
       </div>
       <h3 className="mt-10 text-lg font-bold leading-7 text-white">{title}</h3>
-      <p className="mt-3 text-sm leading-7 text-slate-400">{detail}</p>
-    </article>
-  );
-}
-
-function WorkflowStep({ index, title, detail }: { index: string; title: string; detail: string }) {
-  return (
-    <article className="group relative z-10 rounded-2xl border border-white/10 bg-[#07111f] p-6 transition duration-300 hover:-translate-y-1 hover:border-cyan-300/50 hover:shadow-[0_18px_40px_-24px_rgba(34,211,238,0.8)]">
-      <div className="flex h-7 w-7 items-center justify-center rounded-full border border-cyan-300/50 bg-cyan-300/10 font-mono text-[10px] text-cyan-200 transition group-hover:bg-cyan-300 group-hover:text-slate-950">
-        {index}
-      </div>
-      <h3 className="mt-10 text-xl font-bold text-white">{title}</h3>
       <p className="mt-3 text-sm leading-7 text-slate-400">{detail}</p>
     </article>
   );

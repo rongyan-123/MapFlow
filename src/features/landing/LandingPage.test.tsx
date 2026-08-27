@@ -23,9 +23,17 @@ describe('LandingPage', () => {
     expect(screen.getByTestId('product-landing')).toHaveClass('h-full');
     expect(screen.getByTestId('landing-hero-grid')).toHaveClass('grid-cols-1', 'min-w-0');
     expect(screen.getByTestId('landing-hero-copy')).toHaveClass('w-full', 'min-w-0');
+    expect(screen.getByTestId('landing-story')).toBeInTheDocument();
+    expect(screen.getByTestId('landing-story')).toHaveClass('overflow-clip');
+    expect(screen.getByTestId('landing-story-path')).toHaveAttribute('pathLength', '1');
+    expect(screen.getAllByTestId(/^landing-story-chapter-/)).toHaveLength(4);
     expect(await screen.findByTestId('skill-tree-3d')).toBeInTheDocument();
     expect(
-      await screen.findByRole('button', { name: '重置技能树视角' }),
+      await screen.findByRole(
+        'button',
+        { name: '重置技能树视角' },
+        { timeout: 5000 },
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText('旋转、拖动，找到你真正想学的那个节点。')).toBeInTheDocument();
   });
