@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   fetchKnowledgeChatHistory,
   sendKnowledgeChatMessageStream,
@@ -13,6 +13,7 @@ interface KnowledgeChatPanelProps {
   csrfToken: string;
   onClose: () => void;
   onCreditChanged?: () => void | Promise<void>;
+  isVisible?: boolean;
 }
 
 export default function KnowledgeChatPanel({
@@ -21,6 +22,7 @@ export default function KnowledgeChatPanel({
   csrfToken,
   onClose,
   onCreditChanged,
+  isVisible = true,
 }: KnowledgeChatPanelProps) {
   const [messages, setMessages] = useState<KnowledgeChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -29,6 +31,7 @@ export default function KnowledgeChatPanel({
   const [streamingAnswer, setStreamingAnswer] = useState<string | null>(null);
   const [error, setError] = useState<KnowledgeChatApiError | string | null>(null);
   const [lastCharge, setLastCharge] = useState<number | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -58,12 +61,20 @@ export default function KnowledgeChatPanel({
     };
   }, [libraryEntryId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!isVisible || historyPending) return;
+
+    const messagesContainer = messagesContainerRef.current;
+    if (messagesContainer) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      return;
+    }
+
     const messagesEnd = messagesEndRef.current;
     if (messagesEnd && typeof messagesEnd.scrollIntoView === 'function') {
-      messagesEnd.scrollIntoView({ block: 'nearest' });
+      messagesEnd.scrollIntoView({ block: 'end' });
     }
-  }, [messages, pending, streamingAnswer]);
+  }, [historyPending, isVisible, messages, pending, streamingAnswer]);
 
   async function handleSubmit() {
     const message = draft.trim();
@@ -125,7 +136,7 @@ export default function KnowledgeChatPanel({
       </header>
 
       <div
-        ref={messagesEndRef}
+        ref={messagesContainerRef}
         data-testid="knowledge-chat-messages"
         className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
       >

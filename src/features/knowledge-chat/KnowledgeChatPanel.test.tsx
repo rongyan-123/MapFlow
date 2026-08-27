@@ -33,6 +33,74 @@ describe('KnowledgeChatPanel', () => {
     expect(chatApi.fetchKnowledgeChatHistory).toHaveBeenCalledWith('entry-1');
   });
 
+  it('opens a chat with a long history scrolled to the latest message', async () => {
+    chatApi.fetchKnowledgeChatHistory.mockResolvedValueOnce({
+      messages: [
+        { id: 'history-user', role: 'user', content: '很早之前的问题' },
+        { id: 'history-assistant', role: 'assistant', content: '很早之前的回答' },
+        { id: 'latest-user', role: 'user', content: '最新的问题' },
+        { id: 'latest-assistant', role: 'assistant', content: '最新的回答' },
+      ],
+    });
+
+    renderPanel();
+    const messagesContainer = screen.getByTestId('knowledge-chat-messages');
+    Object.defineProperty(messagesContainer, 'scrollHeight', {
+      configurable: true,
+      value: 1200,
+    });
+
+    expect(await screen.findByText('最新的回答')).toBeInTheDocument();
+    await waitFor(() => expect(messagesContainer.scrollTop).toBe(1200));
+  });
+
+  it('waits for a hidden chat to become visible before scrolling to the latest message', async () => {
+    chatApi.fetchKnowledgeChatHistory.mockResolvedValueOnce({
+      messages: [
+        { id: 'history-user', role: 'user', content: '隐藏时加载的问题' },
+        { id: 'history-assistant', role: 'assistant', content: '隐藏时加载的回答' },
+        { id: 'latest-user', role: 'user', content: '打开后的最新问题' },
+        { id: 'latest-assistant', role: 'assistant', content: '打开后的最新回答' },
+      ],
+    });
+
+    let isVisible = false;
+    const { rerender } = render(
+      <div hidden={!isVisible}>
+        <KnowledgeChatPanel
+          treeTitle="NestJS 学习树"
+          libraryEntryId="entry-1"
+          csrfToken="csrf-secret"
+          onClose={vi.fn()}
+          isVisible={isVisible}
+        />
+      </div>,
+    );
+    const messagesContainer = screen.getByTestId('knowledge-chat-messages');
+    Object.defineProperty(messagesContainer, 'scrollHeight', {
+      configurable: true,
+      get: () => (isVisible ? 1200 : 0),
+    });
+
+    expect(await screen.findByText('打开后的最新回答')).toBeInTheDocument();
+    expect(messagesContainer.scrollTop).toBe(0);
+
+    isVisible = true;
+    rerender(
+      <div hidden={!isVisible}>
+        <KnowledgeChatPanel
+          treeTitle="NestJS 学习树"
+          libraryEntryId="entry-1"
+          csrfToken="csrf-secret"
+          onClose={vi.fn()}
+          isVisible={isVisible}
+        />
+      </div>,
+    );
+
+    await waitFor(() => expect(messagesContainer.scrollTop).toBe(1200));
+  });
+
   it('refreshes the formal credit query after a successful answer', async () => {
     const user = userEvent.setup();
     const onCreditChanged = vi.fn();

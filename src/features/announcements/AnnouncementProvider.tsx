@@ -30,6 +30,19 @@ export function AnnouncementProvider({ children }: { children: ReactNode }) {
       });
     },
   });
+  const markAllRead = useMutation({
+    mutationFn: (announcementIds: string[]) =>
+      Promise.all(
+        announcementIds.map((announcementId) =>
+          markAnnouncementRead(announcementId, session?.csrfToken ?? ''),
+        ),
+      ),
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['announcements', session?.account.playerId ?? null],
+      });
+    },
+  });
 
   // 会话切换（登录 / 换账号 / 退出）时重置「已手动关闭」标记。
   // 不能放在渲染期间直接 setState（React 反模式），必须用 useEffect。
@@ -48,14 +61,20 @@ export function AnnouncementProvider({ children }: { children: ReactNode }) {
   const currentAnnouncement =
     query.data?.items.find((item) => item.announcementId === currentUnreadId) ??
     null;
+  const mutationPending = markRead.isPending || markAllRead.isPending;
 
   const handleDismiss = () => {
-    if (markRead.isPending || currentUnreadId === null) return;
+    if (mutationPending || currentUnreadId === null) return;
     markRead.mutate(currentUnreadId);
   };
 
+  const handleDismissAll = () => {
+    if (mutationPending || unreadIds.length < 2) return;
+    markAllRead.mutate(unreadIds);
+  };
+
   const handleClose = () => {
-    if (markRead.isPending) return;
+    if (mutationPending) return;
     setDismissed(true);
   };
 
@@ -68,8 +87,11 @@ export function AnnouncementProvider({ children }: { children: ReactNode }) {
           title={currentAnnouncement.title}
           content={currentAnnouncement.content}
           remaining={unreadIds.length}
-          pending={markRead.isPending}
+          pending={mutationPending}
+          bulkPending={markAllRead.isPending}
+          error={markAllRead.error instanceof Error ? markAllRead.error.message : null}
           onDismiss={handleDismiss}
+          onDismissAll={handleDismissAll}
           onClose={handleClose}
         />
       )}

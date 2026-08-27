@@ -4,7 +4,10 @@ interface AnnouncementDialogProps {
   content: string;
   remaining: number;
   pending?: boolean;
+  bulkPending?: boolean;
+  error?: string | null;
   onDismiss: () => void;
+  onDismissAll?: () => void;
   onClose: () => void;
 }
 
@@ -14,7 +17,10 @@ export default function AnnouncementDialog({
   content,
   remaining,
   pending = false,
+  bulkPending = false,
+  error = null,
   onDismiss,
+  onDismissAll,
   onClose,
 }: AnnouncementDialogProps) {
   return (
@@ -39,7 +45,23 @@ export default function AnnouncementDialog({
         <p className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-slate-300">
           {content}
         </p>
-        <div className="mt-4 flex justify-end">
+        {error && (
+          <p role="alert" className="mt-3 text-xs leading-5 text-rose-300">
+            {error}
+          </p>
+        )}
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          {remaining > 1 && onDismissAll && (
+            <button
+              type="button"
+              aria-label="关闭全部公告"
+              disabled={pending}
+              onClick={onDismissAll}
+              className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:border-cyan-300/70 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {bulkPending ? '关闭中…' : '关闭全部'}
+            </button>
+          )}
           <button
             type="button"
             disabled={pending}

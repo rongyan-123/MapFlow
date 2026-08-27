@@ -85,7 +85,7 @@ export default function TreeExportMenu({
         onClick={() => void toggleOpen()}
         className={
           variant === 'drawer'
-            ? 'mapflow-tree-action mapflow-tree-action--export flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-semibold leading-tight transition duration-200 disabled:cursor-wait'
+            ? 'mapflow-tree-action mapflow-tree-action--uniform mapflow-tree-action--export flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-semibold leading-tight transition duration-200 disabled:cursor-wait'
             : compact
             ? 'flex h-8 shrink-0 items-center justify-center gap-1 rounded-lg border border-slate-700 bg-slate-950/70 px-2 text-[11px] font-semibold text-slate-400 transition hover:border-cyan-400/60 hover:text-cyan-200 disabled:cursor-wait disabled:opacity-70'
             : 'flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/80 px-2.5 text-xs font-semibold text-slate-300 transition hover:border-cyan-400/60 hover:text-cyan-200 disabled:cursor-wait disabled:opacity-70'

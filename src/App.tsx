@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -19,6 +19,7 @@ import LogoutConfirmDialog from './features/identity/LogoutConfirmDialog';
 import AnnouncementsButton from './features/announcements/AnnouncementsButton';
 import AnnouncementsDialog from './features/announcements/AnnouncementsDialog';
 import FeedbackDialog from './features/feedback/FeedbackDialog';
+import LandingPage from './features/landing/LandingPage';
 import MobileDrawer from './features/navigation/MobileDrawer';
 import ThemeSwitcher from './features/theme/ThemeSwitcher';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
@@ -42,7 +43,83 @@ import type {
 type AppView = 'public' | 'personal' | 'admin';
 type MobileView = 'list' | 'graph' | 'detail' | 'chat';
 
+const CONSOLE_ENTRY_MEMORY_KEY = 'mapflow.entry.has-entered-console';
+const PENDING_CONSOLE_ENTRY_KEY = 'mapflow.entry.pending-console';
+
 export default function App() {
+  const { session, sessionPending, openIdentityDialog } = useIdentity();
+  const [currentPath, setCurrentPath] = useState(() => readCurrentPath());
+  const marketingRequested =
+    currentPath === '/' &&
+    new URLSearchParams(window.location.search).get('marketing') === '1';
+  const generationRouteRequested = readGenerationSessionId() !== null;
+  const hasEnteredConsole = readBooleanPreference(CONSOLE_ENTRY_MEMORY_KEY, false);
+  const pendingConsoleEntry = readBooleanPreference(PENDING_CONSOLE_ENTRY_KEY, false);
+
+  useEffect(() => {
+    const handlePopState = () => setCurrentPath(readCurrentPath());
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigateToConsole = useCallback((replace = false) => {
+    writeBooleanPreference(CONSOLE_ENTRY_MEMORY_KEY, true);
+    writeBooleanPreference(PENDING_CONSOLE_ENTRY_KEY, false);
+    const method = replace ? 'replaceState' : 'pushState';
+    window.history[method]({}, '', '/console');
+    setCurrentPath('/console');
+  }, []);
+
+  useEffect(() => {
+    if (
+      currentPath === '/' &&
+      !marketingRequested &&
+      !generationRouteRequested &&
+      !sessionPending &&
+      session &&
+      (hasEnteredConsole || pendingConsoleEntry)
+    ) {
+      navigateToConsole(true);
+    }
+  }, [
+    currentPath,
+    generationRouteRequested,
+    hasEnteredConsole,
+    marketingRequested,
+    navigateToConsole,
+    pendingConsoleEntry,
+    session,
+    sessionPending,
+  ]);
+
+  const requestLandingLogin = () => {
+    writeBooleanPreference(PENDING_CONSOLE_ENTRY_KEY, true);
+    openIdentityDialog();
+  };
+
+  const rootRoute = currentPath === '/' && !generationRouteRequested;
+  if (rootRoute) {
+    if (!marketingRequested) {
+      if (hasEnteredConsole && sessionPending) {
+        return <EntryLoading />;
+      }
+      if (hasEnteredConsole && session) {
+        return <ConsoleApp />;
+      }
+    }
+    return (
+      <LandingPage
+        session={session}
+        onEnterConsole={() => navigateToConsole()}
+        onLogin={session ? () => navigateToConsole() : requestLandingLogin}
+      />
+    );
+  }
+
+  return <ConsoleApp />;
+}
+
+function ConsoleApp() {
   const queryClient = useQueryClient();
   const {
     identityEnabled,
@@ -470,6 +547,41 @@ export default function App() {
           )}
         </nav>
         <div className="flex shrink-0 items-center gap-2">
+          {(identityEnabled || session) && (
+            <button
+              type="button"
+              data-testid="top-generate-tree"
+              aria-label="开始生成技能树"
+              title={
+                session && (capabilitiesPending || capabilitiesError)
+                  ? '正在检查生成能力，请稍候'
+                  : undefined
+              }
+              onClick={openTreeGenerator}
+              disabled={
+                Boolean(
+                  session &&
+                    (capabilitiesPending ||
+                      capabilitiesError ||
+                      !generationCapabilities?.enabled),
+                )
+              }
+              className="group rounded-xl border border-cyan-200/90 bg-cyan-300 px-3 py-1.5 text-xs font-bold text-slate-950 shadow-[0_0_18px_rgba(103,232,249,0.32)] transition hover:-translate-y-0.5 hover:bg-cyan-200 hover:shadow-[0_0_24px_rgba(103,232,249,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
+            >
+              <span aria-hidden="true" className="mr-1 transition-transform group-hover:rotate-12">
+                ✦
+              </span>
+              <span className="hidden sm:inline">开始生成</span>
+              <span className="sm:hidden">生成</span>
+            </button>
+          )}
+          <a
+            href="/?marketing=1"
+            aria-label="查看产品首页"
+            className="hidden rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-cyan-600 hover:text-cyan-100 xl:inline-flex"
+          >
+            产品首页
+          </a>
           <ThemeSwitcher />
           <div className="hidden lg:block">
             <AnnouncementsButton />
@@ -756,6 +868,7 @@ export default function App() {
               libraryEntryId={selectedLibraryEntryId}
               csrfToken={session.csrfToken}
               onClose={closeKnowledgeChat}
+              isVisible={chatOpen}
               onCreditChanged={() => {
                 void creditQuery.refetch();
               }}
@@ -848,6 +961,12 @@ export default function App() {
         )}
 
         <nav className="flex flex-col gap-1">
+          <a
+            href="/?marketing=1"
+            className="rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-cyan-100"
+          >
+            产品首页
+          </a>
           <DrawerItem
             active={view === 'public'}
             onClick={() => {
@@ -930,6 +1049,11 @@ function readGenerationSessionId(): string | null {
   );
   if (!sessionId || sessionId.length > 128) return null;
   return sessionId;
+}
+
+function readCurrentPath(): string {
+  const path = window.location.pathname.replace(/\/+$/, '');
+  return path || '/';
 }
 
 function writeGenerationSessionId(sessionId: string | null) {
@@ -1140,7 +1264,7 @@ function TreeChoice({
             aria-label={`技能树操作：${title}`}
             className="mapflow-tree-choice__actions mapflow-tree-choice__actions--inline"
           >
-            <div className="mapflow-tree-choice__drawer">
+            <div className="mapflow-tree-choice__drawer mapflow-tree-choice__drawer--uniform">
               {actions}
             </div>
           </div>
@@ -1166,7 +1290,7 @@ function TreeChoice({
               if (!isInsideCardOrActions(event.relatedTarget)) scheduleHide();
             }}
           >
-            <div className="mapflow-tree-choice__drawer">
+            <div className="mapflow-tree-choice__drawer mapflow-tree-choice__drawer--uniform">
               {actions}
             </div>
           </div>,
@@ -1193,7 +1317,7 @@ function ReservedTreeAction({
       disabled
       title="即将支持"
       aria-label={`${label}技能树：${title}`}
-      className={`mapflow-tree-action mapflow-tree-action--${tone} flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-semibold leading-tight transition duration-200 disabled:cursor-not-allowed`}
+      className={`mapflow-tree-action mapflow-tree-action--uniform mapflow-tree-action--${tone} flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-semibold leading-tight transition duration-200 disabled:cursor-not-allowed`}
     >
       <span aria-hidden="true" className="text-base leading-none">
         {icon}
@@ -1254,6 +1378,19 @@ function FullPageStatus({
         )}
       </div>
     </main>
+  );
+}
+
+function EntryLoading() {
+  return (
+    <div className="flex h-screen items-center justify-center bg-slate-950 px-6 text-slate-300">
+      <p
+        role="status"
+        className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm"
+      >
+        正在恢复你的控制台…
+      </p>
+    </div>
   );
 }
 

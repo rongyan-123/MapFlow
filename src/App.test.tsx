@@ -253,7 +253,8 @@ beforeEach(() => {
     platformModeAvailable: true,
   });
   legacyApi.fetchLearningTree.mockResolvedValue(legacySnapshot);
-  window.history.replaceState({}, '', '/');
+  window.localStorage.clear();
+  window.history.replaceState({}, '', '/console');
 });
 
 afterEach(() => {
@@ -261,6 +262,69 @@ afterEach(() => {
 });
 
 describe('MapFlow tree library', () => {
+  it('首次访问根路径展示产品首页，并可直接进入控制台', async () => {
+    const user = userEvent.setup();
+    renderApp('/');
+
+    expect(
+      await screen.findByRole('heading', {
+        name: '把复杂知识，变成一条可执行的成长路径。',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
+
+    await user.click(screen.getAllByRole('button', { name: '进入控制台' })[0]);
+
+    expect(window.location.pathname).toBe('/console');
+    expect(await screen.findByText('公共树池')).toBeInTheDocument();
+  });
+
+  it('进入过控制台后再次访问根路径会自动回到控制台', async () => {
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    window.localStorage.setItem('mapflow.entry.has-entered-console', 'true');
+    renderApp('/');
+
+    expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/console');
+    expect(
+      screen.queryByRole('heading', {
+        name: '把复杂知识，变成一条可执行的成长路径。',
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('控制台可以通过显式入口参数再次查看产品首页', async () => {
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    window.localStorage.setItem('mapflow.entry.has-entered-console', 'true');
+    renderApp('/?marketing=1');
+
+    expect(
+      await screen.findByRole('heading', {
+        name: '把复杂知识，变成一条可执行的成长路径。',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
+  });
+
+  it('从产品首页登录后直接进入控制台，不要求再次点击入口', async () => {
+    const user = userEvent.setup();
+    identityApi.loginIdentity.mockResolvedValue(authenticated);
+    renderApp('/');
+
+    await screen.findByRole('heading', {
+      name: '把复杂知识，变成一条可执行的成长路径。',
+    });
+    await user.click(screen.getByRole('button', { name: '登录' }));
+    const dialog = screen.getByRole('dialog', { name: '登录学习账号' });
+    await user.type(within(dialog).getByLabelText('用户名'), 'firstuser');
+    await user.type(within(dialog).getByLabelText('密码'), 'safe-password-2026');
+    const loginButtons = within(dialog).getAllByRole('button', { name: '登录' });
+    await user.click(loginButtons[loginButtons.length - 1]);
+
+    expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/console');
+  });
+
   it('lets a visitor inspect two complete public trees and opens identity for joining', async () => {
     const user = userEvent.setup();
     renderApp();
@@ -438,6 +502,32 @@ describe('MapFlow tree library', () => {
     );
     expect(screen.queryByRole('dialog', { name: 'mock tree generator' })).not.toBeInTheDocument();
     expect(new URLSearchParams(window.location.search).has('generationSession')).toBe(false);
+  });
+
+  it('shows a prominent generation entry in the top bar for visitors', async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    const button = await screen.findByRole('button', { name: '开始生成技能树' });
+    expect(button).toBeInTheDocument();
+
+    await user.click(button);
+
+    expect(screen.getByRole('dialog', { name: '登录学习账号' })).toBeInTheDocument();
+  });
+
+  it('lets an authenticated user start generation directly from the top bar', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp();
+
+    const button = await screen.findByRole('button', { name: '开始生成技能树' });
+    expect(button).toBeEnabled();
+    await user.click(button);
+
+    expect(screen.getByRole('dialog', { name: 'mock tree generator' })).toBeInTheDocument();
   });
 
   it('keeps the generation button visible and disabled while capabilities are still loading', async () => {
@@ -839,6 +929,16 @@ describe('手机端视图栈', () => {
     expect(screen.getAllByTestId('tree-choice-actions')).toHaveLength(2);
     expect(exportTriggers[1].closest('[data-testid="mobile-list"]')).toBeNull();
 
+    const firstActionGroup = screen.getAllByTestId('tree-choice-actions')[0];
+    expect(
+      firstActionGroup.querySelector('.mapflow-tree-choice__drawer'),
+    ).toHaveClass('mapflow-tree-choice__drawer--uniform');
+    const firstActionButtons = within(firstActionGroup).getAllByRole('button');
+    expect(firstActionButtons).toHaveLength(3);
+    firstActionButtons.forEach((button) => {
+      expect(button).toHaveClass('mapflow-tree-action--uniform');
+    });
+
     const renameTriggers = screen.getAllByRole('button', {
       name: /重命名技能树：/,
     });
@@ -1102,7 +1202,8 @@ describe('手机端抽屉', () => {
   });
 });
 
-function renderApp() {
+function renderApp(path?: string) {
+  if (path) window.history.replaceState({}, '', path);
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });

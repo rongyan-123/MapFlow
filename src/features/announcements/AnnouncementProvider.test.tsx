@@ -125,6 +125,33 @@ describe('AnnouncementProvider', () => {
     );
   });
 
+  it('未读公告达到两条时可以一次关闭全部', async () => {
+    const user = userEvent.setup();
+    identityMock.session = firstAccount;
+    renderProvider();
+
+    expect(await screen.findByText('第一条公告')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '关闭全部公告' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '关闭全部公告' }));
+
+    await waitFor(() => {
+      const posts = vi
+        .mocked(fetch)
+        .mock.calls.filter(([, init]) => init?.method === 'POST');
+      expect(posts).toHaveLength(2);
+      expect(posts.map(([url]) => url)).toEqual(
+        expect.arrayContaining([
+          '/api/announcements/ann-1/read',
+          '/api/announcements/ann-2/read',
+        ]),
+      );
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+  });
+
   it('手动关闭（点遮罩）后同会话不再自动弹出', async () => {
     identityMock.session = firstAccount;
     const { rerender } = renderProvider();
