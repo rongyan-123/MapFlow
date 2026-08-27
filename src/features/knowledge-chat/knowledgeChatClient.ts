@@ -8,7 +8,6 @@ import { KnowledgeChatApiError } from './types';
 
 export { KnowledgeChatApiError } from './types';
 
-const MAX_MESSAGE_CHARACTERS = 4_000;
 const MAX_CLIENT_TURN_ID_CHARACTERS = 128;
 
 export async function fetchKnowledgeChatHistory(
@@ -238,13 +237,17 @@ function parseSseError(value: string): KnowledgeChatApiError {
   const body = parseSseJson(value);
   if (isRecord(body) && typeof body.code === 'string' && typeof body.message === 'string') {
     return new KnowledgeChatApiError(
-      502,
+      isHttpStatus(body.httpStatus) ? body.httpStatus : 502,
       body.code,
       body.message,
       typeof body.traceId === 'string' ? body.traceId : undefined,
     );
   }
   return invalidResponseError();
+}
+
+function isHttpStatus(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 400 && value <= 599;
 }
 
 function parseChatResponse(value: unknown): KnowledgeChatResponse {
@@ -318,11 +321,18 @@ function validatePathSegment(value: string): void {
 }
 
 function validateMessage(value: string): void {
-  if (!value.trim() || value.length > MAX_MESSAGE_CHARACTERS || hasControlCharacter(value)) {
+  if (!value.trim()) {
     throw new KnowledgeChatApiError(
       400,
-      'knowledge_chat_invalid_message',
-      '请输入 1 到 4000 个字符的问题。',
+      'knowledge_chat.message_empty',
+      '请输入消息内容。',
+    );
+  }
+  if (hasDisallowedControlCharacter(value)) {
+    throw new KnowledgeChatApiError(
+      400,
+      'knowledge_chat.message_invalid_characters',
+      '消息包含无法处理的控制字符，请删除后重试。',
     );
   }
 }
@@ -335,6 +345,10 @@ function validateClientTurnId(value: string): void {
       '聊天请求标识无效，请重试。',
     );
   }
+}
+
+function hasDisallowedControlCharacter(value: string): boolean {
+  return /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value);
 }
 
 function hasControlCharacter(value: string): boolean {

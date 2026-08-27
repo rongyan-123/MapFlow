@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import KnowledgeChatPanel from './KnowledgeChatPanel';
+import { KnowledgeChatApiError } from './types';
 
 const chatApi = vi.hoisted(() => ({
   fetchKnowledgeChatHistory: vi.fn(),
@@ -191,6 +192,28 @@ describe('KnowledgeChatPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('知识聊天服务暂时不可用。');
 
     expect(screen.queryByRole('button', { name: '重置对话' })).not.toBeInTheDocument();
+  });
+
+  it('shows the actionable error code and trace id for a server failure', async () => {
+    const user = userEvent.setup();
+    chatApi.sendKnowledgeChatMessageStream.mockRejectedValueOnce(
+      new KnowledgeChatApiError(
+        400,
+        'knowledge_chat.message_invalid_characters',
+        '消息包含无法处理的控制字符，请删除后重试。',
+        'trace-chat-2',
+      ),
+    );
+    renderPanel();
+    await waitForHistoryReady();
+
+    await user.type(screen.getByRole('textbox', { name: '输入问题' }), '错误详情测试');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('消息包含无法处理的控制字符，请删除后重试。');
+    expect(alert).toHaveTextContent('错误代码：knowledge_chat.message_invalid_characters');
+    expect(alert).toHaveTextContent('诊断编号：trace-chat-2');
   });
 
   it('exposes a mobile-safe message area and a close action', async () => {

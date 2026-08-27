@@ -3,10 +3,9 @@ import {
   fetchKnowledgeChatHistory,
   sendKnowledgeChatMessageStream,
 } from './knowledgeChatClient';
+import { KnowledgeChatApiError } from './types';
 import type { KnowledgeChatMessage } from './types';
 import AssistantMarkdown from './AssistantMarkdown';
-
-const MAX_MESSAGE_CHARACTERS = 4_000;
 
 interface KnowledgeChatPanelProps {
   treeTitle: string;
@@ -28,7 +27,7 @@ export default function KnowledgeChatPanel({
   const [historyPending, setHistoryPending] = useState(true);
   const [pending, setPending] = useState(false);
   const [streamingAnswer, setStreamingAnswer] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<KnowledgeChatApiError | string | null>(null);
   const [lastCharge, setLastCharge] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -47,7 +46,7 @@ export default function KnowledgeChatPanel({
       .catch((caught: unknown) => {
         if (active) {
           setError(
-            caught instanceof Error ? caught.message : '聊天历史暂时无法读取，请稍后重试。',
+            toChatError(caught, '聊天历史暂时无法读取，请稍后重试。'),
           );
         }
       })
@@ -99,7 +98,7 @@ export default function KnowledgeChatPanel({
       await onCreditChanged?.();
     } catch (caught: unknown) {
       setStreamingAnswer(null);
-      setError(caught instanceof Error ? caught.message : '知识聊天暂时不可用，请稍后重试。');
+      setError(toChatError(caught, '知识聊天暂时不可用，请稍后重试。'));
     } finally {
       setPending(false);
     }
@@ -181,11 +180,7 @@ export default function KnowledgeChatPanel({
         <div ref={messagesEndRef} aria-hidden="true" />
       </div>
 
-      {error && (
-        <div role="alert" className="mx-4 mb-2 rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-xs leading-5 text-rose-200">
-          {error}
-        </div>
-      )}
+      {error && <ChatErrorNotice error={error} />}
 
       {lastCharge !== null && (
         <p className="mx-4 mb-2 text-xs text-emerald-300">
@@ -208,7 +203,6 @@ export default function KnowledgeChatPanel({
           id="knowledge-chat-input"
           aria-label="输入问题"
           value={draft}
-          maxLength={MAX_MESSAGE_CHARACTERS}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -223,7 +217,7 @@ export default function KnowledgeChatPanel({
         />
         <div className="mt-2 flex items-center justify-between gap-3">
           <span className="text-[11px] text-slate-600">
-            {draft.length}/{MAX_MESSAGE_CHARACTERS} · Shift+Enter 换行
+            支持长文本 · Shift+Enter 换行
           </span>
           <button
             type="submit"
@@ -237,6 +231,26 @@ export default function KnowledgeChatPanel({
       </form>
     </section>
   );
+}
+
+function ChatErrorNotice({ error }: { error: KnowledgeChatApiError | string }) {
+  return (
+    <div role="alert" className="mx-4 mb-2 rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-xs leading-5 text-rose-200">
+      <p>{error instanceof Error ? error.message : error}</p>
+      {error instanceof KnowledgeChatApiError && (
+        <p className="mt-1 text-[10px] text-rose-200/70">
+          错误代码：{error.code}
+          {error.traceId ? ` · 诊断编号：${error.traceId}` : ''}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function toChatError(caught: unknown, fallback: string): KnowledgeChatApiError | string {
+  if (caught instanceof KnowledgeChatApiError) return caught;
+  if (caught instanceof Error) return caught.message;
+  return fallback;
 }
 
 function createMessageId(): string {

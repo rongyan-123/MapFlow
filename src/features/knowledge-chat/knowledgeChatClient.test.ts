@@ -15,6 +15,34 @@ afterEach(() => {
 });
 
 describe('knowledgeChatClient', () => {
+  it('sends a long multiline user message without a client character cap', async () => {
+    const message = `开头说明\n${'这是用户的长篇学习背景。\n'.repeat(1_001)}结尾问题`;
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        answer: '已收到长篇背景。',
+        usage: {
+          inputTokens: 10,
+          outputTokens: 4,
+          cacheHitInputTokens: 0,
+          cacheMissInputTokens: 10,
+        },
+        chargedCredits: 0.01,
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      sendKnowledgeChatMessage('entry/id', message, 'turn-long-message', 'csrf-secret'),
+    ).resolves.toMatchObject({ answer: '已收到长篇背景。' });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/me/tree-library/entry%2Fid/knowledge-chat/messages',
+      expect.objectContaining({
+        body: JSON.stringify({ message, clientTurnId: 'turn-long-message' }),
+      }),
+    );
+  });
+
   it('loads the complete persisted history for one personal tree', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -109,6 +137,35 @@ describe('knowledgeChatClient', () => {
         }),
       },
     );
+  });
+
+  it('preserves the status and diagnostic fields from a streamed error event', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        'event: error\ndata: ' + JSON.stringify({
+          httpStatus: 429,
+          code: 'knowledge_chat.rate_limited',
+          message: '知识聊天请求过于频繁，请稍后再试。',
+          traceId: 'trace-rate-limit',
+        }) + '\n\n',
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      sendKnowledgeChatMessageStream(
+        'entry/id',
+        '触发限流',
+        'turn-rate-limit',
+        'csrf-secret',
+        () => undefined,
+      ),
+    ).rejects.toMatchObject({
+      status: 429,
+      code: 'knowledge_chat.rate_limited',
+      traceId: 'trace-rate-limit',
+    });
   });
 
   it('sends a personal-library scoped message and parses formal credit usage', async () => {
