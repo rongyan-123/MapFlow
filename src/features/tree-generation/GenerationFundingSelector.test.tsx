@@ -40,7 +40,7 @@ describe('GenerationFundingSelector', () => {
     expect(screen.getByRole('button', { name: '选择平台免费体验' })).toBeDisabled();
   });
 
-  it('shows credit pricing when free entitlement is exhausted and disables below price', () => {
+  it('shows a separate credit mode when free entitlement is exhausted and disables below price', () => {
     render(
       <GenerationFundingSelector
         value="byok"
@@ -50,21 +50,22 @@ describe('GenerationFundingSelector', () => {
       />,
     );
 
-    expect(screen.getByText('积分生成 · 需 6 积分')).toBeInTheDocument();
+    expect(screen.getByText('积分生成 · 起价 6 积分')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '选择平台免费体验' })).toBeDisabled();
   });
 
-  it('enables platform mode with enough credits even without free entitlement', () => {
+  it('enables credit mode with enough credits without changing free mode', () => {
     render(
       <GenerationFundingSelector
-        value="platform"
+        value="credits"
         platformEntitlements={{ ...entitlements(0), platformModeAvailable: false }}
         credit={{ balance: 6, signedInToday: false, freeRemaining: 0, pricePerTree: 6 }}
         onChange={vi.fn()}
       />,
     );
 
-    expect(screen.getByRole('button', { name: '选择平台免费体验' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '选择平台免费体验' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '选择使用积分生成' })).toBeEnabled();
   });
 });
 

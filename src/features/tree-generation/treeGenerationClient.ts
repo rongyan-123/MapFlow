@@ -8,6 +8,7 @@ import type {
   GenerationSession,
   GenerationSessionState,
   GenerationUsage,
+  CreditGenerationSelection,
   ModelAccess,
   PlatformGenerationEntitlementSummary,
   PlatformGenerationLimits,
@@ -68,6 +69,36 @@ export async function createPlatformTreeGeneration(
   const response = await request(
     '/api/me/tree-generations',
     modelRequest(csrfToken, { ...input, fundingMode: 'platform' }),
+  );
+  return parseGenerationSession(await readJson(response));
+}
+
+export async function createCreditsTreeGeneration(
+  input: GenerationInput,
+  selection: CreditGenerationSelection,
+  csrfToken: string,
+): Promise<GenerationSession> {
+  const response = await request(
+    '/api/me/tree-generations',
+    modelRequest(csrfToken, {
+      ...input,
+      fundingMode: 'credits',
+      creditSelection: selection,
+    }),
+  );
+  return parseGenerationSession(await readJson(response));
+}
+
+export async function reviseCreditsTreeGeneration(
+  generationSessionId: string,
+  action: 'replan' | 'adjust' | 'clarify',
+  body: object,
+  csrfToken: string,
+): Promise<GenerationSession> {
+  const session = encodeURIComponent(generationSessionId);
+  const response = await request(
+    `/api/me/tree-generations/${session}/${action}`,
+    modelRequest(csrfToken, body),
   );
   return parseGenerationSession(await readJson(response));
 }
@@ -204,6 +235,27 @@ export async function confirmTreeGeneration(
 }
 
 export async function confirmPlatformTreeGeneration(
+  generationSessionId: string,
+  expectedPlanVersion: number,
+  idempotencyKey: string,
+  csrfToken: string,
+): Promise<GenerationRun> {
+  const path = `/api/me/tree-generations/${encodeURIComponent(generationSessionId)}/confirm`;
+  const response = await request(path, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({ expectedPlanVersion }),
+  });
+  return parseGenerationRun(await readJson(response));
+}
+
+export async function confirmCreditsTreeGeneration(
   generationSessionId: string,
   expectedPlanVersion: number,
   idempotencyKey: string,
@@ -392,6 +444,7 @@ function parseGenerationSession(value: unknown): GenerationSession {
   }
   const latestPlan =
     value.latest_plan === null ? null : parseGenerationPlan(value.latest_plan);
+  const creditQuestionLimit = parseCreditQuestionLimit(value.credit_question_limit);
   const platformLimits =
     value.platform_limits === null
       ? null
@@ -399,6 +452,9 @@ function parseGenerationSession(value: unknown): GenerationSession {
   if (
     (value.funding_mode === 'byok' && platformLimits !== null) ||
     (value.funding_mode === 'platform' && platformLimits === null) ||
+    (value.funding_mode === 'credits' &&
+      (platformLimits !== null || creditQuestionLimit === null)) ||
+    (value.funding_mode !== 'credits' && creditQuestionLimit !== null) ||
     (value.state === 'planning' &&
       (value.funding_mode !== 'platform' || latestPlan !== null)) ||
     (!['planning', 'failed'].includes(value.state) && latestPlan === null)
@@ -415,6 +471,7 @@ function parseGenerationSession(value: unknown): GenerationSession {
     producedTreeId: value.produced_tree_id,
     producedLibraryEntryId: value.produced_library_entry_id,
     platformLimits,
+    creditQuestionLimit,
   };
 }
 
@@ -443,6 +500,12 @@ function parsePlatformGenerationEntitlements(
     activePlatformSessionId: value.activePlatformSessionId,
     platformModeAvailable: value.platformModeAvailable,
   };
+}
+
+function parseCreditQuestionLimit(value: unknown): number | null {
+  if (value === undefined || value === null) return null;
+  if (!isBoundedInteger(value, 3) || value < 1) throw invalidResponseError();
+  return value;
 }
 
 function parsePlatformGenerationLimits(value: unknown): PlatformGenerationLimits {
@@ -490,9 +553,18 @@ function parseGenerationPlan(value: unknown): GenerationPlan {
   ) {
     throw invalidResponseError();
   }
+  const model = value.model === undefined ? 'deepseek-v4-flash' : value.model;
+  const thinking = value.thinking === undefined ? 'disabled' : value.thinking;
+  const reasoningEffort = value.reasoning_effort === undefined ? 'low' : value.reasoning_effort;
+  if (!isDeepSeekModel(model) || !isThinkingMode(thinking) || !isReasoningEffort(reasoningEffort)) {
+    throw invalidResponseError();
+  }
   return {
     version: value.version,
     changeKind: value.change_kind,
+    model,
+    thinking,
+    reasoningEffort,
     outcome: parsePlanningOutcome(value.outcome),
     usage: parseUsage(value.usage),
   };
@@ -646,7 +718,19 @@ function isGenerationSessionState(value: unknown): value is GenerationSessionSta
 }
 
 function isGenerationFundingMode(value: unknown): value is GenerationFundingMode {
-  return value === 'byok' || value === 'platform';
+  return value === 'byok' || value === 'platform' || value === 'credits';
+}
+
+function isDeepSeekModel(value: unknown): value is 'deepseek-v4-flash' | 'deepseek-v4-pro' {
+  return value === 'deepseek-v4-flash' || value === 'deepseek-v4-pro';
+}
+
+function isThinkingMode(value: unknown): value is 'enabled' | 'disabled' {
+  return value === 'enabled' || value === 'disabled';
+}
+
+function isReasoningEffort(value: unknown): value is 'low' | 'high' | 'max' {
+  return value === 'low' || value === 'high' || value === 'max';
 }
 
 function isGenerationRunStatus(value: unknown): value is GenerationRunStatus {

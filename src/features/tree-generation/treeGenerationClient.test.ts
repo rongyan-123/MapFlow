@@ -8,7 +8,9 @@ import {
   clarifyPlatformTreeGeneration,
   confirmTreeGeneration,
   confirmPlatformTreeGeneration,
+  confirmCreditsTreeGeneration,
   createPlatformTreeGeneration,
+  createCreditsTreeGeneration,
   createTreeGeneration,
   readPlatformGenerationEntitlements,
   readGenerationRun,
@@ -16,6 +18,7 @@ import {
   releaseFailedPlatformTreeGeneration,
   replanTreeGeneration,
   replanPlatformTreeGeneration,
+  reviseCreditsTreeGeneration,
 } from './treeGenerationClient';
 import type { GenerationInput, ModelAccess } from './types';
 
@@ -292,6 +295,53 @@ describe('treeGenerationClient', () => {
         expect(serialized).not.toContain(forbidden);
       }
     }
+  });
+
+  it('sends paid-credit model controls and never sends a client price', async () => {
+    const selection = {
+      model: 'deepseek-v4-pro' as const,
+      thinking: 'enabled' as const,
+      reasoningEffort: 'max' as const,
+      clarificationQuestionLimit: 3 as const,
+    };
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ...planReadySession(),
+          funding_mode: 'credits',
+          credit_question_limit: 3,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ...planReadySession(2, 'replan'),
+          funding_mode: 'credits',
+          credit_question_limit: 3,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(runDocument('queued'), 202));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createCreditsTreeGeneration(input, selection, 'csrf-token');
+    await reviseCreditsTreeGeneration(
+      'session/id',
+      'replan',
+      { expectedPlanVersion: 1, feedback: '扩大实战部分' },
+      'csrf-token',
+    );
+    await confirmCreditsTreeGeneration(
+      'session/id',
+      2,
+      'credits-confirmation-0001',
+      'csrf-token',
+    );
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({
+      ...input,
+      fundingMode: 'credits',
+      creditSelection: selection,
+    });
+    expect(String(fetchMock.mock.calls[0][1]?.body)).not.toContain('price');
   });
 
   it('reads strict entitlement summaries and sends explicit empty lifecycle commands', async () => {

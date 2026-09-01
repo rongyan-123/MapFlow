@@ -3,6 +3,7 @@ import {
   fetchKnowledgeChatHistory,
   KnowledgeChatApiError,
   resetKnowledgeChat,
+  resolveKnowledgeChatApproval,
   sendKnowledgeChatMessage,
   sendKnowledgeChatMessageStream,
 } from './knowledgeChatClient';
@@ -166,6 +167,61 @@ describe('knowledgeChatClient', () => {
       code: 'knowledge_chat.rate_limited',
       traceId: 'trace-rate-limit',
     });
+  });
+
+  it('pauses on a safe approval summary and posts the explicit decision', async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(
+          'event: approval_required\ndata: ' + JSON.stringify({
+            approvalRequestId: 'approval-1',
+            toolName: 'personal_tree_mutation',
+            action: '修改节点',
+            target: '当前个人树',
+            destructive: false,
+          }) + '\n\n',
+        ));
+        controller.enqueue(new TextEncoder().encode(
+          'event: complete\ndata: ' + JSON.stringify({
+            answer: '已完成。',
+            usage: { inputTokens: 2, outputTokens: 2, cacheHitInputTokens: 0, cacheMissInputTokens: 2 },
+            chargedCredits: 0.01,
+          }) + '\n\n',
+        ));
+        controller.close();
+      },
+    });
+    fetchMock
+      .mockResolvedValueOnce(new Response(stream, { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const approvals: string[] = [];
+    await expect(sendKnowledgeChatMessageStream(
+      'entry/id',
+      '修改节点',
+      'turn-approval',
+      'csrf-secret',
+      () => undefined,
+      async (approval) => {
+        approvals.push(approval.action);
+        await resolveKnowledgeChatApproval(
+          'entry/id',
+          approval.approvalRequestId,
+          'allowed-once',
+          false,
+          'csrf-secret',
+        );
+      },
+    )).resolves.toMatchObject({ answer: '已完成。' });
+
+    expect(approvals).toEqual(['修改节点']);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/me/tree-library/entry%2Fid/knowledge-chat/approvals/approval-1',
+      expect.objectContaining({
+        body: JSON.stringify({ outcome: 'allowed-once', confirmDestructive: false }),
+      }),
+    );
   });
 
   it('sends a personal-library scoped message and parses formal credit usage', async () => {

@@ -18,6 +18,8 @@ const adminApi = vi.hoisted(() => ({
   fetchAdminInvitations: vi.fn(),
   fetchAdminAuditEvents: vi.fn(),
   fetchAdminAuditEventsPage: vi.fn(),
+  fetchAdminRequestObservations: vi.fn(),
+  fetchAdminRequestObservation: vi.fn(),
   suspendAdminAccount: vi.fn(),
   revokeAdminInvitation: vi.fn(),
   fetchAdminFeedback: vi.fn(),
@@ -169,6 +171,10 @@ beforeEach(() => {
       2,
     ),
   );
+  adminApi.fetchAdminRequestObservations.mockResolvedValue({ items: [], total: 0 });
+  adminApi.fetchAdminRequestObservation.mockRejectedValue(
+    new Error('detail should only load after selecting a request'),
+  );
   adminApi.fetchAdminFeedback.mockResolvedValue({ items: [], total: 0 });
   adminApi.fetchAdminAnnouncements.mockResolvedValue([]);
 });
@@ -189,7 +195,7 @@ function renderAdminPanel() {
 }
 
 describe('AdminPanel', () => {
-  it('renders the six tabs, opens the overview by default, and goes back', async () => {
+  it('renders the seven tabs, opens the overview by default, and goes back', async () => {
     const user = userEvent.setup();
     const { props } = renderAdminPanel();
 
@@ -200,6 +206,7 @@ describe('AdminPanel', () => {
     expect(screen.getByRole('tab', { name: '用户' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '邀请码' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '审计日志' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '请求观测' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '反馈' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '公告' })).toBeInTheDocument();
     expect(screen.getByRole('tablist')).toHaveClass('overflow-x-auto');
@@ -211,11 +218,27 @@ describe('AdminPanel', () => {
     expect(adminApi.fetchAdminAccounts).not.toHaveBeenCalled();
     expect(adminApi.fetchAdminInvitations).not.toHaveBeenCalled();
     expect(adminApi.fetchAdminAuditEventsPage).not.toHaveBeenCalled();
+    expect(adminApi.fetchAdminRequestObservations).not.toHaveBeenCalled();
     expect(adminApi.fetchAdminFeedback).not.toHaveBeenCalled();
     expect(adminApi.fetchAdminAnnouncements).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: '返回' }));
     expect(props.onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the request observatory from the admin navigation', async () => {
+    const user = userEvent.setup();
+    renderAdminPanel();
+
+    await user.click(screen.getByRole('tab', { name: '请求观测' }));
+
+    expect(await screen.findByText('请求生命周期地图')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(adminApi.fetchAdminRequestObservations).toHaveBeenCalledWith(
+        'csrf-secret',
+        { limit: 50, offset: 0 },
+      ),
+    );
   });
 
   it('overview renders the metric cards and the tallest bar of the 7-day trend', async () => {

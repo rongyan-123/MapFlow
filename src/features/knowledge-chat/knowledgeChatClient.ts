@@ -1,5 +1,6 @@
 import type {
   KnowledgeChatHistoryResponse,
+  KnowledgeChatApprovalEvent,
   KnowledgeChatMessage,
   KnowledgeChatResponse,
   KnowledgeChatUsage,
@@ -58,6 +59,7 @@ export async function sendKnowledgeChatMessageStream(
   clientTurnId: string,
   csrfToken: string,
   onDelta: (delta: string) => void,
+  onApprovalRequired?: (approval: KnowledgeChatApprovalEvent) => Promise<void>,
 ): Promise<KnowledgeChatResponse> {
   validatePathSegment(libraryEntryId);
   validateMessage(message);
@@ -104,6 +106,10 @@ export async function sendKnowledgeChatMessageStream(
             throw invalidResponseError();
           }
           onDelta(data.delta);
+        } else if (parsed.event === 'approval_required') {
+          const approval = parseApprovalEvent(parseSseJson(parsed.data));
+          if (!onApprovalRequired) throw invalidResponseError();
+          await onApprovalRequired(approval);
         } else if (parsed.event === 'complete') {
           finalResponse = parseChatResponse(parseSseJson(parsed.data));
         } else if (parsed.event === 'error') {
@@ -128,6 +134,30 @@ export async function sendKnowledgeChatMessageStream(
 
   if (!finalResponse) throw invalidResponseError();
   return finalResponse;
+}
+
+export async function resolveKnowledgeChatApproval(
+  libraryEntryId: string,
+  approvalRequestId: string,
+  outcome: 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable',
+  confirmDestructive: boolean,
+  csrfToken: string,
+): Promise<void> {
+  validatePathSegment(libraryEntryId);
+  validatePathSegment(approvalRequestId);
+  await request(
+    `/api/me/tree-library/${encodeURIComponent(libraryEntryId)}/knowledge-chat/approvals/${encodeURIComponent(approvalRequestId)}`,
+    {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken,
+      },
+      body: JSON.stringify({ outcome, confirmDestructive }),
+    },
+  );
 }
 
 export async function resetKnowledgeChat(
@@ -244,6 +274,26 @@ function parseSseError(value: string): KnowledgeChatApiError {
     );
   }
   return invalidResponseError();
+}
+
+function parseApprovalEvent(value: unknown): KnowledgeChatApprovalEvent {
+  if (
+    !isRecord(value) ||
+    typeof value.approvalRequestId !== 'string' ||
+    value.toolName !== 'personal_tree_mutation' ||
+    typeof value.action !== 'string' ||
+    typeof value.target !== 'string' ||
+    typeof value.destructive !== 'boolean'
+  ) {
+    throw invalidResponseError();
+  }
+  return {
+    approvalRequestId: value.approvalRequestId,
+    toolName: 'personal_tree_mutation',
+    action: value.action,
+    target: value.target,
+    destructive: value.destructive,
+  };
 }
 
 function isHttpStatus(value: unknown): value is number {

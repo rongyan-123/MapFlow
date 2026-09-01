@@ -9,6 +9,8 @@ import {
   fetchAdminDashboard,
   fetchAdminFeedback,
   fetchAdminInvitations,
+  fetchAdminRequestObservation,
+  fetchAdminRequestObservations,
   revokeAdminInvitation,
   suspendAdminAccount,
 } from './adminClient';
@@ -349,6 +351,252 @@ describe('adminClient', () => {
     );
   });
 
+  it('reads request observation summaries and sends snake_case filters', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        items: [
+          {
+            requestId: '81000000-0000-4000-8000-000000000301',
+            startedAt: '2026-08-31T11:59:59Z',
+            completedAt: '2026-08-31T12:00:00Z',
+            durationMs: 18,
+            method: 'POST',
+            route: '/api/invitations/claim',
+            routeFamily: 'invitation',
+            httpStatus: 429,
+            requestBytes: 128,
+            responseBytes: 256,
+            outcome: 'rejected',
+            summary: '邀请码领取频率守卫拒绝了请求',
+            terminalStage: 'security_guard',
+            errorCode: 'invitation.claim_rate_limited',
+            effectiveClientIp: '198.51.100.23',
+            accountId: null,
+            username: null,
+            correlationId: null,
+            actorKind: 'unassociated',
+            lifecycleSchemaVersion: 2,
+            lifecycleDataStatus: 'current',
+            stages: validRequestStages(),
+          },
+        ],
+        total: 1,
+        delivery: {
+          persistedSinceStart: 120,
+          queueDroppedSinceStart: 2,
+          writeFailedSinceStart: 1,
+          queued: 3,
+          capacity: 256,
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const page = await fetchAdminRequestObservations('csrf-secret', {
+      outcome: 'rejected',
+      routeFamily: 'invitation',
+      terminalStage: 'security_guard',
+      errorCode: 'invitation.claim_rate_limited',
+      limit: 50,
+      offset: 0,
+    });
+
+    expect(page.total).toBe(1);
+    expect(page.delivery).toEqual({
+      persistedSinceStart: 120,
+      queueDroppedSinceStart: 2,
+      writeFailedSinceStart: 1,
+      queued: 3,
+      capacity: 256,
+    });
+    expect(page.items[0]).toMatchObject({
+      requestId: '81000000-0000-4000-8000-000000000301',
+      outcome: 'rejected',
+      terminalStage: 'security_guard',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/admin/request-observations?outcome=rejected&route_family=invitation&terminal_stage=security_guard&error_code=invitation.claim_rate_limited&limit=50&offset=0',
+      {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+      },
+    );
+  });
+
+  it('reads a complete request lifecycle with friendly and technical details', async () => {
+    const stages = validRequestStages();
+    stages[3] = {
+      ...stages[3],
+      id: 'security_guard',
+      title: '通用安全守卫',
+      status: 'rejected',
+      evidence: 'measured',
+      explanation: '有效客户端 IP 在 24 小时内已经领取过邀请码。',
+      startedOffsetMs: 4,
+      durationMs: 3,
+      technical: {
+        errorCode: 'invitation.claim_rate_limited',
+        httpStatus: 429,
+      },
+      technicalTruncated: true,
+      operations: [
+        {
+          code: 'invitation.claim.ip_guard',
+          status: 'rejected',
+          evidence: 'measured',
+          startedOffsetMs: 4,
+          durationMs: 1,
+          explanation: '命中 24 小时 IP 领取限制。',
+        },
+      ],
+      operationsTruncated: false,
+    };
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(requestObservationDetailBody(stages)),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const detail = await fetchAdminRequestObservation(
+      'csrf-secret',
+      '81000000-0000-4000-8000-000000000301',
+    );
+
+    expect(detail.stages[3].explanation).toContain('24 小时');
+    expect(detail.stages[3].technical).toEqual({
+      errorCode: 'invitation.claim_rate_limited',
+      httpStatus: 429,
+    });
+    expect(detail.stages[3].startedOffsetMs).toBe(4);
+    expect(detail.stages[3].technicalTruncated).toBe(true);
+    expect(detail.stages[3].operations[0]).toMatchObject({
+      code: 'invitation.claim.ip_guard',
+      status: 'rejected',
+      durationMs: 1,
+    });
+    expect(detail.lifecycleSchemaVersion).toBe(2);
+    expect(detail.redactionSchemaVersion).toBe(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/admin/request-observations/81000000-0000-4000-8000-000000000301',
+      {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+      },
+    );
+  });
+
+  it('rejects request observation details that omit redaction metadata', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        requestId: '81000000-0000-4000-8000-000000000301',
+        startedAt: '2026-08-31T11:59:59Z',
+        completedAt: '2026-08-31T12:00:00Z',
+        durationMs: 18,
+        method: 'POST',
+        route: '/api/invitations/claim',
+        routeFamily: 'invitation',
+        httpStatus: 429,
+        requestBytes: 128,
+        responseBytes: 256,
+        outcome: 'rejected',
+        summary: '邀请码领取频率守卫拒绝了请求',
+        terminalStage: 'security_guard',
+        errorCode: 'invitation.claim_rate_limited',
+        effectiveClientIp: '198.51.100.23',
+        peerIp: '172.30.0.3',
+        accountId: null,
+        username: null,
+        correlationId: null,
+        lifecycleSchemaVersion: 2,
+        redactionSchemaVersion: 1,
+        stages: [
+          {
+            id: 'security_guard',
+            title: '通用安全守卫',
+            location: 'mapflow-app',
+            status: 'rejected',
+            evidence: 'measured',
+            explanation: '请求被拒绝。',
+            startedOffsetMs: 4,
+            durationMs: 3,
+            technical: {},
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const error = await fetchAdminRequestObservation(
+      'csrf-secret',
+      '81000000-0000-4000-8000-000000000301',
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(IdentityApiError);
+    expect(error).toMatchObject({ status: 502, code: 'admin.invalid_response' });
+  });
+
+  it('rejects a lifecycle that omits any fixed architecture stage', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(requestObservationDetailBody(validRequestStages().slice(0, -1))),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const error = await fetchAdminRequestObservation(
+      'csrf-secret',
+      '81000000-0000-4000-8000-000000000301',
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(IdentityApiError);
+    expect(error).toMatchObject({ status: 502, code: 'admin.invalid_response' });
+  });
+
+  it('rejects an operation with impossible evidence', async () => {
+    const stages = validRequestStages();
+    stages[3] = {
+      ...stages[3],
+      status: 'passed',
+      evidence: 'measured',
+      operations: [
+        {
+          code: 'security.guard',
+          status: 'passed',
+          evidence: 'not_observed',
+          startedOffsetMs: 1,
+          durationMs: 1,
+          explanation: '不应通过校验。',
+        },
+      ],
+    };
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(requestObservationDetailBody(stages)),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const error = await fetchAdminRequestObservation(
+      'csrf-secret',
+      '81000000-0000-4000-8000-000000000301',
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(IdentityApiError);
+    expect(error).toMatchObject({ status: 502, code: 'admin.invalid_response' });
+  });
+
+  it('rejects inferred evidence that would otherwise be painted as a green pass', async () => {
+    const stages = validRequestStages();
+    stages[0] = { ...stages[0], status: 'passed', evidence: 'inferred' };
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(requestObservationDetailBody(stages)),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const error = await fetchAdminRequestObservation(
+      'csrf-secret',
+      '81000000-0000-4000-8000-000000000301',
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(IdentityApiError);
+    expect(error).toMatchObject({ status: 502, code: 'admin.invalid_response' });
+  });
+
   it('suspends an account with the CSRF header and treats 204 as success', async () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
@@ -497,4 +745,62 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+function requestObservationDetailBody(stages: unknown[]) {
+  return {
+    requestId: '81000000-0000-4000-8000-000000000301',
+    startedAt: '2026-08-31T11:59:59Z',
+    completedAt: '2026-08-31T12:00:00Z',
+    durationMs: 18,
+    method: 'POST',
+    route: '/api/invitations/claim',
+    routeFamily: 'invitation',
+    httpStatus: 429,
+    requestBytes: 128,
+    responseBytes: 256,
+    outcome: 'rejected',
+    summary: '邀请码领取频率守卫拒绝了请求',
+    terminalStage: 'security_guard',
+    errorCode: 'invitation.claim_rate_limited',
+    effectiveClientIp: '198.51.100.23',
+    peerIp: '172.30.0.3',
+    accountId: null,
+    username: null,
+    correlationId: null,
+    actorKind: 'unassociated',
+    lifecycleSchemaVersion: 2,
+    lifecycleDataStatus: 'current',
+    redactionSchemaVersion: 1,
+    stages,
+  };
+}
+
+function validRequestStages(): Record<string, unknown>[] {
+  return [
+    'client',
+    'edge_proxy',
+    'router',
+    'security_guard',
+    'identity',
+    'http_handler',
+    'business_service',
+    'database',
+    'worker',
+    'external_dependency',
+    'response',
+  ].map((id) => ({
+    id,
+    title: id,
+    location: 'mapflow-app',
+    status: 'not_reached',
+    evidence: 'not_observed',
+    explanation: '本次请求没有到达此阶段。',
+    startedOffsetMs: null,
+    durationMs: null,
+    technical: {},
+    technicalTruncated: false,
+    operations: [],
+    operationsTruncated: false,
+  }));
 }

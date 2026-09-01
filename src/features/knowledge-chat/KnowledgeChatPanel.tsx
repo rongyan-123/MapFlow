@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   fetchKnowledgeChatHistory,
+  resolveKnowledgeChatApproval,
   sendKnowledgeChatMessageStream,
 } from './knowledgeChatClient';
 import { KnowledgeChatApiError } from './types';
@@ -98,6 +99,21 @@ export default function KnowledgeChatPanel({
         csrfToken,
         (delta) => {
           setStreamingAnswer((current) => (current ?? '') + delta);
+        },
+        async (approval) => {
+          const confirmationText = approval.destructive
+            ? `请单独确认：${approval.action}（${approval.target}）。确认后才会执行。`
+            : `确认${approval.action}（${approval.target}）？`
+          const confirmed = typeof window !== 'undefined' && typeof window.confirm === 'function'
+            ? window.confirm(confirmationText)
+            : false;
+          await resolveKnowledgeChatApproval(
+            libraryEntryId,
+            approval.approvalRequestId,
+            confirmed ? 'allowed-once' : 'rejected',
+            confirmed && approval.destructive,
+            csrfToken,
+          );
         },
       );
       setMessages((current) => [

@@ -25,17 +25,21 @@ import {
   clarifyPlatformTreeGeneration,
   clarifyTreeGeneration,
   confirmPlatformTreeGeneration,
+  confirmCreditsTreeGeneration,
   confirmTreeGeneration,
+  createCreditsTreeGeneration,
   createPlatformTreeGeneration,
   createTreeGeneration,
   readGenerationRun,
   readTreeGeneration,
   releaseFailedPlatformTreeGeneration,
   replanPlatformTreeGeneration,
+  reviseCreditsTreeGeneration,
   replanTreeGeneration,
 } from './treeGenerationClient';
 import type {
   DeepSeekModel,
+  CreditGenerationSelection,
   GenerationFundingMode,
   GenerationInput,
   GenerationRun,
@@ -103,6 +107,7 @@ export default function TreeGenerationDialog({
       ? 'low'
       : (capabilities.reasoningEfforts[0] ?? 'high'),
   );
+  const [creditQuestionLimit, setCreditQuestionLimit] = useState<1 | 2 | 3>(1);
   const [clarification, setClarification] = useState('');
   const [revisionKind, setRevisionKind] = useState<RevisionKind | null>(null);
   const [revisionFeedback, setRevisionFeedback] = useState('');
@@ -135,6 +140,14 @@ export default function TreeGenerationDialog({
   const session = sessionQuery.data ?? null;
   const activeFundingMode = session?.fundingMode ??
     (currentSessionId === null ? fundingMode : null);
+
+  useEffect(() => {
+    const persistedLimit = session?.creditQuestionLimit;
+    if (persistedLimit === 1 || persistedLimit === 2 || persistedLimit === 3) {
+      setCreditQuestionLimit(persistedLimit);
+    }
+  }, [session?.creditQuestionLimit]);
+
   const runId = confirmedRunId ?? session?.latestRun?.runId ?? null;
   const runQuery = useQuery({
     queryKey: generationRunQueryKey(currentSessionId, runId),
@@ -181,6 +194,14 @@ export default function TreeGenerationDialog({
       void onPlatformEntitlementsChanged();
     },
   });
+  const creditsCreateMutation = useMutation({
+    mutationFn: () =>
+      createCreditsTreeGeneration(normalizeInput(input), creditSelection(), csrfToken),
+    onSuccess: (created) => {
+      setLocalError(null);
+      rememberSession(created);
+    },
+  });
   const revisionMutation = useMutation({
     mutationFn: async ({
       kind,
@@ -206,6 +227,14 @@ export default function TreeGenerationDialog({
               feedback.trim(),
               csrfToken,
             );
+      }
+      if (session.fundingMode === 'credits') {
+        return reviseCreditsTreeGeneration(
+          currentSessionId,
+          kind,
+          { expectedPlanVersion: session.latestPlan.version, feedback: feedback.trim() },
+          csrfToken,
+        );
       }
       const access = modelAccess();
       return kind === 'replan'
@@ -243,7 +272,14 @@ export default function TreeGenerationDialog({
             clarification.trim(),
             csrfToken,
           )
-        : clarifyTreeGeneration(
+        : session.fundingMode === 'credits'
+          ? reviseCreditsTreeGeneration(
+              currentSessionId,
+              'clarify',
+              { expectedPlanVersion: session.latestPlan.version, answer: clarification.trim() },
+              csrfToken,
+            )
+          : clarifyTreeGeneration(
             currentSessionId,
             session.latestPlan.version,
             clarification.trim(),
@@ -270,7 +306,14 @@ export default function TreeGenerationDialog({
             idempotencyKey,
             csrfToken,
           )
-        : confirmTreeGeneration(
+        : session.fundingMode === 'credits'
+          ? confirmCreditsTreeGeneration(
+              currentSessionId,
+              session.latestPlan.version,
+              idempotencyKey,
+              csrfToken,
+            )
+          : confirmTreeGeneration(
             currentSessionId,
             session.latestPlan.version,
             idempotencyKey,
@@ -382,6 +425,7 @@ export default function TreeGenerationDialog({
   const synchronousPending =
     createMutation.isPending ||
     platformCreateMutation.isPending ||
+    creditsCreateMutation.isPending ||
     revisionMutation.isPending ||
     clarificationMutation.isPending ||
     confirmMutation.isPending ||
@@ -403,6 +447,7 @@ export default function TreeGenerationDialog({
     const candidates: Array<[GenerationDiagnosticOperation, unknown]> = [
       ['create_plan', createMutation.error],
       ['create_plan', platformCreateMutation.error],
+      ['create_plan', creditsCreateMutation.error],
       [revisionKind === 'replan' ? 'replan' : 'adjust', revisionMutation.error],
       ['clarify_plan', clarificationMutation.error],
       ['confirm_generation', confirmMutation.error],
@@ -431,6 +476,7 @@ export default function TreeGenerationDialog({
     createMutation.error,
     currentSessionId,
     platformCreateMutation.error,
+    creditsCreateMutation.error,
     releaseFailedMutation.error,
     revisionKind,
     revisionMutation.error,
@@ -443,6 +489,10 @@ export default function TreeGenerationDialog({
     const apiKeyError = validateGenerationApiKey(apiKey);
     if (apiKeyError) throw new Error(apiKeyError);
     return { apiKey: apiKey.trim(), model, thinking, reasoningEffort };
+  }
+
+  function creditSelection(): CreditGenerationSelection {
+    return { model, thinking, reasoningEffort, clarificationQuestionLimit: creditQuestionLimit };
   }
 
   const submitInitial = (event: FormEvent) => {
@@ -464,7 +514,8 @@ export default function TreeGenerationDialog({
       setConfirmationKind('start');
       return;
     }
-    createMutation.mutate();
+    if (fundingMode === 'credits') creditsCreateMutation.mutate();
+    else createMutation.mutate();
   };
 
   const submitClarification = (event: FormEvent) => {
@@ -474,7 +525,7 @@ export default function TreeGenerationDialog({
       setLocalError(clarificationError);
       return;
     }
-    if (session?.fundingMode !== 'platform') {
+    if (session?.fundingMode === 'byok') {
       const apiKeyError = validateGenerationApiKey(apiKey);
       if (apiKeyError) {
         setLocalError(`请重新输入 DeepSeek API Key：${apiKeyError}`);
@@ -499,7 +550,7 @@ export default function TreeGenerationDialog({
       setLocalError(revisionError);
       return;
     }
-    if (session?.fundingMode !== 'platform') {
+    if (session?.fundingMode === 'byok') {
       const apiKeyError = validateGenerationApiKey(apiKey);
       if (apiKeyError) {
         setLocalError(`请重新输入 DeepSeek API Key：${apiKeyError}`);
@@ -511,7 +562,7 @@ export default function TreeGenerationDialog({
   };
 
   const confirm = () => {
-    if (session?.fundingMode !== 'platform') {
+    if (session?.fundingMode === 'byok') {
       const apiKeyError = validateGenerationApiKey(apiKey);
       if (apiKeyError) {
         setLocalError(`确认前请重新输入 DeepSeek API Key：${apiKeyError}`);
@@ -582,7 +633,7 @@ export default function TreeGenerationDialog({
             </>
           )}
 
-          {activeFundingMode === 'byok' && (
+          {(activeFundingMode === 'byok' || activeFundingMode === 'credits') && (
             <div className={currentSessionId ? '' : 'mt-4'}>
               <ModelConfiguration
                 apiKey={apiKey}
@@ -594,6 +645,9 @@ export default function TreeGenerationDialog({
                 onModelChange={setModel}
                 onThinkingChange={setThinking}
                 onReasoningEffortChange={setReasoningEffort}
+                includeApiKey={activeFundingMode === 'byok'}
+                creditQuestionLimit={creditQuestionLimit}
+                onCreditQuestionLimitChange={setCreditQuestionLimit}
               />
             </div>
           )}
@@ -602,7 +656,11 @@ export default function TreeGenerationDialog({
             {!currentSessionId ? (
               <InitialGenerationForm
                 input={input}
-                pending={createMutation.isPending || platformCreateMutation.isPending}
+                pending={
+                  createMutation.isPending ||
+                  platformCreateMutation.isPending ||
+                  creditsCreateMutation.isPending
+                }
                 onChange={setInput}
                 onSubmit={submitInitial}
               />
@@ -663,6 +721,9 @@ function ModelConfiguration({
   onModelChange,
   onThinkingChange,
   onReasoningEffortChange,
+  includeApiKey,
+  creditQuestionLimit,
+  onCreditQuestionLimitChange,
 }: {
   capabilities: IdentityCapabilities['generation'];
   apiKey: string;
@@ -673,6 +734,9 @@ function ModelConfiguration({
   onModelChange: (value: DeepSeekModel) => void;
   onThinkingChange: (value: ThinkingMode) => void;
   onReasoningEffortChange: (value: ReasoningEffort) => void;
+  includeApiKey: boolean;
+  creditQuestionLimit: 1 | 2 | 3;
+  onCreditQuestionLimitChange: (value: 1 | 2 | 3) => void;
 }) {
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-950/55 p-4">
@@ -680,15 +744,17 @@ function ModelConfiguration({
         <div>
           <h3 className="text-sm font-semibold text-slate-100">模型配置</h3>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            仅连接服务器固定的 DeepSeek 官方地址；密钥不会写入浏览器存储。
+            {includeApiKey
+              ? '仅连接服务器固定的 DeepSeek 官方地址；密钥不会写入浏览器存储。'
+              : '由平台代付模型费用；你只需选择模型、思考参数和 AI 追问次数。'}
           </p>
         </div>
         <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-300">
-          BYOK
+          {includeApiKey ? 'BYOK' : '积分'}
         </span>
       </div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="DeepSeek API Key">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {includeApiKey && <Field label="DeepSeek API Key">
           <input
             type="password"
             name="mapflow-deepseek-api-key"
@@ -704,7 +770,7 @@ function ModelConfiguration({
             onChange={(event) => onApiKeyChange(event.target.value)}
             className={inputClassName}
           />
-        </Field>
+        </Field>}
         <Field label="模型">
           <select
             value={model}
@@ -746,6 +812,19 @@ function ModelConfiguration({
             ))}
           </select>
         </Field>
+        {!includeApiKey && <Field label="AI 追问次数">
+          <select
+            value={creditQuestionLimit}
+            onChange={(event) =>
+              onCreditQuestionLimitChange(Number(event.target.value) as 1 | 2 | 3)
+            }
+            className={inputClassName}
+          >
+            <option value={1}>1 次</option>
+            <option value={2}>2 次</option>
+            <option value={3}>3 次</option>
+          </select>
+        </Field>}
       </div>
       <p className="mt-3 text-[11px] leading-5 text-slate-500">
         默认关闭思考以缩短等待时间。思考强度随时可选，但仅在开启思考时生效；High

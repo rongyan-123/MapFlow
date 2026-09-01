@@ -5,19 +5,28 @@ import AuditLogTab from './AuditLogTab';
 import FeedbackTab from './FeedbackTab';
 import InvitationsTab from './InvitationsTab';
 import OverviewTab from './OverviewTab';
+import RequestObservationsTab from './RequestObservationsTab';
 
 export interface AdminPanelProps {
   onBack: () => void;
   csrfToken: string;
 }
 
-type AdminTab = 'overview' | 'accounts' | 'invitations' | 'audit' | 'feedback' | 'announcements';
+type AdminTab =
+  | 'overview'
+  | 'accounts'
+  | 'invitations'
+  | 'audit'
+  | 'requests'
+  | 'feedback'
+  | 'announcements';
 
 const TABS: { id: AdminTab; label: string }[] = [
   { id: 'overview', label: '概览' },
   { id: 'accounts', label: '用户' },
   { id: 'invitations', label: '邀请码' },
   { id: 'audit', label: '审计日志' },
+  { id: 'requests', label: '请求观测' },
   { id: 'feedback', label: '反馈' },
   { id: 'announcements', label: '公告' },
 ];
@@ -70,6 +79,9 @@ export default function AdminPanel({ onBack, csrfToken }: AdminPanelProps) {
         {activeTab === 'accounts' && <AccountsTab csrfToken={csrfToken} />}
         {activeTab === 'invitations' && <InvitationsTab csrfToken={csrfToken} />}
         {activeTab === 'audit' && <AuditLogTab csrfToken={csrfToken} />}
+        {activeTab === 'requests' && (
+          <RequestObservationsTab csrfToken={csrfToken} />
+        )}
         {activeTab === 'feedback' && <FeedbackTab csrfToken={csrfToken} />}
         {activeTab === 'announcements' && <AnnouncementsTab csrfToken={csrfToken} />}
       </main>

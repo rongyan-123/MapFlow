@@ -718,6 +718,9 @@ function planReadySession(version = 1): GenerationSession {
     latestPlan: {
       version,
       changeKind: version === 1 ? 'initial' : 'replan',
+      model: 'deepseek-v4-flash',
+      thinking: 'disabled',
+      reasoningEffort: 'low',
       outcome: {
         outcome: 'plan_ready',
         normalizedSpec: generationInput,
@@ -734,6 +737,7 @@ function planReadySession(version = 1): GenerationSession {
     producedTreeId: null,
     producedLibraryEntryId: null,
     platformLimits: null,
+    creditQuestionLimit: null,
   };
 }
 

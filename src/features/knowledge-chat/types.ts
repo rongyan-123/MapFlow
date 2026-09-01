@@ -13,6 +13,14 @@ export interface KnowledgeChatResponse {
   creditBalance?: number;
 }
 
+export interface KnowledgeChatApprovalEvent {
+  approvalRequestId: string;
+  toolName: 'personal_tree_mutation';
+  action: string;
+  target: string;
+  destructive: boolean;
+}
+
 export type KnowledgeChatMessageRole = 'user' | 'assistant';
 
 export interface KnowledgeChatMessage {

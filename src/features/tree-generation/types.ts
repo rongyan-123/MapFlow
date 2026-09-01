@@ -1,13 +1,20 @@
 export type DeepSeekModel = 'deepseek-v4-flash' | 'deepseek-v4-pro';
 export type ThinkingMode = 'enabled' | 'disabled';
 export type ReasoningEffort = 'low' | 'high' | 'max';
-export type GenerationFundingMode = 'byok' | 'platform';
+export type GenerationFundingMode = 'byok' | 'platform' | 'credits';
 
 export interface ModelAccess {
   apiKey: string;
   model: DeepSeekModel;
   thinking: ThinkingMode;
   reasoningEffort: ReasoningEffort;
+}
+
+export interface CreditGenerationSelection {
+  model: DeepSeekModel;
+  thinking: ThinkingMode;
+  reasoningEffort: ReasoningEffort;
+  clarificationQuestionLimit: 1 | 2 | 3;
 }
 
 export interface GenerationInput {
@@ -49,6 +56,9 @@ export type PlanningChangeKind =
 export interface GenerationPlan {
   version: number;
   changeKind: PlanningChangeKind;
+  model: DeepSeekModel;
+  thinking: ThinkingMode;
+  reasoningEffort: ReasoningEffort;
   outcome: PlanningOutcome;
   usage: GenerationUsage;
 }
@@ -101,4 +111,5 @@ export interface GenerationSession {
   producedTreeId: string | null;
   producedLibraryEntryId: string | null;
   platformLimits: PlatformGenerationLimits | null;
+  creditQuestionLimit: number | null;
 }
