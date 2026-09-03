@@ -1,0 +1,239 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1260" viewBox="0 0 2000 1260" role="img" aria-labelledby="title desc">
+  <title id="title">MapFlow 一张图架构说明</title>
+  <desc id="desc">展示浏览器、Caddy、Rust Axum 后端、请求生命周期、PostgreSQL、异步 Worker、技能树引擎、Node Harness、DeepSeek 和搜索服务之间的关系。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07152f"/>
+      <stop offset="0.55" stop-color="#0b1f3f"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="appBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#102b50"/>
+      <stop offset="1" stop-color="#0c213d"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity="0.28"/>
+    </filter>
+    <marker id="arrowBlue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#60a5fa"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrowOrange" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrowGray" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#94a3b8"/>
+    </marker>
+    <style>
+      .font { font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", Arial, sans-serif; }
+      .title { font-size: 34px; font-weight: 800; fill: #f8fafc; }
+      .subtitle { font-size: 17px; fill: #a9c4e7; }
+      .section { font-size: 21px; font-weight: 800; fill: #e0f2fe; }
+      .card-title { font-size: 19px; font-weight: 800; fill: #f8fafc; }
+      .card-text { font-size: 15px; fill: #cbd5e1; }
+      .small { font-size: 13px; fill: #94a3b8; }
+      .tiny { font-size: 12px; fill: #9fb4cf; }
+      .label { font-size: 13px; font-weight: 700; fill: #dbeafe; }
+      .stage { font-size: 14px; font-weight: 800; fill: #f8fafc; }
+      .stage-small { font-size: 12px; fill: #cbd5e1; }
+    </style>
+  </defs>
+
+  <rect width="2000" height="1260" fill="url(#bg)"/>
+  <path d="M0 110 H2000" stroke="#26466d" stroke-width="1" opacity="0.55"/>
+  <text x="70" y="60" class="font title">MapFlow：从浏览器到技能树结果的一张图</text>
+  <text x="70" y="91" class="font subtitle">先看整体结构，再看一条请求怎样穿过系统；灰色阶段表示“存在，但这次没有经过”。</text>
+  <g class="font" transform="translate(1460 45)">
+    <circle cx="10" cy="9" r="7" fill="#60a5fa"/><text x="25" y="14" class="small">普通请求</text>
+    <circle cx="130" cy="9" r="7" fill="#34d399"/><text x="145" y="14" class="small">业务/数据</text>
+    <circle cx="270" cy="9" r="7" fill="#fbbf24"/><text x="285" y="14" class="small">外部/异步</text>
+  </g>
+
+  <!-- Runtime overview -->
+  <text x="70" y="150" class="font section">一、运行时结构：它不是很多微服务，而是一个模块化后端</text>
+  <rect x="55" y="175" width="275" height="155" rx="18" fill="#12335c" stroke="#60a5fa" stroke-width="2" filter="url(#shadow)"/>
+  <text x="82" y="218" class="font card-title">浏览器 / React 前端</text>
+  <text x="82" y="248" class="font card-text">页面、技能树画布、管理面板</text>
+  <text x="82" y="273" class="font card-text">登录、聊天、生成任务状态</text>
+  <text x="82" y="306" class="font tiny">D:\MapFlow-publish</text>
+
+  <path d="M330 252 H395" stroke="#60a5fa" stroke-width="4" marker-end="url(#arrowBlue)"/>
+  <text x="339" y="236" class="font label">HTTPS</text>
+
+  <rect x="400" y="175" width="220" height="155" rx="18" fill="#193554" stroke="#60a5fa" stroke-width="2" filter="url(#shadow)"/>
+  <text x="430" y="218" class="font card-title">Caddy</text>
+  <text x="430" y="248" class="font card-text">域名、TLS、反向代理</text>
+  <text x="430" y="275" class="font card-text">把请求转给 8080</text>
+  <text x="430" y="306" class="font tiny">deploy/Caddyfile</text>
+
+  <path d="M620 252 H685" stroke="#60a5fa" stroke-width="4" marker-end="url(#arrowBlue)"/>
+  <text x="625" y="236" class="font label">转发</text>
+
+  <rect x="690" y="135" width="685" height="235" rx="22" fill="url(#appBg)" stroke="#38bdf8" stroke-width="2.5" filter="url(#shadow)"/>
+  <text x="720" y="174" class="font card-title">mapflow-app：Rust + Axum（一个主后端进程）</text>
+  <text x="720" y="199" class="font small">同一个镜像里还包含前端静态文件 web-dist 和 Node Harness 子进程</text>
+
+  <rect x="720" y="225" width="195" height="90" rx="14" fill="#173d69" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="746" y="260" class="font card-title" font-size="17">请求观测</text>
+  <text x="746" y="286" class="font card-text">Request ID、IP、阶段</text>
+  <text x="746" y="309" class="font card-text">成功 / 拒绝 / 失败</text>
+
+  <rect x="940" y="225" width="195" height="90" rx="14" fill="#173d69" stroke="#60a5fa" stroke-width="1.5"/>
+  <text x="966" y="260" class="font card-title" font-size="17">HTTP 路由</text>
+  <text x="966" y="286" class="font card-text">/api/auth</text>
+  <text x="966" y="309" class="font card-text">/api/trees / /api/admin</text>
+
+  <rect x="1160" y="225" width="185" height="90" rx="14" fill="#164c4b" stroke="#34d399" stroke-width="1.5"/>
+  <text x="1182" y="260" class="font card-title" font-size="17">业务服务</text>
+  <text x="1182" y="286" class="font card-text">账号、树库、生成、聊天</text>
+  <text x="1182" y="309" class="font card-text">积分、邀请码、公告</text>
+
+  <path d="M1375 252 H1440" stroke="#34d399" stroke-width="4" marker-end="url(#arrowGreen)"/>
+
+  <rect x="1445" y="175" width="235" height="155" rx="18" fill="#123f3d" stroke="#34d399" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1475" y="218" class="font card-title">PostgreSQL</text>
+  <text x="1475" y="248" class="font card-text">账号、会话、邀请码</text>
+  <text x="1475" y="275" class="font card-text">技能树、生成任务</text>
+  <text x="1475" y="302" class="font card-text">请求生命周期日志</text>
+
+  <path d="M1680 252 H1745" stroke="#fbbf24" stroke-width="4" marker-end="url(#arrowOrange)"/>
+
+  <rect x="1750" y="175" width="195" height="155" rx="18" fill="#493a19" stroke="#fbbf24" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1778" y="218" class="font card-title">外部依赖</text>
+  <text x="1778" y="248" class="font card-text">DeepSeek API</text>
+  <text x="1778" y="275" class="font card-text">Web Search</text>
+  <text x="1778" y="306" class="font tiny">需要网络 / 密钥</text>
+
+  <!-- Request lifecycle -->
+  <rect x="55" y="405" width="1890" height="300" rx="22" fill="#0b172d" stroke="#31577f" stroke-width="1.5"/>
+  <text x="82" y="445" class="font section">二、所有 API 请求的完整生命周期</text>
+  <text x="82" y="473" class="font small">管理面板的“请求观测”就是在记录这条横向链路；没有走到的节点仍会显示为“未到达 / 未适用”。</text>
+
+  <g class="font">
+    <rect x="82" y="520" width="145" height="112" rx="14" fill="#17385f" stroke="#60a5fa"/>
+    <text x="154" y="553" text-anchor="middle" class="stage">浏览器</text>
+    <text x="154" y="580" text-anchor="middle" class="stage-small">Client</text>
+    <text x="154" y="607" text-anchor="middle" class="stage-small">发起 HTTP</text>
+
+    <rect x="245" y="520" width="145" height="112" rx="14" fill="#17385f" stroke="#60a5fa"/>
+    <text x="317" y="553" text-anchor="middle" class="stage">Caddy</text>
+    <text x="317" y="580" text-anchor="middle" class="stage-small">Edge Proxy</text>
+    <text x="317" y="607" text-anchor="middle" class="stage-small">转发 / 真实 IP</text>
+
+    <rect x="408" y="520" width="145" height="112" rx="14" fill="#17385f" stroke="#60a5fa"/>
+    <text x="480" y="553" text-anchor="middle" class="stage">HTTP 路由</text>
+    <text x="480" y="580" text-anchor="middle" class="stage-small">Router</text>
+    <text x="480" y="607" text-anchor="middle" class="stage-small">匹配 endpoint</text>
+
+    <rect x="571" y="520" width="145" height="112" rx="14" fill="#17385f" stroke="#60a5fa"/>
+    <text x="643" y="553" text-anchor="middle" class="stage">安全守卫</text>
+    <text x="643" y="580" text-anchor="middle" class="stage-small">Security Guard</text>
+    <text x="643" y="607" text-anchor="middle" class="stage-small">限流 / CSRF</text>
+
+    <rect x="734" y="520" width="145" height="112" rx="14" fill="#17385f" stroke="#60a5fa"/>
+    <text x="806" y="553" text-anchor="middle" class="stage">身份权限</text>
+    <text x="806" y="580" text-anchor="middle" class="stage-small">Identity</text>
+    <text x="806" y="607" text-anchor="middle" class="stage-small">登录 / 管理员</text>
+
+    <rect x="897" y="520" width="145" height="112" rx="14" fill="#17385f" stroke="#60a5fa"/>
+    <text x="969" y="553" text-anchor="middle" class="stage">处理器</text>
+    <text x="969" y="580" text-anchor="middle" class="stage-small">Handler</text>
+    <text x="969" y="607" text-anchor="middle" class="stage-small">类似 Controller</text>
+
+    <rect x="1060" y="520" width="145" height="112" rx="14" fill="#164c4b" stroke="#34d399"/>
+    <text x="1132" y="553" text-anchor="middle" class="stage">业务服务</text>
+    <text x="1132" y="580" text-anchor="middle" class="stage-small">Service</text>
+    <text x="1132" y="607" text-anchor="middle" class="stage-small">业务规则</text>
+
+    <rect x="1223" y="520" width="145" height="112" rx="14" fill="#164c4b" stroke="#34d399"/>
+    <text x="1295" y="553" text-anchor="middle" class="stage">PostgreSQL</text>
+    <text x="1295" y="580" text-anchor="middle" class="stage-small">Database</text>
+    <text x="1295" y="607" text-anchor="middle" class="stage-small">读 / 写数据</text>
+
+    <rect x="1386" y="520" width="145" height="112" rx="14" fill="#493a19" stroke="#fbbf24"/>
+    <text x="1458" y="553" text-anchor="middle" class="stage">Worker</text>
+    <text x="1458" y="580" text-anchor="middle" class="stage-small">Queue</text>
+    <text x="1458" y="607" text-anchor="middle" class="stage-small">异步任务</text>
+
+    <rect x="1549" y="520" width="145" height="112" rx="14" fill="#493a19" stroke="#fbbf24"/>
+    <text x="1621" y="553" text-anchor="middle" class="stage">外部依赖</text>
+    <text x="1621" y="580" text-anchor="middle" class="stage-small">External</text>
+    <text x="1621" y="607" text-anchor="middle" class="stage-small">模型 / 搜索</text>
+
+    <rect x="1712" y="520" width="145" height="112" rx="14" fill="#263448" stroke="#94a3b8"/>
+    <text x="1784" y="553" text-anchor="middle" class="stage">HTTP 响应</text>
+    <text x="1784" y="580" text-anchor="middle" class="stage-small">Response</text>
+    <text x="1784" y="607" text-anchor="middle" class="stage-small">返回状态 / 数据</text>
+
+    <path d="M227 576 H245" stroke="#60a5fa" stroke-width="3" marker-end="url(#arrowBlue)"/>
+    <path d="M390 576 H408" stroke="#60a5fa" stroke-width="3" marker-end="url(#arrowBlue)"/>
+    <path d="M553 576 H571" stroke="#60a5fa" stroke-width="3" marker-end="url(#arrowBlue)"/>
+    <path d="M716 576 H734" stroke="#60a5fa" stroke-width="3" marker-end="url(#arrowBlue)"/>
+    <path d="M879 576 H897" stroke="#60a5fa" stroke-width="3" marker-end="url(#arrowBlue)"/>
+    <path d="M1042 576 H1060" stroke="#34d399" stroke-width="3" marker-end="url(#arrowGreen)"/>
+    <path d="M1205 576 H1223" stroke="#34d399" stroke-width="3" marker-end="url(#arrowGreen)"/>
+    <path d="M1368 576 H1386" stroke="#fbbf24" stroke-width="3" marker-end="url(#arrowOrange)"/>
+    <path d="M1531 576 H1549" stroke="#fbbf24" stroke-width="3" marker-end="url(#arrowOrange)"/>
+    <path d="M1694 576 H1712" stroke="#94a3b8" stroke-width="3" marker-end="url(#arrowGray)"/>
+  </g>
+  <text x="82" y="675" class="font tiny">注意：不是每次请求都会经过 Worker 或外部依赖；这就是为什么后台要把“未到达”也展示出来。</text>
+
+  <!-- Async generation -->
+  <text x="70" y="755" class="font section">三、技能树生成请求：业务服务之后会分叉成异步任务</text>
+  <text x="70" y="783" class="font small">初始 HTTP 请求不必一直等模型生成完成；它先保存任务并返回处理中，前端再查询结果。</text>
+
+  <g class="font">
+    <rect x="70" y="825" width="235" height="142" rx="18" fill="#12335c" stroke="#60a5fa" stroke-width="2" filter="url(#shadow)"/>
+    <text x="100" y="868" class="font card-title">前端确认生成</text>
+    <text x="100" y="900" class="font card-text">POST /api/me/tree-generations</text>
+    <text x="100" y="929" class="font card-text">随后轮询 session / run</text>
+
+    <rect x="355" y="825" width="235" height="142" rx="18" fill="#17385f" stroke="#60a5fa" stroke-width="2" filter="url(#shadow)"/>
+    <text x="385" y="868" class="font card-title">Rust 生成 API</text>
+    <text x="385" y="900" class="font card-text">校验身份、计划和额度</text>
+    <text x="385" y="929" class="font card-text">确认后交给队列</text>
+
+    <rect x="640" y="825" width="235" height="142" rx="18" fill="#164c4b" stroke="#34d399" stroke-width="2" filter="url(#shadow)"/>
+    <text x="670" y="868" class="font card-title">PostgreSQL</text>
+    <text x="670" y="900" class="font card-text">保存 session / plan / run</text>
+    <text x="670" y="929" class="font card-text">保存每一步进度和结果</text>
+
+    <rect x="925" y="825" width="235" height="142" rx="18" fill="#493a19" stroke="#fbbf24" stroke-width="2" filter="url(#shadow)"/>
+    <text x="955" y="868" class="font card-title">进程内 Worker</text>
+    <text x="955" y="900" class="font card-text">有界队列，后台异步执行</text>
+    <text x="955" y="929" class="font card-text">不会阻塞初始 HTTP 请求</text>
+
+    <rect x="1210" y="825" width="235" height="142" rx="18" fill="#183f42" stroke="#2dd4bf" stroke-width="2" filter="url(#shadow)"/>
+    <text x="1240" y="868" class="font card-title">skill-tree-engine</text>
+    <text x="1240" y="900" class="font card-text">Agent A + B → C 生成算法</text>
+    <text x="1240" y="929" class="font card-text">规划、搜索、验证、投影</text>
+
+    <rect x="1495" y="825" width="235" height="142" rx="18" fill="#493a19" stroke="#fbbf24" stroke-width="2" filter="url(#shadow)"/>
+    <text x="1525" y="868" class="font card-title">Node Harness</text>
+    <text x="1525" y="900" class="font card-text">DeepSeek Agent Runtime</text>
+    <text x="1525" y="929" class="font card-text">独立 Node 子进程</text>
+
+    <rect x="1780" y="825" width="165" height="142" rx="18" fill="#493a19" stroke="#fbbf24" stroke-width="2" filter="url(#shadow)"/>
+    <text x="1862" y="868" text-anchor="middle" class="font card-title">DeepSeek</text>
+    <text x="1862" y="900" text-anchor="middle" class="font card-text">+ 搜索</text>
+    <text x="1862" y="929" text-anchor="middle" class="font card-text">外部服务</text>
+
+    <path d="M305 896 H355" stroke="#60a5fa" stroke-width="4" marker-end="url(#arrowBlue)"/>
+    <path d="M590 896 H640" stroke="#34d399" stroke-width="4" marker-end="url(#arrowGreen)"/>
+    <path d="M875 896 H925" stroke="#fbbf24" stroke-width="4" marker-end="url(#arrowOrange)"/>
+    <path d="M1160 896 H1210" stroke="#fbbf24" stroke-width="4" marker-end="url(#arrowOrange)"/>
+    <path d="M1445 896 H1495" stroke="#fbbf24" stroke-width="4" marker-end="url(#arrowOrange)"/>
+    <path d="M1730 896 H1780" stroke="#fbbf24" stroke-width="4" marker-end="url(#arrowOrange)"/>
+
+    <path d="M1328 967 C1328 1015 750 1015 750 967" fill="none" stroke="#34d399" stroke-width="3" stroke-dasharray="9 8" marker-end="url(#arrowGreen)"/>
+    <text x="1015" y="1044" text-anchor="middle" class="font label">生成结果写回 PostgreSQL，前端再查询并绘制</text>
+  </g>
+
+  <!-- Code ownership -->
+  <rect x="70" y="1080" width="1875" height="118" rx="18" fill="#0b172d" stroke="#31577f" stroke-width="1.5"/>
+  <text x="100" y="1115" class="font section" font-size="18">四、记忆口诀</text>
+  <text x="100" y="1148" class="font card-text">前端负责“显示和发请求”　｜　mapflow-server 负责“接请求、守规则、存数据、排任务”　｜　skill-tree-engine 负责“真正生成技能树”</text>
+  <text x="100" y="1178" class="font card-text">Node Harness 是模型代理，PostgreSQL 是长期记忆，Caddy 是门口保安；管理面板看到的是这条链路的录像。</text>
+</svg>
