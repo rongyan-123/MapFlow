@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { passwordRules, validateRegistration } from './identityValidation';
+import {
+  passwordRules,
+  validateConfirmPasswordField,
+  validateEmailField,
+  validateInvitationCodeField,
+  validatePasswordField,
+  validatePhoneField,
+  validateRegistration,
+  validateUsernameField,
+} from './identityValidation';
 
 const valid = {
   username: 'firstuser',
@@ -81,6 +90,90 @@ describe('validateRegistration', () => {
     expect(
       validateRegistration({ ...valid, email: '', phone: '13800138000' }),
     ).toBeNull();
+  });
+});
+
+describe('validateUsernameField', () => {
+  it.each([
+    ['', '请输入用户名。'],
+    ['a', '用户名需要 2～24 个字符。'],
+    ['2264896153@qq.com', '用户名不能使用邮箱地址，请填写昵称；邮箱请填入「邮箱」栏。'],
+    ['张 三', '用户名只能包含汉字、英文字母、数字、下划线或短横线。'],
+  ])('rejects unsafe usernames on blur', (username, message) => {
+    expect(validateUsernameField(username)).toBe(message);
+  });
+
+  it('accepts usernames the server allowlist accepts', () => {
+    expect(validateUsernameField('学习者')).toBeNull();
+    expect(validateUsernameField('user_name-1')).toBeNull();
+  });
+});
+
+describe('validatePasswordField', () => {
+  it.each([
+    ['', 'firstuser', '请输入密码。'],
+    ['1234567', 'firstuser', '密码至少需要 8 位。'],
+    ['12345678', 'firstuser', '密码过于常见，请更换一个更复杂的密码。'],
+    ['FIRSTUSER2026', 'firstuser', '密码不能包含用户名。'],
+  ])('rejects unsafe passwords on blur', (password, username, message) => {
+    expect(validatePasswordField(password, username)).toBe(message);
+  });
+
+  it('accepts a long safe password', () => {
+    expect(validatePasswordField('safe-password-2026', 'firstuser')).toBeNull();
+  });
+});
+
+describe('validateConfirmPasswordField', () => {
+  it.each([
+    ['safe-password-2026', '', '请再次输入密码。'],
+    ['safe-password-2026', 'different-password', '两次输入的密码不一致。'],
+  ])('rejects a missing or mismatched confirmation on blur', (password, confirm, message) => {
+    expect(validateConfirmPasswordField(password, confirm)).toBe(message);
+  });
+
+  it('accepts a matching confirmation', () => {
+    expect(validateConfirmPasswordField('safe-password-2026', 'safe-password-2026')).toBeNull();
+  });
+});
+
+describe('validateInvitationCodeField', () => {
+  it.each([
+    ['', '请输入邀请码。'],
+    ['ABCDE', '邀请码必须是 6 位大写字母。'],
+    ['abc123', '邀请码必须是 6 位大写字母。'],
+  ])('rejects a missing or malformed invitation on blur', (invitationCode, message) => {
+    expect(validateInvitationCodeField(invitationCode)).toBe(message);
+  });
+
+  it('accepts a 6-letter uppercase invitation', () => {
+    expect(validateInvitationCodeField('QJXKRP')).toBeNull();
+  });
+});
+
+describe('validateEmailField and validatePhoneField', () => {
+  it('treats an empty contact as unfilled, not invalid', () => {
+    expect(validateEmailField('')).toBeNull();
+    expect(validatePhoneField('')).toBeNull();
+  });
+
+  it.each([
+    ['not-an-email', '邮箱格式无效。'],
+    ['a b@example.com', '邮箱格式无效。'],
+  ])('rejects malformed emails once filled', (email, message) => {
+    expect(validateEmailField(email)).toBe(message);
+  });
+
+  it.each([
+    ['+1234', '手机号需为 8～15 位数字，可带前导 +。'],
+    ['13800138000123456', '手机号需为 8～15 位数字，可带前导 +。'],
+  ])('rejects malformed phones once filled', (phone, message) => {
+    expect(validatePhoneField(phone)).toBe(message);
+  });
+
+  it('accepts valid contacts', () => {
+    expect(validateEmailField(' learner@example.com ')).toBeNull();
+    expect(validatePhoneField('13800138000')).toBeNull();
   });
 });
 

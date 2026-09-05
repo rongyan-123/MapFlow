@@ -1,8 +1,22 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import {
+  Children,
+  cloneElement,
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+  type ReactElement,
+} from 'react';
 import type { LoginInput, RegistrationInput } from './types';
 import {
   passwordRules,
+  validateConfirmPasswordField,
+  validateEmailField,
+  validateInvitationCodeField,
+  validatePasswordField,
+  validatePhoneField,
   validateRegistration,
+  validateUsernameField,
   type RegistrationFormValues,
 } from './identityValidation';
 import { IdentityApiError, type ClaimedInvitation } from './identityClient';
@@ -33,6 +47,23 @@ const EMPTY_REGISTRATION: RegistrationFormValues = {
   phone: '',
 };
 
+type RegistrationField =
+  | 'username'
+  | 'password'
+  | 'confirmPassword'
+  | 'invitationCode'
+  | 'email'
+  | 'phone';
+
+const EMPTY_TOUCHED: Record<RegistrationField, boolean> = {
+  username: false,
+  password: false,
+  confirmPassword: false,
+  invitationCode: false,
+  email: false,
+  phone: false,
+};
+
 export default function IdentityDialog({
   pending,
   requestError,
@@ -47,6 +78,10 @@ export default function IdentityDialog({
     useState<RegistrationFormValues>(EMPTY_REGISTRATION);
   const [login, setLogin] = useState<LoginInput>({ username: '', password: '' });
   const [localError, setLocalError] = useState<string | null>(null);
+  const [touched, setTouched] = useState<Record<RegistrationField, boolean>>(EMPTY_TOUCHED);
+  const touch = useCallback((field: RegistrationField) => {
+    setTouched((current) => (current[field] ? current : { ...current, [field]: true }));
+  }, []);
   const [claimStatus, setClaimStatus] = useState<ClaimStatus>('idle');
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claimedCode, setClaimedCode] = useState<string | null>(null);
@@ -95,6 +130,7 @@ export default function IdentityDialog({
   const changeMode = (nextMode: 'login' | 'register') => {
     setMode(nextMode);
     setLocalError(null);
+    setTouched(EMPTY_TOUCHED);
     setClaimStatus('idle');
     setClaimError(null);
     setClaimedCode(null);
@@ -115,13 +151,37 @@ export default function IdentityDialog({
     }
   };
 
+  const usernameError = touched.username ? validateUsernameField(registration.username) : null;
+  const passwordError = touched.password
+    ? validatePasswordField(registration.password, registration.username)
+    : null;
+  const confirmPasswordError = touched.confirmPassword
+    ? validateConfirmPasswordField(registration.password, registration.confirmPassword)
+    : null;
+  const invitationCodeError = touched.invitationCode
+    ? validateInvitationCodeField(registration.invitationCode)
+    : null;
+  const emailError = touched.email ? validateEmailField(registration.email) : null;
+  const phoneError = touched.phone ? validatePhoneField(registration.phone) : null;
+
   const submitRegistration = async (event: FormEvent) => {
     event.preventDefault();
+    // 提交时点亮所有字段：逐个字段的错误显示在对应输入框下，
+    // 「至少一种联系方式」这类跨字段错误才显示在底部。
+    setTouched({
+      username: true,
+      password: true,
+      confirmPassword: true,
+      invitationCode: true,
+      email: true,
+      phone: true,
+    });
     const validationError = validateRegistration(registration);
-    if (validationError) {
+    if (validationError === '请至少填写邮箱或手机号。') {
       setLocalError(validationError);
       return;
     }
+    if (validationError) return;
     setLocalError(null);
     const email = registration.email.trim();
     const phone = registration.phone.trim();
@@ -151,7 +211,7 @@ export default function IdentityDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="identity-dialog-title"
-        className="w-full max-w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl shadow-cyan-950/40"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-[min(28rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl shadow-cyan-950/40"
       >
         <div className="flex items-start justify-between border-b border-slate-800 px-5 py-4">
           <div>
@@ -184,24 +244,22 @@ export default function IdentityDialog({
 
         {mode === 'login' ? (
           <form className="space-y-4 p-5" onSubmit={(event) => void submitLogin(event)}>
-            <Field label="用户名">
+            <Field label="用户名" id="login-username">
               <input
                 autoFocus
                 autoComplete="username"
                 maxLength={24}
                 value={login.username}
                 onChange={(event) => setLogin({ ...login, username: event.target.value })}
-                className={inputClassName}
               />
             </Field>
-            <Field label="密码">
+            <Field label="密码" id="login-password">
               <input
                 type="password"
                 autoComplete="current-password"
                 maxLength={128}
                 value={login.password}
                 onChange={(event) => setLogin({ ...login, password: event.target.value })}
-                className={inputClassName}
               />
             </Field>
             <StatusMessage message={visibleError} />
@@ -211,8 +269,12 @@ export default function IdentityDialog({
             </p>
           </form>
         ) : (
-          <form className="space-y-3.5 p-5" onSubmit={(event) => void submitRegistration(event)}>
-            <Field label="用户名">
+          <form
+            noValidate
+            className="space-y-3.5 p-5"
+            onSubmit={(event) => void submitRegistration(event)}
+          >
+            <Field label="用户名" id="register-username" error={usernameError}>
               <input
                 autoFocus
                 autoComplete="username"
@@ -222,11 +284,11 @@ export default function IdentityDialog({
                 onChange={(event) =>
                   setRegistration({ ...registration, username: event.target.value })
                 }
-                className={inputClassName}
+                onBlur={() => touch('username')}
               />
             </Field>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="设置密码">
+              <Field label="设置密码" id="register-password" error={passwordError}>
                 <input
                   type="password"
                   autoComplete="new-password"
@@ -236,14 +298,18 @@ export default function IdentityDialog({
                   onChange={(event) =>
                     setRegistration({ ...registration, password: event.target.value })
                   }
-                  className={inputClassName}
+                  onBlur={() => touch('password')}
                 />
               </Field>
               <PasswordRuleList
                 username={registration.username}
                 password={registration.password}
               />
-              <Field label="确认密码">
+              <Field
+                label="确认密码"
+                id="register-confirm-password"
+                error={confirmPasswordError}
+              >
                 <input
                   type="password"
                   autoComplete="new-password"
@@ -253,11 +319,11 @@ export default function IdentityDialog({
                   onChange={(event) =>
                     setRegistration({ ...registration, confirmPassword: event.target.value })
                   }
-                  className={inputClassName}
+                  onBlur={() => touch('confirmPassword')}
                 />
               </Field>
             </div>
-            <Field label="邀请码">
+            <Field label="邀请码" id="register-invitation-code" error={invitationCodeError}>
               <input
                 autoComplete="one-time-code"
                 inputMode="text"
@@ -273,7 +339,8 @@ export default function IdentityDialog({
                       .slice(0, 6),
                   })
                 }
-                className={`${inputClassName} font-mono uppercase tracking-[0.3em]`}
+                onBlur={() => touch('invitationCode')}
+                className="font-mono uppercase tracking-[0.3em]"
               />
             </Field>
             {claimStatus === 'claimed' && claimedCode ? (
@@ -316,7 +383,7 @@ export default function IdentityDialog({
               </div>
             )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="邮箱（可选）">
+              <Field label="邮箱（可选）" id="register-email" error={emailError}>
                 <input
                   type="email"
                   autoComplete="email"
@@ -324,10 +391,10 @@ export default function IdentityDialog({
                   onChange={(event) =>
                     setRegistration({ ...registration, email: event.target.value })
                   }
-                  className={inputClassName}
+                  onBlur={() => touch('email')}
                 />
               </Field>
-              <Field label="手机号（可选）">
+              <Field label="手机号（可选）" id="register-phone" error={phoneError}>
                 <input
                   type="tel"
                   autoComplete="tel"
@@ -336,7 +403,7 @@ export default function IdentityDialog({
                   onChange={(event) =>
                     setRegistration({ ...registration, phone: event.target.value })
                   }
-                  className={inputClassName}
+                  onBlur={() => touch('phone')}
                 />
               </Field>
             </div>
@@ -355,12 +422,45 @@ export default function IdentityDialog({
 const inputClassName =
   'mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/10';
 
-function Field({ label, children }: { label: string; children: React.ReactElement }) {
+const errorInputClassName =
+  'mt-1.5 w-full rounded-lg border border-rose-500/70 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-rose-400 focus:ring-2 focus:ring-rose-400/20';
+
+function Field({
+  label,
+  id,
+  error,
+  children,
+}: {
+  label: string;
+  id: string;
+  error?: string | null;
+  children: ReactElement;
+}) {
+  const hasError = Boolean(error);
+  const baseClassName = hasError ? errorInputClassName : inputClassName;
   return (
-    <label className="block text-xs font-medium text-slate-300">
-      {label}
-      {children}
-    </label>
+    <div>
+      <label htmlFor={id} className="block text-xs font-medium text-slate-300">
+        {label}
+      </label>
+      {Children.only(
+        cloneElement(children, {
+          id,
+          'aria-invalid': hasError || undefined,
+          'aria-describedby': hasError ? `${id}-error` : undefined,
+          className: `${baseClassName} ${children.props.className ?? ''}`.trim(),
+        }),
+      )}
+      {error && (
+        <p
+          id={`${id}-error`}
+          role="alert"
+          className="mt-1 text-xs leading-5 text-rose-300"
+        >
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
