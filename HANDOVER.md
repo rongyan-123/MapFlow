@@ -23,21 +23,25 @@ MapFlow 是一个 **AI 技能树教学系统**（生产：https://xxian.fun）�
 
 ---
 
-## 2. 当前状态（2026-08-21）
+## 2. 当前状态（2026-09-05）
 
 ### 已验证 ✅
-- 生产健康：`/health/ready` 200
-- 生产已部署 c05199e 版本：新 JS `index-BYhfuej4.js`、CSS `index-as4gmxTC.css`
-- `index.html` 响应头 `Cache-Control: no-store`；hash 资源 `public, max-age=31536000, immutable`
-- 前端 158 用例全绿 + typecheck + build；server 非 DB 测试全绿（DB 测试需 Postgres，本地无）
+- 生产健康：`/health/ready` 200（外部公网复核）
+- 当前版本：server main = abacbc6（含身份 fail-closed 91f0a1f 与运维 workflow）；前端 main = 8750add（server ci.yml pin 的 MAPFLOW_COMMIT = 805a813）
+- **领邀请码报错已修复**：登录探针返回 `identity.authentication_rejected`（不再 `client_ip.unavailable`），等用户实报复验
+- **xiuxian 已全部下架**（用户授权）：restart policy → no + 已停止，无 systemd/cron 守护，重启不自启。服务器仅剩 mapflow app/caddy/postgres 三容器
+- `index.html` no-store / hash 资源 immutable 缓存头仍生效
+- 前端 158 用例全绿 + typecheck + build；server 非 DB 测试全绿
 
 ### 未验证 ❓（接手后第一优先）
-- 用户手机真机复验：「我的学习」视图生成按钮是否稳定显示（修复轮 6 刚部署，用户尚未反馈）
-- 无痕窗口验证过不了本地，只能等用户真机确认
+- 用户手机真机复验：「我的学习」视图生成按钮是否稳定显示（修复轮 6，用户尚未反馈）
+- 真实用户复验领邀请码（修复刚上线，尚无实际用户反馈）
 
 ### 已知问题（待处理）
-- **switch.sh 无回滚缺陷**（服务器脚本 `/opt/mapflow/switch.sh`）：新容器启动失败时旧容器已被 stop+rename，生产直接 502 离线。2026-08-21 已实际发生一次（见 §7 事故记录）。加固方案未定，改动前需与用户确认
-- 用户 PAT（`ghp_06hJ...`，存 `D:/tmp/gh-token.txt`）：用于查 CI 状态/删 artifact，不再使用时建议撤销
+- **caddy IP 漂移残留风险**：已固定 172.30.0.4，但若 caddy 容器被重建（未带 --ip pin）仍会漂移复发；此时重跑 `fix-prod.yml` 或直接 `bash /opt/mapflow/switch.sh <最近归档>`（switch.sh 已内置 trusted proxy 动态修复 + health 回滚，见 §7）
+- 服务器残留占盘：`mapflow-app-previous-2d64cbb6c7a2`、两个 `rollback-*` 旧容器（Exited 137）、3 个 ~87MB 历史归档——清理前与用户确认
+- 生成 worker 维持 4 个不降（用户判断正常使用到不了并发峰值）
+- 用户 PAT（`ghp_06hJ...`，存 `D:/tmp/gh-token.txt`）：仍用于查 CI / 触发运维 workflow，不再使用时建议撤销
 
 ---
 
@@ -129,7 +133,14 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/rongyan-123/
 
 ---
 
-## 7. 最近变更（2026-08-20/21，详见 ledger）
+## 7. 最近变更（详见 ledger）
+
+2026-09-05 运维（server abacbc6 / 前端 8750add）：
+- **领邀请码报错修复**：「暂时无法确认真实网络来源」= 服务器重启后 caddy IP 漂移（172.30.0.3→.4），`MAPFLOW_IDENTITY_TRUSTED_PROXY_IP` 失配被 91f0a1f 的 fail-closed 拦截。`fix-prod.yml`：固定 caddy IP + 用现有归档重跑 switch.sh 重建 app（env 动态写 caddy 实际 IP）→ 登录探针 503→401 验证通过
+- **xiuxian 全部下架**（用户授权）：restart policy→no + stop，无自启守护
+- 宕机根因沉淀：1.6GB 机挤 8 容器，xiuxian 三件套 cap 各 1.575GiB，峰值叠加打崩宿主机
+- **switch.sh 旧结论作废**：服务器端已内置 `MAPFLOW_TRUSTED_PROXY_REPAIR`（部署时动态探测 caddy IP 写 env）+ health 超时 30s 自动回滚——「无回滚缺陷」已在服务器上被加固（HANDOVER 未记录过该改动，何时加固未知，注意本地无此版本）
+- 前端 main 快进同步 4 个提交至 8750add 并推送（其中 805a813 是 server ci.yml 的 MAPFLOW_COMMIT pin）
 
 修复轮 1-5（手机端适配 + showcase 黑节点 + 进图冻结 + 生成按钮常驻）：commits `bbc1f193..d8ff601`，全部已部署。
 修复轮 6（当前上线版本，server c05199e / 前端 8ba45fb）：
@@ -152,10 +163,11 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/rongyan-123/
 
 ## 9. 下一步（接手后建议顺序）
 
-1. 等用户真机反馈「我的学习」按钮（修复轮 6 验收）
-2. 用户确认后，讨论 **switch.sh 无回滚加固**（trap 回滚或先起新容器再停旧；改动前与用户确认方案）
-3. 建议用户撤销 PAT（若不再需要我这边查 CI）
-4. 长期待办：AdminPanel v2、公告/信用/反馈迭代（docs/superpowers/ 下有相关 plan/spec 未实施）
+1. 用户真机复验「我的学习」按钮 + 真实用户复验领邀请码
+2. 服务器残留清理（previous-/rollback-* 旧容器、历史归档）——与用户确认后执行
+3. 建议用户撤销 PAT（若不再需要我这边查 CI / 触发运维 workflow）
+4. **进行中：MapFlow MCP 设计**（2026-09-05 用户提出）
+5. 长期待办：AdminPanel v2、公告/信用/反馈迭代（docs/superpowers/ 下有相关 plan/spec 未实施）
 
 ---
 
