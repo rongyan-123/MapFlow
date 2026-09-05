@@ -36,6 +36,46 @@ describe('validateRegistration', () => {
     expect(validateRegistration(form)).toBe(message);
   });
 
+  it.each([
+    [
+      { ...valid, username: '2264896153@qq.com' },
+      '用户名不能使用邮箱地址，请填写昵称；邮箱请填入「邮箱」栏。',
+    ],
+    [
+      { ...valid, username: 'a@b.com' },
+      '用户名不能使用邮箱地址，请填写昵称；邮箱请填入「邮箱」栏。',
+    ],
+  ])('引导把邮箱误填进用户名框的用户', (form, message) => {
+    expect(validateRegistration(form)).toBe(message);
+  });
+
+  it.each([
+    [
+      { ...valid, username: '张 三' },
+      '用户名只能包含汉字、英文字母、数字、下划线或短横线。',
+    ],
+    [
+      { ...valid, username: 'user.one' },
+      '用户名只能包含汉字、英文字母、数字、下划线或短横线。',
+    ],
+    [
+      { ...valid, username: '用户!名' },
+      '用户名只能包含汉字、英文字母、数字、下划线或短横线。',
+    ],
+    [
+      { ...valid, username: '名字emoji🙂' },
+      '用户名只能包含汉字、英文字母、数字、下划线或短横线。',
+    ],
+  ])('rejects characters the server allowlist would refuse', (form, message) => {
+    expect(validateRegistration(form)).toBe(message);
+  });
+
+  it('accepts usernames the server allowlist accepts', () => {
+    expect(validateRegistration({ ...valid, username: '学习者' })).toBeNull();
+    expect(validateRegistration({ ...valid, username: 'user_name-1' })).toBeNull();
+    expect(validateRegistration({ ...valid, username: 'ｕｓｅｒｎａｍｅ' })).toBeNull();
+  });
+
   it('accepts either a valid email or a digits-only phone locator', () => {
     expect(validateRegistration(valid)).toBeNull();
     expect(

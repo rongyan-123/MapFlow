@@ -53,13 +53,20 @@ export function passwordRules(username: string, password: string): PasswordRule[
 }
 
 export function validateRegistration(form: RegistrationFormValues): string | null {
-  const usernameLength = Array.from(form.username).length;
+  // 与 server 端 Username::parse（src/identity/username.rs）镜像：
+  // NFKC 归一化后按字符计数，再逐字符过 allowlist（长度、字符集顺序一致）
+  const usernameCharacters = Array.from(form.username.normalize('NFKC'));
   if (
-    usernameLength < 2 ||
-    usernameLength > 24 ||
-    form.username.trim() !== form.username
+    usernameCharacters.length < 2 ||
+    usernameCharacters.length > 24
   ) {
     return '用户名需要 2～24 个字符。';
+  }
+  if (usernameCharacters.includes('@')) {
+    return '用户名不能使用邮箱地址，请填写昵称；邮箱请填入「邮箱」栏。';
+  }
+  if (usernameCharacters.some((character) => !isAllowedUsernameCharacter(character))) {
+    return '用户名只能包含汉字、英文字母、数字、下划线或短横线。';
   }
   const passwordLength = Array.from(form.password).length;
   if (passwordLength < 8) return '密码至少需要 8 位。';
@@ -85,4 +92,12 @@ export function validateRegistration(form: RegistrationFormValues): string | nul
     return '手机号需为 8～15 位数字，可带前导 +。';
   }
   return null;
+}
+
+// 镜像 server 端 username.rs 的 allowlist：_ - 数字、拉丁/汉字字母。
+// 只放行 server 必然接受的字面字符（ASCII 拉丁 + 常用 CJK），避免前端放行后端再拒的误导窗口。
+function isAllowedUsernameCharacter(character: string): boolean {
+  if (character === '_' || character === '-') return true;
+  if (/[0-9A-Za-z]/.test(character)) return true;
+  return /[㐀-鿿豈-﫿\u{20000}-\u{2FA1F}]/u.test(character);
 }
