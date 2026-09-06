@@ -53,7 +53,8 @@ MapFlow 的树由 AI 生成,默认按「难度/推荐顺序」排布,适合顺�
 `targetId`(与既有 add_node/delete_node 等一致的传法)。按语境切块、把节点归入:
 
 1. `add_block`:`patch` 含 `name`、可选 `color`,无 `targetId`——块 id 由服务端生成,
-   在响应里返回,记下来供后续命令用;
+   但不随提交响应返回;成功后重读一次 `mapflow.get_tree`,在返回的 `blocks`
+   数组里按块名找到新块 id,记下来供后续命令用;
 2. `set_node_block`:`targetId` = 节点 id,`patch` 含 `blockId`;想移出块则给
    `"blockId": null`;
 3. 重复直至块的成员齐整;块不需要的节点保持原样(无 100% 覆盖要求)。
@@ -89,8 +90,9 @@ MapFlow 的树由 AI 生成,默认按「难度/推荐顺序」排布,适合顺�
 
 - `mutation.revision_conflict` → 树已被别人改过。丢弃本地草稿,
   重新 `mapflow.get_tree` 取最新 revision,把未提交的命令在新版本上重放。
-- `mutation.invalid` → 命令无效:引用的节点/边/块 id 或 patch 字段不对
-  (服务器会用一句话说明哪里不对)。重读树核对 id 与字段后重发。
+- `mutation.invalid` → 命令无效:引用的节点/边/块 id 或 patch 字段不对。
+  服务器只会回固定文案「变更命令无效,请检查节点/边/块 id 与 patch 字段。」,
+  不会指明具体错在哪;需重读树,自行核对引用的 id 与 patch 字段后重发。
 - `mutation.not_private_tree` → 只允许改自己的私有树,核对 `libraryEntryId`。
 - HTTP 401 + `auth.token_revoked` → 本机 token 已被吊销:relay 会自动清掉缓存 token
   并重新授权一次,无需手动处理;401 + `auth.invalid_token` → token 文件损坏或不被识别,
