@@ -69,7 +69,7 @@ describe('device flow', () => {
     expect(pollUrls.some((url) => url.endsWith(`/api/mcp/auth/requests/${requestCode}`))).toBe(true);
   });
 
-  it('fails fast when the user denies (status expired)', async () => {
+  it('fails fast when the user denies (200 status expired)', async () => {
     const requestCode = randomUUID();
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (init?.method === 'POST') return new Response(JSON.stringify({ requestCode, secret: 'e'.repeat(64), verificationPath: 'x', expiresInSeconds: 600 }), { status: 200 });
@@ -78,6 +78,27 @@ describe('device flow', () => {
     await expect(runDeviceFlow({ baseUrl, label: 'test', tokenFile, fetchImpl: fetchMock as never, openImpl: vi.fn(), pollIntervalMs: 1 }))
       .rejects.toThrow(/过期|expired|超时/i);
     expect(await readTokenFile(tokenFile)).toBeNull();
+  });
+
+  it('fails fast when the user denies (server removed the pending entry → poll returns 404)', async () => {
+    const requestCode = randomUUID();
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Response(JSON.stringify({ requestCode, secret: 'e'.repeat(64), verificationPath: 'x', expiresInSeconds: 600 }), { status: 200 });
+      // 服务器拒绝按钮 → resolve_approval 立即移除 pending 条目 → 后续轮询 404(终态)
+      return new Response('not found', { status: 404 });
+    });
+    // timeoutMs 收紧:若回归成「404 也 continue 空转」,本用例应在 ~1s 内以超时文案失败,而非挂 10 分钟
+    await expect(runDeviceFlow({
+      baseUrl, label: 'test', tokenFile, fetchImpl: fetchMock as never, openImpl: vi.fn(),
+      pollIntervalMs: 1, timeoutMs: 1000,
+    })).rejects.toThrow(/授权已过期或已被拒绝/);
+    expect(await readTokenFile(tokenFile)).toBeNull();
+  });
+
+  it('maps a network failure (fetch rejects) to a clear cannot-connect message', async () => {
+    const fetchMock = vi.fn(async () => { throw new TypeError('fetch failed'); });
+    await expect(runDeviceFlow({ baseUrl, label: 'test', tokenFile, fetchImpl: fetchMock as never, openImpl: vi.fn() }))
+      .rejects.toThrow(`无法连接 MapFlow 服务器(${baseUrl}),请检查网络后重试。`);
   });
 });
 

@@ -63,4 +63,25 @@ describe('rpc forwarding', () => {
     await expect(rpcCall({ baseUrl: 'https://x.test', token: 't'.repeat(64), fetchImpl: fetchMock as never, method: 'tools/list', params: {} }))
       .resolves.toBeNull();
   });
+
+  // 服务器存储不可用时在 JSON-RPC 分发前返回 503 扁平信封 —— 同样应归一为 MapflowRpcError,不得落 null
+  it('maps a flat non-2xx envelope (503 service temporarily unavailable) to MapflowRpcError', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      code: 'service.temporarily_unavailable', message: '服务暂不可用,请稍后重试。',
+    }), { status: 503, headers: { 'content-type': 'application/json' } }));
+    await expect(rpcCall({ baseUrl: 'https://x.test', token: 't'.repeat(64), fetchImpl: fetchMock as never, method: 'tools/list', params: {} }))
+      .rejects.toMatchObject({ operationCode: 'service.temporarily_unavailable', message: '服务暂不可用,请稍后重试。' });
+  });
+
+  it('does not swallow a bare non-2xx without any envelope (HTML 500 from a proxy) into null', async () => {
+    const fetchMock = vi.fn(async () => new Response('<html>oops</html>', { status: 500 }));
+    await expect(rpcCall({ baseUrl: 'https://x.test', token: 't'.repeat(64), fetchImpl: fetchMock as never, method: 'tools/list', params: {} }))
+      .rejects.toThrow('服务暂不可用(HTTP 500),请稍后重试。');
+  });
+
+  it('maps a network failure (fetch rejects) to a clear cannot-connect message', async () => {
+    const fetchMock = vi.fn(async () => { throw new TypeError('fetch failed'); });
+    await expect(rpcCall({ baseUrl: 'https://x.test', token: 't'.repeat(64), fetchImpl: fetchMock as never, method: 'tools/list', params: {} }))
+      .rejects.toThrow('无法连接 MapFlow 服务器(https://x.test),请检查网络后重试。');
+  });
 });

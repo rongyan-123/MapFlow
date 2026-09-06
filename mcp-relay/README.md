@@ -32,6 +32,10 @@ claude mcp add mapflow -- npx @mapflow/mcp
 
 按语义把树重组成块的操作方法见 [BLOCKS.md](BLOCKS.md)。
 
+## 技术说明
+
+`/mcp` 端点只接受单个 JSON-RPC 2.0 请求对象;畸形请求体回 HTTP 400/415,不支持 JSON-RPC batch(顶层数组请求回 -32600)。
+
 ## 环境变量(全部可选)
 
 - `MAPFLOW_SERVER_URL` — 服务器地址,默认 `https://xxian.fun`

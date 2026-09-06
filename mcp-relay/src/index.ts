@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { fromJSONSchema } from 'zod';
-import { readTokenFile } from './token-file.js';
+import { clearTokenFile, readTokenFile, tokenFilePath } from './token-file.js';
 import { runDeviceFlow, openBrowser } from './device-flow.js';
 import { rpcCall, isRevokedResponse, MapflowRpcError } from './http.js';
 import type { FetchLike } from './http.js';
@@ -18,10 +18,56 @@ function toZodSchema(inputSchema: unknown): ReturnType<typeof fromJSONSchema> {
 }
 
 async function obtainToken(): Promise<string> {
-  const tokenFile = (await import('./token-file.js')).tokenFilePath();
+  const tokenFile = tokenFilePath();
   const cached = await readTokenFile(tokenFile);
   if (cached) return cached;
   return runDeviceFlow({ baseUrl: serverUrl(), label: tokenLabel(), tokenFile, fetchImpl: fetch, openImpl: (url) => void openBrowser(url) });
+}
+
+// M3:工具调用共享上下文。多个工具回调并发时共用同一实例;吊销恢复后就地刷新 token,
+// 恢复完成后各自用最新 token 重发自己的请求。
+export interface ToolCallContext {
+  baseUrl: string; fetchImpl: FetchLike; token: string;
+  /** 完整重授权动作(清缓存 + 走一次授权流程);single-flight 保证并发 401 只执行一次 */
+  reauthorize: () => Promise<string>;
+}
+
+// M3:模块级 single-flight——并发 401 时首个触发重授权,其余复用同一 in-flight Promise,
+// 消除「后到的 clearTokenFile 删掉先者刚写入的新 token」竞态;settle 后复位。
+let reauthorizeInFlight: Promise<string> | null = null;
+export function reauthorizeTokenOnce(reauthorize: () => Promise<string>): Promise<string> {
+  if (!reauthorizeInFlight) {
+    reauthorizeInFlight = reauthorize().finally(() => { reauthorizeInFlight = null; });
+  }
+  return reauthorizeInFlight;
+}
+
+/** 单次工具调用(回调核心):遇吊销(401 auth.token_revoked)经 single-flight 重授权后自动重发一次 */
+export async function runToolCall(ctx: ToolCallContext, method: string, params: unknown): Promise<unknown> {
+  try {
+    return await rpcCall({ baseUrl: ctx.baseUrl, token: ctx.token, method, params, fetchImpl: ctx.fetchImpl });
+  } catch (error) {
+    if (error instanceof MapflowRpcError && isRevokedResponse((error as unknown as { status?: number }).status ?? 0, error.operationCode)) {
+      ctx.token = await reauthorizeTokenOnce(ctx.reauthorize);
+      return rpcCall({ baseUrl: ctx.baseUrl, token: ctx.token, method, params, fetchImpl: ctx.fetchImpl });
+    }
+    throw error;
+  }
+}
+
+/** M2:工具错误文本 = `${operationCode}: ${message}`,给 Agent 机器可分支信号,中文 message 保持可读 */
+export function formatToolError(error: unknown): string {
+  if (error instanceof MapflowRpcError) return `${error.operationCode}: ${error.message}`;
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** M5:主入口致命错误文案——invalid_token(缓存 token 无效)时附删 token 文件的自救步骤,路径动态拼 */
+export function formatFatalError(error: unknown): string {
+  const base = error instanceof Error ? error.message : String(error);
+  if (error instanceof MapflowRpcError && error.operationCode === 'auth.invalid_token') {
+    return `${base}\n若反复失败,请删除 ${tokenFilePath()} 后重试。`;
+  }
+  return base;
 }
 
 export interface StartupToolList {
@@ -48,35 +94,29 @@ export async function listToolsAtStartup(deps: {
 
 async function main(): Promise<void> {
   const baseUrl = serverUrl();
-  const tokenFile = (await import('./token-file.js')).tokenFilePath();
-  let token = await obtainToken();
-  const server = new McpServer({ name: 'mapflow', version: '0.1.0' });
-
-  // 与服务器同源的工具清单:先拉一次(冷启动遇已吊销的缓存 token 时自动清缓存重授),再逐工具注册
-  const startup = await listToolsAtStartup({
-    baseUrl, token, fetchImpl: fetch,
+  const tokenFile = tokenFilePath();
+  const ctx: ToolCallContext = {
+    baseUrl,
+    fetchImpl: fetch,
+    token: await obtainToken(),
     reauthorize: async () => {
-      const { clearTokenFile } = await import('./token-file.js');
       await clearTokenFile(tokenFile);
       return obtainToken();
     },
-  });
-  token = startup.token;
+  };
+  const server = new McpServer({ name: 'mapflow', version: '0.1.0' });
+
+  // 与服务器同源的工具清单:先拉一次(冷启动遇已吊销的缓存 token 时自动清缓存重授),再逐工具注册
+  const startup = await listToolsAtStartup({ baseUrl, token: ctx.token, fetchImpl: fetch, reauthorize: ctx.reauthorize });
+  ctx.token = startup.token;
   const listed = startup.listed;
   for (const tool of listed.tools) {
     server.registerTool(tool.name, { description: tool.description ?? '', inputSchema: toZodSchema(tool.inputSchema) }, async (args: unknown) => {
       try {
-        const result = await rpcCall({ baseUrl, token, method: 'tools/call', params: { name: tool.name, arguments: args }, fetchImpl: fetch });
+        const result = await runToolCall(ctx, 'tools/call', { name: tool.name, arguments: args });
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       } catch (error) {
-        if (error instanceof MapflowRpcError && isRevokedResponse((error as unknown as { status?: number }).status ?? 0, error.operationCode)) {
-          const { clearTokenFile } = await import('./token-file.js');
-          await clearTokenFile(tokenFile);
-          token = await obtainToken();
-          const retried = await rpcCall({ baseUrl, token, method: 'tools/call', params: { name: tool.name, arguments: args }, fetchImpl: fetch });
-          return { content: [{ type: 'text', text: JSON.stringify(retried) }] };
-        }
-        return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
+        return { isError: true, content: [{ type: 'text', text: formatToolError(error) }] };
       }
     });
   }
@@ -96,7 +136,7 @@ export function isDirectRun(argv1: string | undefined, moduleUrl: string): boole
 }
 if (isDirectRun(process.argv[1], import.meta.url)) {
   main().catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(formatFatalError(error));
     process.exit(1);
   });
 }

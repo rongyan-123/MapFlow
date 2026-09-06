@@ -8,8 +8,18 @@ export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 与服务端 TTL(600s)一致
 
+// M4:fetch 抛错(URL 不可达 / DNS 失败等网络型错误,无 HTTP 状态可辨)转清晰中文提示
+const networkErrorMessage = (baseUrl: string) => `无法连接 MapFlow 服务器(${baseUrl}),请检查网络后重试。`;
+
 export async function runDeviceFlow(deps: DeviceFlowDeps): Promise<string> {
-  const response = await deps.fetchImpl(`${deps.baseUrl}/api/mcp/auth/requests`, {
+  const fetchChecked = async (url: string, init?: RequestInit): Promise<Response> => {
+    try {
+      return await deps.fetchImpl(url, init ?? {});
+    } catch {
+      throw new Error(networkErrorMessage(deps.baseUrl));
+    }
+  };
+  const response = await fetchChecked(`${deps.baseUrl}/api/mcp/auth/requests`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ label: deps.label }),
@@ -23,10 +33,15 @@ export async function runDeviceFlow(deps: DeviceFlowDeps): Promise<string> {
   const interval = deps.pollIntervalMs ?? 2000;
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, interval));
-    const pollResponse = await deps.fetchImpl(poll, {
+    const pollResponse = await fetchChecked(poll, {
       headers: { authorization: `Bearer ${secret}` },
     });
-    if (!pollResponse.ok) continue; // 服务端抖动:继续等
+    // I1:服务器状态机里「拒绝」是终态——approve 页点拒绝后条目被立即移除,轮询返回 404;
+    // secret 不符则 401。两者都立即快速报错,不再静默空转到超时。5xx 视为服务端抖动继续等。
+    if (pollResponse.status === 404 || pollResponse.status === 401) {
+      throw new Error('授权已过期或已被拒绝,请重新运行 npx @mapflow/mcp 再试。');
+    }
+    if (!pollResponse.ok) continue;
     const body = await pollResponse.json();
     if (body.status === 'approved' && typeof body.token === 'string') {
       await writeTokenFile(deps.tokenFile, body.token);
