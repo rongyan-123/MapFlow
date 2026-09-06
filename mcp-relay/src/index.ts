@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { pathToFileURL } from 'node:url';
+import { existsSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { fromJSONSchema } from 'zod';
@@ -85,10 +86,15 @@ async function main(): Promise<void> {
 }
 
 // 直接以 node 运行本文件(bin 入口)才启动主流程;被测试 import 时保持惰性,不抢 stdin。
-// Windows 下盘符大小写可能不一致,统一小写比较。
-const isDirectRun = process.argv[1] !== undefined
-  && import.meta.url.toLowerCase() === pathToFileURL(process.argv[1]).href.toLowerCase();
-if (isDirectRun) {
+// Node 对主模块做 realpath:import.meta.url 已是链接目标的真实路径,而 argv[1] 仍是用户键入
+// 的路径——经 npm 全局安装 / npx 的 .bin 符号链接拉起时两者直比必不等 → 进程静默退出。
+// 故 argv1 侧 realpath 归一后与 moduleUrl(fileURLToPath)比较;盘符大小写统一小写。
+export function isDirectRun(argv1: string | undefined, moduleUrl: string): boolean {
+  return argv1 !== undefined
+    && existsSync(argv1)
+    && realpathSync(argv1).toLowerCase() === fileURLToPath(moduleUrl).toLowerCase();
+}
+if (isDirectRun(process.argv[1], import.meta.url)) {
   main().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
