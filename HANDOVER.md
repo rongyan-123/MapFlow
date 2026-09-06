@@ -1,7 +1,7 @@
 # MapFlow 项目交接文档
 
 > 交接日期：2026-08-21　交接对象：接手此项目的 AI Agent
-> 阅读顺序：本文档（30 秒概览 + 部署流水线必读）→ 全局 `C:\Users\Administrator\.claude\CLAUDE.md`（工作流规则）→ `.superpowers/sdd/2026-08-20-mobile-responsive/progress.md`（修复历史 ledger）→ 相关代码
+> 阅读顺序：本文档（30 秒概览 + 部署流水线必读）→ 全局 `C:\Users\Administrator\.claude\CLAUDE.md`（工作流规则）→ `git log --oneline -20`（两仓库；SDD ledger 已清理，历史以本文档 §7 + git 为准）→ 相关代码
 
 ---
 
@@ -13,6 +13,7 @@ MapFlow 是一个 **AI 技能树教学系统**（生产：https://xxian.fun）�
 - **公共树库**：所有用户生成的树进入公共池，可浏览/查看（含 showcase 高亮节点）
 - **身份系统**：邀请码注册、登录、会话（opaque cookie + CSRF）、管理员面板
 - **辅助系统**：信用/积分（平台免费额度）、公告、意见反馈
+- **MapFlow MCP**：外部 Agent（`npx @mapflow-publish/mcp`）经 device flow 授权后读取学习进度、读取/编辑私人技能树（含分组块），全部写操作落 agent 审计
 
 两个仓库（均直接工作在 `main` 分支）：
 
@@ -23,35 +24,37 @@ MapFlow 是一个 **AI 技能树教学系统**（生产：https://xxian.fun）�
 
 ---
 
-## 2. 当前状态（2026-09-05）
+## 2. 当前状态（2026-09-06）
 
 ### 已验证 ✅
 - 生产健康：`/health/ready` 200（外部公网复核）
-- 当前版本：server main = abacbc6（含身份 fail-closed 91f0a1f 与运维 workflow）；前端 main = 8750add（server ci.yml pin 的 MAPFLOW_COMMIT = 805a813）
-- **领邀请码报错已修复**：登录探针返回 `identity.authentication_rejected`（不再 `client_ip.unavailable`），等用户实报复验
-- **xiuxian 已全部下架**（用户授权）：restart policy → no + 已停止，无 systemd/cron 守护，重启不自启。服务器仅剩 mapflow app/caddy/postgres 三容器
+- 当前版本：server main = b583558（MCP 全量上线，含 Firefox Origin 修复，见 §7）；前端 app 代码 main = 8750add（server ci.yml pin 的 MAPFLOW_COMMIT = 805a813；其后仅 docs 提交至 2bf6aaa，不触发 rebuild）
+- **MapFlow MCP 生产冒烟全绿**：device flow 授权（Firefox 实证形态）+ 四工具（whoami/get_progress/get_tree/apply_tree_mutation）+ 块三连零残留 + agent 审计落账 + api_tokens 仅存 SHA-256 digest
+- **Caddy 访问日志已上线**（保留决策）：site 级 JSON access log → stdout → `docker logs mapflow-caddy`，排障可查 Origin/UA/IP 全 headers
 - `index.html` no-store / hash 资源 immutable 缓存头仍生效
-- 前端 158 用例全绿 + typecheck + build；server 非 DB 测试全绿
+- 前端 158 用例全绿 + typecheck + build；server 测试全绿（CI linux-canary 实跑 DB 测试）
 
 ### 未验证 ❓（接手后第一优先）
+- 真实用户接入 MCP 使用（用户曾在授权页操作，工具级使用待其反馈）
 - 用户手机真机复验：「我的学习」视图生成按钮是否稳定显示（修复轮 6，用户尚未反馈）
-- 真实用户复验领邀请码（修复刚上线，尚无实际用户反馈）
+- 真实用户复验领邀请码（修复已上线多日，无实际用户反馈）
 
 ### 已知问题（待处理）
 - **caddy IP 漂移残留风险**：已固定 172.30.0.4，但若 caddy 容器被重建（未带 --ip pin）仍会漂移复发；此时重跑 `fix-prod.yml` 或直接 `bash /opt/mapflow/switch.sh <最近归档>`（switch.sh 已内置 trusted proxy 动态修复 + health 回滚，见 §7）
 - 服务器残留占盘：`mapflow-app-previous-2d64cbb6c7a2`、两个 `rollback-*` 旧容器（Exited 137）、3 个 ~87MB 历史归档——清理前与用户确认
 - 生成 worker 维持 4 个不降（用户判断正常使用到不了并发峰值）
 - 用户 PAT（`ghp_06hJ...`，存 `D:/tmp/gh-token.txt`）：仍用于查 CI / 触发运维 workflow，不再使用时建议撤销
+- npm 发布 token（granular org token ×3，已提示用户吊销）
 
 ---
 
 ## 3. 真相源优先级
 
 ```
-运行中的生产代码 > 本地代码 > 测试 > progress.md ledger > 本文档 > 旧交接
+运行中的生产代码 > 本地代码 > 测试 > git 提交记录 > 本文档 > 旧交接
 ```
 
-本文档与 ledger 可能滞后于实际代码。接手时先 `git log --oneline -10` 与 `git status` 核实，再信任文档中的 commit hash 与状态。
+本文档可能滞后于实际代码。接手时先 `git log --oneline -20` 与 `git status` 核实，再信任文档中的 commit hash 与状态。
 
 ---
 
@@ -133,7 +136,13 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/rongyan-123/
 
 ---
 
-## 7. 最近变更（详见 ledger）
+## 7. 最近变更
+
+2026-09-06 MCP 上线（server b583558 / 前端 2bf6aaa）：
+- **MapFlow MCP 全流程交付**（SDD 8-task）：0015 迁移（api_tokens + agent_audit_events + skill_tree_blocks，skill_nodes.block_id 复合外键 ON DELETE SET NULL）；mutation 12 op + 幂等收据 + 与审计同事务；device flow 五端点（登记/轮询/授权页/决策，secret 仅存 digest，TTL 600s，登记容量 cap 10k）；`/api/mcp` JSON-RPC 四工具（whoami/get_progress/get_tree/apply_tree_mutation）；npm 包 `@mapflow-publish/mcp@0.1.0`（MCP SDK stdio/HTTP relay）
+- **Firefox 授权 403 修复（生产实证两连）**：授权页是同源 HTML 表单 POST，no-referrer 响应策略下 Firefox/Chrome 按规范发字面 `Origin: null` 头。修复 = 新闸 `require_form_csrf_identity_origin_optional`：仅授权决策路由用，Origin 缺失或为 `"null"` 时放行、存在且非 null 但不符仍拒、Host 必匹配，CSRF 隐藏字段为主防线；13 个 JSON/fetch 路由不变。测试锁 null 实证形态 + 缺失形态 + evil origin 拒绝（CI 全绿）
+- **Caddy 访问日志上线**（诊断产物，用户确认保留）：site 级 `log { output stdout format json }`，json access log 含完整 headers
+- 冒烟临时文件与冒烟 token 已清理/吊销；SDD ledger 已清理（含误删的历史 ledger，历史以本条目 + git log 为准）
 
 2026-09-05 运维（server abacbc6 / 前端 8750add）：
 - **领邀请码报错修复**：「暂时无法确认真实网络来源」= 服务器重启后 caddy IP 漂移（172.30.0.3→.4），`MAPFLOW_IDENTITY_TRUSTED_PROXY_IP` 失配被 91f0a1f 的 fail-closed 拦截。`fix-prod.yml`：固定 caddy IP + 用现有归档重跑 switch.sh 重建 app（env 动态写 caddy 实际 IP）→ 登录探针 503→401 验证通过
@@ -149,8 +158,6 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/rongyan-123/
 - **capabilities 失败乐观启用身份入口**（IdentityContext.tsx）——杜绝匿名用户无法登录的死锁
 - CI 事故修复 + GHCR 迁移 + recover-prod（见 §5.5）
 
-完整历史：`.superpowers/sdd/2026-08-20-mobile-responsive/progress.md`
-
 ---
 
 ## 8. 测试账号与环境
@@ -163,14 +170,13 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/rongyan-123/
 
 ## 9. 下一步（接手后建议顺序）
 
-1. 用户真机复验「我的学习」按钮 + 真实用户复验领邀请码
+1. 真实用户接入 MCP 使用（授权已通，等使用反馈）+ 手机真机复验按钮 + 真实用户复验领邀请码
 2. 服务器残留清理（previous-/rollback-* 旧容器、历史归档）——与用户确认后执行
-3. 建议用户撤销 PAT（若不再需要我这边查 CI / 触发运维 workflow）
-4. **进行中：MapFlow MCP 设计**（2026-09-05 用户提出）
-5. 长期待办：AdminPanel v2、公告/信用/反馈迭代（docs/superpowers/ 下有相关 plan/spec 未实施）
+3. 建议用户撤销 PAT（若不再需要我这边查 CI / 触发运维 workflow）+ 吊销 npm 发布 token
+4. 长期待办：AdminPanel v2、公告/信用/反馈迭代（docs/superpowers/ 下有相关 plan/spec 未实施）
 
 ---
 
 ## 10. 给接手 AI 的开场指令（可直接复制）
 
-> 你正在接手 MapFlow 教学系统（https://xxian.fun）。请先读 `D:\MapFlow-publish\HANDOVER.md`（项目交接文档）→ 全局 `C:\Users\Administrator\.claude\CLAUDE.md`（工作流规则）→ `.superpowers/sdd/2026-08-20-mobile-responsive/progress.md`（修复历史）。然后 `git log --oneline -10` 核实两仓库（D:\MapFlow-publish 前端、D:\mapflow-server 后端）当前状态。确认无误后我们再开始具体任务。
+> 你正在接手 MapFlow 教学系统（https://xxian.fun）。请先读 `D:\MapFlow-publish\HANDOVER.md`（项目交接文档）→ 全局 `C:\Users\Administrator\.claude\CLAUDE.md`（工作流规则）。然后 `git log --oneline -20` 核实两仓库（D:\MapFlow-publish 前端、D:\mapflow-server 后端）当前状态（§7 有最近变更摘要）。确认无误后我们再开始具体任务。
