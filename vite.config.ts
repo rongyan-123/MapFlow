@@ -14,5 +14,7 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     clearMocks: true,
     restoreMocks: true,
+    // 只扫前端 src,mcp-relay/ 用自带 vitest.config.ts 独立跑
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
   },
 });
