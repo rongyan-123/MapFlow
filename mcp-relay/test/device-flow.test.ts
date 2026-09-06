@@ -1,10 +1,33 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { runDeviceFlow } from '../src/device-flow.js';
+import { openBrowser, runDeviceFlow } from '../src/device-flow.js';
 import { readTokenFile } from '../src/token-file.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+// 模拟 child_process.spawn:返回一个行为近似真实 EventEmitter 的句柄——
+// 'error' 无监听时触发即抛(与 Node 的 unhandled 'error' 语义一致,原实现的
+// try/catch 拦不住异步 emit,缺命令时会直接崩进程)。
+const { spawnMock, emitSpawnError } = vi.hoisted(() => {
+  const listeners: Record<string, Array<(err: Error) => void>> = {};
+  const child: Record<string, unknown> = {
+    on: (event: string, fn: (err: Error) => void) => {
+      (listeners[event] ??= []).push(fn);
+      return child;
+    },
+    unref: () => {},
+  };
+  return {
+    spawnMock: vi.fn(() => child),
+    emitSpawnError: (err: Error) => {
+      const fns = listeners['error'] ?? [];
+      if (fns.length === 0) throw err;
+      for (const fn of fns) fn(err);
+    },
+  };
+});
+vi.mock('node:child_process', () => ({ spawn: spawnMock }));
 
 describe('device flow', () => {
   let tokenFile: string;
@@ -55,5 +78,17 @@ describe('device flow', () => {
     await expect(runDeviceFlow({ baseUrl, label: 'test', tokenFile, fetchImpl: fetchMock as never, openImpl: vi.fn(), pollIntervalMs: 1 }))
       .rejects.toThrow(/过期|expired|超时/i);
     expect(await readTokenFile(tokenFile)).toBeNull();
+  });
+});
+
+describe('openBrowser fallback', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('prints the manual-open hint when the opener command is missing (ENOENT emitted asynchronously)', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await openBrowser('https://x.test/approve?code=abc');
+    // spawn 对缺失命令异步 emit 'error',try/catch 拦不住;实现必须挂 on('error') 兜底
+    emitSpawnError(Object.assign(new Error('spawn xdg-open ENOENT'), { code: 'ENOENT' }));
+    expect(logSpy).toHaveBeenCalledWith('请在浏览器打开授权页:https://x.test/approve?code=abc');
   });
 });

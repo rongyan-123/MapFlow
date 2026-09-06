@@ -1,6 +1,4 @@
-import { clearTokenFile, readTokenFile, writeTokenFile } from './token-file.js';
-import { isRevokedResponse } from './http.js';
-import { randomUUID } from 'node:crypto';
+import { writeTokenFile } from './token-file.js';
 
 export interface DeviceFlowDeps {
   baseUrl: string; label: string; tokenFile: string; fetchImpl: FetchLike;
@@ -42,15 +40,14 @@ export async function runDeviceFlow(deps: DeviceFlowDeps): Promise<string> {
 }
 
 export async function openBrowser(url: string): Promise<void> {
-  // 用户本机;打印 URL 兜底(无图形环境/命令缺失时用户可手动打开)
+  // 用户本机;命令缺失时打印 URL 兜底(无图形环境时用户可手动打开)
   const { spawn } = await import('node:child_process');
   const platform = process.platform;
   const command = platform === 'darwin' ? ['open', url]
     : platform === 'win32' ? ['cmd', '/c', 'start', '', url]
     : ['xdg-open', url];
-  try {
-    spawn(command[0], command.slice(1), { stdio: 'ignore', detached: true }).unref();
-  } catch {
-    console.log(`请在浏览器打开授权页:${url}`);
-  }
+  // spawn 对缺失命令(ENOENT)异步 emit 'error',try/catch 拦不住 → 挂监听兜底提示
+  const child = spawn(command[0], command.slice(1), { stdio: 'ignore', detached: true });
+  child.on('error', () => console.log(`请在浏览器打开授权页:${url}`));
+  child.unref();
 }
