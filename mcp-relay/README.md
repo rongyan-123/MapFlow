@@ -1,4 +1,4 @@
-# @mapflow/mcp
+# @mapflow-publish/mcp
 
 一行命令,让你的 Agent(Claude Code / Codex / Cursor)连接 MapFlow:
 读取学习进度、读写你自己的私有技能树,还能按你的语义把树重组成「块」。
@@ -7,7 +7,7 @@
 ## 一行命令(首次约 3 秒授权)
 
 ```bash
-npx @mapflow/mcp
+npx @mapflow-publish/mcp
 ```
 
 首次运行自动打开浏览器 → 在 xxian.fun 授权页点「允许」(复用你的登录态)→
@@ -16,7 +16,7 @@ token 存入本机 `~/.mapflow/token`(权限 600)。之后每次运行静默直�
 ## 接入 Claude Code
 
 ```bash
-claude mcp add mapflow -- npx @mapflow/mcp
+claude mcp add mapflow -- npx @mapflow-publish/mcp
 ```
 
 之后在 Claude Code 里直接说「读一下我的学习进度」「把安全相关的节点整理成块」即可。
@@ -40,7 +40,7 @@ claude mcp add mapflow -- npx @mapflow/mcp
 
 - `MAPFLOW_SERVER_URL` — 服务器地址,默认 `https://xxian.fun`
 - `MAPFLOW_TOKEN_FILE` — token 文件路径,默认 `~/.mapflow/token`
-- `MAPFLOW_TOKEN_LABEL` — 授权页显示的用途名,默认 `npx @mapflow/mcp`
+- `MAPFLOW_TOKEN_LABEL` — 授权页显示的用途名,默认 `npx @mapflow-publish/mcp`
 
 ## 重新授权 / 吊销
 
@@ -49,7 +49,7 @@ token 被吊销(HTTP 401 `auth.token_revoked`)后,relay 会自动清掉缓存 to
 
 ```bash
 rm ~/.mapflow/token
-npx @mapflow/mcp
+npx @mapflow-publish/mcp
 ```
 
 服务器端吊销入口:运维 SQL 置 `revoked_at`(管理界面后续提供)。

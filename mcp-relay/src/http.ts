@@ -36,7 +36,7 @@ export async function rpcCall(deps: RpcDeps): Promise<unknown> {
     const code = body.error?.data?.code ?? (typeof body.code === 'string' ? body.code : undefined)
       ?? (response.status === 401 ? 'auth.invalid_token' : 'unknown');
     const message = body.error?.message ?? (typeof body.message === 'string' ? body.message
-      : response.status === 401 ? '令牌无效,请重新执行 npx @mapflow/mcp 授权。'
+      : response.status === 401 ? '令牌无效,请重新执行 npx @mapflow-publish/mcp 授权。'
       : `服务暂不可用(HTTP ${response.status}),请稍后重试。`);
     const error = new MapflowRpcError(message, code);
     (error as unknown as { status: number }).status = response.status;

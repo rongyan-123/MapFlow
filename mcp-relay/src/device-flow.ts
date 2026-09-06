@@ -39,7 +39,7 @@ export async function runDeviceFlow(deps: DeviceFlowDeps): Promise<string> {
     // I1:服务器状态机里「拒绝」是终态——approve 页点拒绝后条目被立即移除,轮询返回 404;
     // secret 不符则 401。两者都立即快速报错,不再静默空转到超时。5xx 视为服务端抖动继续等。
     if (pollResponse.status === 404 || pollResponse.status === 401) {
-      throw new Error('授权已过期或已被拒绝,请重新运行 npx @mapflow/mcp 再试。');
+      throw new Error('授权已过期或已被拒绝,请重新运行 npx @mapflow-publish/mcp 再试。');
     }
     if (!pollResponse.ok) continue;
     const body = await pollResponse.json();
@@ -48,7 +48,7 @@ export async function runDeviceFlow(deps: DeviceFlowDeps): Promise<string> {
       return body.token;
     }
     if (body.status === 'expired') {
-      throw new Error('授权已过期或已被拒绝,请重新运行 npx @mapflow/mcp 再试。');
+      throw new Error('授权已过期或已被拒绝,请重新运行 npx @mapflow-publish/mcp 再试。');
     }
   }
   throw new Error('等待授权超时(10 分钟),请重新运行。');

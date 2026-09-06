@@ -1,11 +1,11 @@
 {
-  "name": "@mapflow/mcp",
+  "name": "@mapflow-publish/mcp",
   "version": "0.1.0",
   "description": "MapFlow 外部 Agent 接入:一行命令让 Claude Code/Codex 等读写你的学习树(需先授权一次)。",
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
-  "bin": { "@mapflow/mcp": "dist/index.js" },
+  "bin": { "@mapflow-publish/mcp": "dist/index.js" },
   "files": ["dist", "README.md", "BLOCKS.md"],
   "engines": { "node": ">=18" },
   "scripts": {

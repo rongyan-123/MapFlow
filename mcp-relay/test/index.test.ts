@@ -125,8 +125,8 @@ describe('错误面文案', () => {
     const customTokenFile = join(tmpdir(), `mapflow-fatal-${process.pid}-${Date.now()}.token`);
     process.env.MAPFLOW_TOKEN_FILE = customTokenFile;
     try {
-      const err = new MapflowRpcError('令牌无效,请重新执行 npx @mapflow/mcp 授权。', 'auth.invalid_token');
-      expect(formatFatalError(err)).toBe(`令牌无效,请重新执行 npx @mapflow/mcp 授权。\n若反复失败,请删除 ${customTokenFile} 后重试。`);
+      const err = new MapflowRpcError('令牌无效,请重新执行 npx @mapflow-publish/mcp 授权。', 'auth.invalid_token');
+      expect(formatFatalError(err)).toBe(`令牌无效,请重新执行 npx @mapflow-publish/mcp 授权。\n若反复失败,请删除 ${customTokenFile} 后重试。`);
       expect(formatFatalError(new MapflowRpcError('服务暂不可用。', 'service.temporarily_unavailable'))).toBe('服务暂不可用。');
       expect(formatFatalError(new Error('网络断开'))).toBe('网络断开');
     } finally {
