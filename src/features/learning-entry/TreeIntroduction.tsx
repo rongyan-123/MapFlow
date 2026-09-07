@@ -24,7 +24,7 @@ export default function TreeIntroduction({
       className="flex min-h-0 flex-1 overflow-y-auto bg-[#f6f4ee] text-slate-900"
       aria-labelledby="tree-introduction-title"
     >
-      <div className="mx-auto flex w-full max-w-5xl flex-col px-5 py-6 sm:px-8 sm:py-10 lg:px-12 lg:py-14">
+      <div className="mx-auto flex w-full max-w-5xl flex-col px-5 py-4 sm:px-8 sm:py-10 lg:px-12 lg:py-14">
         <button
           type="button"
           onClick={onBack}
@@ -33,21 +33,21 @@ export default function TreeIntroduction({
           ← 返回探索
         </button>
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-end lg:gap-16">
+        <div className="mt-5 grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-end lg:gap-16">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-700">{guide.eyebrow}</p>
             <h1
               id="tree-introduction-title"
-              className="mt-4 max-w-3xl text-4xl font-black leading-[1.08] tracking-[-0.05em] text-slate-950 sm:text-6xl"
+              className="mt-3 max-w-3xl text-3xl font-black leading-[1.05] tracking-[-0.05em] text-slate-950 sm:mt-4 sm:text-6xl sm:leading-[1.08]"
             >
               {guide.displayTitle}
             </h1>
-            <p className="mt-6 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600 sm:mt-6 sm:text-lg sm:leading-8">
               {guide.summary}
             </p>
           </div>
 
-          <div className="relative min-h-56 overflow-hidden rounded-[2rem] border border-teal-900/10 bg-[#183c3b] p-6 text-white shadow-[0_24px_70px_-35px_rgba(15,118,110,0.75)] sm:min-h-64 sm:p-8">
+          <div className="relative hidden min-h-56 overflow-hidden rounded-[2rem] border border-teal-900/10 bg-[#183c3b] p-6 text-white shadow-[0_24px_70px_-35px_rgba(15,118,110,0.75)] lg:block sm:min-h-64 sm:p-8">
             <div className="absolute -right-10 -top-12 h-40 w-40 rounded-full border border-teal-100/20" aria-hidden="true" />
             <div className="absolute -bottom-16 left-8 h-44 w-44 rounded-full border border-amber-100/15" aria-hidden="true" />
             <p className="relative text-xs font-bold uppercase tracking-[0.2em] text-teal-100/70">一条可验证的学习路径</p>
@@ -58,12 +58,12 @@ export default function TreeIntroduction({
           </div>
         </div>
 
-        <div className="mt-10 flex flex-col gap-5 rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-[0_18px_50px_-38px_rgba(15,23,42,0.55)] sm:p-7">
+        <div className="mt-6 flex flex-col gap-4 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-[0_18px_50px_-38px_rgba(15,23,42,0.55)] sm:mt-10 sm:gap-5 sm:p-7">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-700">推荐起点</p>
-            <p className="mt-3 max-w-3xl text-lg font-semibold leading-8 text-slate-900">从一个具体问题开始，地图会告诉你它和哪些概念相连。</p>
+            <p className="mt-2 max-w-3xl text-base font-semibold leading-6 text-slate-900 sm:mt-3 sm:text-lg sm:leading-8">从一个具体问题开始，地图会告诉你它和哪些概念相连。</p>
           </div>
-          <p className="rounded-xl bg-teal-50 px-4 py-3 text-sm font-semibold leading-6 text-teal-900">
+          <p className="rounded-xl bg-teal-50 px-3 py-2.5 text-sm font-semibold leading-6 text-teal-900 sm:px-4 sm:py-3">
             {guide.question}
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

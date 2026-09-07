@@ -33,6 +33,10 @@ describe('TreeIntroduction', () => {
     expect(screen.getByRole('button', { name: '了解适合人群与基础要求' })).toBeInTheDocument();
     expect(screen.queryByText('适合谁')).not.toBeInTheDocument();
     expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
+    const decorativePathCard = screen
+      .getByText('一条可验证的学习路径')
+      .closest('div') as HTMLElement;
+    expect(decorativePathCard).toHaveClass('hidden', 'lg:block');
 
     await user.click(screen.getByRole('button', { name: '了解适合人群与基础要求' }));
     expect(screen.getByText('适合谁')).toBeInTheDocument();
