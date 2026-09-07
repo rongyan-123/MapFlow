@@ -16,6 +16,7 @@ interface KnowledgeChatPanelProps {
   onCreditChanged?: () => void | Promise<void>;
   isVisible?: boolean;
   initialDraft?: string;
+  initialDraftRevision?: number;
 }
 
 export default function KnowledgeChatPanel({
@@ -26,6 +27,7 @@ export default function KnowledgeChatPanel({
   onCreditChanged,
   isVisible = true,
   initialDraft = '',
+  initialDraftRevision = 0,
 }: KnowledgeChatPanelProps) {
   const [messages, setMessages] = useState<KnowledgeChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -41,7 +43,6 @@ export default function KnowledgeChatPanel({
     let active = true;
     setHistoryPending(true);
     setMessages([]);
-    setDraft(initialDraft);
     setError(null);
     setLastCharge(null);
     setStreamingAnswer(null);
@@ -62,7 +63,11 @@ export default function KnowledgeChatPanel({
     return () => {
       active = false;
     };
-  }, [initialDraft, libraryEntryId]);
+  }, [libraryEntryId]);
+
+  useEffect(() => {
+    setDraft(initialDraft);
+  }, [initialDraft, initialDraftRevision]);
 
   useLayoutEffect(() => {
     if (!isVisible || historyPending) return;

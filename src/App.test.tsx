@@ -293,6 +293,46 @@ describe('MapFlow tree library', () => {
     expect(treeApi.fetchPublicTree).not.toHaveBeenCalled();
   });
 
+  it('公共工作台中的继续探索直接进入个人地图并使用个人树查询', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp('/console');
+
+    await user.click(
+      await screen.findByRole('button', { name: `继续探索 ${nestjsTree.title}` }),
+    );
+
+    expect(await screen.findByRole('button', { name: '查看节点 基础节点' })).toHaveAttribute(
+      'data-display-mode',
+      'personal',
+    );
+    expect(treeApi.fetchPersonalTree).toHaveBeenCalledWith(
+      personalEntry.library_entry_id,
+    );
+    expect(treeApi.fetchPublicTree).not.toHaveBeenCalled();
+  });
+
+  it('个人空库选择公共方向时回到公共地图，而不是沿用个人视图', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [] });
+    renderApp('/console');
+
+    await user.click(await screen.findByRole('button', { name: '我的学习' }));
+    await user.click(
+      await screen.findByRole('button', { name: /查看 NestJS 完整学习树 简介/ }),
+    );
+    await user.click(screen.getByRole('button', { name: '开始探索' }));
+
+    expect(await screen.findByRole('button', { name: '查看节点 基础节点' })).toHaveAttribute(
+      'data-display-mode',
+      'showcase',
+    );
+    expect(treeApi.fetchPublicTree).toHaveBeenCalledWith(nestjsTree.id);
+  });
+
   it('方向卡先打开简介，开始探索与先看地图进入同一张地图但意图不同', async () => {
     const user = userEvent.setup();
     renderApp('/console');
@@ -336,6 +376,80 @@ describe('MapFlow tree library', () => {
     const input = await screen.findByRole('textbox', { name: '输入问题' });
     expect(input).toHaveValue('我想先弄懂「NestJS」里的哪个关键关系？');
     expect(chatApi.sendKnowledgeChatMessageStream).not.toHaveBeenCalled();
+  });
+
+  it('已登录用户把推荐问题带入正确的个人聊天，并可编辑而不自动发送', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.addTreeToPersonalLibrary.mockResolvedValue({
+      library_entry_id: personalEntry.library_entry_id,
+      tree_id: nestjsTree.id,
+    });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp('/console');
+
+    await user.click(
+      await screen.findByRole('button', { name: /查看 NestJS 完整学习树 简介/ }),
+    );
+    await user.click(screen.getByRole('button', { name: '开始探索' }));
+    await user.click(
+      await screen.findByRole('button', { name: '加入我的学习并带入聊天草稿' }),
+    );
+
+    const input = await screen.findByRole('textbox', { name: '输入问题' });
+    expect(input).toHaveValue('我想先弄懂「NestJS」里的哪个关键关系？');
+    expect(screen.getByText(`当前树：${nestjsTree.title}`)).toBeInTheDocument();
+    expect(treeApi.fetchPersonalTree).toHaveBeenCalledWith(
+      personalEntry.library_entry_id,
+    );
+
+    await user.clear(input);
+    await user.type(input, '请换成一个具体例子。');
+    expect(input).toHaveValue('请换成一个具体例子。');
+    expect(chatApi.sendKnowledgeChatMessageStream).not.toHaveBeenCalled();
+  });
+
+  it('登录前切换公共方向不会把旧方向的问题带入新树', async () => {
+    const user = userEvent.setup();
+    identityApi.loginIdentity.mockResolvedValue(authenticated);
+    treeApi.fetchPublicTree.mockResolvedValue({
+      view_mode: 'showcase',
+      graph: agentGraph,
+    });
+    renderApp('/console');
+
+    await user.click(
+      await screen.findByRole('button', { name: /查看 NestJS 完整学习树 简介/ }),
+    );
+    await user.click(screen.getByRole('button', { name: '开始探索' }));
+    await user.click(await screen.findByRole('button', { name: '登录后带入聊天草稿' }));
+
+    const dialog = screen.getByRole('dialog', { name: '登录学习账号' });
+    await user.click(
+      await screen.findByRole('button', { name: `查看 ${agentTree.title}` }),
+    );
+    await user.type(within(dialog).getByLabelText('用户名'), authenticated.account.username);
+    await user.type(within(dialog).getByLabelText('密码'), 'safe-password-2026');
+    const loginButtons = within(dialog).getAllByRole('button', { name: '登录' });
+    await user.click(loginButtons[loginButtons.length - 1]);
+
+    expect(treeApi.addTreeToPersonalLibrary).not.toHaveBeenCalled();
+    expect(await screen.findByRole('heading', { name: '今天想弄懂什么？' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: '输入问题' })).not.toBeInTheDocument();
+  });
+
+  it('工作台顶栏把工具收进可访问的更多菜单', async () => {
+    const user = userEvent.setup();
+    renderApp('/console');
+
+    await screen.findByRole('heading', { name: '今天想弄懂什么？' });
+    expect(screen.queryByTestId('top-generate-tree')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '打开更多菜单' }));
+
+    const menu = screen.getByRole('menu', { name: '更多工具' });
+    expect(within(menu).getByRole('button', { name: '开始生成技能树' })).toBeInTheDocument();
+    expect(within(menu).getByRole('link', { name: '查看产品首页' })).toBeInTheDocument();
+    expect(within(menu).getByRole('combobox', { name: '选择主题' })).toBeInTheDocument();
   });
 
   it('首次访问根路径展示产品首页，并可直接进入控制台', async () => {
@@ -578,6 +692,7 @@ describe('MapFlow tree library', () => {
     const user = userEvent.setup();
     renderApp();
 
+    await user.click(await screen.findByRole('button', { name: '打开更多菜单' }));
     const button = await screen.findByRole('button', { name: '开始生成技能树' });
     expect(button).toBeInTheDocument();
 
@@ -593,6 +708,7 @@ describe('MapFlow tree library', () => {
     treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
     renderApp();
 
+    await user.click(await screen.findByRole('button', { name: '打开更多菜单' }));
     const button = await screen.findByRole('button', { name: '开始生成技能树' });
     expect(button).toBeEnabled();
     await user.click(button);
@@ -873,7 +989,7 @@ describe('手机端视图栈', () => {
     expect(screen.getByRole('button', { name: '返回上一级' })).toBeInTheDocument();
   });
 
-  it('点节点进入详情页，返回按钮先回图页再回列表', async () => {
+  it('点节点进入详情页，返回按钮依次回图页和工作台', async () => {
     const user = userEvent.setup();
     renderApp();
 
@@ -889,7 +1005,8 @@ describe('手机端视图栈', () => {
     expect(screen.getByTestId('mobile-detail').className).toContain('hidden');
 
     await user.click(screen.getByRole('button', { name: '返回上一级' }));
-    expect(screen.getByTestId('mobile-list').className).not.toContain('hidden');
+    expect(screen.getByTestId('workbench-home')).toBeInTheDocument();
+    expect(screen.queryByTestId('mobile-list')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '返回上一级' }),
     ).not.toBeInTheDocument();

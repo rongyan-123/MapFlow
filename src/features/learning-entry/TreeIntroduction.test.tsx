@@ -29,9 +29,13 @@ describe('TreeIntroduction', () => {
     );
 
     expect(screen.getByRole('heading', { name: '数据迁移学习地图' })).toBeInTheDocument();
-    expect(screen.getByText('适合谁')).toBeInTheDocument();
-    expect(screen.getByText('推荐从这个问题开始')).toBeInTheDocument();
+    expect(screen.getAllByText(/我想先弄懂「数据迁移」/)).toHaveLength(1);
+    expect(screen.getByRole('button', { name: '了解适合人群与基础要求' })).toBeInTheDocument();
+    expect(screen.queryByText('适合谁')).not.toBeInTheDocument();
     expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '了解适合人群与基础要求' }));
+    expect(screen.getByText('适合谁')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '开始探索' }));
     expect(onStartExploring).toHaveBeenCalledWith(expect.stringContaining('数据迁移'));

@@ -84,11 +84,14 @@ function StoryMapIllustration({ accent }: { accent: 'teal' | 'coral' }) {
         <circle cx="207" cy="122" r="10" fill={nodeColor} />
         <circle cx="254" cy="58" r="10" fill="#fff" stroke={nodeColor} strokeWidth="4" />
       </svg>
-      <span className="absolute left-5 top-4 rounded-lg bg-white/80 px-2.5 py-1.5 text-[11px] font-semibold text-[#607477]">
-        {accent === 'teal' ? '问题' : '证据'}
+      <span className="absolute left-5 top-4 rounded-lg bg-white/90 px-2.5 py-1.5 text-[11px] font-semibold text-[#607477]">
+        {accent === 'teal' ? 'Python 基础' : '模型调用节点'}
       </span>
-      <span className="absolute bottom-4 right-5 rounded-lg bg-white/80 px-2.5 py-1.5 text-[11px] font-semibold text-[#607477]">
-        {accent === 'teal' ? '路径' : '下一步'}
+      <span className="absolute left-1/2 top-[42%] -translate-x-1/2 rounded-lg border border-[#dce7e1] bg-white/90 px-2.5 py-1.5 text-[11px] font-semibold text-[#176f70]">
+        {accent === 'teal' ? 'HTTP 请求节点' : '工具调用节点'}
+      </span>
+      <span className="absolute bottom-4 right-5 rounded-lg bg-white/90 px-2.5 py-1.5 text-[11px] font-semibold text-[#607477]">
+        {accent === 'teal' ? '模型调用节点' : '返回可验证结果'}
       </span>
     </div>
   );

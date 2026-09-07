@@ -47,6 +47,11 @@ type AppView = 'public' | 'personal' | 'admin';
 type MobileView = 'list' | 'graph' | 'detail' | 'chat';
 type ConsoleMode = 'home' | 'introduction' | 'map';
 
+interface PendingExplorationIntent {
+  treeId: string;
+  question: string;
+}
+
 const CONSOLE_ENTRY_MEMORY_KEY = 'mapflow.entry.has-entered-console';
 const PENDING_CONSOLE_ENTRY_KEY = 'mapflow.entry.pending-console';
 
@@ -134,6 +139,7 @@ function ConsoleApp() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [explorationQuestion, setExplorationQuestion] = useState<string | null>(null);
   const [initialChatDraft, setInitialChatDraft] = useState('');
+  const [initialChatDraftRevision, setInitialChatDraftRevision] = useState(0);
   const [completion, setCompletion] = useState<{ node: SkillNode; nonce: number } | null>(null);
   const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
   const [generationSessionId, setGenerationSessionId] = useState<string | null>(
@@ -143,6 +149,7 @@ function ConsoleApp() {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatWidth, setChatWidth] = useState(DEFAULT_CHAT_WIDTH);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [announcementsOpen, setAnnouncementsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [personalSidebarOpen, setPersonalSidebarOpen] = useState(() =>
@@ -153,7 +160,8 @@ function ConsoleApp() {
   );
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const completedGenerationSessionIdRef = useRef<string | null>(null);
-  const pendingExplorationAfterLoginRef = useRef<string | null>(null);
+  const pendingExplorationIntentRef = useRef<PendingExplorationIntent | null>(null);
+  const previousAccountPlayerIdRef = useRef<string | null>(null);
   const accountPlayerId = session?.account.playerId ?? null;
   const personalTreeLibraryQueryKey = [
     'me',
@@ -242,16 +250,13 @@ function ConsoleApp() {
   }, [personalLibrary.data, selectedLibraryEntryId, session, view]);
 
   useEffect(() => {
-    const pendingQuestion = pendingExplorationAfterLoginRef.current;
-    if (accountPlayerId && pendingQuestion) {
-      setInitialChatDraft(pendingQuestion);
-      setExplorationQuestion(pendingQuestion);
-      setCompletion(null);
-      setChatOpen(false);
-      setConsoleMode('map');
-      setMobileView('detail');
-      return;
-    }
+    const previousAccountPlayerId = previousAccountPlayerIdRef.current;
+    const accountChanged =
+      previousAccountPlayerId !== null && previousAccountPlayerId !== accountPlayerId;
+    previousAccountPlayerIdRef.current = accountPlayerId;
+    if (accountChanged) pendingExplorationIntentRef.current = null;
+
+    if (accountPlayerId && pendingExplorationIntentRef.current) return;
 
     setSelectedLibraryEntryId(null);
     setSelectedNodeId(null);
@@ -261,8 +266,26 @@ function ConsoleApp() {
     setChatOpen(false);
     setConsoleMode('home');
     setMobileView('list');
-    if (!accountPlayerId) pendingExplorationAfterLoginRef.current = null;
+    if (!accountPlayerId) pendingExplorationIntentRef.current = null;
   }, [accountPlayerId]);
+
+  useEffect(() => {
+    const pendingIntent = pendingExplorationIntentRef.current;
+    if (!accountPlayerId || !pendingIntent) return;
+    if (selectedPublicTreeId && selectedPublicTreeId !== pendingIntent.treeId) {
+      pendingExplorationIntentRef.current = null;
+      return;
+    }
+
+    setInitialChatDraft(pendingIntent.question);
+    setInitialChatDraftRevision((revision) => revision + 1);
+    setExplorationQuestion(pendingIntent.question);
+    setCompletion(null);
+    setChatOpen(false);
+    setView('public');
+    setConsoleMode('map');
+    setMobileView('detail');
+  }, [accountPlayerId, selectedPublicTreeId]);
 
   useEffect(() => {
     if (!session && !sessionPending && view !== 'public') {
@@ -275,6 +298,7 @@ function ConsoleApp() {
       setAnnouncementsOpen(false);
       setFeedbackOpen(false);
       setGenerationDialogOpen(false);
+      setMoreOpen(false);
       setGenerationSessionId(null);
       writeGenerationSessionId(null);
     }
@@ -358,24 +382,41 @@ function ConsoleApp() {
       return addTreeToPersonalLibrary(treeId, session.csrfToken);
     },
     onSuccess: async (added) => {
+      const pendingIntent = pendingExplorationIntentRef.current;
+      const carriesExplorationQuestion = pendingIntent?.treeId === added.tree_id;
+      if (carriesExplorationQuestion) pendingExplorationIntentRef.current = null;
       setSelectedLibraryEntryId(added.library_entry_id);
       setSelectedNodeId(null);
       setCompletion(null);
       setView('personal');
       setConsoleMode('map');
-      setExplorationQuestion(null);
+      setExplorationQuestion(carriesExplorationQuestion ? pendingIntent.question : null);
+      if (carriesExplorationQuestion) {
+        setInitialChatDraft(pendingIntent.question);
+        setInitialChatDraftRevision((revision) => revision + 1);
+        setChatOpen(true);
+        setMobileView('chat');
+      }
       await queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
+    },
+    onError: () => {
+      pendingExplorationIntentRef.current = null;
     },
   });
 
   useEffect(() => {
-    const pendingQuestion = pendingExplorationAfterLoginRef.current;
-    if (!session || !pendingQuestion || !selectedPublicTreeId || addTree.isPending) return;
+    const pendingIntent = pendingExplorationIntentRef.current;
+    if (!session || !pendingIntent || !selectedPublicTreeId || addTree.isPending) return;
+    if (pendingIntent.treeId !== selectedPublicTreeId) {
+      pendingExplorationIntentRef.current = null;
+      return;
+    }
 
-    pendingExplorationAfterLoginRef.current = null;
-    addTree.mutate(selectedPublicTreeId, {
+    pendingExplorationIntentRef.current = null;
+    addTree.mutate(pendingIntent.treeId, {
       onSuccess: () => {
-        setInitialChatDraft(pendingQuestion);
+        setInitialChatDraft(pendingIntent.question);
+        setInitialChatDraftRevision((revision) => revision + 1);
         setChatOpen(true);
         setMobileView('chat');
       },
@@ -406,6 +447,8 @@ function ConsoleApp() {
   });
 
   const selectPublicTree = (treeId: string) => {
+    pendingExplorationIntentRef.current = null;
+    setView('public');
     setSelectedPublicTreeId(treeId);
     setSelectedNodeId(null);
     setCompletion(null);
@@ -416,6 +459,8 @@ function ConsoleApp() {
     setMobileView('graph');
   };
   const selectPersonalTree = (libraryEntryId: string) => {
+    pendingExplorationIntentRef.current = null;
+    setView('personal');
     setSelectedLibraryEntryId(libraryEntryId);
     setSelectedNodeId(null);
     setCompletion(null);
@@ -426,6 +471,8 @@ function ConsoleApp() {
     setMobileView('graph');
   };
   const openPublicIntroduction = (treeId: string) => {
+    pendingExplorationIntentRef.current = null;
+    setView('public');
     setSelectedPublicTreeId(treeId);
     setSelectedNodeId(null);
     setCompletion(null);
@@ -436,12 +483,15 @@ function ConsoleApp() {
     setMobileView('list');
   };
   const startPublicExploration = (question: string) => {
+    setView('public');
     setExplorationQuestion(question);
     setInitialChatDraft('');
     setConsoleMode('map');
     setMobileView('detail');
   };
   const previewPublicMap = () => {
+    pendingExplorationIntentRef.current = null;
+    setView('public');
     setExplorationQuestion(null);
     setInitialChatDraft('');
     setSelectedNodeId(null);
@@ -449,6 +499,7 @@ function ConsoleApp() {
     setMobileView('graph');
   };
   const returnToWorkbench = () => {
+    pendingExplorationIntentRef.current = null;
     setConsoleMode('home');
     setSelectedNodeId(null);
     setExplorationQuestion(null);
@@ -458,9 +509,11 @@ function ConsoleApp() {
   };
   const showPersonalLibrary = () => {
     if (!session) {
+      pendingExplorationIntentRef.current = null;
       openIdentityDialog();
       return;
     }
+    pendingExplorationIntentRef.current = null;
     setView('personal');
     setSelectedNodeId(null);
     setCompletion(null);
@@ -511,7 +564,10 @@ function ConsoleApp() {
       return;
     }
     if (view !== 'personal' || !selectedLibraryEntryId) return;
-    if (prompt !== undefined) setInitialChatDraft(prompt);
+    if (prompt !== undefined) {
+      setInitialChatDraft(prompt);
+      setInitialChatDraftRevision((revision) => revision + 1);
+    }
     setChatOpen(true);
     setMobileView('chat');
   };
@@ -519,7 +575,12 @@ function ConsoleApp() {
     if (!explorationQuestion) return;
     setInitialChatDraft(explorationQuestion);
     if (!session) {
-      pendingExplorationAfterLoginRef.current = explorationQuestion;
+      if (selectedPublicTreeId) {
+        pendingExplorationIntentRef.current = {
+          treeId: selectedPublicTreeId,
+          question: explorationQuestion,
+        };
+      }
       openIdentityDialog();
       return;
     }
@@ -527,7 +588,13 @@ function ConsoleApp() {
       openKnowledgeChat(explorationQuestion);
       return;
     }
-    if (selectedPublicTreeId) joinSelectedTree();
+    if (selectedPublicTreeId) {
+      pendingExplorationIntentRef.current = {
+        treeId: selectedPublicTreeId,
+        question: explorationQuestion,
+      };
+      joinSelectedTree();
+    }
   };
   const closeKnowledgeChat = () => {
     setChatOpen(false);
@@ -549,7 +616,15 @@ function ConsoleApp() {
       closeKnowledgeChat();
       return;
     }
-    setMobileView(mobileView === 'detail' ? 'graph' : 'list');
+    if (mobileView === 'detail') {
+      setMobileView('graph');
+      return;
+    }
+    if (mobileView === 'graph') {
+      returnToWorkbench();
+      return;
+    }
+    setMobileView('list');
   };
 
   // admin 视图整体替换页面（卸载个人/公共内容，返回时重新挂载）；
@@ -592,6 +667,7 @@ function ConsoleApp() {
       : activeGraph?.tree.title ??
         (view === 'public' ? selectedPublicTree?.title : selectedPersonalEntry?.tree.title) ??
         'MapFlow 技能树';
+  const isDarkHeader = consoleMode === 'map';
   const treePending =
     consoleMode !== 'map'
       ? false
@@ -602,7 +678,7 @@ function ConsoleApp() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
-      <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-2 sm:px-5 max-lg:pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <header className={`relative z-20 flex min-h-16 shrink-0 items-center justify-between gap-3 border-b px-4 py-2 sm:px-5 max-lg:pt-[max(0.5rem,env(safe-area-inset-top))] ${isDarkHeader ? 'border-slate-800 bg-slate-950/95 text-slate-100' : 'border-[#dce7e1] bg-[#f7f5ef] text-slate-950'}`}>
         <div className="flex min-w-0 items-center gap-2">
           {consoleMode === 'introduction' && (
             <button
@@ -649,10 +725,12 @@ function ConsoleApp() {
             </p>
           </div>
         </div>
-        <nav className="hidden shrink-0 items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/80 p-1 text-xs lg:flex">
+        <nav className={`hidden shrink-0 items-center gap-1 rounded-xl border p-1 text-xs lg:flex ${isDarkHeader ? 'border-slate-800 bg-slate-900/80' : 'border-slate-300 bg-white/70'}`}>
           <ViewButton
+            tone={isDarkHeader ? 'dark' : 'light'}
             active={view === 'public'}
             onClick={() => {
+              pendingExplorationIntentRef.current = null;
               setView('public');
               setSelectedNodeId(null);
               setCompletion(null);
@@ -661,81 +739,95 @@ function ConsoleApp() {
               setExplorationQuestion(null);
               setInitialChatDraft('');
               setMobileView('list');
+              setMoreOpen(false);
             }}
           >
             探索
           </ViewButton>
-          <ViewButton active={view === 'personal'} onClick={showPersonalLibrary}>
+          <ViewButton tone={isDarkHeader ? 'dark' : 'light'} active={view === 'personal'} onClick={() => { showPersonalLibrary(); setMoreOpen(false); }}>
             我的学习
           </ViewButton>
           {session?.account.isAdmin && (
-            <ViewButton active={view === 'admin'} onClick={() => setView('admin')}>
+            <ViewButton tone={isDarkHeader ? 'dark' : 'light'} active={view === 'admin'} onClick={() => { setView('admin'); setMoreOpen(false); }}>
               管理面板
             </ViewButton>
           )}
         </nav>
         <div className="flex shrink-0 items-center gap-2">
-          {(identityEnabled || session) && (
+          <div className="relative">
             <button
               type="button"
-              data-testid="top-generate-tree"
-              aria-label="开始生成技能树"
-              title={
-                session && (capabilitiesPending || capabilitiesError)
-                  ? '正在检查生成能力，请稍候'
-                  : undefined
-              }
-              onClick={openTreeGenerator}
-              disabled={
-                Boolean(
-                  session &&
-                    (capabilitiesPending ||
-                      capabilitiesError ||
-                      !generationCapabilities?.enabled),
-                )
-              }
-              className="group rounded-xl border border-cyan-200/90 bg-cyan-300 px-3 py-1.5 text-xs font-bold text-slate-950 shadow-[0_0_18px_rgba(103,232,249,0.32)] transition hover:-translate-y-0.5 hover:bg-cyan-200 hover:shadow-[0_0_24px_rgba(103,232,249,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
+              aria-label="打开更多菜单"
+              aria-expanded={moreOpen}
+              onClick={() => setMoreOpen((open) => !open)}
+              className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 ${isDarkHeader ? 'border-slate-700 bg-slate-900/80 text-slate-300 hover:border-cyan-600 hover:text-white focus-visible:ring-cyan-300' : 'border-slate-300 bg-white/70 text-slate-700 hover:border-teal-700 hover:text-teal-800 focus-visible:ring-teal-700'}`}
             >
-              <span aria-hidden="true" className="mr-1 transition-transform group-hover:rotate-12">
-                ✦
-              </span>
-              <span className="hidden sm:inline">开始生成</span>
-              <span className="sm:hidden">生成</span>
+              更多
             </button>
-          )}
-          <a
-            href="/?marketing=1"
-            aria-label="查看产品首页"
-            className="hidden rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-cyan-600 hover:text-cyan-100 xl:inline-flex"
-          >
-            产品首页
-          </a>
-          <ThemeSwitcher />
-          <div className="hidden lg:block">
-            <AnnouncementsButton />
-          </div>
-          <div className="hidden lg:block">
-            <button
-              type="button"
-              aria-label="意见反馈"
-              onClick={() => setFeedbackOpen(true)}
-              className="rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-cyan-600 hover:text-white"
-            >
-              意见反馈
-            </button>
-          </div>
-          {session &&
-            generationCapabilities?.platformFundedEnabled === true && (
-              <CreditPill
-                credit={creditQuery.data ?? null}
-                onSignedIn={() => {
-                  void creditQuery.refetch();
-                  void platformEntitlements.refetch();
-                }}
-              />
+            {moreOpen && (
+              <div
+                role="menu"
+                aria-label="更多工具"
+                className="absolute right-0 top-[calc(100%+0.5rem)] z-50 flex min-w-56 flex-col gap-2 rounded-2xl border border-slate-700 bg-slate-950 p-3 text-slate-100 shadow-[0_22px_60px_-24px_rgba(15,23,42,0.75)]"
+              >
+                {(identityEnabled || session) && (
+                  <button
+                    type="button"
+                    data-testid="top-generate-tree"
+                    aria-label="开始生成技能树"
+                    title={session && (capabilitiesPending || capabilitiesError) ? '正在检查生成能力，请稍候' : undefined}
+                    onClick={() => {
+                      setMoreOpen(false);
+                      openTreeGenerator();
+                    }}
+                    disabled={Boolean(session && (capabilitiesPending || capabilitiesError || !generationCapabilities?.enabled))}
+                    className="flex items-center justify-between rounded-xl border border-cyan-200/70 bg-cyan-300 px-3 py-2 text-left text-xs font-bold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <span>创建自己的地图</span>
+                    <span aria-hidden="true">✦</span>
+                  </button>
+                )}
+                <a
+                  href="/?marketing=1"
+                  aria-label="查看产品首页"
+                  className="rounded-xl px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-slate-900 hover:text-cyan-100"
+                >
+                  产品首页
+                </a>
+                <div role="none"><ThemeSwitcher /></div>
+                {session && (
+                  <>
+                    <div role="none"><AnnouncementsButton /></div>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label="意见反馈"
+                      onClick={() => {
+                        setFeedbackOpen(true);
+                        setMoreOpen(false);
+                      }}
+                      className="rounded-xl px-3 py-2 text-left text-xs font-semibold text-slate-300 transition hover:bg-slate-900 hover:text-white"
+                    >
+                      意见反馈
+                    </button>
+                    {generationCapabilities?.platformFundedEnabled === true && (
+                      <div role="none">
+                        <CreditPill
+                          credit={creditQuery.data ?? null}
+                          onSignedIn={() => {
+                            void creditQuery.refetch();
+                            void platformEntitlements.refetch();
+                          }}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             )}
+          </div>
           <div className="hidden lg:block">
-            <IdentityAccess onRequestLogout={requestLogout} />
+            <IdentityAccess tone={isDarkHeader ? 'dark' : 'light'} onRequestLogout={requestLogout} />
           </div>
         </div>
       </header>
@@ -982,6 +1074,7 @@ function ConsoleApp() {
                 }
                 explorationQuestion={explorationQuestion}
                 onUseExplorationQuestion={useExplorationQuestion}
+                isAuthenticated={Boolean(session)}
               />
             ) : (
               <button
@@ -1032,6 +1125,7 @@ function ConsoleApp() {
               onClose={closeKnowledgeChat}
               isVisible={chatOpen}
               initialDraft={initialChatDraft}
+              initialDraftRevision={initialChatDraftRevision}
               onCreditChanged={() => {
                 void creditQuery.refetch();
               }}
@@ -1134,6 +1228,7 @@ function ConsoleApp() {
           <DrawerItem
             active={view === 'public'}
             onClick={() => {
+              pendingExplorationIntentRef.current = null;
               setView('public');
               setSelectedNodeId(null);
               setCompletion(null);
@@ -1252,10 +1347,12 @@ function snapshotFromGraph(
 }
 
 function ViewButton({
+  tone = 'dark',
   active,
   onClick,
   children,
 }: {
+  tone?: 'dark' | 'light';
   active: boolean;
   onClick: () => void;
   children: string;
@@ -1267,7 +1364,11 @@ function ViewButton({
       onClick={onClick}
       className={`rounded-lg px-3 py-1.5 font-semibold transition ${
         active
-          ? 'bg-cyan-300 text-slate-950'
+          ? tone === 'light'
+            ? 'bg-teal-700 text-white'
+            : 'bg-cyan-300 text-slate-950'
+          : tone === 'light'
+          ? 'text-slate-600 hover:bg-white hover:text-teal-800'
           : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
       }`}
     >

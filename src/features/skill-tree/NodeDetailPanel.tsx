@@ -15,6 +15,7 @@ interface NodeDetailPanelProps {
   onTogglePanel?: () => void;
   explorationQuestion?: string | null;
   onUseExplorationQuestion?: () => void;
+  isAuthenticated?: boolean;
 }
 
 function parseStringList(raw: string | null): string[] {
@@ -39,6 +40,7 @@ export default function NodeDetailPanel({
   onTogglePanel,
   explorationQuestion = null,
   onUseExplorationQuestion,
+  isAuthenticated = false,
 }: NodeDetailPanelProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const node = snapshot.nodes.find((item) => item.id === selectedNodeId);
@@ -156,7 +158,7 @@ export default function NodeDetailPanel({
             onClick={onUseExplorationQuestion}
             className="mt-3 w-full rounded-lg border border-amber-200/35 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:border-amber-100 hover:bg-amber-200/10"
           >
-            登录后带入聊天草稿
+            {isAuthenticated ? '加入我的学习并带入聊天草稿' : '登录后带入聊天草稿'}
           </button>
         </section>
       )}

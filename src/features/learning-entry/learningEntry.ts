@@ -2,6 +2,7 @@ import type { SkillNode, SkillTree } from '../../types/learning';
 
 export interface TreeGuide {
   title: string;
+  displayTitle: string;
   eyebrow: string;
   summary: string;
   audience: string;
@@ -10,7 +11,7 @@ export interface TreeGuide {
   recommendedNodeTitle: string | null;
 }
 
-const OFFICIAL_TREE_GUIDES: Record<string, Omit<TreeGuide, 'title'>> = {
+const OFFICIAL_TREE_GUIDES: Record<string, Omit<TreeGuide, 'title' | 'displayTitle'>> = {
   '005d217e-2106-4a8f-ab84-769d48f52c08': {
     eyebrow: '后端与 AI 应用',
     summary: '沿着服务边界、数据流和 Agent 能力，把一套 NestJS 后端拆成可以逐步验证的路径。',
@@ -32,11 +33,12 @@ const OFFICIAL_TREE_GUIDES: Record<string, Omit<TreeGuide, 'title'>> = {
 export function getTreeGuide(tree: SkillTree): TreeGuide {
   const officialGuide = OFFICIAL_TREE_GUIDES[tree.id];
   if (officialGuide) {
-    return { title: tree.title, ...officialGuide };
+    return { title: tree.title, displayTitle: getOfficialDisplayTitle(tree.id, tree.title), ...officialGuide };
   }
 
   return {
     title: tree.title,
+    displayTitle: tree.title,
     eyebrow: tree.topic,
     summary: tree.description ?? `从「${tree.topic}」中选择一个现在最想弄懂的部分，沿着关系继续往下。`,
     audience: '已经有一个具体问题，想把它拆成可走路径的人',
@@ -44,6 +46,12 @@ export function getTreeGuide(tree: SkillTree): TreeGuide {
     prerequisites: ['知道自己想解决的一个具体问题'],
     recommendedNodeTitle: null,
   };
+}
+
+function getOfficialDisplayTitle(treeId: string, fallbackTitle: string): string {
+  if (treeId === '005d217e-2106-4a8f-ab84-769d48f52c08') return 'NestJS 后端与 AI 应用';
+  if (treeId === '9369e054-3c40-4a46-9952-3abbde4195a1') return 'Python Agent 开发路径';
+  return fallbackTitle;
 }
 
 export function findRecommendedNodeId(

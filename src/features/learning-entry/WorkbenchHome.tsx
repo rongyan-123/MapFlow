@@ -68,6 +68,28 @@ export default function WorkbenchHome({
           </section>
         )}
 
+        {mode === 'public' && hasPersonalTrees && (
+          <section className="mt-10 rounded-[1.25rem] border border-slate-200 bg-white/70 p-5 sm:p-6" aria-labelledby="continue-learning-title">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 id="continue-learning-title" className="font-bold text-slate-900">已有一棵树？</h2>
+                <p className="mt-1 text-sm text-slate-600">从已保存的节点进度继续。</p>
+                <p className="mt-2 text-xs font-semibold text-emerald-700">
+                  {personalEntries[0].completed_nodes} / {personalEntries[0].tree.total_nodes} 个节点已完成
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label={`继续探索 ${personalEntries[0].tree.title}`}
+                onClick={() => onContinuePersonalTree(personalEntries[0].library_entry_id)}
+                className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
+              >
+                继续探索
+              </button>
+            </div>
+          </section>
+        )}
+
         {(mode === 'public' || !hasPersonalTrees) && (
           <section className="mt-10" aria-labelledby="public-directions-title">
             <div className="flex items-center justify-between gap-3">
@@ -82,26 +104,6 @@ export default function WorkbenchHome({
           </section>
         )}
 
-        {mode === 'public' && hasPersonalTrees && (
-          <section className="mt-8 rounded-[1.25rem] border border-slate-200 bg-white/70 p-5 sm:p-6" aria-labelledby="continue-learning-title">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 id="continue-learning-title" className="font-bold text-slate-900">已有一棵树？</h2>
-                <p className="mt-1 text-sm text-slate-600">直接回到你上次留下的真实进度。</p>
-                <p className="mt-2 text-xs font-semibold text-emerald-700">
-                  {personalEntries[0].completed_nodes} / {personalEntries[0].tree.total_nodes} 个节点已完成
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => onContinuePersonalTree(personalEntries[0].library_entry_id)}
-                className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
-              >
-                继续探索
-              </button>
-            </div>
-          </section>
-        )}
       </div>
     </main>
   );
@@ -116,7 +118,7 @@ function PublicTreeCard({ tree, index, onOpen }: { tree: SkillTree; index: numbe
         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">{tree.total_nodes} 个节点</span>
       </div>
       <p className="mt-8 text-xs font-bold uppercase tracking-[0.18em] text-teal-700">{guide.eyebrow}</p>
-      <h2 className="mt-3 text-2xl font-black tracking-[-0.04em] text-slate-950">{tree.title}</h2>
+      <h2 className="mt-3 text-2xl font-black tracking-[-0.04em] text-slate-950">{guide.displayTitle}</h2>
       <p className="mt-4 text-sm leading-7 text-slate-600">{guide.audience}</p>
       <p className="mt-5 rounded-xl bg-[#f4f7f4] px-4 py-3 text-sm font-semibold leading-6 text-slate-800">{guide.question}</p>
       <button
@@ -125,7 +127,7 @@ function PublicTreeCard({ tree, index, onOpen }: { tree: SkillTree; index: numbe
         onClick={() => onOpen(tree.id)}
         className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-teal-700/30 bg-teal-50 px-4 py-2.5 text-sm font-bold text-teal-900 transition hover:border-teal-700 hover:bg-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
       >
-        查看 {tree.title} 简介
+        看看这个方向
         <span className="ml-2" aria-hidden="true">→</span>
       </button>
     </article>
@@ -133,22 +135,24 @@ function PublicTreeCard({ tree, index, onOpen }: { tree: SkillTree; index: numbe
 }
 
 function PersonalTreeCard({ entry, onContinue }: { entry: PersonalLibraryEntry; onContinue: (libraryEntryId: string) => void }) {
+  const guide = getTreeGuide(entry.tree);
   return (
     <article className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-[0_20px_55px_-42px_rgba(15,23,42,0.6)] sm:p-7">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-700">我的学习树</p>
-          <h3 className="mt-3 text-xl font-black tracking-[-0.035em] text-slate-950">{entry.tree.title}</h3>
+          <h3 className="mt-3 text-xl font-black tracking-[-0.035em] text-slate-950">{guide.displayTitle}</h3>
         </div>
         <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{entry.completed_nodes} / {entry.tree.total_nodes} 个节点已完成</span>
       </div>
       <p className="mt-5 text-sm leading-7 text-slate-600">你的完成记录会保存在当前账号里，随时可以从这里继续。</p>
       <button
         type="button"
+        aria-label={`继续探索 ${entry.tree.title}`}
         onClick={() => onContinue(entry.library_entry_id)}
         className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
       >
-        继续探索 {entry.tree.title}
+        继续探索
         <span className="ml-2" aria-hidden="true">→</span>
       </button>
     </article>

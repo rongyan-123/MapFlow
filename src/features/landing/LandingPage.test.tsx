@@ -22,6 +22,12 @@ describe('LandingPage', () => {
     expect(screen.getByRole('button', { name: '试着探索一下' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument();
     expect(screen.getByTestId('landing-map-illustration')).toBeInTheDocument();
+    expect(screen.getByText('示意地图')).toBeInTheDocument();
+    expect(screen.getByText('Python')).toBeInTheDocument();
+    expect(screen.getByText('HTTP 请求')).toBeInTheDocument();
+    expect(screen.getByText('模型调用')).toBeInTheDocument();
+    expect(screen.getByText('工具调用')).toBeInTheDocument();
+    expect(screen.queryByText('不用先选课程，也不用一次学完整套。先从一个具体问题落脚。')).not.toBeInTheDocument();
     expect(screen.getAllByTestId(/^landing-story-chapter-/)).toHaveLength(2);
     expect(screen.queryByTestId('skill-tree-3d')).not.toBeInTheDocument();
   });

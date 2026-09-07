@@ -105,9 +105,6 @@ export default function LandingPage({
                 </button>
               </div>
 
-              <p className="mt-5 text-xs leading-6 text-[#82918f]">
-                不用先选课程，也不用一次学完整套。先从一个具体问题落脚。
-              </p>
             </div>
 
             <LearningMapIllustration />
@@ -134,7 +131,7 @@ function LearningMapIllustration() {
     <div
       data-testid="landing-map-illustration"
       role="img"
-      aria-label="一张从问题走向下一步的轻量学习地图"
+      aria-label="一张展示 Python、HTTP 请求、模型调用和工具调用依赖关系的示意地图"
       className="relative mx-auto aspect-[1.08] w-full max-w-[36rem] overflow-hidden rounded-[2rem] border border-[#c9dfd7] bg-[#edf5ef] shadow-[0_24px_70px_-34px_rgba(23,111,112,0.45)]"
     >
       <div className="absolute inset-4 rounded-[1.5rem] border border-dashed border-[#b9d8cf] sm:inset-6" />
@@ -145,14 +142,14 @@ function LearningMapIllustration() {
         aria-hidden="true"
       >
         <path
-          d="M92 168C180 80 228 110 286 194C340 272 396 258 470 178C520 125 548 156 566 217"
+          d="M100 166C168 114 218 116 278 190C334 258 386 274 450 218C494 180 536 184 562 238"
           stroke="#9bc8ba"
           strokeWidth="3"
           strokeLinecap="round"
           strokeDasharray="9 11"
         />
         <path
-          d="M117 347C180 287 229 290 284 326C356 373 424 365 512 292"
+          d="M112 362C176 300 230 300 286 332C352 370 426 360 516 300"
           stroke="#dfad91"
           strokeWidth="3"
           strokeLinecap="round"
@@ -167,23 +164,23 @@ function LearningMapIllustration() {
         <circle cx="512" cy="292" r="13" fill="#176f70" />
       </svg>
 
-      <div className="absolute left-[8%] top-[16%] rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-[0_12px_26px_rgba(23,111,112,0.1)]">
-        <p className="text-[10px] font-bold tracking-[0.16em] text-[#82918f]">起点</p>
-        <p className="mt-1 text-sm font-black text-[#16383b]">我想弄懂什么？</p>
+      <div className="absolute left-[7%] top-[15%] rounded-2xl border border-white/80 bg-white/90 px-4 py-3 shadow-[0_12px_26px_rgba(23,111,112,0.1)]">
+        <p className="text-[10px] font-bold tracking-[0.16em] text-[#82918f]">概念节点</p>
+        <p className="mt-1 text-sm font-black text-[#16383b]">Python</p>
       </div>
-      <div className="absolute left-[38%] top-[36%] rounded-2xl border border-[#f0c9b6] bg-[#fff8f3] px-4 py-3 shadow-[0_12px_26px_rgba(224,122,82,0.12)]">
-        <p className="text-[10px] font-bold tracking-[0.16em] text-[#c16d4a]">正在走</p>
-        <p className="mt-1 text-sm font-black text-[#16383b]">一个小目标</p>
+      <div className="absolute left-[37%] top-[35%] rounded-2xl border border-[#f0c9b6] bg-[#fff8f3] px-4 py-3 shadow-[0_12px_26px_rgba(224,122,82,0.12)]">
+        <p className="text-[10px] font-bold tracking-[0.16em] text-[#c16d4a]">依赖关系</p>
+        <p className="mt-1 text-sm font-black text-[#16383b]">HTTP 请求</p>
       </div>
-      <div className="absolute right-[8%] top-[17%] rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-[0_12px_26px_rgba(23,111,112,0.1)]">
-        <p className="text-[10px] font-bold tracking-[0.16em] text-[#82918f]">下一步</p>
-        <p className="mt-1 text-sm font-black text-[#16383b]">可以验证的结果</p>
+      <div className="absolute right-[7%] top-[16%] rounded-2xl border border-white/80 bg-white/90 px-4 py-3 shadow-[0_12px_26px_rgba(23,111,112,0.1)]">
+        <p className="text-[10px] font-bold tracking-[0.16em] text-[#82918f]">能力节点</p>
+        <p className="mt-1 text-sm font-black text-[#16383b]">模型调用</p>
       </div>
-      <div className="absolute bottom-[14%] left-[18%] rounded-xl border border-[#c9dfd7] bg-[#f8fcf8]/90 px-3 py-2 text-xs font-semibold text-[#176f70]">
-        前置关系
+      <div className="absolute bottom-[13%] left-[17%] rounded-xl border border-[#c9dfd7] bg-[#f8fcf8]/90 px-3 py-2 text-xs font-semibold text-[#176f70]">
+        工具调用
       </div>
-      <div className="absolute bottom-[12%] right-[18%] rounded-xl border border-[#ecd0c1] bg-[#fff8f3]/90 px-3 py-2 text-xs font-semibold text-[#c16d4a]">
-        继续探索
+      <div className="absolute bottom-[11%] right-[17%] rounded-xl border border-[#ecd0c1] bg-[#fff8f3]/90 px-3 py-2 text-xs font-semibold text-[#c16d4a]">
+        <span className="mr-1" aria-hidden="true">↳</span>示意地图
       </div>
     </div>
   );

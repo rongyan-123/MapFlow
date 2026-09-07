@@ -26,6 +26,98 @@ describe('KnowledgeChatPanel', () => {
     expect(chatApi.sendKnowledgeChatMessageStream).not.toHaveBeenCalled();
   });
 
+  it('切换草稿不会重新加载历史或清空正在进行的流式回答', async () => {
+    const user = userEvent.setup();
+    let resolveTurn!: (value: unknown) => void;
+    let emitDelta!: (delta: string) => void;
+    chatApi.fetchKnowledgeChatHistory.mockResolvedValue({
+      messages: [{ id: 'history-1', role: 'assistant', content: '历史回答' }],
+    });
+    chatApi.sendKnowledgeChatMessageStream.mockImplementation(
+      (
+        _libraryEntryId: string,
+        _message: string,
+        _clientTurnId: string,
+        _csrfToken: string,
+        onDelta: (delta: string) => void,
+      ) => {
+        emitDelta = onDelta;
+        return new Promise((resolve) => {
+          resolveTurn = resolve;
+        });
+      },
+    );
+
+    const view = renderPanel({ initialDraft: '问题 A', initialDraftRevision: 1 });
+    expect(await screen.findByText('历史回答')).toBeInTheDocument();
+    const input = screen.getByRole('textbox', { name: '输入问题' });
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    emitDelta('流式片段');
+    expect(await screen.findByText('流式片段')).toBeInTheDocument();
+
+    view.rerender(
+      <KnowledgeChatPanel
+        treeTitle="NestJS 学习树"
+        libraryEntryId="entry-1"
+        csrfToken="csrf-secret"
+        onClose={vi.fn()}
+        initialDraft="问题 B"
+        initialDraftRevision={2}
+      />,
+    );
+
+    expect(screen.getByText('历史回答')).toBeInTheDocument();
+    expect(screen.getByText('流式片段')).toBeInTheDocument();
+    expect(input).toHaveValue('问题 B');
+    expect(chatApi.fetchKnowledgeChatHistory).toHaveBeenCalledOnce();
+    expect(chatApi.sendKnowledgeChatMessageStream).toHaveBeenCalledOnce();
+
+    resolveTurn({
+      answer: '完成回答',
+      usage: {
+        inputTokens: 1,
+        outputTokens: 1,
+        cacheHitInputTokens: 0,
+        cacheMissInputTokens: 1,
+      },
+      chargedCredits: 0,
+    });
+  });
+
+  it('同一个建议再次选择也能重新填入已清空的草稿，且不会自动发送', async () => {
+    const user = userEvent.setup();
+    chatApi.sendKnowledgeChatMessageStream.mockResolvedValueOnce({
+      answer: '回答',
+      usage: {
+        inputTokens: 1,
+        outputTokens: 1,
+        cacheHitInputTokens: 0,
+        cacheMissInputTokens: 1,
+      },
+      chargedCredits: 0,
+    });
+
+    const view = renderPanel({ initialDraft: '重复建议', initialDraftRevision: 1 });
+    await waitForHistoryReady();
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    expect(await screen.findByText('回答')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '输入问题' })).toHaveValue('');
+
+    view.rerender(
+      <KnowledgeChatPanel
+        treeTitle="NestJS 学习树"
+        libraryEntryId="entry-1"
+        csrfToken="csrf-secret"
+        onClose={vi.fn()}
+        initialDraft="重复建议"
+        initialDraftRevision={2}
+      />,
+    );
+
+    expect(screen.getByRole('textbox', { name: '输入问题' })).toHaveValue('重复建议');
+    expect(chatApi.sendKnowledgeChatMessageStream).toHaveBeenCalledOnce();
+  });
+
   it('restores persisted messages when a personal tree chat opens', async () => {
     chatApi.fetchKnowledgeChatHistory.mockResolvedValueOnce({
       messages: [
