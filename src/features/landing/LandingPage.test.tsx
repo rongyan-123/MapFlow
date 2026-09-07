@@ -30,6 +30,8 @@ describe('LandingPage', () => {
     expect(screen.queryByRole('button', { name: '重置地球视角' })).not.toBeInTheDocument();
     expect(screen.getByTestId('landing-opening-viewport')).toBeInTheDocument();
     expect(screen.getAllByTestId(/^landing-story-scene-/)).toHaveLength(5);
+    expect(screen.getByTestId('landing-story-media-stage')).toBeInTheDocument();
+    expect(screen.getAllByTestId(/^landing-map-graphic-/)).toHaveLength(4);
     expect(screen.getByTestId('landing-map-graphic-domain')).toBeInTheDocument();
     expect(
       screen

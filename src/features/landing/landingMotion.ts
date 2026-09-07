@@ -11,8 +11,8 @@ export const MIN_EARTH_ZOOM = 0.72;
 export const MAX_EARTH_ZOOM = 1.34;
 
 export function getEarthRevealProgress(progress: number): number {
-  const clarityProgress = getSceneProgress(progress, 1, LANDING_SCENE_COUNT);
-  return getMediaRevealProgress(clarityProgress, 0.52, 0.92);
+  const clarityProgress = getStorySceneProgress(progress, 1, LANDING_SCENE_COUNT);
+  return getMediaRevealProgress(clarityProgress, 0.2, 0.6);
 }
 
 export function clampUnit(value: number): number {
@@ -85,6 +85,75 @@ export function getSceneProgress(
 ): number {
   if (sceneCount <= 0 || sceneIndex < 0 || sceneIndex >= sceneCount) return 0;
   return Number(clampUnit((progress - sceneIndex / sceneCount) * sceneCount).toFixed(6));
+}
+
+/**
+ * Calculates chapter-local progress from the scroll timeline used by the
+ * pinned story stage. Five chapters occupy four viewport-to-viewport spans.
+ */
+export function getStorySceneProgress(
+  progress: number,
+  sceneIndex: number,
+  sceneCount = LANDING_SCENE_COUNT,
+): number {
+  if (sceneCount <= 0 || sceneIndex < 0 || sceneIndex >= sceneCount) return 0;
+  if (sceneCount === 1) return 1;
+
+  const intervalCount = sceneCount - 1;
+  const intervalSize = 1 / intervalCount;
+  if (sceneIndex === sceneCount - 1) return clampUnit(progress) >= 1 ? 1 : 0;
+  const sceneStart = sceneIndex * intervalSize;
+  return Number(clampUnit((clampUnit(progress) - sceneStart) / intervalSize).toFixed(6));
+}
+
+export interface StoryTimelineState {
+  activeSceneIndex: number;
+  baseSceneIndex: number;
+  nextSceneIndex: number | null;
+  mediaRevealProgress: number;
+}
+
+/**
+ * Maps the normalized story scroll range to the chapter centers used by the
+ * pinned media stage. The first and last chapters are the ends of the range,
+ * so four scroll intervals connect five full-screen chapters.
+ */
+export function getStoryTimelineState(
+  progress: number,
+  sceneCount = LANDING_SCENE_COUNT,
+): StoryTimelineState {
+  if (sceneCount <= 0) {
+    return {
+      activeSceneIndex: 0,
+      baseSceneIndex: 0,
+      nextSceneIndex: null,
+      mediaRevealProgress: 0,
+    };
+  }
+
+  if (sceneCount === 1) {
+    return {
+      activeSceneIndex: 0,
+      baseSceneIndex: 0,
+      nextSceneIndex: null,
+      mediaRevealProgress: 0,
+    };
+  }
+
+  const normalizedProgress = clampUnit(progress);
+  const intervalCount = sceneCount - 1;
+  const timelinePosition = normalizedProgress * intervalCount;
+  const segmentIndex = Math.min(intervalCount - 1, Math.floor(timelinePosition));
+  const segmentProgress = clampUnit(timelinePosition - segmentIndex);
+  const activeSceneIndex = Math.min(sceneCount - 1, Math.round(timelinePosition));
+  const isAtEnd = normalizedProgress >= 1;
+
+  return {
+    activeSceneIndex,
+    baseSceneIndex: isAtEnd ? sceneCount - 1 : segmentIndex,
+    nextSceneIndex: isAtEnd ? null : segmentIndex + 1,
+    mediaRevealProgress: isAtEnd ? 0 : Number(segmentProgress.toFixed(6)),
+  };
 }
 
 export function getMediaRevealProgress(

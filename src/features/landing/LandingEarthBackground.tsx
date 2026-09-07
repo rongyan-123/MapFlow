@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 import * as THREE from 'three';
 import {
   getEarthZoom,
@@ -8,6 +9,12 @@ import {
   MIN_EARTH_ZOOM,
 } from './landingMotion';
 import { LANDING_EARTH_ROUTES } from './landingMapData';
+import {
+  fetchLandingFlightRecords,
+  getLandingFlightBudget,
+  parseLandingFlightPayload,
+} from './earth/flightData';
+import { DenseFlightRenderer } from './earth/flightRenderer';
 
 interface EarthInteractionState {
   rotationX: number;
@@ -21,7 +28,8 @@ interface PointerPoint {
 }
 
 interface GestureState {
-  mode: 'pending' | 'rotate' | 'pinch';
+  mode: 'pending' | 'rotate' | 'pinch' | 'scroll';
+  pointerType: string;
   lastX: number;
   lastY: number;
   startX: number;
@@ -33,6 +41,7 @@ interface GestureState {
 const BASE_CAMERA_DISTANCE = 8;
 const EARTH_RADIUS = 1.58;
 const EARTH_TEXTURE_URL = `${import.meta.env.BASE_URL}world.topo.jpg`;
+const FLIGHT_DATA_URL = `${import.meta.env.BASE_URL}flights/flights.json`;
 
 function updateCameraProjection(
   camera: Pick<THREE.PerspectiveCamera, 'aspect' | 'updateProjectionMatrix'>,
@@ -41,6 +50,39 @@ function updateCameraProjection(
 ) {
   camera.aspect = width / Math.max(height, 1);
   camera.updateProjectionMatrix();
+}
+
+function shouldAnimateEarth(revealProgress: number, reducedMotion: boolean): boolean {
+  return revealProgress > 0.08 && !reducedMotion;
+}
+
+function hasCanvasSizeChanged(
+  previous: { width: number; height: number },
+  next: { width: number; height: number },
+): boolean {
+  return previous.width !== next.width || previous.height !== next.height;
+}
+
+function getLandingScrollDelta(previousY: number, currentY: number): number {
+  return previousY - currentY;
+}
+
+function getLandingWheelDelta(
+  deltaY: number,
+  deltaMode: number,
+  viewportHeight: number,
+): number {
+  if (deltaMode === 1) return deltaY * 16;
+  if (deltaMode === 2) return deltaY * Math.max(1, viewportHeight);
+  return deltaY;
+}
+
+function getInitialEarthGestureMode(pointerType: string, button: number): GestureState['mode'] {
+  return pointerType === 'mouse' && button === 0 ? 'rotate' : 'pending';
+}
+
+function shouldForwardLandingScroll(pointerType: string, intent: string): boolean {
+  return pointerType !== 'mouse' && intent === 'scroll';
 }
 
 function latLngToVector3(lat: number, lng: number, radius: number): THREE.Vector3 {
@@ -92,7 +134,7 @@ function createFallbackEarthTexture(): THREE.CanvasTexture {
 }
 
 function createStarField(): THREE.Points {
-  const starCount = typeof window !== 'undefined' && window.innerWidth < 640 ? 420 : 760;
+  const starCount = typeof window !== 'undefined' && window.innerWidth < 640 ? 900 : 2600;
   const positions = new Float32Array(starCount * 3);
   const opacities = new Float32Array(starCount);
   let seed = 1987;
@@ -258,6 +300,7 @@ export default function LandingEarthBackground({ revealProgress = 1 }: LandingEa
   const pointersRef = useRef(new Map<number, PointerPoint>());
   const gestureRef = useRef<GestureState>({
     mode: 'pending',
+    pointerType: 'mouse',
     lastX: 0,
     lastY: 0,
     startX: 0,
@@ -269,6 +312,12 @@ export default function LandingEarthBackground({ revealProgress = 1 }: LandingEa
   const [interactionHintVisible, setInteractionHintVisible] = useState(true);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [earthZoom, setEarthZoom] = useState(1);
+  const earthRevealProgressRef = useRef(earthRevealProgress);
+  const reducedMotionRef = useRef(reducedMotion);
+  const animationControllerRef = useRef<((shouldRun: boolean) => void) | null>(null);
+  const loadFlightDataRef = useRef<(() => void) | null>(null);
+  earthRevealProgressRef.current = earthRevealProgress;
+  reducedMotionRef.current = reducedMotion;
 
   const updateZoom = (nextZoom: number, hideHint = true) => {
     const zoom = getEarthZoom(nextZoom);
@@ -291,6 +340,7 @@ export default function LandingEarthBackground({ revealProgress = 1 }: LandingEa
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || typeof window === 'undefined') return undefined;
+    const animationCanvas = canvas;
     if (typeof window.WebGLRenderingContext === 'undefined') {
       setWebglFailed(true);
       return undefined;
@@ -306,8 +356,21 @@ export default function LandingEarthBackground({ revealProgress = 1 }: LandingEa
     let atmosphereMaterial: THREE.MeshBasicMaterial | null = null;
     let starField: THREE.Points | null = null;
     let routeLines: THREE.Group | null = null;
+    let denseFlightRenderer: DenseFlightRenderer | null = null;
     let resizeObserver: ResizeObserver | null = null;
     let textureRequestActive = true;
+    const flightDataAbortController = new AbortController();
+    let animationFrameId = 0;
+    let lastAnimationTimestamp = 0;
+    let frameDurationTotal = 0;
+    let frameDurationSamples = 0;
+    let maxFrameDuration = 0;
+    let lastDiagnosticsFrame = -1;
+    let renderedSize = { width: 0, height: 0 };
+    let flightRecords: ReturnType<typeof parseLandingFlightPayload> | null = null;
+    let flightBudgetKey = '';
+    let flightLoadStarted = false;
+    let isDisposed = false;
 
     try {
       renderer = new THREE.WebGLRenderer({
@@ -385,21 +448,158 @@ export default function LandingEarthBackground({ revealProgress = 1 }: LandingEa
       sunLight.position.set(-4, 3, 5);
       scene.add(sunLight);
 
+      const updateFlightDiagnostics = (force = false) => {
+        const stats = denseFlightRenderer?.getStats();
+        if (!stats) return;
+        if (!force && stats.frame - lastDiagnosticsFrame < 6) return;
+        lastDiagnosticsFrame = stats.frame;
+        canvas.dataset.earthFlightCount = String(stats.activeFlights);
+        canvas.dataset.earthFlightSourceCount = String(stats.sourceFlights);
+        canvas.dataset.earthFlightRouteSegments = String(stats.routeSegmentCount);
+        canvas.dataset.earthFlightTrailParticles = String(stats.trailParticleCount);
+        canvas.dataset.earthFlightFrame = String(stats.frame);
+        canvas.dataset.earthFlightElapsed = stats.elapsedSeconds.toFixed(3);
+        canvas.dataset.earthFlightMotionSignature = stats.motionSignature;
+      };
+
       const renderScene = () => {
         const parent = canvas.parentElement;
         const width = parent?.clientWidth || window.innerWidth;
         const height = parent?.clientHeight || window.innerHeight;
-        renderer?.setSize(width, height, false);
-        updateCameraProjection(camera, width, height);
+        const size = { width, height };
+        if (hasCanvasSizeChanged(renderedSize, size)) {
+          renderer?.setSize(width, height, false);
+          updateCameraProjection(camera, width, height);
+          renderedSize = size;
+        }
         camera.position.set(0, 0.04, BASE_CAMERA_DISTANCE / interactionRef.current.zoom);
         camera.lookAt(0, 0, 0);
         earthGroup.rotation.x = interactionRef.current.rotationX;
         earthGroup.rotation.y = interactionRef.current.rotationY;
+        if (canvas.dataset.earthRotationX !== interactionRef.current.rotationX.toFixed(4)) {
+          canvas.dataset.earthRotationX = interactionRef.current.rotationX.toFixed(4);
+        }
+        if (canvas.dataset.earthRotationY !== interactionRef.current.rotationY.toFixed(4)) {
+          canvas.dataset.earthRotationY = interactionRef.current.rotationY.toFixed(4);
+        }
         renderer?.render(scene, camera);
       };
       renderSceneRef.current = renderScene;
 
-      resizeObserver = new ResizeObserver(renderScene);
+      const installFlightRenderer = (records: ReturnType<typeof parseLandingFlightPayload>, width: number) => {
+        const budget = getLandingFlightBudget(width, window.devicePixelRatio || 1);
+        const nextBudgetKey = `${budget.activeFlights}:${budget.pathPoints}:${budget.trailParticlesPerFlight}`;
+        if (denseFlightRenderer && nextBudgetKey === flightBudgetKey) return;
+        const previousRenderer = denseFlightRenderer;
+        denseFlightRenderer = new DenseFlightRenderer({
+          radius: EARTH_RADIUS,
+          records,
+          budget,
+        });
+        flightBudgetKey = nextBudgetKey;
+        earthGroup.add(denseFlightRenderer.group);
+        if (previousRenderer) {
+          earthGroup.remove(previousRenderer.group);
+          previousRenderer.dispose();
+        }
+        updateFlightDiagnostics(true);
+      };
+
+      const loadFlightData = async () => {
+        if (flightLoadStarted) return;
+        flightLoadStarted = true;
+        try {
+          const loadStartedAt = performance.now();
+          const records = await fetchLandingFlightRecords(
+            FLIGHT_DATA_URL,
+            flightDataAbortController.signal,
+          );
+          const parsedAt = performance.now();
+          if (isDisposed || records.length === 0) return;
+          flightRecords = records;
+          const parent = canvas.parentElement;
+          const width = parent?.clientWidth || window.innerWidth;
+          installFlightRenderer(records, width);
+          renderScene();
+          canvas.dataset.earthFlightParseMs = (parsedAt - loadStartedAt).toFixed(1);
+          canvas.dataset.earthFlightLoadMs = (performance.now() - loadStartedAt).toFixed(1);
+        } catch {
+          if (flightDataAbortController.signal.aborted) return;
+          // The static route layer remains available when the optional packed flight data cannot load.
+        }
+      };
+      loadFlightDataRef.current = () => {
+        void loadFlightData();
+      };
+
+      const stopAnimation = () => {
+        if (animationFrameId) {
+          window.cancelAnimationFrame(animationFrameId);
+          animationFrameId = 0;
+        }
+        lastAnimationTimestamp = 0;
+      };
+
+      function animateFrame(timestamp: number) {
+        if (isDisposed) return;
+        animationFrameId = 0;
+        const shouldAnimate = shouldAnimateEarth(
+          earthRevealProgressRef.current,
+          reducedMotionRef.current,
+        );
+        if (!shouldAnimate) {
+          lastAnimationTimestamp = 0;
+          renderScene();
+          return;
+        }
+        if (lastAnimationTimestamp > 0) {
+          const frameDuration = timestamp - lastAnimationTimestamp;
+          frameDurationTotal += frameDuration;
+          frameDurationSamples += 1;
+          maxFrameDuration = Math.max(maxFrameDuration, frameDuration);
+          animationCanvas.dataset.earthRafIntervalMsAverage =
+            (frameDurationTotal / frameDurationSamples).toFixed(2);
+          animationCanvas.dataset.earthRafIntervalMsMax = maxFrameDuration.toFixed(2);
+        }
+        const deltaSeconds = lastAnimationTimestamp === 0
+          ? 0
+          : Math.min((timestamp - lastAnimationTimestamp) / 1000, 0.1);
+        lastAnimationTimestamp = timestamp;
+        if (denseFlightRenderer) {
+          denseFlightRenderer.update(deltaSeconds, true);
+          updateFlightDiagnostics();
+        }
+        if (starField) {
+          const material = starField.material as THREE.ShaderMaterial;
+          material.uniforms.time.value += deltaSeconds;
+        }
+        renderScene();
+        animationFrameId = window.requestAnimationFrame(animateFrame);
+      }
+
+      const startAnimation = () => {
+        if (isDisposed || !shouldAnimateEarth(earthRevealProgressRef.current, reducedMotionRef.current)) {
+          return;
+        }
+        if (!animationFrameId) {
+          lastAnimationTimestamp = 0;
+          animationFrameId = window.requestAnimationFrame(animateFrame);
+        }
+      };
+      animationControllerRef.current = (shouldRun) => {
+        if (shouldRun) startAnimation();
+        else stopAnimation();
+        renderScene();
+      };
+
+      resizeObserver = new ResizeObserver(() => {
+        if (flightRecords) {
+          const parent = canvas.parentElement;
+          const width = parent?.clientWidth || window.innerWidth;
+          installFlightRenderer(flightRecords, width);
+        }
+        renderScene();
+      });
       resizeObserver.observe(canvas.parentElement ?? canvas);
       renderScene();
       setWebglFailed(false);
@@ -408,9 +608,15 @@ export default function LandingEarthBackground({ revealProgress = 1 }: LandingEa
     }
 
     return () => {
+      isDisposed = true;
+      if (animationFrameId) window.cancelAnimationFrame(animationFrameId);
+      flightDataAbortController.abort();
       textureRequestActive = false;
       resizeObserver?.disconnect();
+      animationControllerRef.current = null;
+      loadFlightDataRef.current = null;
       renderSceneRef.current = null;
+      denseFlightRenderer?.dispose();
       routeLines?.traverse((object) => {
         const line = object as THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>;
         line.geometry?.dispose();
@@ -426,16 +632,34 @@ export default function LandingEarthBackground({ revealProgress = 1 }: LandingEa
       atmosphereMaterial?.dispose();
       renderer?.dispose();
     };
-  }, [reducedMotion]);
+  }, []);
+
+  useEffect(() => {
+    const shouldRun = shouldAnimateEarth(earthIsRevealed ? 1 : 0, reducedMotion);
+    animationControllerRef.current?.(shouldRun);
+    if (earthIsRevealed) loadFlightDataRef.current?.();
+  }, [earthIsRevealed, reducedMotion]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
 
     const handleNativeWheel = (event: WheelEvent) => {
-      if (!event.ctrlKey) return;
+      if (event.ctrlKey) {
+        event.preventDefault();
+        updateZoom(interactionRef.current.zoom - event.deltaY * 0.0015);
+        return;
+      }
+      const scrollRoot = canvas.closest<HTMLElement>('.mapflow-landing');
+      if (!scrollRoot) return;
+      const delta = getLandingWheelDelta(
+        event.deltaY,
+        event.deltaMode,
+        scrollRoot.clientHeight || window.innerHeight,
+      );
+      if (delta === 0) return;
       event.preventDefault();
-      updateZoom(interactionRef.current.zoom - event.deltaY * 0.0015);
+      scrollRoot.scrollTop += delta;
     };
 
     canvas.addEventListener('wheel', handleNativeWheel, { passive: false });
@@ -455,7 +679,8 @@ export default function LandingEarthBackground({ revealProgress = 1 }: LandingEa
       gesture.pinchStartZoom = interactionRef.current.zoom;
       hideInteractionHint();
     } else {
-      gesture.mode = 'pending';
+      gesture.mode = getInitialEarthGestureMode(event.pointerType, event.button);
+      gesture.pointerType = event.pointerType;
       gesture.lastX = event.clientX;
       gesture.lastY = event.clientY;
       gesture.startX = event.clientX;
@@ -487,14 +712,34 @@ export default function LandingEarthBackground({ revealProgress = 1 }: LandingEa
       return;
     }
 
+    if (gesture.mode === 'scroll') {
+      const scrollRoot = event.currentTarget.closest<HTMLElement>('.mapflow-landing');
+      if (scrollRoot) {
+        scrollRoot.scrollTop += getLandingScrollDelta(previous.y, event.clientY);
+        event.preventDefault();
+      }
+      return;
+    }
+
     if (gesture.mode === 'pending') {
       const intent = getPointerIntentFromDisplacement(
         event.clientX - gesture.startX,
         event.clientY - gesture.startY,
         1,
       );
-      if (intent === 'rotate') gesture.mode = 'rotate';
-      else return;
+      if (intent === 'rotate') {
+        gesture.mode = 'rotate';
+      } else if (shouldForwardLandingScroll(gesture.pointerType, intent)) {
+        gesture.mode = 'scroll';
+        const scrollRoot = event.currentTarget.closest<HTMLElement>('.mapflow-landing');
+        if (scrollRoot) {
+          scrollRoot.scrollTop += getLandingScrollDelta(previous.y, event.clientY);
+          event.preventDefault();
+        }
+        return;
+      } else {
+        gesture.mode = 'rotate';
+      }
     }
     if (gesture.mode !== 'rotate') return;
     gesture.lastX = event.clientX;
@@ -523,6 +768,35 @@ export default function LandingEarthBackground({ revealProgress = 1 }: LandingEa
     renderSceneRef.current?.();
   };
 
+  const earthControls = earthIsRevealed && !webglFailed ? (
+    <div className="mapflow-earth__controls" aria-label="地球视角控制">
+      {interactionHintVisible && (
+        <span data-testid="landing-earth-interaction-hint" className="mapflow-earth__hint">
+          拖动旋转 · Ctrl+滚轮缩放
+        </span>
+      )}
+      <div className="mapflow-earth__zoom-controls" aria-label="地球缩放控制">
+        <button
+          type="button"
+          onClick={() => updateZoom(earthZoom - 0.1)}
+          aria-label="缩小地球视角"
+        >
+          −
+        </button>
+        <button
+          type="button"
+          onClick={() => updateZoom(earthZoom + 0.1)}
+          aria-label="放大地球视角"
+        >
+          +
+        </button>
+        <button type="button" onClick={resetView} aria-label="重置地球视角">
+          重置视角
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div
       data-testid="landing-earth-background"
@@ -535,6 +809,7 @@ export default function LandingEarthBackground({ revealProgress = 1 }: LandingEa
       <canvas
         ref={canvasRef}
         className={`mapflow-earth__canvas${webglFailed ? ' mapflow-earth__canvas--hidden' : ''}`}
+        style={{ touchAction: 'none' }}
         aria-label="可交互地球背景，拖动旋转，按住 Ctrl 使用滚轮缩放"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -543,42 +818,23 @@ export default function LandingEarthBackground({ revealProgress = 1 }: LandingEa
         onContextMenu={(event) => event.preventDefault()}
       />
       {webglFailed && <EarthFallback />}
-      {earthIsRevealed && (
-        <div className="mapflow-earth__controls" aria-label="地球视角控制">
-          {interactionHintVisible && (
-            <span data-testid="landing-earth-interaction-hint" className="mapflow-earth__hint">
-              拖动旋转 · Ctrl+滚轮缩放
-            </span>
-          )}
-          <div className="mapflow-earth__zoom-controls" aria-label="地球缩放控制">
-            <button
-              type="button"
-              onClick={() => updateZoom(earthZoom - 0.1)}
-              aria-label="缩小地球视角"
-            >
-              −
-            </button>
-            <button
-              type="button"
-              onClick={() => updateZoom(earthZoom + 0.1)}
-              aria-label="放大地球视角"
-            >
-              +
-            </button>
-            <button type="button" onClick={resetView} aria-label="重置地球视角">
-              重置视角
-            </button>
-          </div>
-        </div>
-      )}
+      {earthControls && typeof document !== 'undefined'
+        ? createPortal(earthControls, document.body)
+        : null}
     </div>
   );
 }
 
 export {
   createFallbackEarthTexture,
+  getLandingScrollDelta,
+  getLandingWheelDelta,
+  getInitialEarthGestureMode,
+  hasCanvasSizeChanged,
   latLngToVector3,
   projectMapPoint,
+  shouldAnimateEarth,
+  shouldForwardLandingScroll,
   updateCameraProjection,
   MIN_EARTH_ZOOM,
   MAX_EARTH_ZOOM,

@@ -9,6 +9,8 @@ import {
   getPointerIntentFromDisplacement,
   getSceneProgress,
   getSectionScrollProgress,
+  getStorySceneProgress,
+  getStoryTimelineState,
   getStoryChapterStyle,
   getStoryPathDrawProgress,
 } from './landingMotion';
@@ -64,6 +66,44 @@ describe('landingMotion', () => {
     expect(getSceneProgress(0.3, 1, 5)).toBe(0.5);
     expect(getSceneProgress(0.8, 4, 5)).toBe(0);
     expect(getSceneProgress(1, 4, 5)).toBe(1);
+  });
+
+  it('在章节中心保持当前地图完整可见，并用纵向叠层过渡到下一张图', () => {
+    expect(getStoryTimelineState(0.25)).toMatchObject({
+      activeSceneIndex: 1,
+      baseSceneIndex: 1,
+      nextSceneIndex: 2,
+      mediaRevealProgress: 0,
+    });
+
+    expect(getStoryTimelineState(0.375)).toMatchObject({
+      activeSceneIndex: 2,
+      baseSceneIndex: 1,
+      nextSceneIndex: 2,
+      mediaRevealProgress: 0.5,
+    });
+
+    expect(getStoryTimelineState(0.5)).toMatchObject({
+      activeSceneIndex: 2,
+      baseSceneIndex: 2,
+      nextSceneIndex: 3,
+      mediaRevealProgress: 0,
+    });
+
+    expect(getStoryTimelineState(1)).toMatchObject({
+      activeSceneIndex: 4,
+      baseSceneIndex: 4,
+      nextSceneIndex: null,
+      mediaRevealProgress: 0,
+    });
+  });
+
+  it('用同一条四段滚动时间轴计算五幕局部进度', () => {
+    expect(getStorySceneProgress(0.25, 1, 5)).toBe(0);
+    expect(getStorySceneProgress(0.375, 1, 5)).toBe(0.5);
+    expect(getStorySceneProgress(0.5, 2, 5)).toBe(0);
+    expect(getStorySceneProgress(0.75, 3, 5)).toBe(0);
+    expect(getStorySceneProgress(1, 4, 5)).toBe(1);
   });
 
   it('只在媒体 reveal 区间内推进 clip-mask', () => {

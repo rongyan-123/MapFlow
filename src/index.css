@@ -68,7 +68,6 @@ select {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  scroll-snap-type: y proximity;
   background: #050d18;
   color: var(--mapflow-ink);
 }
@@ -179,6 +178,7 @@ select {
   cursor: pointer;
   font-size: 0.76rem;
   font-weight: 800;
+  white-space: nowrap;
   transition:
     border-color 180ms ease,
     background 180ms ease,
@@ -230,7 +230,6 @@ select {
   height: max(100svh, 40rem);
   align-items: center;
   overflow: hidden;
-  scroll-snap-align: start;
   pointer-events: none;
 }
 
@@ -649,37 +648,6 @@ select {
   font-size: 0.9rem;
 }
 
-.mapflow-story__attribution {
-  z-index: 2;
-  display: flex;
-  position: absolute;
-  right: clamp(1rem, 4vw, 4rem);
-  bottom: 1.4rem;
-  left: clamp(1rem, 4vw, 4rem);
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  color: #6f8793;
-  font-size: 0.68rem;
-  pointer-events: auto;
-}
-
-.mapflow-story__attribution-brand {
-  color: #80ddd5;
-  font-weight: 900;
-  letter-spacing: 0.18em;
-}
-
-.mapflow-story__attribution a {
-  color: #8aaeb8;
-  text-decoration: none;
-}
-
-.mapflow-story__attribution a:hover {
-  color: #c6fff8;
-  text-decoration: underline;
-}
-
 .mapflow-earth {
   position: fixed;
   inset: 0;
@@ -744,7 +712,7 @@ select {
 }
 
 .mapflow-earth__controls {
-  position: absolute;
+  position: fixed;
   right: clamp(1rem, 3vw, 2.5rem);
   bottom: clamp(1rem, 3vw, 2rem);
   z-index: 5;
@@ -830,26 +798,47 @@ select {
 @media (max-width: 560px) {
   .mapflow-landing__header-inner {
     min-height: 3.9rem;
-    gap: 0.5rem;
+    width: calc(100% - 1rem);
+    gap: 0.35rem;
   }
 
   .mapflow-landing__brand {
+    flex: 0 0 auto;
+    gap: 0.45rem;
     min-width: auto;
-    font-size: 0.72rem;
+    font-size: 0.66rem;
+    letter-spacing: 0.15em;
   }
 
   .mapflow-landing__brand-mark {
-    width: 1.9rem;
-    height: 1.9rem;
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .mapflow-landing__nav {
+    flex: 0 0 auto;
+    gap: 0;
+    font-size: 0.6rem;
+  }
+
+  .mapflow-landing__nav button {
+    white-space: nowrap;
+  }
+
+  .mapflow-landing__actions {
+    flex: 0 0 auto;
+    gap: 0.2rem;
   }
 
   .mapflow-landing__login {
-    padding-inline: 0.45rem;
+    padding-inline: 0.2rem;
+    font-size: 0.62rem;
   }
 
   .mapflow-landing__enter {
-    padding-inline: 0.7rem;
-    font-size: 0.7rem;
+    gap: 0.3rem;
+    padding-inline: 0.5rem;
+    font-size: 0.62rem;
   }
 
   .mapflow-story__scene {
@@ -910,16 +899,6 @@ select {
 
   .mapflow-story__media {
     min-height: 15rem;
-  }
-
-  .mapflow-story__attribution {
-    right: 1rem;
-    bottom: 1rem;
-    left: 1rem;
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0.35rem;
-    font-size: 0.58rem;
   }
 
   .mapflow-map-graphic {
@@ -990,6 +969,19 @@ select {
     padding-bottom: 4.25rem;
   }
 
+  .mapflow-story__copy {
+    padding: 0.85rem 1rem;
+    border-radius: 1rem;
+    background: rgba(3, 10, 19, 0.94);
+    backdrop-filter: blur(5px);
+  }
+
+  .mapflow-story__scene--opening .mapflow-story__copy {
+    padding: 0;
+    background: transparent;
+    backdrop-filter: none;
+  }
+
   .mapflow-story__copy h2 {
     font-size: clamp(1.85rem, 8vw, 2.6rem);
   }
@@ -1012,9 +1004,339 @@ select {
     aspect-ratio: 1.35;
   }
 
-  .mapflow-story__attribution {
-    position: static;
-    margin: 0 1rem 1rem;
+}
+
+/* Scroll-linked map stage: the copy column supplies the scroll distance while
+   one pinned stack keeps a full base image behind the vertical next-image mask. */
+.mapflow-story {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.mapflow-story__layout {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(19rem, 0.82fr);
+  width: min(calc(100% - 2.5rem), 94rem);
+  margin: 0 auto;
+}
+
+.mapflow-story__copy-column {
+  position: relative;
+  z-index: 2;
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.mapflow-story__media-stage {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  display: flex;
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
+  height: max(100svh, 40rem);
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.mapflow-story__media-stack {
+  position: relative;
+  width: min(100%, 42rem);
+  aspect-ratio: 1.38;
+}
+
+.mapflow-story__scene {
+  position: relative;
+  display: flex;
+  min-height: max(100svh, 40rem);
+  height: max(100svh, 40rem);
+  align-items: center;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.mapflow-story__inner {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: clamp(1.5rem, 3vw, 3.2rem);
+  padding: 5.5rem 0 3.5rem;
+}
+
+.mapflow-story__inner--opening-viewport {
+  position: relative;
+  width: min(calc(100vw - 2.5rem), 88rem);
+  margin-left: max(0px, calc((100% - 88rem) / 2));
+  align-items: center;
+  isolation: isolate;
+}
+
+.mapflow-story__copy {
+  container-type: inline-size;
+  pointer-events: auto;
+}
+
+.mapflow-story__copy {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 48rem;
+  opacity: 0.18;
+  transform: translateY(1.1rem);
+  transition:
+    opacity 500ms ease,
+    transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mapflow-story__copy h2 {
+  font-size: clamp(2rem, 6cqw, 3.8rem);
+}
+
+.mapflow-story__scene[data-active='true'] .mapflow-story__copy {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.mapflow-story__scene--opening .mapflow-story__copy {
+  width: 100%;
+  max-width: 88rem;
+  text-align: center;
+}
+
+.mapflow-story__scene--opening .mapflow-story__copy h2 {
+  width: 100%;
+  max-width: none;
+  white-space: nowrap;
+}
+
+.mapflow-story__scene--clarity .mapflow-story__title-clarity-key {
+  white-space: nowrap;
+}
+
+.mapflow-map-graphic {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  clip-path: inset(100% 0 0 0 round 1.35rem);
+}
+
+.mapflow-map-graphic--layer-base,
+.mapflow-map-graphic--layer-next {
+  visibility: visible;
+  opacity: 1;
+}
+
+.mapflow-map-graphic--layer-base {
+  z-index: 1;
+}
+
+.mapflow-map-graphic--layer-next {
+  z-index: 2;
+}
+
+.mapflow-map-graphic--layer-hidden {
+  z-index: 0;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 860px) {
+  .mapflow-story__layout {
+    display: block;
+    width: 100%;
+  }
+
+  .mapflow-story__media-stage {
+    position: sticky;
+    top: 0;
+    width: 100%;
+    height: 100svh;
+    min-height: 40rem;
+    margin-bottom: -100svh;
+    align-items: flex-end;
+    padding-bottom: 1rem;
+  }
+
+  .mapflow-story__copy-column {
+    position: relative;
+    z-index: 2;
+  }
+
+  .mapflow-story__inner {
+    width: min(calc(100% - 2rem), 45rem);
+    min-height: 100%;
+    margin: 0 auto;
+    padding: 5.5rem 0 3.5rem;
+  }
+
+  .mapflow-story__inner--opening-viewport {
+    width: min(calc(100% - 2rem), 45rem);
+    margin-inline: auto;
+  }
+
+  .mapflow-story__media-stack {
+    width: min(calc(100% - 4rem), 20rem);
+  }
+}
+
+@media (max-width: 560px) {
+  .mapflow-story__media-stage {
+    min-height: 40rem;
+  }
+
+  .mapflow-story__media-stack {
+    width: min(calc(100% - 3.5rem), 20rem);
+    opacity: 0.78;
+  }
+
+  .mapflow-story__copy {
+    max-width: 100%;
+    padding: 1rem 0.9rem;
+    border-radius: 1.2rem;
+    background: linear-gradient(180deg, rgba(3, 10, 19, 0.98), rgba(3, 10, 19, 0.96));
+    backdrop-filter: blur(5px);
+  }
+
+  .mapflow-story__scene--opening .mapflow-story__copy {
+    padding: 0;
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  .mapflow-story__scene--opening .mapflow-story__copy h2 {
+    white-space: normal;
+  }
+
+  .mapflow-story__scene--opening .mapflow-story__title-lead,
+  .mapflow-story__scene--opening .mapflow-story__title-question {
+    display: block;
+  }
+
+  .mapflow-story__scene--opening .mapflow-story__title-lead,
+  .mapflow-story__scene--opening .mapflow-story__title-question-key {
+    white-space: nowrap;
+  }
+
+  .mapflow-story__inner {
+    gap: 1rem;
+    padding-top: 4.75rem;
+    padding-bottom: 2.5rem;
+  }
+
+  .mapflow-story__copy h2 {
+    line-height: 1.08;
+  }
+
+  .mapflow-story__body {
+    margin-top: 1rem;
+    line-height: 1.72;
+  }
+
+  .mapflow-story__transition,
+  .mapflow-story__example {
+    margin-top: 1rem;
+  }
+
+}
+
+@media (max-width: 860px) {
+  .mapflow-story__scene--clarity .mapflow-story__title-segment--prefix {
+    display: block;
+  }
+
+  .mapflow-story__scene--clarity .mapflow-story__title-segment:not(.mapflow-story__title-segment--prefix) {
+    display: block;
+  }
+
+  .mapflow-story__title-clarity-key {
+    white-space: nowrap;
+  }
+
+  .mapflow-story__scene--clarity .mapflow-story__copy h2 {
+    font-size: clamp(1.75rem, 4.5vw, 2.2rem);
+  }
+
+  .mapflow-story__scene:not(.mapflow-story__scene--opening) .mapflow-story__scroll-cue {
+    display: none;
+  }
+
+  .mapflow-story__scene--progress .mapflow-story__title-segment--progress-prefix,
+  .mapflow-story__scene--progress .mapflow-story__title-segment--progress-answer {
+    display: block;
+    white-space: nowrap;
+  }
+
+  .mapflow-earth__controls {
+    top: 5rem;
+    right: 0.8rem;
+    bottom: auto;
+    z-index: 30;
+  }
+
+  .mapflow-earth__controls button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
+
+@media (max-width: 860px) and (max-height: 840px) {
+  .mapflow-story__scene {
+    height: 100svh;
+    min-height: 100svh;
+    align-items: center;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .mapflow-story__inner {
+    gap: 1.25rem;
+    padding-top: clamp(4.25rem, 9vh, 5rem);
+    padding-bottom: 4.25rem;
+  }
+
+  .mapflow-story__media-stage {
+    height: 100svh;
+    min-height: 100svh;
+    margin-bottom: -100svh;
+  }
+
+  .mapflow-story__media-stack {
+    width: min(calc(100% - 4rem), 18rem);
+  }
+
+}
+
+@media (min-width: 640px) and (max-width: 860px) and (max-height: 840px) {
+  .mapflow-story__media-stage {
+    justify-content: flex-end;
+    padding-right: 1rem;
+  }
+
+  .mapflow-story__copy {
+    max-width: 52%;
+  }
+
+  .mapflow-story__scene--opening .mapflow-story__copy {
+    max-width: 100%;
+  }
+}
+
+@media (min-width: 861px) {
+  .mapflow-story__scene--opening {
+    width: min(calc(100vw - 2.5rem), 94rem);
   }
 }
 

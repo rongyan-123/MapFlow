@@ -4,6 +4,8 @@
 
 The landing Earth renderer is informed by the necessary Earth, latitude/longitude projection, curved route, and starfield structures from [jeantimex/flights-tracker](https://github.com/jeantimex/flights-tracker). The bundled [`public/world.topo.jpg`](../public/world.topo.jpg) is copied from that repository's [`public/world.topo.jpg`](https://github.com/jeantimex/flights-tracker/blob/main/public/world.topo.jpg). The project is licensed under the MIT License. MapFlow does not include its dat.GUI, Stats/FPS, forced loading screen, camera intro, or demo UI.
 
+The dense flight layer was derived from upstream commit `b3be3ae5943103c01b25953cd5c25bb3d9a6296d` after reviewing `src/Data.js`, `src/Flight.js`, `src/ParticlePlanes.js`, `src/InstancedPlanes.js`, `src/MergedFlightPaths.js`, and `src/Earth.js`. [`public/flights/flights.json`](../public/flights/flights.json) is a compact representation of the 34,297 source flight records; the TypeScript renderer in [`src/features/landing/earth/`](../src/features/landing/earth/) adapts their curved flight, particle, and merged-path behavior to the landing globe. The complete upstream notice is also kept beside that derived module at [`src/features/landing/earth/LICENSE`](../src/features/landing/earth/LICENSE).
+
 The opening-title CRT effect uses a small local WebGL shader informed by the barrel-distortion, scanline, chromatic-aberration, and grain treatment in [CRT-like effect with VFX-JS](https://codepen.io/fand/pen/YPXBwVd). It has no runtime dependency on VFX-JS.
 
 ```text
