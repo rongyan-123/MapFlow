@@ -355,21 +355,41 @@ select {
 }
 
 .mapflow-story__scene--opening .mapflow-story__copy {
-  width: min(100%, 68rem);
-  max-width: 68rem;
+  width: min(100%, 88rem);
+  max-width: 88rem;
   text-align: center;
 }
 
 .mapflow-story__scene--opening .mapflow-story__copy h2 {
   max-width: none;
-  font-size: clamp(3rem, 6.2vw, 6.6rem);
-  letter-spacing: -0.09em;
-  line-height: 0.98;
+  width: 100%;
+  font-size: clamp(2.8rem, 4.6vw, 5.2rem);
+  letter-spacing: -0.06em;
+  line-height: 1.05;
+  white-space: nowrap;
   text-shadow:
-    -0.028em 0 rgba(77, 246, 226, 0.46),
-    0.028em 0 rgba(255, 142, 115, 0.32),
     0 0 1.3em rgba(87, 208, 222, 0.18);
-  transform: perspective(1000px) rotateX(2deg) scaleX(1.025);
+}
+
+.mapflow-story__title-lead,
+.mapflow-story__title-question,
+.mapflow-story__title-question-key {
+  display: inline;
+}
+
+.mapflow-story__crt-title[data-crt-renderer='webgl'] h2 {
+  color: transparent;
+  text-shadow: none;
+  -webkit-text-fill-color: transparent;
+}
+
+.mapflow-story__crt-title[data-crt-renderer='fallback'] h2 {
+  text-shadow: none;
+  transform: none;
+}
+
+.mapflow-story__crt-title[data-crt-renderer='fallback'] .mapflow-story__crt-shader {
+  display: none;
 }
 
 .mapflow-story__scene--opening .mapflow-story__body {
@@ -856,6 +876,18 @@ select {
 
   .mapflow-story__scene--opening .mapflow-story__copy h2 {
     font-size: clamp(2rem, 10vw, 3rem);
+    line-height: 1.1;
+    white-space: normal;
+  }
+
+  .mapflow-story__scene--opening .mapflow-story__title-lead,
+  .mapflow-story__scene--opening .mapflow-story__title-question {
+    display: block;
+  }
+
+  .mapflow-story__scene--opening .mapflow-story__title-lead,
+  .mapflow-story__scene--opening .mapflow-story__title-question-key {
+    white-space: nowrap;
   }
 
   .mapflow-story__body {

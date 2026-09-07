@@ -71,7 +71,7 @@ LandingPage
 
 - [x] landingMotion 先红后绿，覆盖五场景边界、缩放上下限和触控方向判断。
 - [x] LandingPage 测试通过，既有 MCP 教程复制/关闭行为不回归。
-- [x] 全量 Vitest 通过：36 个测试文件、310 个测试。
+- [x] 全量 Vitest 通过：36 个测试文件、312 个测试。
 - [x] TypeScript typecheck 通过。
 - [x] Vite production build 通过（仅保留既有的大 chunk advisory）。
 - [x] diff 自审：无 billing、后端、登录协议和无关工作台改动；无新增无主 TODO。

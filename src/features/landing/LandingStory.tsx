@@ -161,7 +161,13 @@ export default function LandingStory({
               <div className="mapflow-story__copy">
                 {scene.id === 'opening' ? (
                   <div className="mapflow-story__crt-title">
-                    <h2 id={`landing-scene-title-${scene.index}`}>{scene.title}</h2>
+                    <h2 id={`landing-scene-title-${scene.index}`} aria-label={scene.title}>
+                      <span className="mapflow-story__title-lead">学习——</span>
+                      <span className="mapflow-story__title-question">
+                        <span className="mapflow-story__title-question-key">什么时候</span>
+                        {scene.title.slice('学习——什么时候'.length)}
+                      </span>
+                    </h2>
                     <LandingCrtShader text={scene.title} progress={sceneProgress} />
                   </div>
                 ) : (
