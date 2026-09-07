@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import type { IdentitySession } from '../identity/types';
+import McpGuideDialog from '../mcp/McpGuideDialog';
 import LandingStory from './LandingStory';
 
 const SkillTree3D = lazy(() => import('./SkillTree3D'));
@@ -15,6 +16,8 @@ export default function LandingPage({
   onEnterConsole,
   onLogin,
 }: LandingPageProps) {
+  const [mcpGuideOpen, setMcpGuideOpen] = useState(false);
+
   return (
     <div
       data-testid="product-landing"
@@ -105,6 +108,15 @@ export default function LandingPage({
                 >
                   先看看它怎么学
                 </a>
+                <button
+                  type="button"
+                  aria-label="如何在自己的 Agent 里连接 MapFlow"
+                  onClick={() => setMcpGuideOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-violet-300/35 bg-violet-300/[0.08] px-5 py-3.5 text-sm font-semibold text-violet-100 transition hover:border-violet-200/65 hover:bg-violet-300/[0.14] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#07111f]"
+                >
+                  如何接入 Agent
+                  <span aria-hidden="true">↗</span>
+                </button>
               </div>
 
               <div className="mt-12 grid max-w-xl grid-cols-3 gap-5 border-t border-white/10 pt-6">
@@ -198,6 +210,8 @@ export default function LandingPage({
           <span>想学哪里，就从哪里开始。</span>
         </div>
       </footer>
+
+      {mcpGuideOpen && <McpGuideDialog onClose={() => setMcpGuideOpen(false)} />}
     </div>
   );
 }
