@@ -154,7 +154,10 @@ export default function LandingStory({
             style={sceneStyle}
             aria-labelledby={`landing-scene-title-${scene.index}`}
           >
-            <div className="mapflow-story__inner">
+            <div
+              className={`mapflow-story__inner${scene.id === 'opening' ? ' mapflow-story__inner--opening-viewport' : ''}`}
+              data-testid={scene.id === 'opening' ? 'landing-opening-viewport' : undefined}
+            >
               <div className="mapflow-story__copy">
                 {scene.id === 'opening' ? (
                   <div className="mapflow-story__crt-title">
@@ -172,13 +175,6 @@ export default function LandingStory({
                   </div>
                 )}
                 {scene.transition && <p className="mapflow-story__transition">{scene.transition}</p>}
-                {scene.id === 'domain' && (
-                  <div className="mapflow-story__tags" aria-label="Agent 学习方向">
-                    <span>学习方向</span>
-                    <span>工程问题</span>
-                    <span>前置关系</span>
-                  </div>
-                )}
                 {scene.id === 'mcp' && (
                   <p className="mapflow-story__example">
                     <span>示例操作</span>
@@ -328,7 +324,7 @@ function LearningMapGraphic({
       )}
       <div className="mapflow-map-graphic__legend">
         <span className="mapflow-map-graphic__legend-label">
-          {variant === 'progress' ? '学习进度' : '示意关系'}
+          {variant === 'progress' ? '示意进度' : '示意关系'}
         </span>
         <span><i className="is-understood" />已理解</span>
         <span><i className="is-exploring" />正在探索</span>

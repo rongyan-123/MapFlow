@@ -44,7 +44,7 @@ LandingPage
 - `LandingEarthBackground` 只在 `LandingPage` 挂载一次，不按场景 key、不按滚动进度卸载，不从滚动位置写 camera position。A/B 前段通过 opacity 和 pointer-events 隐藏 Earth 与控件；B 转场后逐步开放交互。Earth 的 mesh、routes、stars、camera ref 和 zoom state 在首页滚动中保持同一生命周期，滚回 A/B 只隐藏，不重置。
 - Earth 优先加载仓库内随包发布的 `public/world.topo.jpg`（来自 flights-tracker 的 `public/world.topo.jpg`），失败时回退到低亮度海面/经纬线纹理；路线使用其 `latLngToVector3` 语义与球面 Catmull-Rom 弧线，星场使用同源的点精灵闪烁语义。首屏只渲染少量路线和星点，移动端降低 DPR、路线点数和星点数。
 - 视线层次：A/B 前段由稳定 veil 保持逼仄和可读；揭示后 Earth/stars/routes 低亮度但可辨认，前景 copy 保持高对比度；背景不抢正文。
-- CRT shader 的参数随开场进度从轻微失真收敛到零；窄屏多行标题关闭 shader canvas，避免第二份错位文字，保留同一份语义 DOM 标题。
+- CRT shader 的参数随开场进度从轻微失真收敛到零；窄屏保留 shader canvas 但降低采样分辨率，配合 CSS 色散与曲面视窗，避免绘制第二份错位标题。
 - WebGL 不可用或创建 renderer 失败时，使用同一数据的 CSS/SVG Earth fallback；`prefers-reduced-motion` 下关闭自转/粒子闪烁/转场位移，只保留静态 Earth、路线和内容。
 
 ## 输入事件策略
@@ -71,7 +71,7 @@ LandingPage
 
 - [x] landingMotion 先红后绿，覆盖五场景边界、缩放上下限和触控方向判断。
 - [x] LandingPage 测试通过，既有 MCP 教程复制/关闭行为不回归。
-- [x] 全量 Vitest 通过：36 个测试文件、309 个测试。
+- [x] 全量 Vitest 通过：36 个测试文件、310 个测试。
 - [x] TypeScript typecheck 通过。
 - [x] Vite production build 通过（仅保留既有的大 chunk advisory）。
 - [x] diff 自审：无 billing、后端、登录协议和无关工作台改动；无新增无主 TODO。
@@ -82,7 +82,7 @@ LandingPage
 - [x] 滚过 A→E：A/B/C/D/E 只显示当前 scene copy/media；B 的 clip reveal 从 `100%` 逐步到 `0%`，D 增量显示 MCP 节点与边，E 显示进度图例。
 - [x] 滚回 A 再回 C：Earth 仍是同一背景实例，zoom `1.18` 保留；隐藏阶段控件消失，重新揭示后控件恢复。
 - [x] 空白处拖拽旋转、`Ctrl+wheel` 缩放、重置按钮有效；提示在第一次交互后消失。
-- [x] 390×640、390×700、768×600：document 无横向溢出；短视口下 scene 可延展并可继续纵向滚动，E 的 CTA/归属说明可达；A 的 Earth 和控件隐藏。
+- [x] 390×640、390×700、768×600、768×800：document 无横向溢出；短视口下 scene 可延展并可继续纵向滚动，E 的 CTA/归属说明可达；A 的 Earth 和控件隐藏。
 - [x] WebGL fallback/reduced-motion：组件 fallback 测试通过；无自转/粒子闪烁，reduced-motion 仅保留静态 Earth、路线和内容。
 - [x] 点击 `打开我的学习地图` / `进入工作台` 的回调与现有 `/console` 路由测试通过；登录、Agent 接入和 MCP 教程保持可用。
 
@@ -91,7 +91,8 @@ LandingPage
 - Browser Harness：1440×900 下，scrollTop `0` 和 `1000` 时 Earth 为 hidden；scrollTop `1200` 开始渐进揭示（Earth opacity `0.127`），scrollTop `1800` 完整揭示；B 的 map clip 从 `inset(... 100% ...)` 变为 `inset(... 52.5695% ...)`，C 为 `0%`。
 - Browser Harness：scrollTop `2700` 的 D 场景出现 MCP 节点与橙色增量边；E 场景显示完整七节点地图、三种中文进度状态和 CTA。A/B/C/D/E 截图已保存到本地验证目录；A/B 前段没有完整 Earth，C/D/E 使用同一圆形 Earth。
 - Browser Harness：真实 Canvas `Ctrl+wheel` 后事件 `defaultPrevented=true`、landing scrollTop 不变、zoom 从 `1` 到 `1.18`；普通 wheel 未被取消。拖拽测试使用五次各 3px 的慢速横向移动，累计位移足以触发旋转意图。
-- Browser Harness：390×640、390×700、768×600 的 document/client width 相等且无横向溢出；短视口 scene 高度可延展，E 的 CTA 和 attribution 均可滚动到达；390px A 场景关闭 shader canvas 后标题无重影。
+- Browser Harness：390×640、390×700、768×600、768×800 的 document/client width 相等且无横向溢出；短视口 scene 高度可延展，E 的 CTA 和 attribution 均可滚动到达；390px A 保留低采样 shader 且标题无重影。
+- Browser Harness：768×800 复现过 inner 高于固定 scene 的边界问题；将短视口断点扩至 `max-height: 840px` 后，clarity/domain/mcp/progress 的 inner 均落在 scene 内，E 最大滚动位置仍可见 CTA（top `182`）和 attribution（top `768`）。
 - Browser Harness：Earth zoom 在滚回隐藏阶段并重新回到 C 后仍为 `1.18`；隐藏阶段控件不渲染，重新揭示后恢复。
 - Browser Harness：此前已模拟 `prefers-reduced-motion: reduce`，Earth/CRT 仍可渲染，场景 copy transition duration 为 `0s`；恢复默认媒体偏好后重新确认 Earth、CRT 和纹理请求正常。
 - API 来源凭证：`GET /api/capabilities` 同源 200、匿名 `GET /api/auth/session` 401，均符合当前认证语义；未修改服务端 Origin/CSRF 或代理配置。

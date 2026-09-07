@@ -12,7 +12,6 @@ const CRT_VERTEX_SHADER = `
 
 const CRT_FRAGMENT_SHADER = `
   precision highp float;
-  uniform sampler2D uSource;
   uniform vec2 uResolution;
   uniform float uBarrel;
   uniform float uChannelOffset;
@@ -29,15 +28,17 @@ const CRT_FRAGMENT_SHADER = `
     aspectCentered.x *= uResolution.x / max(uResolution.y, 1.0);
     float radius = length(aspectCentered);
     vec2 warped = 0.5 + centered * (1.0 + uBarrel * radius * radius);
-
-    vec4 red = texture2D(uSource, warped + vec2(uChannelOffset, 0.0));
-    vec4 green = texture2D(uSource, warped);
-    vec4 blue = texture2D(uSource, warped - vec2(uChannelOffset, 0.0));
-    float scanline = 1.0 - uIntensity * 0.08 * (0.5 + 0.5 * sin(warped.y * uResolution.y * 1.25));
-    float grain = (hash(gl_FragCoord.xy) - 0.5) * uIntensity * 0.08;
-    float vignette = 1.0 - uIntensity * smoothstep(0.28, 0.9, radius);
-    float alpha = (red.a + green.a + blue.a) / 3.0 * uIntensity * vignette;
-    vec3 color = vec3(red.r, green.g, blue.b) * scanline + grain;
+    float scanline = 0.5 + 0.5 * sin(warped.y * uResolution.y * 1.25);
+    float raster = 0.5 + 0.5 * sin(warped.x * uResolution.x * 0.035);
+    float grain = (hash(gl_FragCoord.xy) - 0.5) * uIntensity * 0.12;
+    float vignette = smoothstep(0.2, 0.92, radius);
+    float fringe = uChannelOffset * 90.0 * smoothstep(0.08, 0.76, abs(centered.x));
+    vec3 color = vec3(
+      0.04 + fringe * 0.32,
+      0.18 + scanline * 0.12 + raster * 0.05,
+      0.2 - fringe * 0.22
+    ) + grain;
+    float alpha = uIntensity * (0.12 + scanline * 0.1 + vignette * 0.14);
 
     gl_FragColor = vec4(color, alpha);
   }
@@ -56,9 +57,9 @@ function clampUnit(value: number) {
 function getCrtEffectParameters(progress: number): CrtEffectParameters {
   const residual = 1 - clampUnit(progress);
   return {
-    barrel: Number((0.12 * residual).toFixed(4)),
-    channelOffset: Number((0.0028 * residual).toFixed(4)),
-    intensity: Number((0.24 * residual).toFixed(4)),
+    barrel: Number((0.18 * residual).toFixed(4)),
+    channelOffset: Number((0.0045 * residual).toFixed(4)),
+    intensity: Number((0.38 * residual).toFixed(4)),
   };
 }
 
@@ -66,32 +67,12 @@ function setRendererState(canvas: HTMLCanvasElement, state: 'fallback' | 'webgl'
   canvas.dataset.crtRenderer = state;
 }
 
-function wrapText(
-  text: string,
-  context: CanvasRenderingContext2D,
-  maxWidth: number,
-): string[] {
-  const lines: string[] = [];
-  let line = '';
-  for (const character of Array.from(text)) {
-    const nextLine = line + character;
-    if (line && context.measureText(nextLine).width > maxWidth) {
-      lines.push(line);
-      line = character;
-    } else {
-      line = nextLine;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-
 interface LandingCrtShaderProps {
   text: string;
   progress?: number;
 }
 
-export default function LandingCrtShader({ text, progress = 0 }: LandingCrtShaderProps) {
+export default function LandingCrtShader({ text: _text, progress = 0 }: LandingCrtShaderProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const progressRef = useRef(progress);
   const renderRef = useRef<(() => void) | null>(null);
@@ -149,60 +130,22 @@ export default function LandingCrtShader({ text, progress = 0 }: LandingCrtShade
       }
 
       const positionBuffer = gl.createBuffer();
-      const texture = gl.createTexture();
-      if (!positionBuffer || !texture) throw new Error('CRT buffer allocation failed');
+      if (!positionBuffer) throw new Error('CRT buffer allocation failed');
 
       const positionLocation = gl.getAttribLocation(program, 'aPosition');
-      const sourceLocation = gl.getUniformLocation(program, 'uSource');
       const resolutionLocation = gl.getUniformLocation(program, 'uResolution');
       const barrelLocation = gl.getUniformLocation(program, 'uBarrel');
       const channelOffsetLocation = gl.getUniformLocation(program, 'uChannelOffset');
       const intensityLocation = gl.getUniformLocation(program, 'uIntensity');
-      const sourceCanvas = document.createElement('canvas');
-      const sourceContext = sourceCanvas.getContext('2d');
-      if (!sourceContext) throw new Error('CRT source canvas is unavailable');
 
-      const resizeAndPaint = () => {
+      const resizeCanvas = () => {
         const rect = host.getBoundingClientRect();
-        const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
-        const cssWidth = Math.max(1, rect.width);
-        const cssHeight = Math.max(1, rect.height);
-        const width = Math.max(1, Math.round(cssWidth * pixelRatio));
-        const height = Math.max(1, Math.round(cssHeight * pixelRatio));
-        canvas.width = width;
-        canvas.height = height;
-        sourceCanvas.width = width;
-        sourceCanvas.height = height;
-        sourceContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-        sourceContext.clearRect(0, 0, cssWidth, cssHeight);
-
-        const title = host.querySelector('h2');
-        const style = title ? window.getComputedStyle(title) : null;
-        sourceContext.font = style
-          ? `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
-          : '900 48px sans-serif';
-        sourceContext.fillStyle = '#ffffff';
-        sourceContext.textBaseline = 'top';
-        const fontSize = Number.parseFloat(style?.fontSize ?? '') || 48;
-        const lineHeight = Number.parseFloat(style?.lineHeight ?? '') || fontSize * 1.1;
-        wrapText(text, sourceContext, cssWidth).forEach((line, index) => {
-          sourceContext.fillText(line, 0, index * lineHeight);
-        });
-
-        gl!.bindTexture(gl!.TEXTURE_2D, texture);
-        gl!.pixelStorei(gl!.UNPACK_FLIP_Y_WEBGL, 1);
-        gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_S, gl!.CLAMP_TO_EDGE);
-        gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_T, gl!.CLAMP_TO_EDGE);
-        gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MIN_FILTER, gl!.LINEAR);
-        gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MAG_FILTER, gl!.LINEAR);
-        gl!.texImage2D(
-          gl!.TEXTURE_2D,
-          0,
-          gl!.RGBA,
-          gl!.RGBA,
-          gl!.UNSIGNED_BYTE,
-          sourceCanvas,
+        const pixelRatio = Math.min(
+          window.devicePixelRatio || 1,
+          window.innerWidth <= 560 ? 1 : 1.5,
         );
+        canvas.width = Math.max(1, Math.round(rect.width * pixelRatio));
+        canvas.height = Math.max(1, Math.round(rect.height * pixelRatio));
       };
 
       const render = () => {
@@ -220,9 +163,6 @@ export default function LandingCrtShader({ text, progress = 0 }: LandingCrtShade
         );
         gl!.enableVertexAttribArray(positionLocation);
         gl!.vertexAttribPointer(positionLocation, 2, gl!.FLOAT, false, 0, 0);
-        gl!.activeTexture(gl!.TEXTURE0);
-        gl!.bindTexture(gl!.TEXTURE_2D, texture);
-        gl!.uniform1i(sourceLocation, 0);
         gl!.uniform2f(resolutionLocation, canvas.width, canvas.height);
         gl!.uniform1f(barrelLocation, parameters.barrel);
         gl!.uniform1f(channelOffsetLocation, parameters.channelOffset);
@@ -230,11 +170,11 @@ export default function LandingCrtShader({ text, progress = 0 }: LandingCrtShade
         gl!.drawArrays(gl!.TRIANGLE_STRIP, 0, 4);
       };
 
-      resizeAndPaint();
+      resizeCanvas();
       renderRef.current = render;
       render();
       resizeObserver = new ResizeObserver(() => {
-        resizeAndPaint();
+        resizeCanvas();
         render();
       });
       resizeObserver.observe(host);
@@ -245,7 +185,6 @@ export default function LandingCrtShader({ text, progress = 0 }: LandingCrtShade
         renderRef.current = null;
         resizeObserver?.disconnect();
         gl?.deleteBuffer(positionBuffer);
-        gl?.deleteTexture(texture);
         gl?.deleteProgram(program);
       };
     } catch {
@@ -253,7 +192,7 @@ export default function LandingCrtShader({ text, progress = 0 }: LandingCrtShade
       setRendererState(canvas, 'fallback');
       return () => resizeObserver?.disconnect();
     }
-  }, [text]);
+  }, []);
 
   return (
     <canvas

@@ -28,6 +28,7 @@ describe('LandingPage', () => {
     expect(screen.getByTestId('landing-crt-shader')).toBeInTheDocument();
     expect(screen.getByTestId('landing-earth-background')).toHaveAttribute('data-earth-revealed', 'false');
     expect(screen.queryByRole('button', { name: '重置地球视角' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('landing-opening-viewport')).toBeInTheDocument();
     expect(screen.getAllByTestId(/^landing-story-scene-/)).toHaveLength(5);
     expect(screen.getByTestId('landing-map-graphic-domain')).toBeInTheDocument();
     expect(
@@ -44,6 +45,10 @@ describe('LandingPage', () => {
     expect(screen.getAllByText('已理解').length).toBeGreaterThan(0);
     expect(screen.getAllByText('正在探索').length).toBeGreaterThan(0);
     expect(screen.getAllByText('下一步').length).toBeGreaterThan(0);
+    expect(screen.getByText('示意进度')).toBeInTheDocument();
+    expect(screen.queryByText('学习进度', { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText('工程问题', { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText('前置关系', { exact: true })).not.toBeInTheDocument();
     expect(screen.queryByText('A MAP FOR THE THINGS YOU WANT TO UNDERSTAND')).not.toBeInTheDocument();
     expect(screen.queryByText('YOU ARE HERE')).not.toBeInTheDocument();
     expect(screen.queryByText('MAPFLOW / LEARNING MAP')).not.toBeInTheDocument();
