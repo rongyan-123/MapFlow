@@ -18,6 +18,14 @@ beforeEach(() => {
 });
 
 describe('KnowledgeChatPanel', () => {
+  it('可从探索入口带入草稿，但不会在打开聊天时自动发送', async () => {
+    renderPanel({ initialDraft: '为什么数据迁移需要先检查依赖？' });
+
+    const input = await screen.findByRole('textbox', { name: '输入问题' });
+    expect(input).toHaveValue('为什么数据迁移需要先检查依赖？');
+    expect(chatApi.sendKnowledgeChatMessageStream).not.toHaveBeenCalled();
+  });
+
   it('restores persisted messages when a personal tree chat opens', async () => {
     chatApi.fetchKnowledgeChatHistory.mockResolvedValueOnce({
       messages: [

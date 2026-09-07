@@ -40,6 +40,35 @@ const snapshot: LearningTreeSnapshot = {
 };
 
 describe('NodeDetailPanel 知识聊天入口', () => {
+  it('先展示当前节点可探索的内容，其余学习细节放进可访问折叠区', async () => {
+    const user = userEvent.setup();
+    const detailedSnapshot = {
+      ...snapshot,
+      nodes: [{
+        ...snapshot.nodes[0],
+        learning_objectives: '["能解释模块边界"]',
+        observable_evidence: '["能画出模块依赖"]',
+      }],
+    };
+
+    render(
+      <NodeDetailPanel
+        snapshot={detailedSnapshot}
+        selectedNodeId="node-1"
+        displayMode="showcase"
+      />,
+    );
+
+    expect(screen.getByText('理解模块边界。')).toBeInTheDocument();
+    expect(screen.getByText('你现在可以探索')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '展开学习细节' })).toBeInTheDocument();
+    expect(screen.queryByText('能解释模块边界')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '展开学习细节' }));
+    expect(screen.getByText('能解释模块边界')).toBeInTheDocument();
+    expect(screen.getByText('能画出模块依赖')).toBeInTheDocument();
+  });
+
   it('在个人树节点详情中点击聊天入口会通知上层', async () => {
     const user = userEvent.setup();
     const onOpenChat = vi.fn();

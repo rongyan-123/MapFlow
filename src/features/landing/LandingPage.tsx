@@ -1,9 +1,7 @@
-import { lazy, Suspense, useState } from 'react';
+import { useState } from 'react';
 import type { IdentitySession } from '../identity/types';
 import McpGuideDialog from '../mcp/McpGuideDialog';
 import LandingStory from './LandingStory';
-
-const SkillTree3D = lazy(() => import('./SkillTree3D'));
 
 interface LandingPageProps {
   session: IdentitySession | null;
@@ -21,192 +19,107 @@ export default function LandingPage({
   return (
     <div
       data-testid="product-landing"
-      className="mapflow-landing h-full min-h-screen overflow-y-auto bg-[#07111f] text-slate-100 selection:bg-cyan-300 selection:text-slate-950"
+      className="mapflow-landing h-full min-h-screen overflow-y-auto bg-[#f7f5ef] text-[#16383b] selection:bg-[#b8e2d5] selection:text-[#16383b]"
     >
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07111f]/80 backdrop-blur-2xl">
-        <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between gap-4 px-5 sm:px-8">
+      <header className="sticky top-0 z-30 border-b border-[#dce7e1]/90 bg-[#f7f5ef]/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
           <a
             href="/?marketing=1"
             className="flex min-w-0 items-center gap-3"
             aria-label="MapFlow 产品首页"
           >
-            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-cyan-200/70 bg-cyan-300 font-black text-slate-950 shadow-[0_0_26px_rgba(103,232,249,0.34)]">
-              <span className="absolute inset-1 rounded-xl border border-slate-950/20" aria-hidden="true" />
+            <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#176f70] text-sm font-black text-white shadow-[0_8px_20px_rgba(23,111,112,0.2)]">
+              <span className="absolute inset-1 rounded-lg border border-white/40" aria-hidden="true" />
               M
             </span>
-            <span className="truncate text-sm font-black tracking-[0.2em] text-white sm:text-base">
+            <span className="truncate text-sm font-black tracking-[0.18em] text-[#16383b] sm:text-base">
               MAPFLOW
             </span>
           </a>
 
-          <nav className="hidden items-center gap-8 text-sm text-slate-400 md:flex" aria-label="产品导航">
-            <a className="transition hover:text-cyan-200" href="#why">
-              为什么是 MapFlow
+          <nav className="hidden items-center gap-7 text-sm text-[#607477] md:flex" aria-label="产品导航">
+            <a className="transition hover:text-[#176f70]" href="#route">
+              怎么开始
             </a>
-            <a className="transition hover:text-cyan-200" href="#workflow">
-              怎么学习
+            <a className="transition hover:text-[#176f70]" href="#evidence">
+              怎么前进
             </a>
-            <a className="transition hover:text-cyan-200" href="#features">
-              能做什么
-            </a>
+            <button
+              type="button"
+              aria-label="如何在自己的 Agent 里连接 MapFlow"
+              onClick={() => setMcpGuideOpen(true)}
+              className="transition hover:text-[#176f70]"
+            >
+              Agent 接入
+            </button>
           </nav>
 
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={onLogin}
-              className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white sm:inline-flex"
-            >
-              {session ? '返回控制台' : '登录'}
-            </button>
-            <button
-              type="button"
-              aria-label="进入控制台"
-              onClick={onEnterConsole}
-              className="mapflow-landing-primary-button rounded-xl border border-cyan-200/90 bg-cyan-300 px-3.5 py-2 text-sm font-bold text-slate-950 shadow-[0_0_22px_rgba(103,232,249,0.28)] transition hover:-translate-y-0.5 hover:bg-cyan-200 hover:shadow-[0_0_30px_rgba(103,232,249,0.48)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#07111f]"
-            >
-              开始使用
-            </button>
-          </div>
+          <span className="hidden text-xs font-medium text-[#82918f] sm:inline">
+            从一个问题开始
+          </span>
         </div>
       </header>
 
       <main>
-        <section className="relative isolate overflow-hidden" aria-labelledby="landing-hero-title">
-          <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_76%_18%,rgba(34,211,238,0.2),transparent_27%),radial-gradient(circle_at_8%_38%,rgba(59,130,246,0.15),transparent_29%)]" />
-          <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[42rem] opacity-35 [background-image:linear-gradient(rgba(148,163,184,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.07)_1px,transparent_1px)] [background-size:52px_52px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
+        <section
+          className="relative overflow-hidden border-b border-[#dce7e1]"
+          aria-labelledby="landing-hero-title"
+        >
+          <div className="pointer-events-none absolute -right-36 -top-36 h-[28rem] w-[28rem] rounded-full bg-[#cfe9df]/70 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-40 -left-32 h-[22rem] w-[22rem] rounded-full bg-[#f3d8c7]/55 blur-3xl" />
 
-          <div data-testid="landing-hero-grid" className="mx-auto grid min-w-0 max-w-7xl grid-cols-1 items-center gap-14 px-5 pb-24 pt-20 sm:px-8 lg:grid-cols-[0.92fr_1.08fr] lg:gap-8 lg:pb-32 lg:pt-24">
-            <div data-testid="landing-hero-copy" className="w-full min-w-0 max-w-2xl">
-              <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1.5 text-[11px] font-bold tracking-[0.16em] text-cyan-200">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-300" aria-hidden="true" />
-                给好奇心一条能走通的路
+          <div
+            data-testid="landing-hero-grid"
+            className="relative mx-auto grid min-w-0 max-w-6xl grid-cols-1 items-center gap-12 px-5 pb-16 pt-14 sm:px-8 sm:pb-20 sm:pt-20 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:pb-24 lg:pt-24"
+          >
+            <div data-testid="landing-hero-copy" className="w-full min-w-0 max-w-xl">
+              <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#b9d8cf] bg-white/65 px-3 py-1.5 text-[11px] font-bold tracking-[0.14em] text-[#176f70]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#e07a52] motion-safe:animate-pulse" aria-hidden="true" />
+                一张从好奇心出发的学习地图
               </p>
               <h1
                 id="landing-hero-title"
-                className="max-w-2xl text-4xl font-black leading-[1.06] tracking-[-0.055em] text-white sm:text-6xl lg:text-[4.65rem]"
+                className="max-w-xl text-4xl font-black leading-[1.08] tracking-[-0.055em] text-[#16383b] sm:text-6xl lg:text-[4.25rem]"
               >
-                <span className="block">不想再看无聊的网课，</span>
-                <span className="mt-2 block text-cyan-300">从你真正想学的地方开始。</span>
+                把你想懂的东西，展开成一张地图。
               </h1>
-              <p className="mt-7 max-w-xl text-base leading-8 text-slate-400 sm:text-lg">
-                MapFlow 把一门复杂技术拆成一棵可以探索、可以执行的技能树。每个节点都是一个明确的小目标，沿着依赖关系学习，今天就能开始，学到哪里算到哪里。
+              <p className="mt-6 max-w-lg text-base leading-8 text-[#607477] sm:text-lg">
+                选一个好奇的问题，看看自己能走到哪里。
               </p>
 
-              <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <button
                   type="button"
                   onClick={onEnterConsole}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-200/90 bg-cyan-300 px-5 py-3.5 text-sm font-black text-slate-950 shadow-[0_0_28px_rgba(103,232,249,0.28)] transition hover:-translate-y-1 hover:bg-cyan-200 hover:shadow-[0_0_38px_rgba(103,232,249,0.52)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#07111f]"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#176f70] px-5 py-3.5 text-sm font-black text-white shadow-[0_10px_24px_rgba(23,111,112,0.22)] transition hover:-translate-y-0.5 hover:bg-[#125e60] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#176f70] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7f5ef]"
                 >
-                  进入控制台
+                  试着探索一下
                   <span aria-hidden="true">↗</span>
                 </button>
-                <a
-                  href="#why"
-                  className="inline-flex items-center justify-center rounded-2xl border border-white/15 px-5 py-3.5 text-sm font-semibold text-slate-300 transition hover:border-cyan-300/50 hover:bg-white/5 hover:text-cyan-100"
-                >
-                  先看看它怎么学
-                </a>
                 <button
                   type="button"
-                  aria-label="如何在自己的 Agent 里连接 MapFlow"
-                  onClick={() => setMcpGuideOpen(true)}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-violet-300/35 bg-violet-300/[0.08] px-5 py-3.5 text-sm font-semibold text-violet-100 transition hover:border-violet-200/65 hover:bg-violet-300/[0.14] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#07111f]"
+                  onClick={session ? onEnterConsole : onLogin}
+                  className="inline-flex items-center justify-center rounded-2xl border border-[#b9d8cf] bg-white/60 px-5 py-3.5 text-sm font-bold text-[#176f70] transition hover:border-[#176f70] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#176f70] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7f5ef]"
                 >
-                  如何接入 Agent
-                  <span aria-hidden="true">↗</span>
+                  {session ? '继续我的学习' : '登录'}
                 </button>
               </div>
 
-              <div className="mt-12 grid max-w-xl grid-cols-3 gap-5 border-t border-white/10 pt-6">
-                <LandingMetric value="01" label="从目标开始" />
-                <LandingMetric value="∞" label="自由组合路径" />
-                <LandingMetric value="AI" label="卡住就问" />
-              </div>
-            </div>
-
-            <Suspense fallback={<LandingSceneLoading />}>
-              <SkillTree3D />
-            </Suspense>
-          </div>
-        </section>
-
-        <section id="why" className="relative border-y border-white/10 bg-[#0a1728]/75" aria-labelledby="why-title">
-          <div className="mx-auto grid max-w-7xl gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-center lg:gap-20 lg:py-28">
-            <div>
-              <p className="text-[11px] font-bold tracking-[0.18em] text-cyan-300">不再从头熬到尾</p>
-              <h2 id="why-title" className="mt-4 text-3xl font-black tracking-[-0.04em] text-white sm:text-5xl">
-                你不需要学完整套课，
-                <span className="block text-cyan-300">才有资格解决一个问题。</span>
-              </h2>
-              <p className="mt-6 max-w-xl text-base leading-8 text-slate-400">
-                网课常常把知识排成一条只能从头走到尾的队伍，项目又常常把所有问题一次性砸过来。MapFlow 把技术拆成一个个可以执行的小节点，让你从眼前的问题出发，走向真正需要的能力。
+              <p className="mt-5 text-xs leading-6 text-[#82918f]">
+                不用先选课程，也不用一次学完整套。先从一个具体问题落脚。
               </p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <ReasonCard number="01" title="想学哪里，就从哪里开始" detail="不必先完成无关章节，先处理你此刻最想弄懂的节点。" />
-              <ReasonCard number="02" title="每一步都小到可以行动" detail="一个节点对应一个目标、一个练习方向和一份可验证的结果。" />
-              <ReasonCard number="03" title="卡在哪里，就问哪里" detail="在当前技能树里和 AI 对话，让解释贴着你的学习上下文走。" />
-            </div>
+            <LearningMapIllustration />
           </div>
         </section>
 
         <LandingStory />
-
-        <section id="features" className="border-y border-white/10 bg-[#0a1728]/75" aria-labelledby="features-title">
-          <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:py-28">
-            <div className="grid gap-10 lg:grid-cols-[0.78fr_1.22fr] lg:items-end">
-              <div>
-                <p className="text-[11px] font-bold tracking-[0.18em] text-cyan-300">学得更轻，走得更远</p>
-                <h2 id="features-title" className="mt-4 text-3xl font-black tracking-[-0.04em] text-white sm:text-5xl">
-                  不只是看懂，
-                  <span className="text-cyan-300">而是一步步做出来。</span>
-                </h2>
-              </div>
-              <p className="max-w-2xl text-base leading-8 text-slate-400 lg:justify-self-end">
-                公共技能树提供可复用的起点，个人学习库保留你的真实进度；节点、对话、复盘和导出，都围绕同一棵树展开。
-              </p>
-            </div>
-
-            <div className="mt-14 grid gap-4 md:grid-cols-2">
-              <FeatureCard number="01" title="结构化的学习路径" detail="用节点和依赖关系看清全局，也能马上找到下一步。" accent="cyan" />
-              <FeatureCard number="02" title="看得见的真实进度" detail="每个节点都有目标和可观察证据，完成不是一个模糊的感觉。" accent="blue" />
-              <FeatureCard number="03" title="只围绕你的树对话" detail="在当前技能树里向 AI 提问，让解释贴着你正在学的内容。" accent="violet" />
-              <FeatureCard number="04" title="把成果带到别处" detail="随时导出技能树与学习进度，继续交给其他工具使用和复盘。" accent="amber" />
-            </div>
-          </div>
-        </section>
-
-        <section id="start" className="relative overflow-hidden" aria-labelledby="start-title">
-          <div className="pointer-events-none absolute -right-32 top-1/2 h-96 w-96 -translate-y-1/2 rounded-full bg-cyan-300/10 blur-3xl" />
-          <div className="mx-auto flex max-w-7xl flex-col gap-8 px-5 py-20 sm:px-8 lg:flex-row lg:items-center lg:justify-between lg:py-28">
-            <div>
-              <p className="text-[11px] font-bold tracking-[0.18em] text-cyan-300">轮到你了</p>
-              <h2 id="start-title" className="mt-4 text-3xl font-black tracking-[-0.04em] text-white sm:text-5xl">
-                告诉 MapFlow，
-                <span className="text-cyan-300">你想学什么。</span>
-              </h2>
-              <p className="mt-4 max-w-xl text-base leading-8 text-slate-400">
-                从一棵技能树开始，把复杂技术拆成今天就能走出的下一步。
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onEnterConsole}
-              className="inline-flex shrink-0 items-center justify-center gap-3 rounded-2xl border border-cyan-200/90 bg-cyan-300 px-6 py-4 text-sm font-black text-slate-950 shadow-[0_0_32px_rgba(103,232,249,0.25)] transition hover:-translate-y-1 hover:bg-cyan-200 hover:shadow-[0_0_42px_rgba(103,232,249,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#07111f]"
-            >
-              开始构建我的技能树
-              <span aria-hidden="true">→</span>
-            </button>
-          </div>
-        </section>
       </main>
 
-      <footer className="border-t border-white/10 px-5 py-8 sm:px-8">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-          <span className="font-semibold tracking-[0.16em] text-slate-300">MAPFLOW</span>
+      <footer className="border-t border-[#dce7e1] px-5 py-8 sm:px-8">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 text-xs text-[#82918f] sm:flex-row sm:items-center sm:justify-between">
+          <span className="font-semibold tracking-[0.16em] text-[#176f70]">MAPFLOW</span>
           <span>想学哪里，就从哪里开始。</span>
         </div>
       </footer>
@@ -216,74 +129,62 @@ export default function LandingPage({
   );
 }
 
-function LandingMetric({ value, label }: { value: string; label: string }) {
-  return (
-    <div>
-      <div className="text-2xl font-black tracking-tight text-white">{value}</div>
-      <div className="mt-1 text-[11px] text-slate-500">{label}</div>
-    </div>
-  );
-}
-
-function LandingSceneLoading() {
+function LearningMapIllustration() {
   return (
     <div
-      data-testid="skill-tree-3d"
-      className="relative mx-auto aspect-[0.92] w-full max-w-[42rem] overflow-hidden rounded-[2rem] border border-cyan-200/20 bg-[#081827] shadow-[0_30px_100px_-28px_rgba(34,211,238,0.38)] sm:aspect-square"
-      aria-label="正在加载 3D 技能树展示"
+      data-testid="landing-map-illustration"
+      role="img"
+      aria-label="一张从问题走向下一步的轻量学习地图"
+      className="relative mx-auto aspect-[1.08] w-full max-w-[36rem] overflow-hidden rounded-[2rem] border border-[#c9dfd7] bg-[#edf5ef] shadow-[0_24px_70px_-34px_rgba(23,111,112,0.45)]"
     >
-      <div className="absolute inset-5 rounded-[1.5rem] border border-dashed border-cyan-300/15 sm:inset-7" />
-      <div className="absolute inset-0 grid place-items-center">
-        <div className="text-center">
-          <div className="mx-auto h-16 w-16 animate-pulse rounded-full border border-cyan-200/60 bg-cyan-300/10 shadow-[0_0_45px_rgba(103,232,249,0.28)]" />
-          <p className="mt-5 text-xs font-semibold tracking-[0.12em] text-cyan-200">正在展开技能树…</p>
-        </div>
+      <div className="absolute inset-4 rounded-[1.5rem] border border-dashed border-[#b9d8cf] sm:inset-6" />
+      <svg
+        className="absolute inset-0 h-full w-full"
+        viewBox="0 0 640 520"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M92 168C180 80 228 110 286 194C340 272 396 258 470 178C520 125 548 156 566 217"
+          stroke="#9bc8ba"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray="9 11"
+        />
+        <path
+          d="M117 347C180 287 229 290 284 326C356 373 424 365 512 292"
+          stroke="#dfad91"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray="8 12"
+        />
+        <circle cx="92" cy="168" r="13" fill="#176f70" />
+        <circle cx="286" cy="194" r="13" fill="#e07a52" />
+        <circle cx="470" cy="178" r="13" fill="#176f70" />
+        <circle cx="566" cy="217" r="13" fill="#e07a52" />
+        <circle cx="117" cy="347" r="13" fill="#e07a52" />
+        <circle cx="284" cy="326" r="13" fill="#176f70" />
+        <circle cx="512" cy="292" r="13" fill="#176f70" />
+      </svg>
+
+      <div className="absolute left-[8%] top-[16%] rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-[0_12px_26px_rgba(23,111,112,0.1)]">
+        <p className="text-[10px] font-bold tracking-[0.16em] text-[#82918f]">起点</p>
+        <p className="mt-1 text-sm font-black text-[#16383b]">我想弄懂什么？</p>
       </div>
-      <div className="absolute bottom-6 left-6 text-[10px] font-bold tracking-[0.18em] text-cyan-300 sm:bottom-8 sm:left-9">
-        SKILL TREE / 3D
+      <div className="absolute left-[38%] top-[36%] rounded-2xl border border-[#f0c9b6] bg-[#fff8f3] px-4 py-3 shadow-[0_12px_26px_rgba(224,122,82,0.12)]">
+        <p className="text-[10px] font-bold tracking-[0.16em] text-[#c16d4a]">正在走</p>
+        <p className="mt-1 text-sm font-black text-[#16383b]">一个小目标</p>
+      </div>
+      <div className="absolute right-[8%] top-[17%] rounded-2xl border border-white/80 bg-white/85 px-4 py-3 shadow-[0_12px_26px_rgba(23,111,112,0.1)]">
+        <p className="text-[10px] font-bold tracking-[0.16em] text-[#82918f]">下一步</p>
+        <p className="mt-1 text-sm font-black text-[#16383b]">可以验证的结果</p>
+      </div>
+      <div className="absolute bottom-[14%] left-[18%] rounded-xl border border-[#c9dfd7] bg-[#f8fcf8]/90 px-3 py-2 text-xs font-semibold text-[#176f70]">
+        前置关系
+      </div>
+      <div className="absolute bottom-[12%] right-[18%] rounded-xl border border-[#ecd0c1] bg-[#fff8f3]/90 px-3 py-2 text-xs font-semibold text-[#c16d4a]">
+        继续探索
       </div>
     </div>
-  );
-}
-
-function ReasonCard({ number, title, detail }: { number: string; title: string; detail: string }) {
-  return (
-    <article className="group rounded-2xl border border-white/10 bg-white/[0.035] p-5 transition duration-300 hover:-translate-y-1 hover:border-cyan-300/45 hover:bg-cyan-300/[0.07]">
-      <div className="flex items-center justify-between text-xs text-cyan-300">
-        <span className="font-mono">/{number}</span>
-        <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.9)]" aria-hidden="true" />
-      </div>
-      <h3 className="mt-10 text-lg font-bold leading-7 text-white">{title}</h3>
-      <p className="mt-3 text-sm leading-7 text-slate-400">{detail}</p>
-    </article>
-  );
-}
-
-function FeatureCard({
-  number,
-  title,
-  detail,
-  accent,
-}: {
-  number: string;
-  title: string;
-  detail: string;
-  accent: 'cyan' | 'blue' | 'violet' | 'amber';
-}) {
-  const accentClass = {
-    cyan: 'text-cyan-300 border-cyan-300/25 group-hover:bg-cyan-300/10',
-    blue: 'text-blue-300 border-blue-300/25 group-hover:bg-blue-300/10',
-    violet: 'text-violet-300 border-violet-300/25 group-hover:bg-violet-300/10',
-    amber: 'text-amber-300 border-amber-300/25 group-hover:bg-amber-300/10',
-  }[accent];
-
-  return (
-    <article className="group rounded-2xl border border-white/10 bg-white/[0.025] p-6 transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.05]">
-      <span className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border bg-black/10 font-mono text-xs ${accentClass}`}>
-        {number}
-      </span>
-      <h3 className="mt-8 text-xl font-bold text-white">{title}</h3>
-      <p className="mt-3 max-w-xl text-sm leading-7 text-slate-400">{detail}</p>
-    </article>
   );
 }

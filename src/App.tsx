@@ -20,6 +20,9 @@ import AnnouncementsButton from './features/announcements/AnnouncementsButton';
 import AnnouncementsDialog from './features/announcements/AnnouncementsDialog';
 import FeedbackDialog from './features/feedback/FeedbackDialog';
 import LandingPage from './features/landing/LandingPage';
+import TreeIntroduction from './features/learning-entry/TreeIntroduction';
+import WorkbenchHome from './features/learning-entry/WorkbenchHome';
+import { findRecommendedNodeId, getTreeGuide } from './features/learning-entry/learningEntry';
 import MobileDrawer from './features/navigation/MobileDrawer';
 import ThemeSwitcher from './features/theme/ThemeSwitcher';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
@@ -42,6 +45,7 @@ import type {
 
 type AppView = 'public' | 'personal' | 'admin';
 type MobileView = 'list' | 'graph' | 'detail' | 'chat';
+type ConsoleMode = 'home' | 'introduction' | 'map';
 
 const CONSOLE_ENTRY_MEMORY_KEY = 'mapflow.entry.has-entered-console';
 const PENDING_CONSOLE_ENTRY_KEY = 'mapflow.entry.pending-console';
@@ -53,7 +57,6 @@ export default function App() {
     currentPath === '/' &&
     new URLSearchParams(window.location.search).get('marketing') === '1';
   const generationRouteRequested = readGenerationSessionId() !== null;
-  const hasEnteredConsole = readBooleanPreference(CONSOLE_ENTRY_MEMORY_KEY, false);
   const pendingConsoleEntry = readBooleanPreference(PENDING_CONSOLE_ENTRY_KEY, false);
 
   useEffect(() => {
@@ -77,14 +80,13 @@ export default function App() {
       !generationRouteRequested &&
       !sessionPending &&
       session &&
-      (hasEnteredConsole || pendingConsoleEntry)
+      pendingConsoleEntry
     ) {
       navigateToConsole(true);
     }
   }, [
     currentPath,
     generationRouteRequested,
-    hasEnteredConsole,
     marketingRequested,
     navigateToConsole,
     pendingConsoleEntry,
@@ -99,14 +101,6 @@ export default function App() {
 
   const rootRoute = currentPath === '/' && !generationRouteRequested;
   if (rootRoute) {
-    if (!marketingRequested) {
-      if (hasEnteredConsole && sessionPending) {
-        return <EntryLoading />;
-      }
-      if (hasEnteredConsole && session) {
-        return <ConsoleApp />;
-      }
-    }
     return (
       <LandingPage
         session={session}
@@ -134,9 +128,12 @@ function ConsoleApp() {
     logoutError,
   } = useIdentity();
   const [view, setView] = useState<AppView>('public');
+  const [consoleMode, setConsoleMode] = useState<ConsoleMode>('home');
   const [selectedPublicTreeId, setSelectedPublicTreeId] = useState<string | null>(null);
   const [selectedLibraryEntryId, setSelectedLibraryEntryId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [explorationQuestion, setExplorationQuestion] = useState<string | null>(null);
+  const [initialChatDraft, setInitialChatDraft] = useState('');
   const [completion, setCompletion] = useState<{ node: SkillNode; nonce: number } | null>(null);
   const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
   const [generationSessionId, setGenerationSessionId] = useState<string | null>(
@@ -156,6 +153,7 @@ function ConsoleApp() {
   );
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const completedGenerationSessionIdRef = useRef<string | null>(null);
+  const pendingExplorationAfterLoginRef = useRef<string | null>(null);
   const accountPlayerId = session?.account.playerId ?? null;
   const personalTreeLibraryQueryKey = [
     'me',
@@ -178,7 +176,10 @@ function ConsoleApp() {
   const publicTree = useQuery({
     queryKey: ['trees', 'public', selectedPublicTreeId],
     queryFn: () => fetchPublicTree(selectedPublicTreeId ?? ''),
-    enabled: view === 'public' && selectedPublicTreeId !== null,
+    enabled:
+      view === 'public' &&
+      consoleMode === 'map' &&
+      selectedPublicTreeId !== null,
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
@@ -194,6 +195,7 @@ function ConsoleApp() {
     queryFn: () => fetchPersonalTree(selectedLibraryEntryId ?? ''),
     enabled:
       view === 'personal' &&
+      consoleMode === 'map' &&
       accountPlayerId !== null &&
       selectedLibraryEntryId !== null,
     staleTime: 15 * 1000,
@@ -240,11 +242,26 @@ function ConsoleApp() {
   }, [personalLibrary.data, selectedLibraryEntryId, session, view]);
 
   useEffect(() => {
+    const pendingQuestion = pendingExplorationAfterLoginRef.current;
+    if (accountPlayerId && pendingQuestion) {
+      setInitialChatDraft(pendingQuestion);
+      setExplorationQuestion(pendingQuestion);
+      setCompletion(null);
+      setChatOpen(false);
+      setConsoleMode('map');
+      setMobileView('detail');
+      return;
+    }
+
     setSelectedLibraryEntryId(null);
     setSelectedNodeId(null);
+    setExplorationQuestion(null);
+    setInitialChatDraft('');
     setCompletion(null);
     setChatOpen(false);
+    setConsoleMode('home');
     setMobileView('list');
+    if (!accountPlayerId) pendingExplorationAfterLoginRef.current = null;
   }, [accountPlayerId]);
 
   useEffect(() => {
@@ -277,6 +294,7 @@ function ConsoleApp() {
   useEffect(() => {
     if (session && generationCapabilities?.enabled && generationSessionId) {
       setView('personal');
+      setConsoleMode('map');
       setGenerationDialogOpen(true);
     }
   }, [generationCapabilities?.enabled, generationSessionId, session]);
@@ -305,7 +323,11 @@ function ConsoleApp() {
   ]);
 
   const activeGraph =
-    view === 'public' ? publicTree.data?.graph : personalTree.data?.graph;
+    consoleMode === 'map'
+      ? view === 'public'
+        ? publicTree.data?.graph
+        : personalTree.data?.graph
+      : undefined;
   const completedNodeIds =
     view === 'personal' ? personalTree.data?.completed_node_ids ?? [] : [];
   const displayMode: TreeDisplayMode = view === 'public' ? 'showcase' : 'personal';
@@ -314,11 +336,21 @@ function ConsoleApp() {
     : null;
 
   useEffect(() => {
-    if (!activeGraph) return;
-    if (!activeGraph.nodes.some((node) => node.id === selectedNodeId)) {
-      setSelectedNodeId(activeGraph.nodes[0]?.id ?? null);
+    if (!activeGraph || consoleMode !== 'map') return;
+    if (selectedNodeId && !activeGraph.nodes.some((node) => node.id === selectedNodeId)) {
+      setSelectedNodeId(null);
     }
-  }, [activeGraph, selectedNodeId]);
+  }, [activeGraph, consoleMode, selectedNodeId]);
+
+  useEffect(() => {
+    if (!activeGraph || !explorationQuestion || selectedNodeId) return;
+    const guide = getTreeGuide(activeGraph.tree);
+    const recommendedNodeId = findRecommendedNodeId(activeGraph.nodes, guide);
+    if (recommendedNodeId) {
+      setSelectedNodeId(recommendedNodeId);
+      setMobileView('detail');
+    }
+  }, [activeGraph, explorationQuestion, selectedNodeId]);
 
   const addTree = useMutation({
     mutationFn: (treeId: string) => {
@@ -330,9 +362,25 @@ function ConsoleApp() {
       setSelectedNodeId(null);
       setCompletion(null);
       setView('personal');
+      setConsoleMode('map');
+      setExplorationQuestion(null);
       await queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
     },
   });
+
+  useEffect(() => {
+    const pendingQuestion = pendingExplorationAfterLoginRef.current;
+    if (!session || !pendingQuestion || !selectedPublicTreeId || addTree.isPending) return;
+
+    pendingExplorationAfterLoginRef.current = null;
+    addTree.mutate(selectedPublicTreeId, {
+      onSuccess: () => {
+        setInitialChatDraft(pendingQuestion);
+        setChatOpen(true);
+        setMobileView('chat');
+      },
+    });
+  }, [addTree, selectedPublicTreeId, session]);
 
   const completionMutation = useMutation({
     mutationFn: ({ nodeId, completed }: { nodeId: string; completed: boolean }) => {
@@ -362,6 +410,9 @@ function ConsoleApp() {
     setSelectedNodeId(null);
     setCompletion(null);
     setChatOpen(false);
+    setExplorationQuestion(null);
+    setInitialChatDraft('');
+    setConsoleMode('map');
     setMobileView('graph');
   };
   const selectPersonalTree = (libraryEntryId: string) => {
@@ -369,7 +420,41 @@ function ConsoleApp() {
     setSelectedNodeId(null);
     setCompletion(null);
     setChatOpen(false);
+    setExplorationQuestion(null);
+    setInitialChatDraft('');
+    setConsoleMode('map');
     setMobileView('graph');
+  };
+  const openPublicIntroduction = (treeId: string) => {
+    setSelectedPublicTreeId(treeId);
+    setSelectedNodeId(null);
+    setCompletion(null);
+    setChatOpen(false);
+    setExplorationQuestion(null);
+    setInitialChatDraft('');
+    setConsoleMode('introduction');
+    setMobileView('list');
+  };
+  const startPublicExploration = (question: string) => {
+    setExplorationQuestion(question);
+    setInitialChatDraft('');
+    setConsoleMode('map');
+    setMobileView('detail');
+  };
+  const previewPublicMap = () => {
+    setExplorationQuestion(null);
+    setInitialChatDraft('');
+    setSelectedNodeId(null);
+    setConsoleMode('map');
+    setMobileView('graph');
+  };
+  const returnToWorkbench = () => {
+    setConsoleMode('home');
+    setSelectedNodeId(null);
+    setExplorationQuestion(null);
+    setInitialChatDraft('');
+    setChatOpen(false);
+    setMobileView('list');
   };
   const showPersonalLibrary = () => {
     if (!session) {
@@ -380,6 +465,10 @@ function ConsoleApp() {
     setSelectedNodeId(null);
     setCompletion(null);
     setChatOpen(false);
+    setConsoleMode('home');
+    setExplorationQuestion(null);
+    setInitialChatDraft('');
+    setMobileView('list');
   };
   const joinSelectedTree = () => {
     if (!session) {
@@ -408,19 +497,37 @@ function ConsoleApp() {
     setCompletion(null);
     setChatOpen(false);
     setView('personal');
+    setConsoleMode('map');
+    setExplorationQuestion(null);
+    setInitialChatDraft('');
     setGenerationDialogOpen(false);
     rememberGenerationSession(null);
     void queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
   };
 
-  const openKnowledgeChat = () => {
+  const openKnowledgeChat = (prompt?: string) => {
     if (!session) {
       openIdentityDialog();
       return;
     }
     if (view !== 'personal' || !selectedLibraryEntryId) return;
+    if (prompt !== undefined) setInitialChatDraft(prompt);
     setChatOpen(true);
     setMobileView('chat');
+  };
+  const useExplorationQuestion = () => {
+    if (!explorationQuestion) return;
+    setInitialChatDraft(explorationQuestion);
+    if (!session) {
+      pendingExplorationAfterLoginRef.current = explorationQuestion;
+      openIdentityDialog();
+      return;
+    }
+    if (view === 'personal' && selectedLibraryEntryId) {
+      openKnowledgeChat(explorationQuestion);
+      return;
+    }
+    if (selectedPublicTreeId) joinSelectedTree();
   };
   const closeKnowledgeChat = () => {
     setChatOpen(false);
@@ -480,11 +587,15 @@ function ConsoleApp() {
     (entry) => entry.library_entry_id === selectedLibraryEntryId,
   );
   const activeTitle =
-    activeGraph?.tree.title ??
-    (view === 'public' ? selectedPublicTree?.title : selectedPersonalEntry?.tree.title) ??
-    'MapFlow 技能树';
+    consoleMode === 'home'
+      ? 'MapFlow 工作台'
+      : activeGraph?.tree.title ??
+        (view === 'public' ? selectedPublicTree?.title : selectedPersonalEntry?.tree.title) ??
+        'MapFlow 技能树';
   const treePending =
-    view === 'public'
+    consoleMode !== 'map'
+      ? false
+      : view === 'public'
       ? selectedPublicTreeId !== null && publicTree.isPending
       : selectedLibraryEntryId !== null && personalTree.isPending;
   const treeError = view === 'public' ? publicTree.error : personalTree.error;
@@ -493,7 +604,17 @@ function ConsoleApp() {
     <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
       <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-2 sm:px-5 max-lg:pt-[max(0.5rem,env(safe-area-inset-top))]">
         <div className="flex min-w-0 items-center gap-2">
-          {mobileView === 'list' && (
+          {consoleMode === 'introduction' && (
+            <button
+              type="button"
+              aria-label="返回工作台"
+              onClick={returnToWorkbench}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-cyan-400/60 hover:text-white"
+            >
+              ←
+            </button>
+          )}
+          {(consoleMode === 'map' || consoleMode === 'home') && mobileView === 'list' && (
             <button
               type="button"
               aria-label="打开功能菜单"
@@ -503,7 +624,7 @@ function ConsoleApp() {
               ☰
             </button>
           )}
-          {mobileView !== 'list' && mobileView !== 'chat' && (
+          {consoleMode === 'map' && mobileView !== 'list' && mobileView !== 'chat' && (
             <button
               type="button"
               aria-label="返回上一级"
@@ -518,7 +639,11 @@ function ConsoleApp() {
               {activeTitle}
             </h1>
             <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">
-              {view === 'public'
+              {consoleMode === 'home'
+                ? view === 'public'
+                  ? '从一个具体问题开始，先选一个方向'
+                  : '继续已保存的节点，或创建一张自己的地图'
+                : view === 'public'
                 ? '公共示例树 · 全亮预览，不代表你的学习进度'
                 : '我的学习树 · 进度仅保存在当前账号'}
             </p>
@@ -532,10 +657,13 @@ function ConsoleApp() {
               setSelectedNodeId(null);
               setCompletion(null);
               setChatOpen(false);
+              setConsoleMode('home');
+              setExplorationQuestion(null);
+              setInitialChatDraft('');
               setMobileView('list');
             }}
           >
-            公共树库
+            探索
           </ViewButton>
           <ViewButton active={view === 'personal'} onClick={showPersonalLibrary}>
             我的学习
@@ -612,6 +740,38 @@ function ConsoleApp() {
         </div>
       </header>
 
+      {consoleMode !== 'map' ? (
+        consoleMode === 'introduction' && selectedPublicTree ? (
+          <TreeIntroduction
+            tree={selectedPublicTree}
+            onBack={returnToWorkbench}
+            onStartExploring={startPublicExploration}
+            onPreviewMap={previewPublicMap}
+          />
+        ) : (
+          <WorkbenchHome
+            mode={view === 'personal' ? 'personal' : 'public'}
+            publicTrees={publicCatalog.data.trees}
+            personalEntries={personalLibrary.data?.entries ?? []}
+            onOpenPublicTree={openPublicIntroduction}
+            onContinuePersonalTree={selectPersonalTree}
+            onCreateTree={openTreeGenerator}
+            createTreeDisabled={Boolean(
+              session &&
+                (capabilitiesPending ||
+                  capabilitiesError ||
+                  !generationCapabilities?.enabled),
+            )}
+            createTreeLabel={
+              !session || generationCapabilities?.enabled
+                ? '创建自己的地图'
+                : capabilitiesPending
+                ? '正在检查生成能力…'
+                : '创建能力暂不可用'
+            }
+          />
+        )
+      ) : (
       <main className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
         {!personalSidebarOpen && (
           <button
@@ -820,6 +980,8 @@ function ConsoleApp() {
                     ? openKnowledgeChat
                     : undefined
                 }
+                explorationQuestion={explorationQuestion}
+                onUseExplorationQuestion={useExplorationQuestion}
               />
             ) : (
               <button
@@ -869,6 +1031,7 @@ function ConsoleApp() {
               csrfToken={session.csrfToken}
               onClose={closeKnowledgeChat}
               isVisible={chatOpen}
+              initialDraft={initialChatDraft}
               onCreditChanged={() => {
                 void creditQuery.refetch();
               }}
@@ -876,6 +1039,7 @@ function ConsoleApp() {
           </ResizableChatPane>
         )}
       </main>
+      )}
 
       {snapshot && (
         <ProgressOverview
@@ -973,11 +1137,14 @@ function ConsoleApp() {
               setView('public');
               setSelectedNodeId(null);
               setCompletion(null);
+              setExplorationQuestion(null);
+              setInitialChatDraft('');
+              setConsoleMode('home');
               setMobileView('list');
               setDrawerOpen(false);
             }}
           >
-            公共树库
+            探索
           </DrawerItem>
           <DrawerItem
             active={view === 'personal'}

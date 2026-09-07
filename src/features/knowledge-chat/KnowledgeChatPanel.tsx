@@ -15,6 +15,7 @@ interface KnowledgeChatPanelProps {
   onClose: () => void;
   onCreditChanged?: () => void | Promise<void>;
   isVisible?: boolean;
+  initialDraft?: string;
 }
 
 export default function KnowledgeChatPanel({
@@ -24,6 +25,7 @@ export default function KnowledgeChatPanel({
   onClose,
   onCreditChanged,
   isVisible = true,
+  initialDraft = '',
 }: KnowledgeChatPanelProps) {
   const [messages, setMessages] = useState<KnowledgeChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -39,7 +41,7 @@ export default function KnowledgeChatPanel({
     let active = true;
     setHistoryPending(true);
     setMessages([]);
-    setDraft('');
+    setDraft(initialDraft);
     setError(null);
     setLastCharge(null);
     setStreamingAnswer(null);
@@ -60,7 +62,7 @@ export default function KnowledgeChatPanel({
     return () => {
       active = false;
     };
-  }, [libraryEntryId]);
+  }, [initialDraft, libraryEntryId]);
 
   useLayoutEffect(() => {
     if (!isVisible || historyPending) return;
@@ -162,10 +164,8 @@ export default function KnowledgeChatPanel({
           </div>
         ) : messages.length === 0 && !pending ? (
           <div className="rounded-xl border border-cyan-900/60 bg-cyan-950/20 p-4 text-sm leading-6 text-slate-400">
-            <p className="font-semibold text-cyan-200">只读知识助手</p>
-            <p className="mt-2">
-              我会读取这棵个人技能树的节点、目标和前置关系；需要补充资料时，只会进行只读网站搜索。
-            </p>
+            <p className="font-semibold text-cyan-200">从一个具体问题开始</p>
+            <p className="mt-2">你可以先问当前节点的含义、要怎样用，或者它和前置节点为什么有关。写好后点击发送，才会开始一轮对话。</p>
           </div>
         ) : (
           messages.map((message) => (
