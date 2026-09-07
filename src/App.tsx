@@ -24,7 +24,7 @@ import TreeIntroduction from './features/learning-entry/TreeIntroduction';
 import WorkbenchHome from './features/learning-entry/WorkbenchHome';
 import { findRecommendedNodeId, getTreeGuide } from './features/learning-entry/learningEntry';
 import MobileDrawer from './features/navigation/MobileDrawer';
-import ThemeSwitcher from './features/theme/ThemeSwitcher';
+import ThemeSwitcher, { ThemeInitializer } from './features/theme/ThemeSwitcher';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
 import { readPlatformGenerationEntitlements } from './features/tree-generation/treeGenerationClient';
 import {
@@ -50,6 +50,16 @@ type ConsoleMode = 'home' | 'introduction' | 'map';
 interface PendingExplorationIntent {
   treeId: string;
   question: string;
+  intentVersion: number;
+}
+
+interface ExplorationAddRequest extends PendingExplorationIntent {
+  accountPlayerId: string;
+}
+
+interface AddTreeMutationVariables {
+  treeId: string;
+  exploration?: ExplorationAddRequest;
 }
 
 const CONSOLE_ENTRY_MEMORY_KEY = 'mapflow.entry.has-entered-console';
@@ -127,6 +137,7 @@ function ConsoleApp() {
     capabilitiesError,
     session,
     sessionPending,
+    identityDialogOpen,
     openIdentityDialog,
     logout,
     logoutPending,
@@ -161,8 +172,33 @@ function ConsoleApp() {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const completedGenerationSessionIdRef = useRef<string | null>(null);
   const pendingExplorationIntentRef = useRef<PendingExplorationIntent | null>(null);
+  const explorationIntentVersionRef = useRef(0);
+  const activeExplorationAddRequestRef = useRef<ExplorationAddRequest | null>(null);
   const previousAccountPlayerIdRef = useRef<string | null>(null);
+  const previousIdentityDialogOpenRef = useRef(false);
+  const currentAccountPlayerIdRef = useRef<string | null>(null);
+  const currentSelectedPublicTreeIdRef = useRef<string | null>(null);
+  const currentViewRef = useRef<AppView>('public');
+  const currentConsoleModeRef = useRef<ConsoleMode>('home');
   const accountPlayerId = session?.account.playerId ?? null;
+  currentAccountPlayerIdRef.current = accountPlayerId;
+  currentSelectedPublicTreeIdRef.current = selectedPublicTreeId;
+  currentViewRef.current = view;
+  currentConsoleModeRef.current = consoleMode;
+  const clearPendingExplorationIntent = useCallback(() => {
+    explorationIntentVersionRef.current += 1;
+    pendingExplorationIntentRef.current = null;
+  }, []);
+  const createPendingExplorationIntent = useCallback(
+    (treeId: string, question: string): PendingExplorationIntent => {
+      const intentVersion = explorationIntentVersionRef.current + 1;
+      explorationIntentVersionRef.current = intentVersion;
+      const intent = { treeId, question, intentVersion };
+      pendingExplorationIntentRef.current = intent;
+      return intent;
+    },
+    [],
+  );
   const personalTreeLibraryQueryKey = [
     'me',
     accountPlayerId,
@@ -254,7 +290,7 @@ function ConsoleApp() {
     const accountChanged =
       previousAccountPlayerId !== null && previousAccountPlayerId !== accountPlayerId;
     previousAccountPlayerIdRef.current = accountPlayerId;
-    if (accountChanged) pendingExplorationIntentRef.current = null;
+    if (accountChanged) clearPendingExplorationIntent();
 
     if (accountPlayerId && pendingExplorationIntentRef.current) return;
 
@@ -266,14 +302,22 @@ function ConsoleApp() {
     setChatOpen(false);
     setConsoleMode('home');
     setMobileView('list');
-    if (!accountPlayerId) pendingExplorationIntentRef.current = null;
-  }, [accountPlayerId]);
+    if (!accountPlayerId) clearPendingExplorationIntent();
+  }, [accountPlayerId, clearPendingExplorationIntent]);
+
+  useEffect(() => {
+    const wasOpen = previousIdentityDialogOpenRef.current;
+    previousIdentityDialogOpenRef.current = identityDialogOpen;
+    if (wasOpen && !identityDialogOpen && !accountPlayerId) {
+      clearPendingExplorationIntent();
+    }
+  }, [accountPlayerId, clearPendingExplorationIntent, identityDialogOpen]);
 
   useEffect(() => {
     const pendingIntent = pendingExplorationIntentRef.current;
     if (!accountPlayerId || !pendingIntent) return;
     if (selectedPublicTreeId && selectedPublicTreeId !== pendingIntent.treeId) {
-      pendingExplorationIntentRef.current = null;
+      clearPendingExplorationIntent();
       return;
     }
 
@@ -285,7 +329,7 @@ function ConsoleApp() {
     setView('public');
     setConsoleMode('map');
     setMobileView('detail');
-  }, [accountPlayerId, selectedPublicTreeId]);
+  }, [accountPlayerId, clearPendingExplorationIntent, selectedPublicTreeId]);
 
   useEffect(() => {
     if (!session && !sessionPending && view !== 'public') {
@@ -367,61 +411,102 @@ function ConsoleApp() {
   }, [activeGraph, consoleMode, selectedNodeId]);
 
   useEffect(() => {
-    if (!activeGraph || !explorationQuestion || selectedNodeId) return;
+    if (view !== 'public' || !activeGraph || !explorationQuestion || selectedNodeId) return;
     const guide = getTreeGuide(activeGraph.tree);
     const recommendedNodeId = findRecommendedNodeId(activeGraph.nodes, guide);
     if (recommendedNodeId) {
       setSelectedNodeId(recommendedNodeId);
       setMobileView('detail');
     }
-  }, [activeGraph, explorationQuestion, selectedNodeId]);
+  }, [activeGraph, explorationQuestion, selectedNodeId, view]);
+
+  const isCurrentExplorationAddRequest = (request: ExplorationAddRequest) =>
+    activeExplorationAddRequestRef.current === request &&
+    currentAccountPlayerIdRef.current === request.accountPlayerId &&
+    explorationIntentVersionRef.current === request.intentVersion &&
+    currentSelectedPublicTreeIdRef.current === request.treeId &&
+    currentViewRef.current === 'public' &&
+    currentConsoleModeRef.current === 'map';
 
   const addTree = useMutation({
-    mutationFn: (treeId: string) => {
+    mutationFn: ({ treeId }: AddTreeMutationVariables) => {
       if (!session) throw new Error('请先登录或激活账号。');
       return addTreeToPersonalLibrary(treeId, session.csrfToken);
     },
-    onSuccess: async (added) => {
-      const pendingIntent = pendingExplorationIntentRef.current;
-      const carriesExplorationQuestion = pendingIntent?.treeId === added.tree_id;
-      if (carriesExplorationQuestion) pendingExplorationIntentRef.current = null;
+    onSuccess: async (added, variables) => {
+      const explorationRequest = variables.exploration;
+      if (
+        explorationRequest &&
+        !isCurrentExplorationAddRequest(explorationRequest)
+      ) {
+        if (added.tree_id === explorationRequest.treeId) {
+          void queryClient
+            .prefetchQuery({
+              queryKey: [
+                'me',
+                explorationRequest.accountPlayerId,
+                'tree-library',
+                added.library_entry_id,
+              ],
+              queryFn: () => fetchPersonalTree(added.library_entry_id),
+              staleTime: 15 * 1000,
+              retry: false,
+            })
+            .catch(() => undefined);
+        }
+        return;
+      }
+      if (explorationRequest) activeExplorationAddRequestRef.current = null;
       setSelectedLibraryEntryId(added.library_entry_id);
       setSelectedNodeId(null);
       setCompletion(null);
       setView('personal');
       setConsoleMode('map');
-      setExplorationQuestion(carriesExplorationQuestion ? pendingIntent.question : null);
-      if (carriesExplorationQuestion) {
-        setInitialChatDraft(pendingIntent.question);
+      setExplorationQuestion(null);
+      if (explorationRequest) {
+        setInitialChatDraft(explorationRequest.question);
         setInitialChatDraftRevision((revision) => revision + 1);
         setChatOpen(true);
         setMobileView('chat');
       }
       await queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
     },
-    onError: () => {
-      pendingExplorationIntentRef.current = null;
+    onError: (_, variables) => {
+      const explorationRequest = variables.exploration;
+      if (!explorationRequest) return;
+      if (activeExplorationAddRequestRef.current === explorationRequest) {
+        activeExplorationAddRequestRef.current = null;
+        if (
+          currentAccountPlayerIdRef.current === explorationRequest.accountPlayerId &&
+          explorationIntentVersionRef.current === explorationRequest.intentVersion
+        ) {
+          clearPendingExplorationIntent();
+        }
+      }
     },
   });
+
+  const startExplorationAdd = (intent: PendingExplorationIntent) => {
+    if (!session || !accountPlayerId) return;
+    const request: ExplorationAddRequest = {
+      ...intent,
+      accountPlayerId,
+    };
+    activeExplorationAddRequestRef.current = request;
+    pendingExplorationIntentRef.current = null;
+    addTree.mutate({ treeId: request.treeId, exploration: request });
+  };
 
   useEffect(() => {
     const pendingIntent = pendingExplorationIntentRef.current;
     if (!session || !pendingIntent || !selectedPublicTreeId || addTree.isPending) return;
     if (pendingIntent.treeId !== selectedPublicTreeId) {
-      pendingExplorationIntentRef.current = null;
+      clearPendingExplorationIntent();
       return;
     }
 
-    pendingExplorationIntentRef.current = null;
-    addTree.mutate(pendingIntent.treeId, {
-      onSuccess: () => {
-        setInitialChatDraft(pendingIntent.question);
-        setInitialChatDraftRevision((revision) => revision + 1);
-        setChatOpen(true);
-        setMobileView('chat');
-      },
-    });
-  }, [addTree, selectedPublicTreeId, session]);
+    startExplorationAdd(pendingIntent);
+  }, [addTree, accountPlayerId, clearPendingExplorationIntent, selectedPublicTreeId, session]);
 
   const completionMutation = useMutation({
     mutationFn: ({ nodeId, completed }: { nodeId: string; completed: boolean }) => {
@@ -447,7 +532,7 @@ function ConsoleApp() {
   });
 
   const selectPublicTree = (treeId: string) => {
-    pendingExplorationIntentRef.current = null;
+    clearPendingExplorationIntent();
     setView('public');
     setSelectedPublicTreeId(treeId);
     setSelectedNodeId(null);
@@ -459,7 +544,7 @@ function ConsoleApp() {
     setMobileView('graph');
   };
   const selectPersonalTree = (libraryEntryId: string) => {
-    pendingExplorationIntentRef.current = null;
+    clearPendingExplorationIntent();
     setView('personal');
     setSelectedLibraryEntryId(libraryEntryId);
     setSelectedNodeId(null);
@@ -471,7 +556,7 @@ function ConsoleApp() {
     setMobileView('graph');
   };
   const openPublicIntroduction = (treeId: string) => {
-    pendingExplorationIntentRef.current = null;
+    clearPendingExplorationIntent();
     setView('public');
     setSelectedPublicTreeId(treeId);
     setSelectedNodeId(null);
@@ -483,6 +568,7 @@ function ConsoleApp() {
     setMobileView('list');
   };
   const startPublicExploration = (question: string) => {
+    clearPendingExplorationIntent();
     setView('public');
     setExplorationQuestion(question);
     setInitialChatDraft('');
@@ -490,7 +576,7 @@ function ConsoleApp() {
     setMobileView('detail');
   };
   const previewPublicMap = () => {
-    pendingExplorationIntentRef.current = null;
+    clearPendingExplorationIntent();
     setView('public');
     setExplorationQuestion(null);
     setInitialChatDraft('');
@@ -499,7 +585,7 @@ function ConsoleApp() {
     setMobileView('graph');
   };
   const returnToWorkbench = () => {
-    pendingExplorationIntentRef.current = null;
+    clearPendingExplorationIntent();
     setConsoleMode('home');
     setSelectedNodeId(null);
     setExplorationQuestion(null);
@@ -509,11 +595,11 @@ function ConsoleApp() {
   };
   const showPersonalLibrary = () => {
     if (!session) {
-      pendingExplorationIntentRef.current = null;
+      clearPendingExplorationIntent();
       openIdentityDialog();
       return;
     }
-    pendingExplorationIntentRef.current = null;
+    clearPendingExplorationIntent();
     setView('personal');
     setSelectedNodeId(null);
     setCompletion(null);
@@ -528,7 +614,11 @@ function ConsoleApp() {
       openIdentityDialog();
       return;
     }
-    if (selectedPublicTreeId) addTree.mutate(selectedPublicTreeId);
+    if (selectedPublicTreeId) {
+      clearPendingExplorationIntent();
+      activeExplorationAddRequestRef.current = null;
+      addTree.mutate({ treeId: selectedPublicTreeId });
+    }
   };
   const openTreeGenerator = () => {
     if (!session) {
@@ -576,10 +666,7 @@ function ConsoleApp() {
     setInitialChatDraft(explorationQuestion);
     if (!session) {
       if (selectedPublicTreeId) {
-        pendingExplorationIntentRef.current = {
-          treeId: selectedPublicTreeId,
-          question: explorationQuestion,
-        };
+        createPendingExplorationIntent(selectedPublicTreeId, explorationQuestion);
       }
       openIdentityDialog();
       return;
@@ -589,11 +676,11 @@ function ConsoleApp() {
       return;
     }
     if (selectedPublicTreeId) {
-      pendingExplorationIntentRef.current = {
-        treeId: selectedPublicTreeId,
-        question: explorationQuestion,
-      };
-      joinSelectedTree();
+      const intent = createPendingExplorationIntent(
+        selectedPublicTreeId,
+        explorationQuestion,
+      );
+      startExplorationAdd(intent);
     }
   };
   const closeKnowledgeChat = () => {
@@ -675,9 +762,11 @@ function ConsoleApp() {
       ? selectedPublicTreeId !== null && publicTree.isPending
       : selectedLibraryEntryId !== null && personalTree.isPending;
   const treeError = view === 'public' ? publicTree.error : personalTree.error;
+  const retryTree = view === 'public' ? publicTree.refetch : personalTree.refetch;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
+      <ThemeInitializer />
       <header className={`relative z-20 flex min-h-16 shrink-0 items-center justify-between gap-3 border-b px-4 py-2 sm:px-5 max-lg:pt-[max(0.5rem,env(safe-area-inset-top))] ${isDarkHeader ? 'border-slate-800 bg-slate-950/95 text-slate-100' : 'border-[#dce7e1] bg-[#f7f5ef] text-slate-950'}`}>
         <div className="flex min-w-0 items-center gap-2">
           {consoleMode === 'introduction' && (
@@ -730,7 +819,7 @@ function ConsoleApp() {
             tone={isDarkHeader ? 'dark' : 'light'}
             active={view === 'public'}
             onClick={() => {
-              pendingExplorationIntentRef.current = null;
+              clearPendingExplorationIntent();
               setView('public');
               setSelectedNodeId(null);
               setCompletion(null);
@@ -845,6 +934,11 @@ function ConsoleApp() {
             mode={view === 'personal' ? 'personal' : 'public'}
             publicTrees={publicCatalog.data.trees}
             personalEntries={personalLibrary.data?.entries ?? []}
+            personalLibraryPending={personalLibrary.isPending}
+            personalLibraryError={
+              personalLibrary.isError ? readableError(personalLibrary.error) : null
+            }
+            onRetryPersonalLibrary={() => void personalLibrary.refetch()}
             onOpenPublicTree={openPublicIntroduction}
             onContinuePersonalTree={selectPersonalTree}
             onCreateTree={openTreeGenerator}
@@ -1030,10 +1124,14 @@ function ConsoleApp() {
                 setMobileView('detail');
               }}
             />
-          ) : treePending ? (
+          ) : mobileView !== 'graph' ? null : treePending ? (
             <InlineStatus message="正在加载完整技能树…" />
           ) : treeError ? (
-            <InlineStatus message={readableError(treeError)} />
+            <InlineStatus
+              message={readableError(treeError)}
+              actionLabel="重新加载"
+              onAction={() => void retryTree()}
+            />
           ) : (
             <InlineStatus
               message={
@@ -1094,7 +1192,17 @@ function ConsoleApp() {
               mobileView === 'detail' && !chatOpen ? 'flex' : 'hidden'
             } w-full min-h-0 flex-1 flex-col items-center justify-center border-t border-slate-800 bg-slate-950/95 p-6 text-center text-sm text-slate-600 ${chatOpen ? 'lg:hidden' : 'lg:flex'} lg:w-80 lg:flex-none lg:border-l lg:border-t-0`}
           >
-            选择并加载技能树后，可在这里查看节点详情。
+            {treePending ? (
+              <InlineStatus message="正在加载完整技能树…" />
+            ) : treeError ? (
+              <InlineStatus
+                message={readableError(treeError)}
+                actionLabel="重新加载"
+                onAction={() => void retryTree()}
+              />
+            ) : (
+              '选择并加载技能树后，可在这里查看节点详情。'
+            )}
           </aside>
         )}
 
@@ -1228,7 +1336,7 @@ function ConsoleApp() {
           <DrawerItem
             active={view === 'public'}
             onClick={() => {
-              pendingExplorationIntentRef.current = null;
+              clearPendingExplorationIntent();
               setView('public');
               setSelectedNodeId(null);
               setCompletion(null);
@@ -1611,10 +1719,29 @@ function MutationError({ error }: { error: Error }) {
   );
 }
 
-function InlineStatus({ message }: { message: string }) {
+function InlineStatus({
+  message,
+  actionLabel,
+  onAction,
+}: {
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
   return (
     <div className="grid h-full place-items-center p-6 text-center text-sm text-slate-500">
-      {message}
+      <div>
+        <p>{message}</p>
+        {actionLabel && onAction && (
+          <button
+            type="button"
+            onClick={onAction}
+            className="mt-4 rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
+          >
+            {actionLabel}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

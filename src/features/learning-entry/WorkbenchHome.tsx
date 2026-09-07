@@ -6,6 +6,9 @@ interface WorkbenchHomeProps {
   mode: 'public' | 'personal';
   publicTrees: SkillTree[];
   personalEntries: PersonalLibraryEntry[];
+  personalLibraryPending?: boolean;
+  personalLibraryError?: string | null;
+  onRetryPersonalLibrary?: () => void;
   onOpenPublicTree: (treeId: string) => void;
   onContinuePersonalTree: (libraryEntryId: string) => void;
   onCreateTree: () => void;
@@ -17,6 +20,9 @@ export default function WorkbenchHome({
   mode,
   publicTrees,
   personalEntries,
+  personalLibraryPending = false,
+  personalLibraryError = null,
+  onRetryPersonalLibrary,
   onOpenPublicTree,
   onContinuePersonalTree,
   onCreateTree,
@@ -24,6 +30,11 @@ export default function WorkbenchHome({
   createTreeLabel = '创建自己的地图',
 }: WorkbenchHomeProps) {
   const hasPersonalTrees = personalEntries.length > 0;
+  const showPersonalEmptyState =
+    mode === 'personal' &&
+    !personalLibraryPending &&
+    !personalLibraryError &&
+    !hasPersonalTrees;
 
   return (
     <main
@@ -47,7 +58,34 @@ export default function WorkbenchHome({
           </button>
         </div>
 
-        {mode === 'personal' && !hasPersonalTrees && (
+        {mode === 'personal' && personalLibraryPending && (
+          <section
+            role="status"
+            className="mt-10 rounded-[1.5rem] border border-slate-200 bg-white/70 p-6 sm:p-8"
+          >
+            <p className="text-sm font-semibold text-slate-700">正在读取个人学习树…</p>
+          </section>
+        )}
+
+        {mode === 'personal' && personalLibraryError && (
+          <section
+            role="alert"
+            className="mt-10 rounded-[1.5rem] border border-rose-200 bg-rose-50/80 p-6 sm:p-8"
+          >
+            <p className="text-sm font-semibold text-rose-800">{personalLibraryError}</p>
+            {onRetryPersonalLibrary && (
+              <button
+                type="button"
+                onClick={onRetryPersonalLibrary}
+                className="mt-4 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
+              >
+                重新读取个人学习树
+              </button>
+            )}
+          </section>
+        )}
+
+        {showPersonalEmptyState && (
           <section className="mt-10 rounded-[1.5rem] border border-dashed border-slate-300 bg-white/70 p-6 sm:p-8">
             <h2 className="text-xl font-bold text-slate-900">还没有自己的学习树</h2>
             <p className="mt-3 max-w-xl text-sm leading-7 text-slate-600">先从下面的公共方向选一棵，加入后才会记录你的节点进度。</p>
@@ -90,7 +128,7 @@ export default function WorkbenchHome({
           </section>
         )}
 
-        {(mode === 'public' || !hasPersonalTrees) && (
+        {(mode === 'public' || showPersonalEmptyState) && (
           <section className="mt-10" aria-labelledby="public-directions-title">
             <div className="flex items-center justify-between gap-3">
               <h2 id="public-directions-title" className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">选择一个方向</h2>

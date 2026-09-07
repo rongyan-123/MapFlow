@@ -36,6 +36,7 @@ interface IdentityContextValue {
   capabilitiesError: boolean;
   session: IdentitySession | null;
   sessionPending: boolean;
+  identityDialogOpen: boolean;
   openIdentityDialog: () => void;
   logout: () => Promise<void>;
   logoutPending: boolean;
@@ -108,6 +109,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
         capabilitiesError: capabilities.isError,
         session,
         sessionPending: capabilities.isPending || sessionQuery.isPending,
+        identityDialogOpen: dialogOpen,
         openIdentityDialog,
         logout: () => logoutMutation.mutateAsync(),
         logoutPending: logoutMutation.isPending,

@@ -409,6 +409,130 @@ describe('MapFlow tree library', () => {
     expect(chatApi.sendKnowledgeChatMessageStream).not.toHaveBeenCalled();
   });
 
+  it('手机端推荐问题加树成功后仍停留在可见聊天面板', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.addTreeToPersonalLibrary.mockResolvedValue({
+      library_entry_id: personalEntry.library_entry_id,
+      tree_id: nestjsTree.id,
+    });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp('/console');
+
+    await user.click(
+      await screen.findByRole('button', { name: /查看 NestJS 完整学习树 简介/ }),
+    );
+    await user.click(screen.getByRole('button', { name: '开始探索' }));
+    await user.click(
+      await screen.findByRole('button', { name: '加入我的学习并带入聊天草稿' }),
+    );
+
+    await screen.findByRole('textbox', { name: '输入问题' });
+    expect(screen.getByTestId('knowledge-chat-panel')).not.toHaveAttribute('hidden');
+    expect(screen.getByTestId('knowledge-chat-panel')).not.toHaveClass('hidden');
+    expect(screen.getByTestId('mobile-detail')).toHaveClass('hidden');
+  });
+
+  it('延迟的加入响应在返回工作台后不会覆盖当前视图', async () => {
+    const user = userEvent.setup();
+    let resolveAdd!: (value: { library_entry_id: string; tree_id: string }) => void;
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.addTreeToPersonalLibrary.mockImplementation(
+      () => new Promise((resolve) => { resolveAdd = resolve; }),
+    );
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp('/console');
+
+    await user.click(
+      await screen.findByRole('button', { name: /查看 NestJS 完整学习树 简介/ }),
+    );
+    await user.click(screen.getByRole('button', { name: '开始探索' }));
+    await user.click(
+      await screen.findByRole('button', { name: '加入我的学习并带入聊天草稿' }),
+    );
+    await waitFor(() => expect(treeApi.addTreeToPersonalLibrary).toHaveBeenCalledOnce());
+
+    await user.click(screen.getByRole('button', { name: '返回上一级' }));
+    await user.click(screen.getByRole('button', { name: '返回上一级' }));
+    expect(screen.getByTestId('workbench-home')).toBeInTheDocument();
+
+    resolveAdd({ library_entry_id: personalEntry.library_entry_id, tree_id: nestjsTree.id });
+    await waitFor(() =>
+      expect(treeApi.fetchPersonalTree).toHaveBeenCalledWith(personalEntry.library_entry_id),
+    );
+    await waitFor(() => expect(screen.getByTestId('workbench-home')).toBeInTheDocument());
+    expect(screen.queryByRole('textbox', { name: '输入问题' })).not.toBeInTheDocument();
+  });
+
+  it('退出并换号后，旧账号的延迟加入响应不会打开旧问题', async () => {
+    const user = userEvent.setup();
+    let resolveAdd!: (value: { library_entry_id: string; tree_id: string }) => void;
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    identityApi.logoutIdentity.mockResolvedValue(undefined);
+    identityApi.loginIdentity.mockResolvedValue(secondAccount);
+    treeApi.addTreeToPersonalLibrary.mockImplementation(
+      () => new Promise((resolve) => { resolveAdd = resolve; }),
+    );
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [] });
+    renderApp('/console');
+
+    await screen.findByText(authenticated.account.playerId);
+    await user.click(
+      await screen.findByRole('button', { name: /查看 NestJS 完整学习树 简介/ }),
+    );
+    await user.click(screen.getByRole('button', { name: '开始探索' }));
+    await user.click(
+      await screen.findByRole('button', { name: '加入我的学习并带入聊天草稿' }),
+    );
+    await waitFor(() => expect(treeApi.addTreeToPersonalLibrary).toHaveBeenCalledOnce());
+
+    await user.click(screen.getByRole('button', { name: '退出登录' }));
+    await user.click(screen.getByRole('button', { name: '确认退出' }));
+    await user.click(await screen.findByRole('button', { name: '登录 / 激活账号' }));
+    const dialog = screen.getByRole('dialog', { name: '登录学习账号' });
+    await user.type(within(dialog).getByLabelText('用户名'), secondAccount.account.username);
+    await user.type(within(dialog).getByLabelText('密码'), 'safe-password-2026');
+    const loginButtons = within(dialog).getAllByRole('button', { name: '登录' });
+    await user.click(loginButtons[loginButtons.length - 1]);
+    await screen.findByText(secondAccount.account.playerId);
+
+    resolveAdd({ library_entry_id: personalEntry.library_entry_id, tree_id: nestjsTree.id });
+    await waitFor(() =>
+      expect(treeApi.fetchPersonalTree).toHaveBeenCalledWith(personalEntry.library_entry_id),
+    );
+    await waitFor(() => expect(screen.getByTestId('workbench-home')).toBeInTheDocument());
+    expect(screen.queryByRole('textbox', { name: '输入问题' })).not.toBeInTheDocument();
+  });
+
+  it('取消推荐问题登录后，随后普通登录不会自动加入旧树', async () => {
+    const user = userEvent.setup();
+    identityApi.loginIdentity.mockResolvedValue(authenticated);
+    treeApi.addTreeToPersonalLibrary.mockResolvedValue({
+      library_entry_id: personalEntry.library_entry_id,
+      tree_id: nestjsTree.id,
+    });
+    renderApp('/console');
+
+    await user.click(
+      await screen.findByRole('button', { name: /查看 NestJS 完整学习树 简介/ }),
+    );
+    await user.click(screen.getByRole('button', { name: '开始探索' }));
+    await user.click(await screen.findByRole('button', { name: '登录后带入聊天草稿' }));
+    await user.click(screen.getByRole('button', { name: '关闭账号窗口' }));
+
+    await user.click(screen.getByRole('button', { name: '登录 / 激活账号' }));
+    const dialog = screen.getByRole('dialog', { name: '登录学习账号' });
+    await user.type(within(dialog).getByLabelText('用户名'), authenticated.account.username);
+    await user.type(within(dialog).getByLabelText('密码'), 'safe-password-2026');
+    const loginButtons = within(dialog).getAllByRole('button', { name: '登录' });
+    await user.click(loginButtons[loginButtons.length - 1]);
+
+    await screen.findByText(authenticated.account.playerId);
+    expect(treeApi.addTreeToPersonalLibrary).not.toHaveBeenCalled();
+    expect(screen.getByTestId('workbench-home')).toBeInTheDocument();
+  });
+
   it('登录前切换公共方向不会把旧方向的问题带入新树', async () => {
     const user = userEvent.setup();
     identityApi.loginIdentity.mockResolvedValue(authenticated);
@@ -450,6 +574,15 @@ describe('MapFlow tree library', () => {
     expect(within(menu).getByRole('button', { name: '开始生成技能树' })).toBeInTheDocument();
     expect(within(menu).getByRole('link', { name: '查看产品首页' })).toBeInTheDocument();
     expect(within(menu).getByRole('combobox', { name: '选择主题' })).toBeInTheDocument();
+  });
+
+  it('更多菜单关闭时也会恢复已保存的主题', async () => {
+    document.documentElement.dataset.mapflowTheme = 'dark';
+    window.localStorage.setItem('mapflow.theme', 'light');
+    renderApp('/console');
+
+    await screen.findByRole('heading', { name: '今天想弄懂什么？' });
+    expect(document.documentElement.dataset.mapflowTheme).toBe('light');
   });
 
   it('首次访问根路径展示产品首页，并可直接进入控制台', async () => {
@@ -616,6 +749,35 @@ describe('MapFlow tree library', () => {
     expect(
       await screen.findByText('还没有自己的学习树'),
     ).toBeInTheDocument();
+  });
+
+  it('个人库加载中时不误显示为空库', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockImplementation(() => new Promise(() => {}));
+    renderApp('/console');
+
+    await screen.findByText(authenticated.account.playerId);
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+
+    expect(await screen.findByText('正在读取个人学习树…')).toBeInTheDocument();
+    expect(screen.queryByText('还没有自己的学习树')).not.toBeInTheDocument();
+  });
+
+  it('个人库读取失败时提供重试，而不是伪装成空库', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary
+      .mockRejectedValueOnce(new Error('个人库读取失败'))
+      .mockResolvedValueOnce({ entries: [personalEntry] });
+    renderApp('/console');
+
+    await screen.findByText(authenticated.account.playerId);
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+
+    expect(await screen.findByText('个人库读取失败')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '重新读取个人学习树' }));
+    expect(await screen.findByText(/0\s*\/\s*2 个节点已完成/)).toBeInTheDocument();
   });
 
   it('does not expose the previous account personal library after logout and login', async () => {
@@ -987,6 +1149,37 @@ describe('手机端视图栈', () => {
     expect(screen.getByTestId('mobile-graph').className).not.toContain('hidden');
     expect(screen.getByTestId('mobile-list').className).toContain('hidden');
     expect(screen.getByRole('button', { name: '返回上一级' })).toBeInTheDocument();
+  });
+
+  it('手机端开始探索时，在详情层显示公共树加载状态', async () => {
+    const user = userEvent.setup();
+    treeApi.fetchPublicTree.mockImplementation(() => new Promise(() => {}));
+    renderApp('/console');
+
+    await user.click(
+      await screen.findByRole('button', { name: /查看 NestJS 完整学习树 简介/ }),
+    );
+    await user.click(screen.getByRole('button', { name: '开始探索' }));
+
+    expect(screen.getByTestId('mobile-detail')).toHaveTextContent('正在加载完整技能树…');
+  });
+
+  it('手机端树加载失败时在详情层显示错误并提供重试', async () => {
+    const user = userEvent.setup();
+    treeApi.fetchPublicTree
+      .mockRejectedValueOnce(new Error('树加载失败'))
+      .mockRejectedValueOnce(new Error('树加载失败'))
+      .mockResolvedValueOnce({ view_mode: 'showcase', graph: nestjsGraph });
+    renderApp('/console');
+
+    await user.click(
+      await screen.findByRole('button', { name: /查看 NestJS 完整学习树 简介/ }),
+    );
+    await user.click(screen.getByRole('button', { name: '开始探索' }));
+
+    expect(await screen.findByText('树加载失败')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '重新加载' }));
+    expect(await screen.findByTestId('react-flow-boundary')).toBeInTheDocument();
   });
 
   it('点节点进入详情页，返回按钮依次回图页和工作台', async () => {
