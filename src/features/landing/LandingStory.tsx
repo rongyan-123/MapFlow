@@ -1,98 +1,354 @@
-const STORY_SECTIONS = [
-  {
-    index: '01',
-    id: 'route',
-    eyebrow: '从一个问题开始',
-    title: '选一个好奇的问题，往下追。',
-    detail: '不用先把整门课从头看完。把眼前的问题说出来，MapFlow 会把它放进一张能继续走的学习地图。',
-    accent: 'teal',
-  },
-  {
-    index: '02',
-    id: 'evidence',
-    eyebrow: '走出下一步',
-    title: '你弄懂的，都会留下痕迹。',
-    detail: '沿着前置关系理解目标，在卡住的地方提问，再用练习或结果确认自己真的往前走了一格。',
-    accent: 'coral',
-  },
-] as const;
+import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
+import {
+  getEarthRevealProgress,
+  getMediaRevealProgress,
+  getSceneProgress,
+  LANDING_SCENE_COUNT,
+} from './landingMotion';
+import {
+  LANDING_MAP_EDGES,
+  LANDING_MAP_MCP_NODE,
+  LANDING_MAP_NODES,
+  getLandingMapNode,
+} from './landingMapData';
+import LandingCrtShader from './LandingCrtShader';
 
-export default function LandingStory() {
+type SceneId = 'opening' | 'clarity' | 'domain' | 'mcp' | 'progress';
+type MapVariant = 'whole' | 'domain' | 'mcp' | 'progress';
+
+interface LandingStoryProps {
+  onEnterConsole: () => void;
+  onEarthRevealProgress?: (progress: number) => void;
+}
+
+interface LandingScene {
+  id: SceneId;
+  index: string;
+  title: string;
+  body: string;
+  transition?: string;
+  variant?: MapVariant;
+}
+
+const LANDING_SCENES: LandingScene[] = [
+  {
+    id: 'opening',
+    index: '01',
+    title: '学习——什么时候变得如此困难？',
+    body: '学习正在被异化成刷课、背题、追赶要求。痛苦、畏难随之而来，可到底该学什么、学到了什么，依然模糊。',
+  },
+  {
+    id: 'clarity',
+    index: '02',
+    title: '学了这么多，我到底学会了什么？',
+    body: '写过项目，看过网课，也追问过许多问题。为什么回头看，还是说不清自己掌握了什么？',
+    transition: '这些理解，还没有汇成一张看得见全貌的学习地图。',
+    variant: 'whole',
+  },
+  {
+    id: 'domain',
+    index: '03',
+    title: '想进入一个领域，却不知道到底该学什么？',
+    body: '比如 Agent 开发，需要哪些基础，又会遇到哪些工程问题？把学习与就业方向展开成地图，先看清全貌，再决定从哪里开始。',
+    variant: 'domain',
+  },
+  {
+    id: 'mcp',
+    index: '04',
+    title: '让每次理解，都丰富自己的地图。',
+    body: '学到一个概念，就把它放进地图；发现新的联系，就把它们连接起来。接入 MCP 后，也可以让你常用的 AI 帮你补充、整理。',
+    variant: 'mcp',
+  },
+  {
+    id: 'progress',
+    index: '05',
+    title: '学到了哪里，打开地图就知道。',
+    body: '已经理解的、还没弄懂的、接下来想探索的，都能在地图上看见。每次回来，都能接着丰富自己的体系。',
+    variant: 'progress',
+  },
+];
+
+function getStoryProgress(story: HTMLElement, scrollRoot: HTMLElement): number {
+  const distance = Math.max(story.scrollHeight - scrollRoot.clientHeight, 1);
+  const storyStart = story.offsetTop;
+  return Math.min(1, Math.max(0, (scrollRoot.scrollTop - storyStart) / distance));
+}
+
+export default function LandingStory({
+  onEnterConsole,
+  onEarthRevealProgress,
+}: LandingStoryProps) {
+  const storyRef = useRef<HTMLElement>(null);
+  const [activeSceneIndex, setActiveSceneIndex] = useState(0);
+  const [storyProgress, setStoryProgress] = useState(0);
+
+  useEffect(() => {
+    const story = storyRef.current;
+    const scrollRoot = story?.closest<HTMLElement>('.mapflow-landing');
+    if (!story || !scrollRoot) return undefined;
+
+    const updateStoryState = () => {
+      const scenes = Array.from(story.querySelectorAll<HTMLElement>('[data-scene-index]'));
+      const rootRect = scrollRoot.getBoundingClientRect();
+      const rootCenter = rootRect.top + rootRect.height / 2;
+      let nearestIndex = 0;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      scenes.forEach((scene, index) => {
+        const rect = scene.getBoundingClientRect();
+        const distance = Math.abs(rect.top + rect.height / 2 - rootCenter);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestIndex = index;
+        }
+      });
+      setActiveSceneIndex(nearestIndex);
+      const nextStoryProgress = getStoryProgress(story, scrollRoot);
+      setStoryProgress(nextStoryProgress);
+      onEarthRevealProgress?.(getEarthRevealProgress(nextStoryProgress));
+    };
+
+    updateStoryState();
+    scrollRoot.addEventListener('scroll', updateStoryState, { passive: true });
+    window.addEventListener('resize', updateStoryState);
+    return () => {
+      scrollRoot.removeEventListener('scroll', updateStoryState);
+      window.removeEventListener('resize', updateStoryState);
+    };
+  }, [onEarthRevealProgress]);
+
   return (
     <section
+      ref={storyRef}
       id="route"
       data-testid="landing-story"
-      className="border-b border-[#dce7e1] bg-[#fbfaf6]"
-      aria-labelledby="workflow-title"
+      className="mapflow-story"
+      aria-label="MapFlow 学习地图产品叙事"
     >
-      <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 sm:py-20 lg:py-24">
-        <div className="max-w-2xl">
-          <p className="text-[11px] font-bold tracking-[0.18em] text-[#176f70]">THE MAPFLOW ROUTE</p>
-          <h2 id="workflow-title" className="mt-4 text-3xl font-black tracking-[-0.045em] text-[#16383b] sm:text-5xl">
-            学习不是从目录开始，而是从你此刻的问题开始。
-          </h2>
-          <p className="mt-5 max-w-xl text-sm leading-7 text-[#607477] sm:text-base">
-            一张地图让你看见全局，但每一次前进都只需要处理眼前的下一步。
-          </p>
-        </div>
+      {LANDING_SCENES.map((scene, sceneIndex) => {
+        const sceneProgress = getSceneProgress(storyProgress, sceneIndex, LANDING_SCENE_COUNT);
+        const isActive = sceneIndex === activeSceneIndex;
+        const revealProgress = scene.id === 'clarity'
+          ? getMediaRevealProgress(sceneProgress, 0.52, 0.92)
+          : isActive
+            ? 1
+            : getMediaRevealProgress(sceneProgress);
+        const mcpRevealProgress = scene.id === 'mcp'
+          ? sceneProgress
+          : scene.id === 'progress'
+            ? 1
+            : 0;
+        const sceneStyle = {
+          '--mapflow-scene-reveal': revealProgress,
+        } as CSSProperties;
 
-        <div className="mt-12 grid gap-5 lg:grid-cols-2">
-          {STORY_SECTIONS.map((section) => (
-            <article
-              key={section.index}
-              id={section.index === '02' ? section.id : undefined}
-              data-testid={`landing-story-chapter-${section.index}`}
-              className="grid gap-8 rounded-[1.75rem] border border-[#dce7e1] bg-white/75 p-6 sm:p-8 md:grid-cols-[0.88fr_1.12fr] md:items-center"
-            >
-              <StoryMapIllustration accent={section.accent} />
-              <div>
-                <div className="flex items-center gap-3 text-xs font-bold tracking-[0.16em] text-[#82918f]">
-                  <span className={section.accent === 'teal' ? 'text-[#176f70]' : 'text-[#c16d4a]'}>
-                    /{section.index}
-                  </span>
-                  <span>{section.eyebrow}</span>
-                </div>
-                <h3 className="mt-5 text-2xl font-black leading-tight tracking-[-0.035em] text-[#16383b]">
-                  {section.title}
-                </h3>
-                <p className="mt-4 text-sm leading-7 text-[#607477]">{section.detail}</p>
+        return (
+          <article
+            key={scene.id}
+            id={sceneIndex === LANDING_SCENES.length - 1 ? 'evidence' : undefined}
+            data-testid={`landing-story-scene-${scene.index}`}
+            data-scene-index={sceneIndex}
+            data-active={isActive ? 'true' : 'false'}
+            data-scene-id={scene.id}
+            className={`mapflow-story__scene mapflow-story__scene--${scene.id}`}
+            style={sceneStyle}
+            aria-labelledby={`landing-scene-title-${scene.index}`}
+          >
+            <div className="mapflow-story__inner">
+              <div className="mapflow-story__copy">
+                {scene.id === 'opening' ? (
+                  <div className="mapflow-story__crt-title">
+                    <h2 id={`landing-scene-title-${scene.index}`}>{scene.title}</h2>
+                    <LandingCrtShader text={scene.title} progress={sceneProgress} />
+                  </div>
+                ) : (
+                  <h2 id={`landing-scene-title-${scene.index}`}>{scene.title}</h2>
+                )}
+                <p className="mapflow-story__body">{scene.body}</p>
+                {scene.id === 'opening' && (
+                  <div className="mapflow-story__opening-answer">
+                    <p>看清学习与就业方向，建立自己的知识地图，随时查看学习进度。</p>
+                    <strong>这是 MapFlow 想帮你做的事。</strong>
+                  </div>
+                )}
+                {scene.transition && <p className="mapflow-story__transition">{scene.transition}</p>}
+                {scene.id === 'domain' && (
+                  <div className="mapflow-story__tags" aria-label="Agent 学习方向">
+                    <span>学习方向</span>
+                    <span>工程问题</span>
+                    <span>前置关系</span>
+                  </div>
+                )}
+                {scene.id === 'mcp' && (
+                  <p className="mapflow-story__example">
+                    <span>示例操作</span>
+                    把刚才讨论的数据库迁移，整理进我的地图
+                  </p>
+                )}
+                {scene.id === 'progress' && (
+                  <button
+                    type="button"
+                    className="mapflow-story__cta"
+                    onClick={onEnterConsole}
+                  >
+                    打开我的学习地图
+                    <span aria-hidden="true">↗</span>
+                  </button>
+                )}
               </div>
-            </article>
-          ))}
-        </div>
-      </div>
+              {scene.id !== 'opening' && (
+                <div className="mapflow-story__media" aria-hidden="true">
+                  <LearningMapGraphic
+                    variant={scene.variant ?? 'whole'}
+                    revealProgress={revealProgress}
+                    active={isActive}
+                    mcpRevealProgress={mcpRevealProgress}
+                  />
+                </div>
+              )}
+            </div>
+            {sceneIndex < LANDING_SCENES.length - 1 && (
+              <span className="mapflow-story__scroll-cue" aria-hidden="true">
+                向下阅读 <span>↓</span>
+              </span>
+            )}
+            {scene.id === 'progress' && (
+              <div className="mapflow-story__attribution" aria-label="第三方来源说明">
+                <span className="mapflow-story__attribution-brand">MAPFLOW</span>
+                <span>把理解放回自己的地图。</span>
+                <a
+                  href="https://github.com/jeantimex/flights-tracker"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Earth renderer inspiration · jeantimex
+                </a>
+              </div>
+            )}
+          </article>
+        );
+      })}
     </section>
   );
 }
 
-function StoryMapIllustration({ accent }: { accent: 'teal' | 'coral' }) {
-  const lineColor = accent === 'teal' ? '#9bc8ba' : '#dfad91';
-  const nodeColor = accent === 'teal' ? '#176f70' : '#e07a52';
+function LearningMapGraphic({
+  variant,
+  revealProgress,
+  active,
+  mcpRevealProgress,
+}: {
+  variant: MapVariant;
+  revealProgress: number;
+  active: boolean;
+  mcpRevealProgress: number;
+}) {
+  const baseNodeIds = LANDING_MAP_NODES.map((node) => node.id);
+  const nodeIds = baseNodeIds;
+  const nodes = nodeIds
+    .map((nodeId) => getLandingMapNode(nodeId))
+    .filter((node): node is NonNullable<typeof node> => Boolean(node));
+  const edges = LANDING_MAP_EDGES.filter(
+    (edge) => nodeIds.includes(edge.source) && nodeIds.includes(edge.target),
+  );
+  const mcpNode = variant === 'mcp' || variant === 'progress' ? LANDING_MAP_MCP_NODE : null;
+  const normalizedRevealProgress = Math.min(1, Math.max(0, revealProgress));
+  const revealStyle = {
+    clipPath: `inset(0 ${(1 - normalizedRevealProgress) * 100}% 0 0 round 1.35rem)`,
+  } as CSSProperties;
 
   return (
-    <div className="relative flex min-h-44 items-center justify-center overflow-hidden rounded-2xl bg-[#f1f6f1] p-4">
-      <svg viewBox="0 0 280 180" className="h-full w-full" fill="none" aria-hidden="true">
-        <path
-          d="M28 130C76 116 72 49 124 54C174 59 153 130 207 122C231 119 242 91 254 58"
-          stroke={lineColor}
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeDasharray="7 9"
-        />
-        <circle cx="28" cy="130" r="10" fill={nodeColor} />
-        <circle cx="124" cy="54" r="10" fill="#fff" stroke={nodeColor} strokeWidth="4" />
-        <circle cx="207" cy="122" r="10" fill={nodeColor} />
-        <circle cx="254" cy="58" r="10" fill="#fff" stroke={nodeColor} strokeWidth="4" />
+    <div
+      data-testid={`landing-map-graphic-${variant}`}
+      className={`mapflow-map-graphic mapflow-map-graphic--${variant}${active ? ' is-active' : ''}`}
+      style={revealStyle}
+      role="img"
+      aria-label={`Agent 学习地图：${[...nodes, ...(mcpNode ? [mcpNode] : [])].map((node) => node.label).join('、')}`}
+    >
+      <svg className="mapflow-map-graphic__lines" viewBox="0 0 640 420" fill="none">
+        <defs>
+          <linearGradient id={`mapflow-edge-${variant}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#60e4d4" />
+            <stop offset="1" stopColor="#7f9dff" />
+          </linearGradient>
+        </defs>
+        {edges.map((edge) => {
+          const source = getLandingMapNode(edge.source);
+          const target = getLandingMapNode(edge.target);
+          if (!source || !target) return null;
+          const sourcePoint = nodePosition(source.id);
+          const targetPoint = nodePosition(target.id);
+          const controlX = (sourcePoint.x + targetPoint.x) / 2;
+          return (
+            <path
+              key={edge.id}
+              d={`M ${sourcePoint.x} ${sourcePoint.y} Q ${controlX} ${Math.min(sourcePoint.y, targetPoint.y) - 40} ${targetPoint.x} ${targetPoint.y}`}
+              stroke={`url(#mapflow-edge-${variant})`}
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeDasharray="6 9"
+              opacity="0.72"
+            />
+          );
+        })}
+        {mcpNode && mcpRevealProgress > 0.01 && (
+          <path
+            d="M 422 154 Q 452 254 430 346"
+            stroke="#ffb784"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeDasharray="4 8"
+            opacity={0.8 * mcpRevealProgress}
+          />
+        )}
       </svg>
-      <span className="absolute left-5 top-4 rounded-lg bg-white/90 px-2.5 py-1.5 text-[11px] font-semibold text-[#607477]">
-        {accent === 'teal' ? 'Python 基础' : '模型调用节点'}
-      </span>
-      <span className="absolute left-1/2 top-[42%] -translate-x-1/2 rounded-lg border border-[#dce7e1] bg-white/90 px-2.5 py-1.5 text-[11px] font-semibold text-[#176f70]">
-        {accent === 'teal' ? 'HTTP 请求节点' : '工具调用节点'}
-      </span>
-      <span className="absolute bottom-4 right-5 rounded-lg bg-white/90 px-2.5 py-1.5 text-[11px] font-semibold text-[#607477]">
-        {accent === 'teal' ? '模型调用节点' : '返回可验证结果'}
-      </span>
+      {nodes.map((node) => {
+        const position = nodePosition(node.id);
+        return (
+          <span
+            key={node.id}
+            data-testid={`landing-map-node-${node.id}`}
+            className={`mapflow-map-graphic__node mapflow-map-graphic__node--${node.status}`}
+            style={{ left: `${(position.x / 640) * 100}%`, top: `${(position.y / 420) * 100}%` }}
+          >
+            <span className="mapflow-map-graphic__node-dot" />
+            <span className="mapflow-map-graphic__node-label">{node.label}</span>
+          </span>
+        );
+      })}
+      {mcpNode && mcpRevealProgress > 0.12 && (
+        <span
+          data-testid="landing-map-mcp-node"
+          className="mapflow-map-graphic__mcp-node"
+          style={{ left: '67.2%', top: '82.4%', opacity: mcpRevealProgress }}
+        >
+          <span className="mapflow-map-graphic__node-dot" />
+          <span>{mcpNode.label}</span>
+        </span>
+      )}
+      <div className="mapflow-map-graphic__legend">
+        <span className="mapflow-map-graphic__legend-label">
+          {variant === 'progress' ? '学习进度' : '示意关系'}
+        </span>
+        <span><i className="is-understood" />已理解</span>
+        <span><i className="is-exploring" />正在探索</span>
+        <span><i className="is-next" />下一步</span>
+      </div>
     </div>
   );
+}
+
+const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
+  python: { x: 92, y: 276 },
+  fastapi: { x: 206, y: 184 },
+  llm: { x: 324, y: 256 },
+  agent: { x: 422, y: 154 },
+  langgraph: { x: 530, y: 96 },
+  rag: { x: 512, y: 300 },
+  production: { x: 586, y: 218 },
+  mcp: { x: 500, y: 294 },
+};
+
+function nodePosition(nodeId: string) {
+  return NODE_POSITIONS[nodeId] ?? { x: 320, y: 210 };
 }

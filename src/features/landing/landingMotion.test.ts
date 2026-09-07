@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   clampUnit,
   getChapterProgress,
+  getEarthZoom,
+  getEarthRevealProgress,
+  getMediaRevealProgress,
+  getPointerIntent,
+  getPointerIntentFromDisplacement,
+  getSceneProgress,
   getSectionScrollProgress,
   getStoryChapterStyle,
   getStoryPathDrawProgress,
@@ -51,5 +57,43 @@ describe('landingMotion', () => {
     expect(getStoryPathDrawProgress(-1)).toBe(0);
     expect(getStoryPathDrawProgress(0.68)).toBe(0.68);
     expect(getStoryPathDrawProgress(2)).toBe(1);
+  });
+
+  it('把每一个独立视口场景映射为自己的局部进度', () => {
+    expect(getSceneProgress(0, 0, 5)).toBe(0);
+    expect(getSceneProgress(0.3, 1, 5)).toBe(0.5);
+    expect(getSceneProgress(0.8, 4, 5)).toBe(0);
+    expect(getSceneProgress(1, 4, 5)).toBe(1);
+  });
+
+  it('只在媒体 reveal 区间内推进 clip-mask', () => {
+    expect(getMediaRevealProgress(0.1)).toBe(0);
+    expect(getMediaRevealProgress(0.45)).toBe(0.5);
+    expect(getMediaRevealProgress(0.9)).toBe(1);
+  });
+
+  it('把单指垂直移动留给页面滚动，把明显水平移动用于旋转', () => {
+    expect(getPointerIntent(3, 28, 1)).toBe('scroll');
+    expect(getPointerIntent(30, 6, 1)).toBe('rotate');
+    expect(getPointerIntent(2, 2, 2)).toBe('pinch');
+  });
+
+  it('累计的小步水平移动超过阈值后仍能进入旋转状态', () => {
+    expect(getPointerIntentFromDisplacement(14, 4, 1)).toBe('rotate');
+  });
+
+  it('将 Earth 缩放限制在可读且可控的范围内', () => {
+    expect(getEarthZoom(0.1)).toBe(0.72);
+    expect(getEarthZoom(1)).toBe(1);
+    expect(getEarthZoom(2)).toBe(1.34);
+  });
+
+  it('只在 B 幕转句阶段可逆地揭露 Earth', () => {
+    expect(getEarthRevealProgress(0)).toBe(0);
+    expect(getEarthRevealProgress(0.28)).toBe(0);
+    expect(getEarthRevealProgress(0.34)).toBeGreaterThan(0);
+    expect(getEarthRevealProgress(0.36)).toBeGreaterThan(getEarthRevealProgress(0.34));
+    expect(getEarthRevealProgress(0.4)).toBe(1);
+    expect(getEarthRevealProgress(0.48)).toBe(1);
   });
 });

@@ -591,12 +591,12 @@ describe('MapFlow tree library', () => {
 
     expect(
       await screen.findByRole('heading', {
-        name: '把你想懂的东西，展开成一张地图。',
+        name: '学习——什么时候变得如此困难？',
       }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '试着探索一下' }));
+    await user.click(screen.getByRole('button', { name: '进入工作台' }));
 
     expect(window.location.pathname).toBe('/console');
     expect(await screen.findByRole('heading', { name: '今天想弄懂什么？' })).toBeInTheDocument();
@@ -607,7 +607,7 @@ describe('MapFlow tree library', () => {
     window.localStorage.setItem('mapflow.entry.has-entered-console', 'true');
     renderApp('/');
 
-    expect(await screen.findByRole('heading', { name: '把你想懂的东西，展开成一张地图。' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '学习——什么时候变得如此困难？' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/');
     expect(await screen.findByRole('button', { name: '继续我的学习' })).toBeInTheDocument();
   });
@@ -619,7 +619,7 @@ describe('MapFlow tree library', () => {
 
     expect(
       await screen.findByRole('heading', {
-        name: '把你想懂的东西，展开成一张地图。',
+        name: '学习——什么时候变得如此困难？',
       }),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
@@ -631,7 +631,7 @@ describe('MapFlow tree library', () => {
     renderApp('/');
 
     await screen.findByRole('heading', {
-      name: '把你想懂的东西，展开成一张地图。',
+      name: '学习——什么时候变得如此困难？',
     });
     await user.click(screen.getByRole('button', { name: '登录' }));
     const dialog = screen.getByRole('dialog', { name: '登录学习账号' });

@@ -2,7 +2,9 @@
 
 ## flights-tracker
 
-The landing Earth renderer is informed by the necessary Earth, latitude/longitude projection, curved route, and starfield structures from [jeantimex/flights-tracker](https://github.com/jeantimex/flights-tracker). The project is licensed under the MIT License. MapFlow does not include its dat.GUI, Stats/FPS, forced loading screen, camera intro, or demo UI.
+The landing Earth renderer is informed by the necessary Earth, latitude/longitude projection, curved route, and starfield structures from [jeantimex/flights-tracker](https://github.com/jeantimex/flights-tracker). The bundled [`public/world.topo.jpg`](../public/world.topo.jpg) is copied from that repository's [`public/world.topo.jpg`](https://github.com/jeantimex/flights-tracker/blob/main/public/world.topo.jpg). The project is licensed under the MIT License. MapFlow does not include its dat.GUI, Stats/FPS, forced loading screen, camera intro, or demo UI.
+
+The opening-title CRT effect uses a small local WebGL shader informed by the barrel-distortion, scanline, chromatic-aberration, and grain treatment in [CRT-like effect with VFX-JS](https://codepen.io/fand/pen/YPXBwVd). It has no runtime dependency on VFX-JS.
 
 ```text
 MIT License

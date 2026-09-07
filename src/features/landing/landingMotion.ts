@@ -4,6 +4,17 @@ export interface StoryChapterStyle {
   scale: number;
 }
 
+export type PointerIntent = 'scroll' | 'rotate' | 'pinch';
+
+export const LANDING_SCENE_COUNT = 5;
+export const MIN_EARTH_ZOOM = 0.72;
+export const MAX_EARTH_ZOOM = 1.34;
+
+export function getEarthRevealProgress(progress: number): number {
+  const clarityProgress = getSceneProgress(progress, 1, LANDING_SCENE_COUNT);
+  return getMediaRevealProgress(clarityProgress, 0.52, 0.92);
+}
+
 export function clampUnit(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.min(1, Math.max(0, value));
@@ -65,4 +76,52 @@ export function getStoryChapterStyle(
 
 export function getStoryPathDrawProgress(progress: number): number {
   return clampUnit(progress);
+}
+
+export function getSceneProgress(
+  progress: number,
+  sceneIndex: number,
+  sceneCount = LANDING_SCENE_COUNT,
+): number {
+  if (sceneCount <= 0 || sceneIndex < 0 || sceneIndex >= sceneCount) return 0;
+  return Number(clampUnit((progress - sceneIndex / sceneCount) * sceneCount).toFixed(6));
+}
+
+export function getMediaRevealProgress(
+  sceneProgress: number,
+  revealStart = 0.2,
+  revealEnd = 0.7,
+): number {
+  if (revealEnd <= revealStart) return sceneProgress >= revealEnd ? 1 : 0;
+  return Number(clampUnit((sceneProgress - revealStart) / (revealEnd - revealStart)).toFixed(6));
+}
+
+export function getPointerIntent(
+  deltaX: number,
+  deltaY: number,
+  pointerCount = 1,
+): PointerIntent {
+  return getPointerIntentFromDisplacement(deltaX, deltaY, pointerCount);
+}
+
+export function getPointerIntentFromDisplacement(
+  totalDeltaX: number,
+  totalDeltaY: number,
+  pointerCount = 1,
+): PointerIntent {
+  if (pointerCount >= 2) return 'pinch';
+  const horizontalDistance = Math.abs(totalDeltaX);
+  const verticalDistance = Math.abs(totalDeltaY);
+  if (horizontalDistance >= 10 && horizontalDistance > verticalDistance * 1.2) {
+    return 'rotate';
+  }
+  return 'scroll';
+}
+
+export function getEarthZoom(
+  zoom: number,
+  minZoom = MIN_EARTH_ZOOM,
+  maxZoom = MAX_EARTH_ZOOM,
+): number {
+  return Math.min(maxZoom, Math.max(minZoom, Number.isFinite(zoom) ? zoom : 1));
 }

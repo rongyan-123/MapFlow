@@ -4,32 +4,54 @@ import { describe, expect, it, vi } from 'vitest';
 import LandingPage from './LandingPage';
 
 describe('LandingPage', () => {
-  it('用清晰问题入口和轻量学习地图表达产品价值', () => {
+  it('用持续的 Earth 背景和五个独立场景表达产品价值', async () => {
+    const onEnterConsole = vi.fn();
     render(
       <LandingPage
         session={null}
-        onEnterConsole={vi.fn()}
+        onEnterConsole={onEnterConsole}
         onLogin={vi.fn()}
       />,
     );
 
-    expect(
-      screen.getByRole('heading', {
-        name: '把你想懂的东西，展开成一张地图。',
-      }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('选一个好奇的问题，看看自己能走到哪里。')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '试着探索一下' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '学习——什么时候变得如此困难？' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '学了这么多，我到底学会了什么？' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '想进入一个领域，却不知道到底该学什么？' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '让每次理解，都丰富自己的地图。' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '学到了哪里，打开地图就知道。' })).toBeInTheDocument();
+    expect(screen.getByText('看清学习与就业方向，建立自己的知识地图，随时查看学习进度。')).toBeInTheDocument();
+    expect(screen.getByText('这是 MapFlow 想帮你做的事。')).toBeInTheDocument();
+    expect(screen.getByText('把刚才讨论的数据库迁移，整理进我的地图')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument();
-    expect(screen.getByTestId('landing-map-illustration')).toBeInTheDocument();
-    expect(screen.getByText('示意地图')).toBeInTheDocument();
-    expect(screen.getByText('Python')).toBeInTheDocument();
-    expect(screen.getByText('HTTP 请求')).toBeInTheDocument();
-    expect(screen.getByText('模型调用')).toBeInTheDocument();
-    expect(screen.getByText('工具调用')).toBeInTheDocument();
-    expect(screen.queryByText('不用先选课程，也不用一次学完整套。先从一个具体问题落脚。')).not.toBeInTheDocument();
-    expect(screen.getAllByTestId(/^landing-story-chapter-/)).toHaveLength(2);
-    expect(screen.queryByTestId('skill-tree-3d')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '进入工作台' })).toBeInTheDocument();
+    expect(screen.getByTestId('landing-earth-background')).toBeInTheDocument();
+    expect(screen.getByTestId('landing-crt-shader')).toBeInTheDocument();
+    expect(screen.getByTestId('landing-earth-background')).toHaveAttribute('data-earth-revealed', 'false');
+    expect(screen.queryByRole('button', { name: '重置地球视角' })).not.toBeInTheDocument();
+    expect(screen.getAllByTestId(/^landing-story-scene-/)).toHaveLength(5);
+    expect(screen.getByTestId('landing-map-graphic-domain')).toBeInTheDocument();
+    expect(
+      screen
+        .getByTestId('landing-map-graphic-whole')
+        .querySelectorAll('[data-testid^="landing-map-node-"]'),
+    ).toHaveLength(7);
+    expect(
+      within(screen.getByTestId('landing-map-graphic-mcp')).queryByTestId('landing-map-mcp-node'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('landing-map-graphic-progress')).getByTestId('landing-map-mcp-node'),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('已理解').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('正在探索').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('下一步').length).toBeGreaterThan(0);
+    expect(screen.queryByText('A MAP FOR THE THINGS YOU WANT TO UNDERSTAND')).not.toBeInTheDocument();
+    expect(screen.queryByText('YOU ARE HERE')).not.toBeInTheDocument();
+    expect(screen.queryByText('MAPFLOW / LEARNING MAP')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '怎么开始' })).not.toBeInTheDocument();
+    expect(screen.queryByText('把你想懂的东西，展开成一张地图。')).not.toBeInTheDocument();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: '进入工作台' }));
+    expect(onEnterConsole).toHaveBeenCalledTimes(1);
   });
 
   it('从首页打开 Agent 接入教程并展示真实的 npx 配置方式', async () => {
