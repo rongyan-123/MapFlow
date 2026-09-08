@@ -61,6 +61,24 @@ describe('LandingPage', () => {
     expect(onEnterConsole).toHaveBeenCalledTimes(1);
   });
 
+  it('让 opening 独立退出，再让 B 到 E 与媒体舞台共用滚动布局', () => {
+    render(
+      <LandingPage
+        session={null}
+        onEnterConsole={vi.fn()}
+        onLogin={vi.fn()}
+      />,
+    );
+
+    const story = screen.getByTestId('landing-story');
+    const layout = story.querySelector('.mapflow-story__layout');
+
+    expect(layout).not.toBeNull();
+    expect(layout?.querySelector('[data-scene-id="opening"]')).toBeNull();
+    expect(layout?.querySelector('[data-scene-id="clarity"]')).not.toBeNull();
+    expect(story.querySelector('.mapflow-story__opening [data-scene-id="opening"]')).not.toBeNull();
+  });
+
   it('从首页打开 Agent 接入教程并展示真实的 npx 配置方式', async () => {
     const user = userEvent.setup();
     const clipboardWrite = vi.fn().mockResolvedValue(undefined);

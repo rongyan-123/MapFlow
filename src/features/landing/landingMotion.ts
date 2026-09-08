@@ -115,7 +115,7 @@ export interface StoryTimelineState {
 
 /**
  * Maps the normalized story scroll range to the chapter centers used by the
- * pinned media stage. The first and last chapters are the ends of the range,
+ * sticky media stage. The first and last chapters are the ends of the range,
  * so four scroll intervals connect five full-screen chapters.
  */
 export function getStoryTimelineState(
@@ -147,12 +147,15 @@ export function getStoryTimelineState(
   const segmentProgress = clampUnit(timelinePosition - segmentIndex);
   const activeSceneIndex = Math.min(sceneCount - 1, Math.round(timelinePosition));
   const isAtEnd = normalizedProgress >= 1;
+  const mediaRevealProgress = segmentIndex === 0
+    ? 1
+    : Number(segmentProgress.toFixed(6));
 
   return {
     activeSceneIndex,
     baseSceneIndex: isAtEnd ? sceneCount - 1 : segmentIndex,
     nextSceneIndex: isAtEnd ? null : segmentIndex + 1,
-    mediaRevealProgress: isAtEnd ? 0 : Number(segmentProgress.toFixed(6)),
+    mediaRevealProgress: isAtEnd ? 0 : mediaRevealProgress,
   };
 }
 

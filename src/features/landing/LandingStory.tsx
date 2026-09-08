@@ -118,8 +118,6 @@ export default function LandingStory({
         scroller: scrollRoot,
         start: 'top top',
         end: 'bottom bottom',
-        pin: mediaStage,
-        pinSpacing: false,
         scrub: true,
         invalidateOnRefresh: true,
         onUpdate: (self) => updateStoryState(self.progress),
@@ -145,6 +143,102 @@ export default function LandingStory({
     .map((scene, sceneIndex) => ({ scene, sceneIndex }))
     .filter(({ scene }) => scene.variant);
 
+  const renderScene = (scene: LandingScene, sceneIndex: number) => {
+    const sceneProgress = getStorySceneProgress(storyProgress, sceneIndex, LANDING_SCENE_COUNT);
+    const isActive = sceneIndex === activeSceneIndex;
+    const sceneStyle = {
+      '--mapflow-scene-progress': sceneProgress,
+    } as CSSProperties;
+
+    return (
+      <article
+        key={scene.id}
+        id={sceneIndex === LANDING_SCENES.length - 1 ? 'evidence' : undefined}
+        data-testid={`landing-story-scene-${scene.index}`}
+        data-scene-index={sceneIndex}
+        data-active={isActive ? 'true' : 'false'}
+        data-scene-id={scene.id}
+        className={`mapflow-story__scene mapflow-story__scene--${scene.id}`}
+        style={sceneStyle}
+        aria-labelledby={`landing-scene-title-${scene.index}`}
+      >
+        <div
+          className={`mapflow-story__inner${scene.id === 'opening' ? ' mapflow-story__inner--opening-viewport' : ''}`}
+          data-testid={scene.id === 'opening' ? 'landing-opening-viewport' : undefined}
+        >
+          <div className="mapflow-story__copy">
+            {scene.id === 'opening' ? (
+              <div className="mapflow-story__crt-title">
+                <h2 id={`landing-scene-title-${scene.index}`} aria-label={scene.title}>
+                  <span className="mapflow-story__title-lead">学习——</span>
+                  <span className="mapflow-story__title-question">
+                    <span className="mapflow-story__title-question-key">什么时候</span>
+                    {scene.title.slice('学习——什么时候'.length)}
+                  </span>
+                </h2>
+                <LandingCrtShader text={scene.title} progress={sceneProgress} />
+              </div>
+            ) : (
+              <h2 id={`landing-scene-title-${scene.index}`} aria-label={scene.title}>
+                {scene.id === 'clarity' ? (
+                  <>
+                    <span className="mapflow-story__title-segment mapflow-story__title-segment--prefix">
+                      学了这么多，
+                    </span>
+                    <span className="mapflow-story__title-segment">
+                      <span className="mapflow-story__title-clarity-key">我到底</span>
+                      学会了什么？
+                    </span>
+                  </>
+                ) : scene.id === 'progress' ? (
+                  <>
+                    <span className="mapflow-story__title-segment mapflow-story__title-segment--progress-prefix">
+                      学到了哪里，
+                    </span>
+                    <span className="mapflow-story__title-segment mapflow-story__title-segment--progress-answer">
+                      打开地图就知道。
+                    </span>
+                  </>
+                ) : (
+                  scene.title
+                )}
+              </h2>
+            )}
+            <p className="mapflow-story__body">{scene.body}</p>
+            {scene.id === 'opening' && (
+              <div className="mapflow-story__opening-answer">
+                <p>看清学习与就业方向，建立自己的知识地图，随时查看学习进度。</p>
+                <strong>这是 MapFlow 想帮你做的事。</strong>
+              </div>
+            )}
+            {scene.transition && <p className="mapflow-story__transition">{scene.transition}</p>}
+            {scene.id === 'mcp' && (
+              <p className="mapflow-story__example">
+                <span>示例操作</span>
+                把刚才讨论的数据库迁移，整理进我的地图
+              </p>
+            )}
+            {scene.id === 'progress' && (
+              <button
+                type="button"
+                className="mapflow-story__cta"
+                onClick={onEnterConsole}
+              >
+                打开我的学习地图
+                <span aria-hidden="true">↗</span>
+              </button>
+            )}
+          </div>
+        </div>
+        {sceneIndex < LANDING_SCENES.length - 1 && (
+          <span className="mapflow-story__scroll-cue" aria-hidden="true">
+            向下阅读 <span>↓</span>
+          </span>
+        )}
+      </article>
+    );
+  };
+
   return (
     <section
       ref={storyRef}
@@ -153,6 +247,10 @@ export default function LandingStory({
       className="mapflow-story"
       aria-label="MapFlow 学习地图产品叙事"
     >
+      <div className="mapflow-story__opening">
+        {renderScene(LANDING_SCENES[0], 0)}
+      </div>
+
       <div className="mapflow-story__layout">
         <div
           className="mapflow-story__media-stage"
@@ -194,101 +292,7 @@ export default function LandingStory({
         </div>
 
         <div className="mapflow-story__copy-column">
-          {LANDING_SCENES.map((scene, sceneIndex) => {
-            const sceneProgress = getStorySceneProgress(storyProgress, sceneIndex, LANDING_SCENE_COUNT);
-            const isActive = sceneIndex === activeSceneIndex;
-            const sceneStyle = {
-              '--mapflow-scene-progress': sceneProgress,
-            } as CSSProperties;
-
-            return (
-              <article
-                key={scene.id}
-                id={sceneIndex === LANDING_SCENES.length - 1 ? 'evidence' : undefined}
-                data-testid={`landing-story-scene-${scene.index}`}
-                data-scene-index={sceneIndex}
-                data-active={isActive ? 'true' : 'false'}
-                data-scene-id={scene.id}
-                className={`mapflow-story__scene mapflow-story__scene--${scene.id}`}
-                style={sceneStyle}
-                aria-labelledby={`landing-scene-title-${scene.index}`}
-              >
-                <div
-                  className={`mapflow-story__inner${scene.id === 'opening' ? ' mapflow-story__inner--opening-viewport' : ''}`}
-                  data-testid={scene.id === 'opening' ? 'landing-opening-viewport' : undefined}
-                >
-                  <div className="mapflow-story__copy">
-                    {scene.id === 'opening' ? (
-                      <div className="mapflow-story__crt-title">
-                        <h2 id={`landing-scene-title-${scene.index}`} aria-label={scene.title}>
-                          <span className="mapflow-story__title-lead">学习——</span>
-                          <span className="mapflow-story__title-question">
-                            <span className="mapflow-story__title-question-key">什么时候</span>
-                            {scene.title.slice('学习——什么时候'.length)}
-                          </span>
-                        </h2>
-                        <LandingCrtShader text={scene.title} progress={sceneProgress} />
-                      </div>
-                    ) : (
-                      <h2 id={`landing-scene-title-${scene.index}`} aria-label={scene.title}>
-                        {scene.id === 'clarity' ? (
-                          <>
-                            <span className="mapflow-story__title-segment mapflow-story__title-segment--prefix">
-                              学了这么多，
-                            </span>
-                            <span className="mapflow-story__title-segment">
-                              <span className="mapflow-story__title-clarity-key">我到底</span>
-                              学会了什么？
-                            </span>
-                          </>
-                        ) : scene.id === 'progress' ? (
-                          <>
-                            <span className="mapflow-story__title-segment mapflow-story__title-segment--progress-prefix">
-                              学到了哪里，
-                            </span>
-                            <span className="mapflow-story__title-segment mapflow-story__title-segment--progress-answer">
-                              打开地图就知道。
-                            </span>
-                          </>
-                        ) : (
-                          scene.title
-                        )}
-                      </h2>
-                    )}
-                    <p className="mapflow-story__body">{scene.body}</p>
-                    {scene.id === 'opening' && (
-                      <div className="mapflow-story__opening-answer">
-                        <p>看清学习与就业方向，建立自己的知识地图，随时查看学习进度。</p>
-                        <strong>这是 MapFlow 想帮你做的事。</strong>
-                      </div>
-                    )}
-                    {scene.transition && <p className="mapflow-story__transition">{scene.transition}</p>}
-                    {scene.id === 'mcp' && (
-                      <p className="mapflow-story__example">
-                        <span>示例操作</span>
-                        把刚才讨论的数据库迁移，整理进我的地图
-                      </p>
-                    )}
-                    {scene.id === 'progress' && (
-                      <button
-                        type="button"
-                        className="mapflow-story__cta"
-                        onClick={onEnterConsole}
-                      >
-                        打开我的学习地图
-                        <span aria-hidden="true">↗</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {sceneIndex < LANDING_SCENES.length - 1 && (
-                  <span className="mapflow-story__scroll-cue" aria-hidden="true">
-                    向下阅读 <span>↓</span>
-                  </span>
-                )}
-              </article>
-            );
-          })}
+          {LANDING_SCENES.slice(1).map((scene, offset) => renderScene(scene, offset + 1))}
         </div>
       </div>
     </section>

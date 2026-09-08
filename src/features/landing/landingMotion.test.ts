@@ -98,6 +98,18 @@ describe('landingMotion', () => {
     });
   });
 
+  it('让 opening 到 B 的首张地图完整随自然流入场，再从 B 到 C 开始蒙版', () => {
+    expect(getStoryTimelineState(0.125)).toMatchObject({
+      activeSceneIndex: 1,
+      baseSceneIndex: 0,
+      nextSceneIndex: 1,
+      mediaRevealProgress: 1,
+    });
+
+    expect(getStoryTimelineState(0.24).mediaRevealProgress).toBe(1);
+    expect(getStoryTimelineState(0.375).mediaRevealProgress).toBe(0.5);
+  });
+
   it('用同一条四段滚动时间轴计算五幕局部进度', () => {
     expect(getStorySceneProgress(0.25, 1, 5)).toBe(0);
     expect(getStorySceneProgress(0.375, 1, 5)).toBe(0.5);

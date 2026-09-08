@@ -1006,12 +1006,21 @@ select {
 
 }
 
-/* Scroll-linked map stage: the copy column supplies the scroll distance while
-   one pinned stack keeps a full base image behind the vertical next-image mask. */
+/* Scroll-linked map stage: the opening chapter exits on its own, then the
+   B–E copy column supplies the scroll distance for one sticky image stack. */
 .mapflow-story {
   position: relative;
   z-index: 2;
   pointer-events: none;
+}
+
+.mapflow-story__opening {
+  position: relative;
+  width: 100%;
+}
+
+.mapflow-story__opening > .mapflow-story__scene {
+  width: 100%;
 }
 
 .mapflow-story__layout {
