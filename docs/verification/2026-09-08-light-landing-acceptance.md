@@ -22,7 +22,7 @@
 ## 已完成检查
 
 - 通过 scene 的实际 `getBoundingClientRect()` 与滚动容器偏移计算定位；桌面 root 高 4569px、五段各 900px，移动五段各约 844px。截图均无水平溢出。
-- 桌面 D reload 后 Python 地图正常 fit；74 个真实节点中首屏簇完整可见 10 个，分支显示不超过 10 个。地图缩放控件和 mini-map 位于画布底部，没有遮挡 D 本幕标题或详情标题。
+- 桌面 D reload 后 Python 地图正常 fit；以 10 个节点确定初始视角，首屏完整可见 10 个节点；全部 74 个真实节点仍保留，可继续拖动查看。地图缩放控件和 mini-map 位于画布底部，没有遮挡 D 本幕标题或详情标题。
 - 移动 E 的“任何地方皆可用”标题为单行 `nowrap`，元素高度约 22.8px；三项功能标题完整可见，CTA 保持可操作尺寸。
 - D 打开最长 description（文本长度 87）后回到 C，detail 面板约 740×110.6px；五段 scene 高度未改变，C 的 `direction-crossroads.webp` 仍完整加载（naturalWidth 1448，截图中的可视区域完整对应 C）。
 - 之前的交互验收已通过：节点选择、拖拽、缩放、普通滚轮与 Ctrl+滚轮分工、移动 passive/探索/继续阅读触控、Tab+Enter 进入工作台、CTA 键盘激活、CTA 表面偏移，以及 reduced-motion 下不倾斜。
