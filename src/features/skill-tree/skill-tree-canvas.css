@@ -7,6 +7,14 @@
   container-type: inline-size;
 }
 
+.skill-tree-canvas[data-interaction-mode='passive'] .react-flow__pane {
+  touch-action: auto !important;
+}
+
+.skill-tree-canvas[data-interaction-mode='landing-preview'] .react-flow__pane {
+  touch-action: none;
+}
+
 @container (max-width: 1023px) {
   .skill-tree-canvas .react-flow__controls.skill-tree-canvas__controls {
     bottom: max(0.75rem, env(safe-area-inset-bottom)) !important;

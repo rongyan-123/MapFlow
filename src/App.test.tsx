@@ -283,6 +283,32 @@ async function openPersonalMap(
   await screen.findByTestId('react-flow-boundary');
 }
 
+function installNonIntersectingLandingObserver() {
+  const previousObserver = window.IntersectionObserver;
+  class NonIntersectingObserver {
+    constructor(_callback: IntersectionObserverCallback, _options?: IntersectionObserverInit) {}
+
+    observe() {}
+
+    unobserve() {}
+
+    disconnect() {}
+
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  }
+
+  window.IntersectionObserver = NonIntersectingObserver as unknown as typeof IntersectionObserver;
+  return () => {
+    if (previousObserver) {
+      window.IntersectionObserver = previousObserver;
+    } else {
+      Reflect.deleteProperty(window, 'IntersectionObserver');
+    }
+  };
+}
+
 describe('MapFlow tree library', () => {
   it('工作台首次打开只显示方向卡，不自动请求或渲染默认地图', async () => {
     renderApp('/console');
@@ -618,19 +644,25 @@ describe('MapFlow tree library', () => {
 
   it('首次访问根路径展示产品首页，并可直接进入控制台', async () => {
     const user = userEvent.setup();
+    const restoreIntersectionObserver = installNonIntersectingLandingObserver();
     renderApp('/');
 
-    expect(
-      await screen.findByRole('heading', {
-        name: '学习——什么时候变得如此困难？',
-      }),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
+    try {
+      expect(
+        await screen.findByRole('heading', {
+          name: '学习——什么时候变得如此困难？',
+        }),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
+      expect(treeApi.fetchPublicTrees).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole('button', { name: '进入工作台' }));
+      await user.click(screen.getByRole('button', { name: '进入工作台' }));
 
-    expect(window.location.pathname).toBe('/console');
-    expect(await screen.findByRole('heading', { name: '选择一个学习方向' })).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/console');
+      expect(await screen.findByRole('heading', { name: '选择一个学习方向' })).toBeInTheDocument();
+    } finally {
+      restoreIntersectionObserver();
+    }
   });
 
   it('进入过控制台后再次访问根路径仍展示独立产品首页', async () => {
@@ -646,14 +678,21 @@ describe('MapFlow tree library', () => {
   it('控制台可以通过显式入口参数再次查看产品首页', async () => {
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     window.localStorage.setItem('mapflow.entry.has-entered-console', 'true');
-    renderApp('/?marketing=1');
+    const restoreIntersectionObserver = installNonIntersectingLandingObserver();
 
-    expect(
-      await screen.findByRole('heading', {
-        name: '学习——什么时候变得如此困难？',
-      }),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
+    try {
+      renderApp('/?marketing=1');
+
+      expect(
+        await screen.findByRole('heading', {
+          name: '学习——什么时候变得如此困难？',
+        }),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
+      expect(treeApi.fetchPublicTrees).not.toHaveBeenCalled();
+    } finally {
+      restoreIntersectionObserver();
+    }
   });
 
   it('从产品首页登录后直接进入控制台，不要求再次点击入口', async () => {

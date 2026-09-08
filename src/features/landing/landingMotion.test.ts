@@ -5,6 +5,7 @@ import {
   getEarthZoom,
   getEarthRevealProgress,
   getMediaRevealProgress,
+  getJellyTilt,
   getPointerIntent,
   getPointerIntentFromDisplacement,
   getSceneProgress,
@@ -147,5 +148,14 @@ describe('landingMotion', () => {
     expect(getEarthRevealProgress(0.36)).toBeGreaterThan(getEarthRevealProgress(0.34));
     expect(getEarthRevealProgress(0.4)).toBe(1);
     expect(getEarthRevealProgress(0.48)).toBe(1);
+  });
+
+  it('把 CTA 指针位置限制在轻微的可逆倾斜范围内，并支持 reduced motion', () => {
+    const rect = { left: 0, top: 0, width: 200, height: 100 };
+
+    expect(getJellyTilt(100, 50, rect)).toEqual({ x: 0, y: 0, scale: 1 });
+    expect(getJellyTilt(-100, 200, rect)).toEqual({ x: -6, y: -5, scale: 1 });
+    expect(getJellyTilt(300, -100, rect)).toEqual({ x: 6, y: 5, scale: 1 });
+    expect(getJellyTilt(300, -100, rect, true)).toEqual({ x: 0, y: 0, scale: 1 });
   });
 });

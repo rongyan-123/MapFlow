@@ -12,12 +12,14 @@ import LandingEarthBackground, {
 
 describe('LandingEarthBackground', () => {
   it('在 WebGL 不可用时保留可辨认的静态 Earth fallback', () => {
-    render(<LandingEarthBackground />);
+    render(<LandingEarthBackground revealProgress={0} />);
 
-    expect(screen.getByTestId('landing-earth-background')).toHaveAttribute(
+    const earth = screen.getByTestId('landing-earth-background');
+    expect(earth).toHaveAttribute(
       'data-earth-renderer',
       'fallback',
     );
+    expect(Number((earth as HTMLElement).style.opacity)).toBeGreaterThan(0);
     expect(screen.getByTestId('landing-earth-fallback')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.queryByTestId('landing-earth-interaction-hint')).not.toBeInTheDocument();

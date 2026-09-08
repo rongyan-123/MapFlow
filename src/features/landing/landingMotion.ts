@@ -10,6 +10,19 @@ export const LANDING_SCENE_COUNT = 5;
 export const MIN_EARTH_ZOOM = 0.72;
 export const MAX_EARTH_ZOOM = 1.34;
 
+export interface JellyTiltRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+export interface JellyTilt {
+  x: number;
+  y: number;
+  scale: number;
+}
+
 export function getEarthRevealProgress(progress: number): number {
   const clarityProgress = getStorySceneProgress(progress, 1, LANDING_SCENE_COUNT);
   return getMediaRevealProgress(clarityProgress, 0.2, 0.6);
@@ -196,4 +209,33 @@ export function getEarthZoom(
   maxZoom = MAX_EARTH_ZOOM,
 ): number {
   return Math.min(maxZoom, Math.max(minZoom, Number.isFinite(zoom) ? zoom : 1));
+}
+
+export function getJellyTilt(
+  pointerX: number,
+  pointerY: number,
+  rect: JellyTiltRect,
+  reducedMotion = false,
+): JellyTilt {
+  if (
+    reducedMotion ||
+    !Number.isFinite(pointerX) ||
+    !Number.isFinite(pointerY) ||
+    !Number.isFinite(rect.left) ||
+    !Number.isFinite(rect.top) ||
+    !Number.isFinite(rect.width) ||
+    !Number.isFinite(rect.height) ||
+    rect.width <= 0 ||
+    rect.height <= 0
+  ) {
+    return { x: 0, y: 0, scale: 1 };
+  }
+
+  const normalizedX = clampUnit((pointerX - (rect.left + rect.width / 2)) / (rect.width / 2) / 2 + 0.5) * 2 - 1;
+  const normalizedY = clampUnit(((rect.top + rect.height / 2) - pointerY) / (rect.height / 2) / 2 + 0.5) * 2 - 1;
+  return {
+    x: Number((normalizedX * 6).toFixed(3)),
+    y: Number((normalizedY * 5).toFixed(3)),
+    scale: 1,
+  };
 }

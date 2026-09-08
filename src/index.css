@@ -2162,3 +2162,717 @@ html[data-mapflow-theme='blue-gray'] .bg-slate-900\/65 {
     min-height: 44px;
   }
 }
+
+/* Light marketing landing skin. Everything below is scoped to the landing
+   root so the console keeps its existing dark workspace contract. */
+.mapflow-landing {
+  --mapflow-ink: #22343a;
+  --mapflow-muted: #5d7479;
+  --mapflow-dim: #789095;
+  --mapflow-line: rgba(40, 156, 151, 0.2);
+  color-scheme: light;
+  background:
+    radial-gradient(circle at 12% 16%, rgba(178, 237, 227, 0.28), transparent 32rem),
+    radial-gradient(circle at 88% 54%, rgba(204, 239, 247, 0.42), transparent 36rem),
+    #f7fcfa;
+  color: var(--mapflow-ink);
+}
+
+.mapflow-landing__veil {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.08), transparent 38%),
+    linear-gradient(90deg, rgba(247, 252, 250, 0.72), rgba(247, 252, 250, 0.18) 48%, rgba(247, 252, 250, 0.64)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.45), transparent 34%, rgba(230, 247, 246, 0.28));
+}
+
+.mapflow-landing__header {
+  border-bottom-color: rgba(42, 145, 143, 0.16);
+  background: rgba(250, 255, 253, 0.78);
+  box-shadow: 0 0.8rem 2rem rgba(61, 111, 114, 0.06);
+}
+
+.mapflow-landing__brand {
+  color: #1e343b;
+}
+
+.mapflow-landing__brand-mark {
+  border-color: rgba(30, 157, 148, 0.62);
+  background: linear-gradient(145deg, #65cfc0, #237d7b);
+  color: #f8ffff;
+  box-shadow: 0 0.6rem 1.5rem rgba(35, 140, 136, 0.16);
+}
+
+.mapflow-landing__nav,
+.mapflow-landing__login {
+  color: #5b7479;
+}
+
+.mapflow-landing__nav a:hover,
+.mapflow-landing__nav button:hover,
+.mapflow-landing__login:hover {
+  color: #147f7a;
+}
+
+.mapflow-landing__enter,
+.mapflow-story__cta {
+  border-color: rgba(27, 145, 139, 0.52);
+  background: rgba(81, 191, 178, 0.15);
+  color: #176c69;
+  box-shadow: 0 0.8rem 2.2rem rgba(37, 147, 143, 0.1);
+}
+
+.mapflow-landing__enter:hover,
+.mapflow-story__cta:hover {
+  border-color: #42a9a1;
+  background: rgba(81, 191, 178, 0.24);
+}
+
+.mapflow-earth {
+  background: transparent !important;
+  mix-blend-mode: multiply;
+}
+
+.mapflow-earth__canvas {
+  opacity: 0.34;
+  filter: saturate(0.64) brightness(1.32);
+}
+
+.mapflow-earth__fallback {
+  opacity: 0.58;
+  filter: saturate(0.52) brightness(1.75) contrast(0.72);
+}
+
+.mapflow-earth__fallback-glow {
+  background: rgba(70, 183, 180, 0.12);
+}
+
+.mapflow-earth__controls button,
+.mapflow-earth__hint {
+  border-color: rgba(34, 128, 130, 0.2);
+  background: rgba(250, 255, 253, 0.8);
+  color: #527277;
+  box-shadow: 0 0.6rem 1.4rem rgba(62, 117, 121, 0.08);
+}
+
+.mapflow-earth__controls button:hover {
+  background: #ffffff;
+  color: #167d79;
+}
+
+.mapflow-story__inner--opening-viewport::before {
+  border-color: rgba(49, 171, 161, 0.22);
+  background:
+    radial-gradient(ellipse at center, rgba(115, 217, 207, 0.12), transparent 58%),
+    repeating-linear-gradient(0deg, rgba(47, 168, 158, 0.045) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(90deg, rgba(73, 155, 178, 0.035) 0 1px, transparent 1px 9rem);
+  box-shadow:
+    inset 0 0 6rem rgba(68, 190, 181, 0.08),
+    0 0 4rem rgba(87, 178, 182, 0.08);
+}
+
+.mapflow-story__inner--opening-viewport::after {
+  background: radial-gradient(ellipse at center, transparent 44%, rgba(247, 252, 250, 0.82) 100%);
+}
+
+.mapflow-story__copy h2 {
+  color: #20353c;
+  text-shadow: none;
+}
+
+.mapflow-story__copy,
+.mapflow-story__body,
+.mapflow-story__opening-answer,
+.mapflow-story__example {
+  color: #526b71;
+}
+
+.mapflow-story__scene[data-active='true'] .mapflow-story__copy {
+  text-shadow: none;
+}
+
+.mapflow-story__crt-shader {
+  mix-blend-mode: multiply;
+  opacity: 0.08;
+}
+
+.mapflow-landing .mapflow-story__crt-title[data-crt-renderer='webgl'] h2 {
+  color: #1c4449;
+  -webkit-text-fill-color: #1c4449;
+  text-shadow: none;
+}
+
+.mapflow-story__scene--opening .mapflow-story__copy h2 {
+  color: #1c4449;
+  text-shadow: 0 0 1.3em rgba(45, 163, 157, 0.12);
+}
+
+.mapflow-story__opening-answer {
+  border-left-color: rgba(48, 166, 157, 0.5);
+}
+
+.mapflow-story__opening-answer strong,
+.mapflow-story__transition {
+  color: #16847d;
+}
+
+.mapflow-story__example {
+  border-color: rgba(42, 148, 145, 0.18);
+  background: rgba(236, 250, 247, 0.72);
+}
+
+.mapflow-story__example span {
+  color: #b26a3b;
+}
+
+.mapflow-story__scroll-cue {
+  color: #7a9295;
+}
+
+.mapflow-story__scroll-cue span {
+  color: #1a8d86;
+}
+
+.mapflow-story__media-stage {
+  background: transparent;
+}
+
+.mapflow-story__media-stack {
+  aspect-ratio: 4 / 3;
+}
+
+.mapflow-story__media-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border: 1px solid rgba(43, 142, 143, 0.22);
+  border-radius: 1.35rem;
+  background: #eef9f6;
+  box-shadow: 0 2rem 5rem -2rem rgba(44, 112, 119, 0.22), 0 0.4rem 1rem rgba(59, 127, 130, 0.08);
+  transition: border-color 420ms ease, opacity 420ms ease;
+}
+
+.mapflow-story__media-layer[data-media-layer='hidden'] {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mapflow-story__media-layer[data-media-layer='base'] {
+  z-index: 1;
+  opacity: 1;
+}
+
+.mapflow-story__media-layer[data-media-layer='next'] {
+  z-index: 2;
+  opacity: 1;
+}
+
+.mapflow-story__media-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  user-select: none;
+}
+
+.mapflow-story__mobile-media {
+  display: none;
+}
+
+.mapflow-story__independent-scenes {
+  position: relative;
+}
+
+.mapflow-story__scene--with-demo .mapflow-story__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(25rem, 1.18fr);
+  align-items: center;
+  width: min(calc(100% - 2.5rem), 94rem);
+  margin: 0 auto;
+  gap: clamp(2rem, 4vw, 5rem);
+}
+
+.mapflow-story__scene--with-demo .mapflow-story__copy {
+  width: auto;
+  max-width: 35rem;
+}
+
+.mapflow-story__demo-slot {
+  width: 100%;
+  min-width: 0;
+  pointer-events: auto;
+}
+
+.mapflow-public-map-demo {
+  width: 100%;
+  padding: clamp(1rem, 2vw, 1.45rem);
+  border: 1px solid rgba(57, 150, 148, 0.24);
+  border-radius: 1.5rem;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 1.8rem 4rem -2.2rem rgba(41, 120, 125, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  color: #34575d;
+  pointer-events: auto;
+}
+
+.mapflow-public-map-demo__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.mapflow-public-map-demo__eyebrow,
+.mapflow-public-map-demo__detail-label {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: #16847d;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.mapflow-public-map-demo h3,
+.mapflow-public-map-demo h4,
+.mapflow-public-map-demo p {
+  margin: 0;
+}
+
+.mapflow-public-map-demo h3 {
+  color: #203f45;
+  font-size: clamp(1.05rem, 1.6vw, 1.35rem);
+  font-weight: 900;
+}
+
+.mapflow-public-map-demo__readonly {
+  flex: 0 0 auto;
+  border: 1px solid rgba(33, 140, 135, 0.2);
+  border-radius: 999px;
+  padding: 0.34rem 0.52rem;
+  color: #258a83;
+  font-size: 0.62rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.mapflow-public-map-demo__hint,
+.mapflow-public-map-demo__detail {
+  margin-top: 0.7rem !important;
+  color: #6a8588;
+  font-size: 0.78rem;
+  line-height: 1.65;
+}
+
+.mapflow-public-map-demo__canvas-shell {
+  height: clamp(19rem, 43vh, 30rem);
+  min-height: 18rem;
+  margin-top: 0.9rem;
+  overflow: hidden;
+  border: 1px solid rgba(63, 157, 153, 0.2);
+  border-radius: 1.05rem;
+  background: #effaf7;
+}
+
+.mapflow-public-map-demo .skill-tree-canvas {
+  background: #effaf7;
+}
+
+.mapflow-public-map-demo .react-flow__pane {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(8, 145, 178, 0.08), transparent 38%),
+    #effaf7 !important;
+}
+
+.mapflow-public-map-demo .react-flow__background {
+  background: #effaf7;
+}
+
+.mapflow-public-map-demo .react-flow__background pattern circle {
+  fill: rgba(51, 138, 141, 0.18) !important;
+}
+
+.mapflow-public-map-demo .react-flow__edge path {
+  stroke: #42a9a1;
+}
+
+.mapflow-public-map-demo .react-flow__controls.skill-tree-canvas__controls {
+  border: 1px solid rgba(37, 132, 135, 0.24) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 0.6rem 1.2rem rgba(52, 117, 122, 0.12);
+}
+
+.mapflow-public-map-demo .react-flow__controls.skill-tree-canvas__controls button {
+  border-bottom-color: rgba(37, 132, 135, 0.16) !important;
+  background: transparent !important;
+  fill: #2c777b !important;
+}
+
+.mapflow-public-map-demo .react-flow__controls.skill-tree-canvas__controls button:hover {
+  background: #e4f6f2 !important;
+}
+
+.mapflow-public-map-demo .react-flow__minimap.skill-tree-canvas__minimap {
+  border: 1px solid rgba(37, 132, 135, 0.24) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 0.6rem 1.2rem rgba(52, 117, 122, 0.1);
+}
+
+.mapflow-public-map-demo .mapflow-skill-node[data-mapflow-display-mode='showcase'] {
+  border-color: rgba(36, 148, 145, 0.55) !important;
+  background: linear-gradient(145deg, #ffffff, #e4f8f3) !important;
+  color: #24525a !important;
+  box-shadow: 0 0.7rem 1.4rem rgba(47, 136, 137, 0.16) !important;
+}
+
+.mapflow-public-map-demo .mapflow-skill-node[data-mapflow-display-mode='showcase'] span {
+  color: inherit;
+}
+
+.mapflow-public-map-demo__explore-toggle {
+  display: none;
+  margin-top: 0.7rem;
+  border: 1px solid rgba(37, 132, 135, 0.32);
+  border-radius: 999px;
+  padding: 0.48rem 0.78rem;
+  background: #ffffff;
+  color: #247b79;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.mapflow-public-map-demo__detail {
+  min-height: 2.2rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(55, 143, 143, 0.15);
+}
+
+.mapflow-public-map-demo__detail h4 {
+  margin-bottom: 0.25rem;
+  color: #234e55;
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.mapflow-public-map-demo__detail ul {
+  margin: 0.45rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.mapflow-public-map-demo__status {
+  display: grid;
+  min-height: 15rem;
+  margin-top: 0.9rem;
+  place-items: center;
+  gap: 0.75rem;
+  border: 1px dashed rgba(47, 143, 141, 0.3);
+  border-radius: 1rem;
+  color: #628084;
+  font-size: 0.84rem;
+  text-align: center;
+}
+
+.mapflow-public-map-demo__status--error button {
+  border: 1px solid rgba(37, 132, 135, 0.3);
+  border-radius: 999px;
+  padding: 0.5rem 0.85rem;
+  background: #ffffff;
+  color: #247b79;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.mapflow-story__scene--progress .mapflow-story__inner {
+  width: min(calc(100% - 2rem), 56rem);
+  margin: 0 auto;
+  align-items: center;
+  text-align: center;
+}
+
+.mapflow-story__scene--progress .mapflow-story__copy {
+  max-width: 50rem;
+}
+
+.mapflow-story__proof-points {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 31rem);
+  gap: 0.35rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: center;
+}
+
+.mapflow-story__proof-points li {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.8rem;
+  padding: 0.12rem 0;
+  text-align: left;
+}
+
+.mapflow-story__proof-points strong {
+  color: #277f7c;
+  font-size: 0.95rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.mapflow-story__proof-points span {
+  min-width: 0;
+  color: #6b8588;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.mapflow-jelly-cta {
+  position: relative;
+  display: inline-flex;
+  min-height: 3.6rem;
+  margin-top: 1.8rem;
+  padding: 0;
+  border: 0;
+  border-radius: 1.2rem;
+  background: transparent;
+  color: #f7ffff;
+  cursor: pointer;
+  perspective: 700px;
+  transform-style: preserve-3d;
+  transition: filter 240ms ease;
+}
+
+.mapflow-jelly-cta__base {
+  position: absolute;
+  right: 0.8rem;
+  bottom: -0.42rem;
+  left: 0.8rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: rgba(36, 126, 123, 0.22);
+  filter: blur(0.5rem);
+  transform: translateZ(-1rem);
+}
+
+.mapflow-jelly-cta__surface {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  min-height: 3.6rem;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.8rem 1.15rem 0.8rem 1.3rem;
+  border: 1px solid rgba(78, 198, 182, 0.74);
+  border-radius: 1.2rem;
+  background: linear-gradient(145deg, #218d88, #176d73);
+  box-shadow: 0 0.75rem 0 #0e585f, 0 1.6rem 2.6rem -1.1rem rgba(35, 126, 126, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  font-size: 0.9rem;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  transform: translate3d(var(--mapflow-jelly-x, 0px), var(--mapflow-jelly-y, 0px), 0)
+    rotateX(var(--mapflow-jelly-rotate-x, 0deg)) rotateY(var(--mapflow-jelly-rotate-y, 0deg))
+    scale(var(--mapflow-jelly-scale, 1));
+  transform-style: preserve-3d;
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), filter 240ms ease;
+}
+
+.mapflow-jelly-cta__surface span:last-child {
+  font-size: 1.25rem;
+}
+
+.mapflow-jelly-cta:focus-visible {
+  outline: 3px solid rgba(45, 159, 153, 0.42);
+  outline-offset: 5px;
+}
+
+.mapflow-jelly-cta:active .mapflow-jelly-cta__surface {
+  box-shadow: 0 0.35rem 0 #0e585f, 0 1rem 1.8rem -1rem rgba(35, 126, 126, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+@media (max-width: 860px) {
+  .mapflow-landing .mapflow-story__layout--media {
+    display: block;
+    width: 100%;
+    margin: 0;
+  }
+
+  .mapflow-landing .mapflow-story__media-stage {
+    display: none;
+  }
+
+  .mapflow-landing .mapflow-story__copy-column {
+    display: block;
+    position: relative;
+  }
+
+  .mapflow-landing .mapflow-story__copy-column .mapflow-story__scene {
+    display: flex;
+    height: auto;
+    min-height: 100svh;
+    align-items: stretch;
+    overflow: visible;
+  }
+
+  .mapflow-landing .mapflow-story__copy-column .mapflow-story__inner {
+    width: min(calc(100% - 2rem), 45rem);
+    height: auto;
+    min-height: 100svh;
+    margin: 0 auto;
+    align-items: stretch;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 5.5rem 0 3.5rem;
+  }
+
+  .mapflow-landing .mapflow-story__copy-column .mapflow-story__copy {
+    opacity: 1;
+    transform: none;
+  }
+
+  .mapflow-landing .mapflow-story__mobile-media {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid rgba(43, 142, 143, 0.22);
+    border-radius: 1.2rem;
+    background: #eef9f6;
+    box-shadow: 0 1.4rem 3rem -1.5rem rgba(44, 112, 119, 0.22);
+  }
+
+  .mapflow-landing .mapflow-story__mobile-media .mapflow-story__media-image {
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+  }
+
+  .mapflow-story__layout--media {
+    display: block;
+    width: 100%;
+  }
+
+  .mapflow-story__media-stage {
+    top: 4.25rem;
+    height: min(58svh, 30rem);
+    min-height: 19rem;
+    margin-bottom: min(-58svh, -19rem);
+    align-items: flex-start;
+    padding-top: 1.5rem;
+  }
+
+  .mapflow-story__media-stack {
+    width: min(calc(100% - 2rem), 28rem);
+  }
+
+  .mapflow-story__copy-column {
+    z-index: 2;
+  }
+
+  .mapflow-story__scene--with-demo .mapflow-story__inner {
+    display: flex;
+    width: min(calc(100% - 2rem), 45rem);
+    margin: 0 auto;
+    gap: 1.1rem;
+  }
+
+  .mapflow-story__scene--with-demo .mapflow-story__copy,
+  .mapflow-story__demo-slot {
+    width: 100%;
+    max-width: none;
+  }
+
+  .mapflow-public-map-demo__explore-toggle {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .mapflow-story__proof-points {
+    align-items: stretch;
+    width: min(100%, 31rem);
+    text-align: left;
+  }
+}
+
+@media (max-width: 560px) {
+  .mapflow-story__copy {
+    padding: 1rem 0.9rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .mapflow-story__scene--opening .mapflow-story__copy {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .mapflow-public-map-demo {
+    padding: 0.85rem;
+    border-radius: 1.2rem;
+  }
+
+  .mapflow-public-map-demo__header {
+    display: block;
+  }
+
+  .mapflow-public-map-demo__canvas-shell {
+    height: 15rem;
+    min-height: 15rem;
+  }
+
+  .mapflow-story__scene--with-demo .mapflow-story__inner {
+    gap: 0.7rem;
+    padding-top: 5.25rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .mapflow-public-map-demo__detail {
+    max-height: 4.25rem;
+    overflow: auto;
+  }
+
+  .mapflow-jelly-cta {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .mapflow-jelly-cta__surface {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mapflow-landing .mapflow-story__copy,
+  .mapflow-landing .mapflow-story__media-layer,
+  .mapflow-landing .mapflow-jelly-cta {
+    transition: none;
+  }
+
+  .mapflow-landing .mapflow-jelly-cta {
+    transform: none;
+  }
+
+  .mapflow-landing .mapflow-jelly-cta__surface {
+    transform: none;
+  }
+}
+
+/* Earth controls are portaled to body, so the mobile landing placement cannot
+   rely on the landing-root ancestor selector. */
+@media (max-width: 860px) {
+  .mapflow-earth__controls {
+    top: auto !important;
+    right: 0.75rem !important;
+    bottom: max(0.75rem, env(safe-area-inset-bottom)) !important;
+    gap: 0.3rem;
+    transform: scale(0.92);
+    transform-origin: right bottom;
+  }
+}

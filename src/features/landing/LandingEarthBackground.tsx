@@ -290,6 +290,7 @@ interface LandingEarthBackgroundProps {
 export default function LandingEarthBackground({ revealProgress = 1 }: LandingEarthBackgroundProps) {
   const earthRevealProgress = Math.min(1, Math.max(0, Number.isFinite(revealProgress) ? revealProgress : 0));
   const earthIsRevealed = earthRevealProgress > 0.08;
+  const earthVisualOpacity = 0.16 + earthRevealProgress * 0.3;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderSceneRef = useRef<(() => void) | null>(null);
   const interactionRef = useRef<EarthInteractionState>({
@@ -804,7 +805,7 @@ export default function LandingEarthBackground({ revealProgress = 1 }: LandingEa
       data-earth-revealed={earthIsRevealed ? 'true' : 'false'}
       data-earth-zoom={earthZoom}
       className={`mapflow-earth${earthIsRevealed ? ' is-revealed' : ''}`}
-      style={{ opacity: earthRevealProgress }}
+      style={{ opacity: earthVisualOpacity }}
     >
       <canvas
         ref={canvasRef}

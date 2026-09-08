@@ -3,6 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import LandingPage from './LandingPage';
 
+vi.mock('./LandingPublicMapDemo', () => ({
+  default: () => <div data-testid="landing-public-map-demo" />,
+}));
+
 describe('LandingPage', () => {
   it('用持续的 Earth 背景和五个独立场景表达产品价值', async () => {
     const onEnterConsole = vi.fn();
@@ -31,25 +35,23 @@ describe('LandingPage', () => {
     expect(screen.getByTestId('landing-opening-viewport')).toBeInTheDocument();
     expect(screen.getAllByTestId(/^landing-story-scene-/)).toHaveLength(5);
     expect(screen.getByTestId('landing-story-media-stage')).toBeInTheDocument();
-    expect(screen.getAllByTestId(/^landing-map-graphic-/)).toHaveLength(4);
-    expect(screen.getByTestId('landing-map-graphic-domain')).toBeInTheDocument();
-    expect(
-      screen
-        .getByTestId('landing-map-graphic-whole')
-        .querySelectorAll('[data-testid^="landing-map-node-"]'),
-    ).toHaveLength(7);
-    expect(
-      within(screen.getByTestId('landing-map-graphic-mcp')).queryByTestId('landing-map-mcp-node'),
-    ).not.toBeInTheDocument();
-    expect(
-      within(screen.getByTestId('landing-map-graphic-progress')).getByTestId('landing-map-mcp-node'),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText('已理解').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('正在探索').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('下一步').length).toBeGreaterThan(0);
-    expect(screen.getByText('示意进度')).toBeInTheDocument();
-    expect(screen.queryByText('学习进度', { exact: true })).not.toBeInTheDocument();
-    expect(screen.queryByText('工程问题', { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByTestId('landing-story-media-clarity')).toBeInTheDocument();
+    expect(screen.getByTestId('landing-story-media-domain')).toBeInTheDocument();
+    expect(screen.getByTestId('landing-story-media-clarity').querySelector('img')).toHaveAttribute(
+      'src',
+      '/landing/course-overload.webp',
+    );
+    expect(screen.getByTestId('landing-story-media-domain').querySelector('img')).toHaveAttribute(
+      'src',
+      '/landing/direction-crossroads.webp',
+    );
+    expect(screen.getByTestId('landing-story-mobile-media-clarity')).toBeInTheDocument();
+    expect(screen.getByTestId('landing-story-mobile-media-domain')).toBeInTheDocument();
+    expect(screen.getByTestId('landing-public-map-demo')).toBeInTheDocument();
+    expect(screen.getByTestId('landing-jelly-cta')).toBeInTheDocument();
+    expect(screen.getByText('指引方向')).toBeInTheDocument();
+    expect(screen.getByText('学习地图')).toBeInTheDocument();
+    expect(screen.getByText('任何地方皆可用')).toBeInTheDocument();
     expect(screen.queryByText('前置关系', { exact: true })).not.toBeInTheDocument();
     expect(screen.queryByText('A MAP FOR THE THINGS YOU WANT TO UNDERSTAND')).not.toBeInTheDocument();
     expect(screen.queryByText('YOU ARE HERE')).not.toBeInTheDocument();
@@ -76,7 +78,10 @@ describe('LandingPage', () => {
     expect(layout).not.toBeNull();
     expect(layout?.querySelector('[data-scene-id="opening"]')).toBeNull();
     expect(layout?.querySelector('[data-scene-id="clarity"]')).not.toBeNull();
+    expect(layout?.querySelector('[data-scene-id="domain"]')).not.toBeNull();
+    expect(layout?.querySelector('[data-scene-id="mcp"]')).toBeNull();
     expect(story.querySelector('.mapflow-story__opening [data-scene-id="opening"]')).not.toBeNull();
+    expect(story.querySelector('.mapflow-story__independent-scenes [data-scene-id="mcp"]')).not.toBeNull();
   });
 
   it('从首页打开 Agent 接入教程并展示真实的 npx 配置方式', async () => {

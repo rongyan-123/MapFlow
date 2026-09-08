@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Edge } from '@xyflow/react';
 import type {
@@ -17,6 +17,9 @@ const flowMocks = vi.hoisted(() => ({
     height?: number;
   }>,
   edges: [] as Edge[],
+  reactFlowProps: {} as Record<string, unknown>,
+  backgroundProps: {} as Record<string, unknown>,
+  minimapProps: {} as Record<string, unknown>,
 }));
 
 vi.mock('@xyflow/react', async () => {
@@ -58,6 +61,7 @@ vi.mock('@xyflow/react', async () => {
     edges,
     onInit,
     children,
+    ...reactFlowProps
   }: {
     nodes: Array<{
       id: string;
@@ -66,9 +70,11 @@ vi.mock('@xyflow/react', async () => {
     edges: Edge[];
     onInit?: (instance: unknown) => void;
     children?: React.ReactNode;
+    [key: string]: unknown;
   }) {
     flowMocks.nodes = nodes;
     flowMocks.edges = edges;
+    flowMocks.reactFlowProps = reactFlowProps;
     const instance = {
       fitView: flowMocks.fitView,
       setViewport: flowMocks.setViewport,
@@ -87,13 +93,17 @@ vi.mock('@xyflow/react', async () => {
   }
 
   return {
-    Background: () => null,
-    Controls: ({ className }: { className?: string }) => (
-      <div data-testid="controls" className={className} />
+    Background: (props: { color?: string; gap?: number }) => {
+      flowMocks.backgroundProps = props;
+      return null;
+    },
+    Controls: ({ className, showInteractive }: { className?: string; showInteractive?: boolean }) => (
+      <div data-testid="controls" data-show-interactive={showInteractive ? 'true' : 'false'} className={className} />
     ),
-    MiniMap: ({ className }: { className?: string }) => (
-      <div data-testid="minimap" className={className} />
-    ),
+    MiniMap: (props: { className?: string; maskColor?: string }) => {
+      flowMocks.minimapProps = props;
+      return <div data-testid="minimap" className={props.className} />;
+    },
     ReactFlow,
     useEdgesState,
     useNodesState,
@@ -182,6 +192,9 @@ describe('SkillTreeCanvas viewport lifecycle', () => {
     flowMocks.setViewport.mockReset();
     flowMocks.nodes = [];
     flowMocks.edges = [];
+    flowMocks.reactFlowProps = {};
+    flowMocks.backgroundProps = {};
+    flowMocks.minimapProps = {};
     vi.stubGlobal('ResizeObserver', TestResizeObserver);
   });
 
@@ -258,5 +271,86 @@ describe('SkillTreeCanvas viewport lifecycle', () => {
     expect(flowMocks.fitView).toHaveBeenCalledWith(
       expect.objectContaining({ nodes: [{ id: childNode.id }] }),
     );
+  });
+
+  it('在 landing 预览中把普通滚轮还给页面，并锁定节点布局拖动', () => {
+    render(
+      <SkillTreeCanvas
+        snapshot={baseSnapshot()}
+        displayMode="showcase"
+        selectedNodeId={null}
+        onSelectNode={vi.fn()}
+        interactionMode="landing-preview"
+      />,
+    );
+
+    expect(flowMocks.reactFlowProps).toMatchObject({
+      fitView: false,
+      zoomOnScroll: false,
+      zoomOnPinch: true,
+      zoomOnDoubleClick: false,
+      preventScrolling: false,
+      nodesDraggable: false,
+      nodesConnectable: false,
+      panOnDrag: true,
+    });
+    expect(screen.getByTestId('controls')).toHaveAttribute('data-show-interactive', 'false');
+  });
+
+  it('为 landing 预览提供浅色画布和 minimap 遮罩，同时保持默认主题契约', () => {
+    render(
+      <SkillTreeCanvas
+        snapshot={baseSnapshot()}
+        displayMode="showcase"
+        selectedNodeId={null}
+        onSelectNode={vi.fn()}
+        surfaceTheme="light"
+      />,
+    );
+
+    expect(flowMocks.backgroundProps).toMatchObject({ color: '#8ccfc5' });
+    expect(flowMocks.minimapProps).toMatchObject({
+      maskColor: 'rgba(231, 248, 244, 0.84)',
+    });
+  });
+
+  it('landing 首次 fit 可以展示一簇节点，后续仍由 anchor 接管', async () => {
+    render(
+      <SkillTreeCanvas
+        snapshot={baseSnapshot()}
+        displayMode="showcase"
+        selectedNodeId={null}
+        onSelectNode={vi.fn()}
+        interactionMode="landing-preview"
+        initialFitNodeIds={[rootNode.id, childNode.id]}
+      />,
+    );
+
+    emitResize(390, 844);
+    await waitFor(() => expect(flowMocks.fitView).toHaveBeenCalledTimes(1));
+    expect(flowMocks.fitView).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nodes: [{ id: rootNode.id }, { id: childNode.id }],
+      }),
+    );
+  });
+
+  it('landing 首次 fit 保留整簇视口，不再用单锚点移动窄画布', async () => {
+    render(
+      <SkillTreeCanvas
+        snapshot={baseSnapshot()}
+        displayMode="showcase"
+        selectedNodeId={null}
+        onSelectNode={vi.fn()}
+        interactionMode="landing-preview"
+        initialFitNodeIds={[rootNode.id, childNode.id]}
+      />,
+    );
+
+    emitResize(740, 560);
+    await waitFor(() => expect(flowMocks.fitView).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(flowMocks.setViewport).not.toHaveBeenCalled();
   });
 });

@@ -27,6 +27,8 @@ import './skill-tree-canvas.css';
 
 const nodeTypes = { skill: SkillNodeComponent };
 type SkillTreeFlowInstance = ReactFlowInstance<SkillFlowNode, Edge>;
+export type SkillTreeInteractionMode = 'default' | 'landing-preview' | 'passive';
+export type SkillTreeSurfaceTheme = 'default' | 'light';
 
 function getViewportAnchorId(
   nodes: SkillFlowNode[],
@@ -60,6 +62,9 @@ interface SkillTreeCanvasProps {
   displayMode: TreeDisplayMode;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string) => void;
+  interactionMode?: SkillTreeInteractionMode;
+  surfaceTheme?: SkillTreeSurfaceTheme;
+  initialFitNodeIds?: string[];
 }
 
 export default function SkillTreeCanvas({
@@ -67,6 +72,9 @@ export default function SkillTreeCanvas({
   displayMode,
   selectedNodeId,
   onSelectNode,
+  interactionMode = 'default',
+  surfaceTheme = 'default',
+  initialFitNodeIds = [],
 }: SkillTreeCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const flowInstanceRef = useRef<SkillTreeFlowInstance | null>(null);
@@ -78,6 +86,11 @@ export default function SkillTreeCanvas({
   const selectedNodeIdRef = useRef(selectedNodeId);
   currentNodeIdRef.current = snapshot.current_node_id;
   selectedNodeIdRef.current = selectedNodeId;
+
+  const isLandingPreview = interactionMode === 'landing-preview';
+  const isPassive = interactionMode === 'passive';
+  const isLandingMode = interactionMode !== 'default';
+  const isLightSurface = surfaceTheme === 'light';
 
   const progressMap = useMemo(
     () => new Map(snapshot.progress.map((item) => [item.node_id, item])),
@@ -161,14 +174,23 @@ export default function SkillTreeCanvas({
     const flowNodes = instance.getNodes();
     if (flowNodes.length === 0) return false;
 
+    const fallbackNodeId = currentNodeIdRef.current ?? initialFitNodeIds[0] ?? null;
     const anchorId = getViewportAnchorId(
       flowNodes,
       instance.getEdges(),
       selectedNodeIdRef.current,
-      currentNodeIdRef.current,
+      fallbackNodeId,
     );
+    const initialFitNodes = lastFittedViewportSizeRef.current === null
+      ? initialFitNodeIds.filter((nodeId) => flowNodes.some((node) => node.id === nodeId))
+      : [];
+    const isInitialClusterFit = initialFitNodes.length > 0;
     const fitOptions = {
-      ...(anchorId ? { nodes: [{ id: anchorId }] } : {}),
+      ...(isInitialClusterFit
+        ? { nodes: initialFitNodes.map((nodeId) => ({ id: nodeId })) }
+        : anchorId
+          ? { nodes: [{ id: anchorId }] }
+          : {}),
       padding: isMobileViewport(size) ? 0.32 : 0.5,
       maxZoom: 1.5,
     };
@@ -176,7 +198,7 @@ export default function SkillTreeCanvas({
     const fitCompleted = await instance.fitView(fitOptions);
     if (!fitCompleted) return false;
 
-    if (!isMobileViewport(size) || !anchorId) return true;
+    if (isInitialClusterFit || !isMobileViewport(size) || !anchorId) return true;
 
     const fittedNodes = instance.getNodes();
     const anchorNode = fittedNodes.find((node) => node.id === anchorId);
@@ -196,7 +218,7 @@ export default function SkillTreeCanvas({
       await instance.setViewport(adjustedViewport);
     }
     return true;
-  }, []);
+  }, [initialFitNodeIds]);
 
   const scheduleViewportFit = useCallback(
     (size: ViewportSize) => {
@@ -266,6 +288,14 @@ export default function SkillTreeCanvas({
   }, [generatedEdges, setEdges]);
 
   useEffect(() => {
+    if (!isLandingMode || nodes.length === 0) return;
+    const measuredSize = viewportSizeRef.current;
+    if (measuredSize && !lastFittedViewportSizeRef.current) {
+      scheduleViewportFit(measuredSize);
+    }
+  }, [isLandingMode, nodes.length, scheduleViewportFit]);
+
+  useEffect(() => {
     const element = canvasRef.current;
     if (!element) return;
 
@@ -303,7 +333,11 @@ export default function SkillTreeCanvas({
   );
 
   return (
-    <div ref={canvasRef} className="skill-tree-canvas">
+    <div
+      ref={canvasRef}
+      className="skill-tree-canvas"
+      data-interaction-mode={interactionMode}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -312,7 +346,15 @@ export default function SkillTreeCanvas({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={(_, node) => onSelectNode(node.id)}
-        fitView
+        nodesDraggable={!isLandingPreview && !isPassive}
+        nodesConnectable={!isLandingPreview && !isPassive}
+        panOnDrag={!isPassive}
+        zoomOnScroll={interactionMode === 'default'}
+        zoomOnPinch={!isPassive}
+        zoomOnDoubleClick={interactionMode === 'default'}
+        zoomActivationKeyCode={isLandingPreview ? 'Control' : undefined}
+        preventScrolling={interactionMode === 'default'}
+        fitView={!isLandingMode}
         fitViewOptions={{
           nodes: snapshot.current_node_id ? [{ id: snapshot.current_node_id }] : [],
           padding: 0.5,
@@ -323,8 +365,11 @@ export default function SkillTreeCanvas({
         defaultEdgeOptions={{ type: 'smoothstep' }}
         proOptions={{ hideAttribution: true }}
       >
-        <Background color="#1e293b" gap={20} />
-        <Controls className="skill-tree-canvas__controls !rounded-lg !border-slate-700 !bg-slate-900" />
+        <Background color={isLightSurface ? '#8ccfc5' : '#1e293b'} gap={20} />
+        <Controls
+          showInteractive={interactionMode === 'default'}
+          className="skill-tree-canvas__controls !rounded-lg !border-slate-700 !bg-slate-900"
+        />
         <MiniMap
           nodeColor={(node) => {
             if (displayMode === 'showcase') return '#22d3ee';
@@ -335,7 +380,7 @@ export default function SkillTreeCanvas({
             if (status === 'in_progress') return '#fbbf24';
             return '#334155';
           }}
-          maskColor="rgba(2, 6, 23, 0.78)"
+          maskColor={isLightSurface ? 'rgba(231, 248, 244, 0.84)' : 'rgba(2, 6, 23, 0.78)'}
           className="skill-tree-canvas__minimap !border-slate-700 !bg-slate-950"
         />
       </ReactFlow>
