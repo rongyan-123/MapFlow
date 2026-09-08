@@ -37,161 +37,176 @@ export default function WorkbenchHome({
     !hasPersonalTrees;
 
   return (
-    <main
-      data-testid="workbench-home"
-      className="min-h-0 flex-1 overflow-y-auto bg-[#f6f4ee] text-slate-900"
-    >
-      <div className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+    <main data-testid="workbench-home" className="mapflow-workbench">
+      <div className="mapflow-workbench__inner">
+        <header className="mapflow-workbench__heading">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-700">MapFlow / {mode === 'public' ? '探索' : '我的学习'}</p>
-            <h1 className="mt-3 text-3xl font-black tracking-[-0.05em] text-slate-950 sm:text-5xl">{mode === 'public' ? '今天想弄懂什么？' : '继续你的学习'}</h1>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">{mode === 'public' ? '从一个具体问题开始。先了解方向，再决定要不要打开整张地图。' : '从你已经留下的节点继续，或者选择一个新的方向。'}</p>
+            <h1 className="mapflow-workbench__title">
+              {mode === 'public' ? '选择一个学习方向' : '我的学习地图'}
+            </h1>
+            <p className="mapflow-workbench__lede">
+              {mode === 'public'
+                ? '从一个具体领域开始，先看清它有哪些关系。'
+                : '在地图里继续探索，记录新的理解。'}
+            </p>
           </div>
           <button
             type="button"
             onClick={onCreateTree}
             disabled={createTreeDisabled}
-            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-teal-700 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
+            className="mapflow-console-secondary-button"
           >
             {createTreeLabel}
           </button>
-        </div>
+        </header>
 
         {mode === 'personal' && personalLibraryPending && (
-          <section
-            role="status"
-            className="mt-10 rounded-[1.5rem] border border-slate-200 bg-white/70 p-6 sm:p-8"
-          >
-            <p className="text-sm font-semibold text-slate-700">正在读取个人学习树…</p>
+          <section role="status" className="mapflow-status-card">
+            <p>正在读取学习地图…</p>
           </section>
         )}
 
         {mode === 'personal' && personalLibraryError && (
-          <section
-            role="alert"
-            className="mt-10 rounded-[1.5rem] border border-rose-200 bg-rose-50/80 p-6 sm:p-8"
-          >
-            <p className="text-sm font-semibold text-rose-800">{personalLibraryError}</p>
+          <section role="alert" className="mapflow-status-card mapflow-status-card--error">
+            <p>{personalLibraryError}</p>
             {onRetryPersonalLibrary && (
               <button
                 type="button"
                 onClick={onRetryPersonalLibrary}
-                className="mt-4 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
+                className="mapflow-console-secondary-button mapflow-console-secondary-button--dark"
               >
-                重新读取个人学习树
+                重新加载
               </button>
             )}
           </section>
         )}
 
-        {showPersonalEmptyState && (
-          <section className="mt-10 rounded-[1.5rem] border border-dashed border-slate-300 bg-white/70 p-6 sm:p-8">
-            <h2 className="text-xl font-bold text-slate-900">还没有自己的学习树</h2>
-            <p className="mt-3 max-w-xl text-sm leading-7 text-slate-600">先从下面的公共方向选一棵，加入后才会记录你的节点进度。</p>
-          </section>
-        )}
-
-        {mode === 'personal' && hasPersonalTrees && (
-          <section className="mt-10" aria-labelledby="personal-trees-title">
-            <div className="flex items-center justify-between gap-3">
-              <h2 id="personal-trees-title" className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">你的学习进度</h2>
-              <span className="text-xs text-slate-500">真实保存的节点记录</span>
+        {hasPersonalTrees && (
+          <section
+            className="mapflow-continue-section"
+            aria-labelledby="continue-learning-title"
+          >
+            <div className="mapflow-section-heading">
+              <h2 id="continue-learning-title">继续学习</h2>
+              <span>已保存的真实进度</span>
             </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="mapflow-continue-list">
               {personalEntries.map((entry) => (
-                <PersonalTreeCard key={entry.library_entry_id} entry={entry} onContinue={onContinuePersonalTree} />
+                <PersonalTreeRow
+                  key={entry.library_entry_id}
+                  entry={entry}
+                  onContinue={onContinuePersonalTree}
+                />
               ))}
             </div>
           </section>
         )}
 
-        {mode === 'public' && hasPersonalTrees && (
-          <section className="mt-10 rounded-[1.25rem] border border-slate-200 bg-white/70 p-5 sm:p-6" aria-labelledby="continue-learning-title">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 id="continue-learning-title" className="font-bold text-slate-900">已有一棵树？</h2>
-                <p className="mt-1 text-sm text-slate-600">从已保存的节点进度继续。</p>
-                <p className="mt-2 text-xs font-semibold text-emerald-700">
-                  {personalEntries[0].completed_nodes} / {personalEntries[0].tree.total_nodes} 个节点已完成
-                </p>
-              </div>
-              <button
-                type="button"
-                aria-label={`继续探索 ${personalEntries[0].tree.title}`}
-                onClick={() => onContinuePersonalTree(personalEntries[0].library_entry_id)}
-                className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
-              >
-                继续探索
-              </button>
-            </div>
+        {showPersonalEmptyState && (
+          <section className="mapflow-empty-state">
+            <h2>还没有自己的学习地图</h2>
+            <p>从下面选一个方向，加入后记录你的进度。</p>
           </section>
         )}
 
         {(mode === 'public' || showPersonalEmptyState) && (
-          <section className="mt-10" aria-labelledby="public-directions-title">
-            <div className="flex items-center justify-between gap-3">
-              <h2 id="public-directions-title" className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">选择一个方向</h2>
-              <span className="text-xs text-slate-500">先看简介，再决定下一步</span>
+          <section className="mapflow-directions-section" aria-labelledby="public-directions-title">
+            <div className="mapflow-section-heading">
+              <h2 id="public-directions-title">学习方向</h2>
+              <span>先看简介，再决定下一步</span>
             </div>
-            <div className="mt-4 grid gap-5 md:grid-cols-2">
-              {publicTrees.map((tree, index) => (
-                <PublicTreeCard key={tree.id} tree={tree} index={index} onOpen={onOpenPublicTree} />
-              ))}
-            </div>
+            {publicTrees.length > 0 ? (
+              <div className="mapflow-direction-grid">
+                {publicTrees.map((tree) => (
+                  <PublicTreeCard
+                    key={tree.id}
+                    tree={tree}
+                    onOpen={onOpenPublicTree}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="mapflow-empty-state mapflow-empty-state--compact">
+                暂时没有可探索的方向。
+              </p>
+            )}
           </section>
         )}
-
       </div>
     </main>
   );
 }
 
-function PublicTreeCard({ tree, index, onOpen }: { tree: SkillTree; index: number; onOpen: (treeId: string) => void }) {
+function PublicTreeCard({
+  tree,
+  onOpen,
+}: {
+  tree: SkillTree;
+  onOpen: (treeId: string) => void;
+}) {
   const guide = getTreeGuide(tree);
+
   return (
-    <article className="group rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-[0_20px_55px_-42px_rgba(15,23,42,0.6)] transition hover:-translate-y-0.5 hover:border-teal-700/45 hover:shadow-[0_24px_70px_-42px_rgba(15,118,110,0.6)] sm:p-7">
-      <div className="flex items-start justify-between gap-4">
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#e2f1ed] text-sm font-bold text-teal-800">0{index + 1}</span>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">{tree.total_nodes} 个节点</span>
+    <article className="mapflow-direction-card">
+      <div className="mapflow-direction-card__topline">
+        <h2>{guide.displayTitle}</h2>
+        <span>{tree.total_nodes} 个知识点</span>
       </div>
-      <p className="mt-8 text-xs font-bold uppercase tracking-[0.18em] text-teal-700">{guide.eyebrow}</p>
-      <h2 className="mt-3 text-2xl font-black tracking-[-0.04em] text-slate-950">{guide.displayTitle}</h2>
-      <p className="mt-4 text-sm leading-7 text-slate-600">{guide.audience}</p>
-      <p className="mt-5 rounded-xl bg-[#f4f7f4] px-4 py-3 text-sm font-semibold leading-6 text-slate-800">{guide.question}</p>
+      <p className="mapflow-direction-card__audience">{guide.audience}</p>
       <button
         type="button"
         aria-label={`查看 ${tree.title} 简介`}
         onClick={() => onOpen(tree.id)}
-        className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-teal-700/30 bg-teal-50 px-4 py-2.5 text-sm font-bold text-teal-900 transition hover:border-teal-700 hover:bg-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
+        className="mapflow-direction-card__action"
       >
-        看看这个方向
-        <span className="ml-2" aria-hidden="true">→</span>
+        查看方向
+        <span aria-hidden="true">→</span>
       </button>
     </article>
   );
 }
 
-function PersonalTreeCard({ entry, onContinue }: { entry: PersonalLibraryEntry; onContinue: (libraryEntryId: string) => void }) {
+function PersonalTreeRow({
+  entry,
+  onContinue,
+}: {
+  entry: PersonalLibraryEntry;
+  onContinue: (libraryEntryId: string) => void;
+}) {
   const guide = getTreeGuide(entry.tree);
+  const totalNodes = Math.max(entry.tree.total_nodes, 0);
+  const completedNodes = Math.min(Math.max(entry.completed_nodes, 0), totalNodes);
+  const progress = totalNodes > 0 ? (completedNodes / totalNodes) * 100 : 0;
+
   return (
-    <article className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-[0_20px_55px_-42px_rgba(15,23,42,0.6)] sm:p-7">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-700">我的学习树</p>
-          <h3 className="mt-3 text-xl font-black tracking-[-0.035em] text-slate-950">{guide.displayTitle}</h3>
+    <article className="mapflow-continue-row">
+      <div className="mapflow-continue-row__content">
+        <h3>{guide.displayTitle}</h3>
+        <p>{entry.tree.topic}</p>
+        <div className="mapflow-progress-line">
+          <div
+            className="mapflow-progress-line__track"
+            role="progressbar"
+            aria-label={`${guide.displayTitle} 学习进度`}
+            aria-valuemin={0}
+            aria-valuemax={totalNodes}
+            aria-valuenow={completedNodes}
+          >
+            <span style={{ width: `${progress}%` }} />
+          </div>
+          <span>
+            {entry.completed_nodes} / {entry.tree.total_nodes} 个节点已完成
+          </span>
         </div>
-        <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{entry.completed_nodes} / {entry.tree.total_nodes} 个节点已完成</span>
       </div>
-      <p className="mt-5 text-sm leading-7 text-slate-600">你的完成记录会保存在当前账号里，随时可以从这里继续。</p>
       <button
         type="button"
         aria-label={`继续探索 ${entry.tree.title}`}
         onClick={() => onContinue(entry.library_entry_id)}
-        className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 focus-visible:ring-offset-2"
+        className="mapflow-continue-row__action"
       >
         继续探索
-        <span className="ml-2" aria-hidden="true">→</span>
+        <span aria-hidden="true">→</span>
       </button>
     </article>
   );

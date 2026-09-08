@@ -23,6 +23,7 @@ import LandingPage from './features/landing/LandingPage';
 import TreeIntroduction from './features/learning-entry/TreeIntroduction';
 import WorkbenchHome from './features/learning-entry/WorkbenchHome';
 import { findRecommendedNodeId, getTreeGuide } from './features/learning-entry/learningEntry';
+import './features/learning-entry/console.css';
 import MobileDrawer from './features/navigation/MobileDrawer';
 import ThemeSwitcher, { ThemeInitializer } from './features/theme/ThemeSwitcher';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
@@ -748,12 +749,15 @@ function ConsoleApp() {
   const selectedPersonalEntry = personalLibrary.data?.entries.find(
     (entry) => entry.library_entry_id === selectedLibraryEntryId,
   );
+  const activeTree =
+    activeGraph?.tree ??
+    (view === 'public' ? selectedPublicTree : selectedPersonalEntry?.tree) ??
+    null;
+  const activeAccessibleTitle = activeTree?.title ?? 'MapFlow 技能树';
   const activeTitle =
-    consoleMode === 'home'
-      ? 'MapFlow 工作台'
-      : activeGraph?.tree.title ??
-        (view === 'public' ? selectedPublicTree?.title : selectedPersonalEntry?.tree.title) ??
-        'MapFlow 技能树';
+    consoleMode === 'map' && activeTree
+      ? getTreeGuide(activeTree).displayTitle
+      : 'MapFlow';
   const isDarkHeader = consoleMode === 'map';
   const treePending =
     consoleMode !== 'map'
@@ -765,20 +769,10 @@ function ConsoleApp() {
   const retryTree = view === 'public' ? publicTree.refetch : personalTree.refetch;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
+    <div className="mapflow-console flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
       <ThemeInitializer />
-      <header className={`relative z-20 flex min-h-16 shrink-0 items-center justify-between gap-3 border-b px-4 py-2 sm:px-5 max-lg:pt-[max(0.5rem,env(safe-area-inset-top))] ${isDarkHeader ? 'border-slate-800 bg-slate-950/95 text-slate-100' : 'border-[#dce7e1] bg-[#f7f5ef] text-slate-950'}`}>
+      <header className={`mapflow-console-header relative z-20 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2 sm:px-5 max-lg:pt-[max(0.5rem,env(safe-area-inset-top))] ${isDarkHeader ? 'border-slate-800 bg-slate-950/95 text-slate-100' : 'border-[#dbe6e2] bg-[#f7faf9] text-slate-950'}`}>
         <div className="flex min-w-0 items-center gap-2">
-          {consoleMode === 'introduction' && (
-            <button
-              type="button"
-              aria-label="返回工作台"
-              onClick={returnToWorkbench}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-cyan-400/60 hover:text-white"
-            >
-              ←
-            </button>
-          )}
           {(consoleMode === 'map' || consoleMode === 'home') && mobileView === 'list' && (
             <button
               type="button"
@@ -800,7 +794,11 @@ function ConsoleApp() {
             </button>
           )}
           <div className="min-w-0">
-            <h1 className="truncate text-base font-bold tracking-tight sm:text-lg">
+            <h1
+              className="truncate text-base font-bold tracking-tight sm:text-lg"
+              aria-label={consoleMode === 'map' ? activeAccessibleTitle : 'MapFlow'}
+              title={consoleMode === 'map' ? activeAccessibleTitle : 'MapFlow'}
+            >
               {activeTitle}
             </h1>
             <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">
@@ -808,13 +806,15 @@ function ConsoleApp() {
                 ? view === 'public'
                   ? '从一个具体问题开始，先选一个方向'
                   : '继续已保存的节点，或创建一张自己的地图'
+                : consoleMode === 'introduction'
+                ? '选择一个方向，查看它的学习地图'
                 : view === 'public'
                 ? '公共示例树 · 全亮预览，不代表你的学习进度'
                 : '我的学习树 · 进度仅保存在当前账号'}
             </p>
           </div>
         </div>
-        <nav className={`hidden shrink-0 items-center gap-1 rounded-xl border p-1 text-xs lg:flex ${isDarkHeader ? 'border-slate-800 bg-slate-900/80' : 'border-slate-300 bg-white/70'}`}>
+        <nav className={`mapflow-console-nav order-3 flex basis-full shrink-0 items-center gap-1 rounded-xl border p-1 text-xs lg:order-none lg:basis-auto ${isDarkHeader ? 'border-slate-800 bg-slate-900/80' : 'border-slate-300 bg-white/70'}`}>
           <ViewButton
             tone={isDarkHeader ? 'dark' : 'light'}
             active={view === 'public'}
@@ -915,11 +915,37 @@ function ConsoleApp() {
               </div>
             )}
           </div>
-          <div className="hidden lg:block">
+          <div
+            className={`mapflow-console-identity ${
+              session ? 'mapflow-console-identity--authenticated' : ''
+            }`}
+          >
             <IdentityAccess tone={isDarkHeader ? 'dark' : 'light'} onRequestLogout={requestLogout} />
           </div>
         </div>
       </header>
+
+      {consoleMode === 'map' && view === 'public' && selectedPublicTreeId && (
+        <div
+          className="mapflow-map-mobile-action-bar"
+          data-testid="map-action-bar"
+        >
+          <span>可直接浏览</span>
+          <button
+            type="button"
+            disabled={addTree.isPending}
+            onClick={joinSelectedTree}
+          >
+            {addTree.isPending ? '正在加入…' : '加入我的学习'}
+          </button>
+          {addTree.error && (
+            <MutationError
+              error={addTree.error}
+              className="mapflow-map-action-bar__error"
+            />
+          )}
+        </div>
+      )}
 
       {consoleMode !== 'map' ? (
         consoleMode === 'introduction' && selectedPublicTree ? (
@@ -1095,17 +1121,6 @@ function ConsoleApp() {
               </div>
             )}
 
-          {view === 'public' && selectedPublicTreeId && (
-            <button
-              type="button"
-              disabled={addTree.isPending}
-              onClick={joinSelectedTree}
-              className="mt-4 w-full rounded-xl bg-cyan-300 px-3 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-wait disabled:opacity-60"
-            >
-              {addTree.isPending ? '正在加入…' : '加入我的学习'}
-            </button>
-          )}
-          {addTree.error && <MutationError error={addTree.error} />}
           {completionMutation.error && <MutationError error={completionMutation.error} />}
         </aside>
 
@@ -1143,7 +1158,7 @@ function ConsoleApp() {
           )}
         </section>
 
-        {snapshot ? (
+        {snapshot && selectedNodeId ? (
           <div
             data-testid="mobile-detail"
             className={`${
@@ -1185,7 +1200,7 @@ function ConsoleApp() {
               </button>
             )}
           </div>
-        ) : (
+        ) : mobileView === 'detail' && (treePending || treeError) ? (
           <aside
             data-testid="mobile-detail"
             className={`${
@@ -1204,7 +1219,7 @@ function ConsoleApp() {
               '选择并加载技能树后，可在这里查看节点详情。'
             )}
           </aside>
-        )}
+        ) : null}
 
         {snapshot && !nodeDetailOpen && !chatOpen && (
           <button
@@ -1711,9 +1726,18 @@ function SidebarMessage({ children }: { children: string }) {
   );
 }
 
-function MutationError({ error }: { error: Error }) {
+function MutationError({
+  error,
+  className,
+}: {
+  error: Error;
+  className?: string;
+}) {
   return (
-    <p role="alert" className="mt-3 text-xs leading-5 text-rose-300">
+    <p
+      role="alert"
+      className={`text-xs leading-5 text-rose-300 ${className ?? 'mt-3'}`}
+    >
       {error.message}
     </p>
   );

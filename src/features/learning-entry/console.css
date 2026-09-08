@@ -1,0 +1,591 @@
+/* Shared light console surfaces. All selectors are prefixed so the marketing page keeps its own visual system. */
+.mapflow-console-header {
+  row-gap: 8px;
+}
+
+.mapflow-console-nav {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mapflow-console-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.mapflow-console-identity {
+  display: block;
+}
+
+.mapflow-workbench,
+.mapflow-introduction {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  background: #f7faf9;
+  color: #1f2937;
+}
+
+.mapflow-workbench__inner,
+.mapflow-introduction__inner {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: 32px 24px 56px;
+}
+
+.mapflow-workbench__heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.mapflow-workbench__title {
+  margin: 0;
+  color: #17211f;
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.mapflow-workbench__lede {
+  max-width: 38rem;
+  margin: 10px 0 0;
+  color: #52615e;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.mapflow-console-primary-button,
+.mapflow-console-secondary-button,
+.mapflow-back-link,
+.mapflow-direction-card__action,
+.mapflow-continue-row__action {
+  min-height: 44px;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 650;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.mapflow-console-primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #12665d;
+  background: #12665d;
+  padding: 10px 16px;
+  color: #fff;
+}
+
+.mapflow-console-primary-button:hover {
+  border-color: #0e544d;
+  background: #0e544d;
+}
+
+.mapflow-console-secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cbd8d4;
+  background: #fff;
+  padding: 10px 16px;
+  color: #30413d;
+}
+
+.mapflow-console-secondary-button:hover {
+  border-color: #12665d;
+  color: #12665d;
+}
+
+.mapflow-console-secondary-button--dark {
+  border-color: #28403b;
+  background: #1f302d;
+  color: #f4faf8;
+}
+
+.mapflow-console-secondary-button:disabled,
+.mapflow-console-primary-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.mapflow-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mapflow-section-heading h2 {
+  margin: 0;
+  color: #263632;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.mapflow-section-heading span {
+  color: #71807b;
+  font-size: 0.75rem;
+}
+
+.mapflow-status-card,
+.mapflow-empty-state {
+  margin-top: 24px;
+  border: 1px solid #dbe6e2;
+  border-radius: 14px;
+  background: #fff;
+  padding: 18px;
+  color: #53635e;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.mapflow-status-card p,
+.mapflow-empty-state p {
+  margin: 0;
+}
+
+.mapflow-status-card--error {
+  border-color: #e8c8c5;
+  background: #fffaf9;
+  color: #944844;
+}
+
+.mapflow-status-card--error .mapflow-console-secondary-button {
+  margin-top: 14px;
+}
+
+.mapflow-empty-state h2 {
+  margin: 0;
+  color: #25332f;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.mapflow-empty-state p {
+  margin-top: 6px;
+}
+
+.mapflow-empty-state--compact {
+  margin-top: 14px;
+}
+
+.mapflow-continue-section,
+.mapflow-directions-section {
+  margin-top: 32px;
+}
+
+.mapflow-continue-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.mapflow-continue-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border: 1px solid #dbe6e2;
+  border-radius: 14px;
+  background: #fff;
+  padding: 14px 16px;
+}
+
+.mapflow-continue-row__content {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.mapflow-continue-row h3 {
+  margin: 0;
+  overflow: hidden;
+  color: #1e2c28;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mapflow-continue-row__content > p {
+  margin: 3px 0 0;
+  color: #70807a;
+  font-size: 0.75rem;
+}
+
+.mapflow-progress-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  color: #687873;
+  font-size: 0.75rem;
+}
+
+.mapflow-progress-line__track {
+  width: min(18rem, 42vw);
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e6efec;
+}
+
+.mapflow-progress-line__track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #227d70;
+}
+
+.mapflow-continue-row__action {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #cadbd5;
+  background: #f8fcfa;
+  padding: 10px 14px;
+  color: #17675d;
+}
+
+.mapflow-continue-row__action:hover {
+  border-color: #227d70;
+  background: #edf8f4;
+}
+
+.mapflow-direction-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.mapflow-direction-card {
+  display: flex;
+  min-height: 176px;
+  flex-direction: column;
+  border: 1px solid #dbe6e2;
+  border-radius: 14px;
+  background: #fff;
+  padding: 18px;
+}
+
+.mapflow-direction-card__topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mapflow-direction-card h2 {
+  margin: 0;
+  color: #1e2c28;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+}
+
+.mapflow-direction-card__topline span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #f0f6f3;
+  padding: 5px 8px;
+  color: #55706a;
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+
+.mapflow-direction-card__audience {
+  margin: 12px 0 0;
+  color: #52615e;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.mapflow-direction-card__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-top: auto;
+  border: 1px solid #cadbd5;
+  background: #f8fcfa;
+  padding: 9px 12px;
+  color: #17675d;
+  text-align: left;
+}
+
+.mapflow-direction-card__action:hover {
+  border-color: #227d70;
+  background: #edf8f4;
+}
+
+.mapflow-introduction__inner {
+  max-width: 860px;
+  padding-top: 24px;
+}
+
+.mapflow-back-link {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #cbd8d4;
+  background: #fff;
+  padding: 10px 14px;
+  color: #52615e;
+}
+
+.mapflow-back-link:hover {
+  border-color: #227d70;
+  color: #17675d;
+}
+
+.mapflow-introduction__heading {
+  margin-top: 28px;
+}
+
+.mapflow-introduction__heading h1 {
+  margin: 0;
+  color: #17211f;
+  font-size: clamp(1.5rem, 3.3vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+}
+
+.mapflow-introduction__heading p {
+  max-width: 48rem;
+  margin: 12px 0 0;
+  color: #52615e;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+}
+
+.mapflow-introduction__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 28px;
+  border-top: 1px solid #dbe6e2;
+  border-bottom: 1px solid #dbe6e2;
+  padding: 18px 0;
+}
+
+.mapflow-info-block h2,
+.mapflow-recommended__heading p {
+  margin: 0;
+  color: #71807b;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.mapflow-info-block p {
+  margin: 7px 0 0;
+  color: #30413d;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.mapflow-recommended {
+  margin-top: 28px;
+  border: 1px solid #dbe6e2;
+  border-radius: 14px;
+  background: #fff;
+  padding: 20px;
+}
+
+.mapflow-recommended__heading h2 {
+  margin: 7px 0 0;
+  color: #1e2c28;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.mapflow-recommended__question {
+  margin: 14px 0 0;
+  border-left: 3px solid #227d70;
+  background: #f1f8f5;
+  padding: 10px 12px;
+  color: #1f4f48;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.mapflow-introduction__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.mapflow-introduction__actions > button {
+  flex: 1 1 0;
+}
+
+.mapflow-recommended__note {
+  margin: 12px 0 0;
+  color: #71807b;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.mapflow-map-mobile-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #24313b;
+  background: #0b1118;
+  padding: 8px 12px;
+  color: #aab7c4;
+  font-size: 0.75rem;
+}
+
+.mapflow-map-mobile-action-bar button {
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(94, 234, 212, 0.5);
+  background: rgba(20, 115, 105, 0.2);
+  padding: 8px 12px;
+  color: #b9f2e7;
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+
+.mapflow-map-action-bar__error {
+  flex-basis: 100%;
+  margin: 0;
+  color: #fda4af;
+}
+
+/* The map keeps its dark canvas, while its directory stays a quiet compact list. */
+.mapflow-console .mapflow-tree-sidebar {
+  background: #0b1118;
+}
+
+.mapflow-console .mapflow-tree-choice {
+  min-height: 0;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.mapflow-console .mapflow-tree-choice > button {
+  padding: 10px 11px;
+}
+
+@media (max-width: 1023px) {
+  .mapflow-console-header {
+    align-items: center;
+    padding-inline: 12px;
+  }
+
+  .mapflow-console-header > :first-child {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+
+  .mapflow-console-header > :last-child {
+    flex: 0 0 auto;
+  }
+
+  .mapflow-console-nav {
+    width: 100%;
+  }
+
+  .mapflow-console-nav > button {
+    min-height: 40px;
+    flex: 1 1 0;
+    white-space: nowrap;
+  }
+
+  .mapflow-console-identity {
+    max-width: min(42vw, 12rem);
+  }
+
+  .mapflow-console-identity--authenticated {
+    display: none;
+  }
+
+  .mapflow-console-identity > * {
+    max-width: 100%;
+  }
+
+  .mapflow-workbench__inner,
+  .mapflow-introduction__inner {
+    padding: 24px 16px 40px;
+  }
+
+  .mapflow-workbench__heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .mapflow-workbench__heading .mapflow-console-secondary-button {
+    align-self: flex-start;
+  }
+
+  .mapflow-continue-section,
+  .mapflow-directions-section {
+    margin-top: 24px;
+  }
+
+  .mapflow-continue-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .mapflow-continue-row__action {
+    width: 100%;
+  }
+
+  .mapflow-direction-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .mapflow-direction-card {
+    min-height: 160px;
+    padding: 16px;
+  }
+
+  .mapflow-introduction__heading {
+    margin-top: 22px;
+  }
+
+  .mapflow-introduction__facts {
+    gap: 14px;
+    margin-top: 22px;
+    padding: 15px 0;
+  }
+
+  .mapflow-recommended {
+    margin-top: 22px;
+    padding: 16px;
+  }
+
+  .mapflow-introduction__actions {
+    flex-direction: column;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mapflow-console-primary-button,
+  .mapflow-console-secondary-button,
+  .mapflow-back-link,
+  .mapflow-direction-card__action,
+  .mapflow-continue-row__action {
+    transition-duration: 0.01ms !important;
+  }
+}

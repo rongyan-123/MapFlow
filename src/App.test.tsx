@@ -287,7 +287,7 @@ describe('MapFlow tree library', () => {
   it('工作台首次打开只显示方向卡，不自动请求或渲染默认地图', async () => {
     renderApp('/console');
 
-    expect(await screen.findByRole('heading', { name: '今天想弄懂什么？' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '选择一个学习方向' })).toBeInTheDocument();
     expect(screen.getByTestId('workbench-home')).toBeInTheDocument();
     expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
     expect(treeApi.fetchPublicTree).not.toHaveBeenCalled();
@@ -348,6 +348,37 @@ describe('MapFlow tree library', () => {
     expect(await screen.findByTestId('react-flow-boundary')).toBeInTheDocument();
     expect(screen.queryByTestId('tree-introduction')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '与这棵树聊天' })).not.toBeInTheDocument();
+  });
+
+  it('地图尚未选中节点时不渲染空的详情面板', async () => {
+    const user = userEvent.setup();
+    renderApp('/console');
+
+    await user.click(
+      await screen.findByRole('button', { name: /查看 NestJS 完整学习树 简介/ }),
+    );
+    await user.click(screen.getByRole('button', { name: '先看地图' }));
+    await screen.findByTestId('react-flow-boundary');
+
+    expect(screen.queryByTestId('mobile-detail')).not.toBeInTheDocument();
+  });
+
+  it('公共地图加入失败时把错误显示在可见的地图操作条', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.addTreeToPersonalLibrary.mockRejectedValue(new Error('加入失败'));
+    renderApp('/console');
+
+    await user.click(
+      await screen.findByRole('button', { name: /查看 NestJS 完整学习树 简介/ }),
+    );
+    await user.click(screen.getByRole('button', { name: '先看地图' }));
+    await screen.findByTestId('react-flow-boundary');
+    await user.click(screen.getByRole('button', { name: '加入我的学习' }));
+
+    const actionBar = await screen.findByTestId('map-action-bar');
+    expect(within(actionBar).getByRole('alert')).toHaveTextContent('加入失败');
+    expect(within(actionBar).getByRole('alert').closest('[data-testid="mobile-list"]')).toBeNull();
   });
 
   it('推荐问题先经过登录，再自动加入个人树并填入聊天草稿', async () => {
@@ -430,7 +461,7 @@ describe('MapFlow tree library', () => {
     await screen.findByRole('textbox', { name: '输入问题' });
     expect(screen.getByTestId('knowledge-chat-panel')).not.toHaveAttribute('hidden');
     expect(screen.getByTestId('knowledge-chat-panel')).not.toHaveClass('hidden');
-    expect(screen.getByTestId('mobile-detail')).toHaveClass('hidden');
+    expect(screen.queryByTestId('mobile-detail')).not.toBeInTheDocument();
   });
 
   it('延迟的加入响应在返回工作台后不会覆盖当前视图', async () => {
@@ -558,7 +589,7 @@ describe('MapFlow tree library', () => {
     await user.click(loginButtons[loginButtons.length - 1]);
 
     expect(treeApi.addTreeToPersonalLibrary).not.toHaveBeenCalled();
-    expect(await screen.findByRole('heading', { name: '今天想弄懂什么？' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '选择一个学习方向' })).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: '输入问题' })).not.toBeInTheDocument();
   });
 
@@ -566,7 +597,7 @@ describe('MapFlow tree library', () => {
     const user = userEvent.setup();
     renderApp('/console');
 
-    await screen.findByRole('heading', { name: '今天想弄懂什么？' });
+    await screen.findByRole('heading', { name: '选择一个学习方向' });
     expect(screen.queryByTestId('top-generate-tree')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '打开更多菜单' }));
 
@@ -581,7 +612,7 @@ describe('MapFlow tree library', () => {
     window.localStorage.setItem('mapflow.theme', 'light');
     renderApp('/console');
 
-    await screen.findByRole('heading', { name: '今天想弄懂什么？' });
+    await screen.findByRole('heading', { name: '选择一个学习方向' });
     expect(document.documentElement.dataset.mapflowTheme).toBe('light');
   });
 
@@ -599,7 +630,7 @@ describe('MapFlow tree library', () => {
     await user.click(screen.getByRole('button', { name: '进入工作台' }));
 
     expect(window.location.pathname).toBe('/console');
-    expect(await screen.findByRole('heading', { name: '今天想弄懂什么？' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '选择一个学习方向' })).toBeInTheDocument();
   });
 
   it('进入过控制台后再次访问根路径仍展示独立产品首页', async () => {
@@ -724,7 +755,7 @@ describe('MapFlow tree library', () => {
     const user = userEvent.setup();
     renderApp();
 
-    expect(await screen.findByRole('heading', { name: '今天想弄懂什么？' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '选择一个学习方向' })).toBeInTheDocument();
     await user.click(
       screen.getByRole('button', { name: '查看 Python Agent 完整学习树 简介' }),
     );
@@ -747,7 +778,7 @@ describe('MapFlow tree library', () => {
     await user.click(screen.getByRole('button', { name: '我的学习' }));
 
     expect(
-      await screen.findByText('还没有自己的学习树'),
+      await screen.findByText('还没有自己的学习地图'),
     ).toBeInTheDocument();
   });
 
@@ -760,8 +791,8 @@ describe('MapFlow tree library', () => {
     await screen.findByText(authenticated.account.playerId);
     await user.click(screen.getByRole('button', { name: '我的学习' }));
 
-    expect(await screen.findByText('正在读取个人学习树…')).toBeInTheDocument();
-    expect(screen.queryByText('还没有自己的学习树')).not.toBeInTheDocument();
+    expect(await screen.findByText('正在读取学习地图…')).toBeInTheDocument();
+    expect(screen.queryByText('还没有自己的学习地图')).not.toBeInTheDocument();
   });
 
   it('个人库读取失败时提供重试，而不是伪装成空库', async () => {
@@ -776,7 +807,7 @@ describe('MapFlow tree library', () => {
     await user.click(screen.getByRole('button', { name: '我的学习' }));
 
     expect(await screen.findByText('个人库读取失败')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '重新读取个人学习树' }));
+    await user.click(screen.getByRole('button', { name: '重新加载' }));
     expect(await screen.findByText(/0\s*\/\s*2 个节点已完成/)).toBeInTheDocument();
   });
 
@@ -815,7 +846,7 @@ describe('MapFlow tree library', () => {
     await user.click(screen.getByRole('button', { name: '我的学习' }));
 
     expect(
-      await screen.findByText('还没有自己的学习树'),
+      await screen.findByText('还没有自己的学习地图'),
     ).toBeInTheDocument();
     expect(screen.queryByText('0/2 已完成')).not.toBeInTheDocument();
     expect(treeApi.fetchPersonalLibrary).toHaveBeenCalledTimes(3);
@@ -1087,7 +1118,7 @@ describe('管理面板入口', () => {
       'page',
     );
     expect(
-      await screen.findByText('还没有自己的学习树'),
+      await screen.findByText('还没有自己的学习地图'),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('heading', { name: '管理面板' }),
@@ -1130,7 +1161,7 @@ describe('管理面板入口', () => {
 describe('手机端视图栈', () => {
   it('初始显示工作台：不自动请求或渲染地图、无返回按钮', async () => {
     renderApp();
-    await screen.findByRole('heading', { name: '今天想弄懂什么？' });
+    await screen.findByRole('heading', { name: '选择一个学习方向' });
 
     expect(screen.getByTestId('workbench-home')).toBeInTheDocument();
     expect(screen.queryByTestId('mobile-list')).not.toBeInTheDocument();
@@ -1431,7 +1462,7 @@ describe('手机端抽屉', () => {
       screen.queryByRole('dialog', { name: '功能菜单' }),
     ).not.toBeInTheDocument();
     expect(
-      await screen.findByText('还没有自己的学习树'),
+      await screen.findByText('还没有自己的学习地图'),
     ).toBeInTheDocument();
   });
 
