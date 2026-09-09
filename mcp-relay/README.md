@@ -7,7 +7,7 @@
 ## 一行命令(首次约 3 秒授权)
 
 ```bash
-npx @mapflow-publish/mcp
+npx -y @mapflow-publish/mcp
 ```
 
 首次运行自动打开浏览器 → 在 xxian.fun 授权页点「允许」(复用你的登录态)→
@@ -16,10 +16,18 @@ token 存入本机 `~/.mapflow/token`(权限 600)。之后每次运行静默直�
 ## 接入 Claude Code
 
 ```bash
-claude mcp add mapflow -- npx @mapflow-publish/mcp
+claude mcp add mapflow -- npx -y @mapflow-publish/mcp
 ```
 
 之后在 Claude Code 里直接说「读一下我的学习进度」「把安全相关的节点整理成块」即可。
+
+## 接入 Codex CLI
+
+```bash
+codex mcp add mapflow -- npx -y @mapflow-publish/mcp
+```
+
+运行 `npx` 只会启动本地 stdio relay；上面的 `codex mcp add` 或对应客户端的配置步骤才会把它注册到 Agent。
 
 ## 工具
 
@@ -27,10 +35,21 @@ claude mcp add mapflow -- npx @mapflow-publish/mcp
 |---|---|
 | `mapflow.get_progress` | 列出所有树 + 完成进度(含证据) |
 | `mapflow.get_tree` | 读一棵树全量:节点/边/块/完成度 |
+| `mapflow.create_tree` | 用 Agent 提供的完整图创建当前账户的私人树(不调用平台模型) |
 | `mapflow.apply_tree_mutation` | 提交一条编辑命令(add_node / add_edge / add_block / set_node_block 等) |
 | `mapflow.whoami` | 查看当前 token 身份与授权状态 |
 
 按语义把树重组成块的操作方法见 [BLOCKS.md](BLOCKS.md)。
+
+## 创建与排布一棵树
+
+先调用 `mapflow.create_tree` 一次提交完整图。请求包含 `tree` 元数据、`nodes`、`edges` 与账户范围内唯一的 `idempotencyKey`；节点的 `learningObjectives`、`keyConcepts`、`observableEvidence` 优先使用 `string[]`，兼容的 JSON 数组字符串也会被规范化。节点数量最多 500、边最多 2000，坐标必须是有限值且绝对值不超过 1,000,000，图必须无环且所有边端点存在。
+
+`tree.layoutMode` 必须明确填写 `auto` 或 `manual`。Agent 自己计算并提交坐标时使用 `manual`；让 MapFlow 按依赖关系排布时使用 `auto`。服务器不会根据坐标是否为零猜测意图。创建结果返回 `treeId`、`libraryEntryId`、`revision: 1` 与 `layoutMode`；当前前端没有稳定树深链，客户端应使用返回的库条目调用 `get_tree`，不要拼接未经确认的网站 URL。
+
+创建的树始终是当前账号的 `private`、`ai_generated`、`ready` 树。MCP token 不能创建或修改公共树，也不能读取或修改其他账号的库条目。相同账号和幂等键重试会返回同一结果；同一账号复用幂等键提交不同图会返回 `create.idempotency_conflict`。
+
+创建后通过 `mapflow.apply_tree_mutation` 继续编辑。使用最新 `get_tree` 返回的 `tree.revision`；`update_node` 支持有限的 `positionX`、`positionY` 和非负 `orderInLevel`，这些字段与其他节点编辑一起受 revision、幂等键和审计保护。切换排布策略使用 `update_tree` 的 `{ "layoutMode": "auto" | "manual" }`。
 
 ## 技术说明
 
@@ -40,7 +59,7 @@ claude mcp add mapflow -- npx @mapflow-publish/mcp
 
 - `MAPFLOW_SERVER_URL` — 服务器地址,默认 `https://xxian.fun`
 - `MAPFLOW_TOKEN_FILE` — token 文件路径,默认 `~/.mapflow/token`
-- `MAPFLOW_TOKEN_LABEL` — 授权页显示的用途名,默认 `npx @mapflow-publish/mcp`
+- `MAPFLOW_TOKEN_LABEL` — 授权页显示的用途名,默认 `npx -y @mapflow-publish/mcp`
 
 ## 重新授权 / 吊销
 
@@ -49,7 +68,7 @@ token 被吊销(HTTP 401 `auth.token_revoked`)后,relay 会自动清掉缓存 to
 
 ```bash
 rm ~/.mapflow/token
-npx @mapflow-publish/mcp
+npx -y @mapflow-publish/mcp
 ```
 
 服务器端吊销入口:运维 SQL 置 `revoked_at`(管理界面后续提供)。
