@@ -27,8 +27,8 @@ For a local checkout, use the host's documented local Skill discovery/install fl
 The currently verified public Skill source is the locked commit below:
 
 ~~~
-npx skills add https://github.com/rongyan-123/MapFlow/tree/988ddda9e345983644f8073bf0335269dcdfff3d/skills/mapflow --skill mapflow --agent codex
-npx skills add https://github.com/rongyan-123/MapFlow/tree/988ddda9e345983644f8073bf0335269dcdfff3d/skills/mapflow --skill mapflow --agent claude-code
+npx skills add https://github.com/rongyan-123/MapFlow/tree/eb40abe65ae279cb2ec72c1dddf56351bb52951f/skills/mapflow --skill mapflow --agent codex
+npx skills add https://github.com/rongyan-123/MapFlow/tree/eb40abe65ae279cb2ec72c1dddf56351bb52951f/skills/mapflow --skill mapflow --agent claude-code
 ~~~
 
 After mapflow is merged to the repository's default branch, the shorthand source is `rongyan-123/MapFlow`.

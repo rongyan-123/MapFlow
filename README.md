@@ -59,21 +59,21 @@ Skill 会引导确认学习方向和目标，并生成符合 MapFlow 数据结�
 
 skills/mapflow/ 面向 Codex 和 Claude Code 的在线接入工作流：它指导 Agent 通过 MapFlow MCP 读取账户进度、创建私人学习地图、补充节点和整理布局。它与 skill-tree-generator 分工不同，前者需要 MCP 连接后才会写入网站，后者只生成本地 SKILL_TREE.json。
 
-MCP 连接和 Skill 文件需要分别安装。连接器首次运行会引导浏览器完成 device authorization，不要把 token 粘贴到聊天中。Skill 已发布到公开分支，可从已验证的提交 URL 安装；MCP relay 包和 `create_tree` 新工具仍需对应的 server/relay 版本发布，不能把 Skill 已可安装当作 MCP 新能力已在生产可用。连接器包可用后，Codex 和 Claude Code 的命令分别是：
+MCP 连接和 Skill 文件需要分别安装。连接器首次运行会引导浏览器完成 device authorization，不要把 token 粘贴到聊天中。Skill 已发布到公开分支，可从已验证的提交 URL 安装。`@mapflow-publish/mcp` relay 包当前 npm latest 为 `0.1.0`，会按连接服务器的 `tools/list` 动态暴露能力；`create_tree` 是否可用以该清单为准，尚需对应 server 能力发布，不能把 Skill 已可安装当作 MCP 新能力已在生产可用。Codex 和 Claude Code 的命令分别是：
 
 ~~~text
 codex mcp add mapflow -- npx -y @mapflow-publish/mcp
 claude mcp add --transport stdio mapflow -- npx -y @mapflow-publish/mcp
 ~~~
 
-已验证的 Skill 锁定源（提交 `988ddda9e345983644f8073bf0335269dcdfff3d`）和安装命令是：
+已验证的 Skill 锁定源（提交 `eb40abe65ae279cb2ec72c1dddf56351bb52951f`）和安装命令是：
 
 ~~~text
-npx skills add https://github.com/rongyan-123/MapFlow/tree/988ddda9e345983644f8073bf0335269dcdfff3d/skills/mapflow --skill mapflow --agent codex
-npx skills add https://github.com/rongyan-123/MapFlow/tree/988ddda9e345983644f8073bf0335269dcdfff3d/skills/mapflow --skill mapflow --agent claude-code
+npx skills add https://github.com/rongyan-123/MapFlow/tree/eb40abe65ae279cb2ec72c1dddf56351bb52951f/skills/mapflow --skill mapflow --agent codex
+npx skills add https://github.com/rongyan-123/MapFlow/tree/eb40abe65ae279cb2ec72c1dddf56351bb52951f/skills/mapflow --skill mapflow --agent claude-code
 ~~~
 
-若未来将 Skill 合并到默认分支，简写命令才是：`npx skills add rongyan-123/MapFlow --skill mapflow --agent codex` 或 `--agent claude-code`。接入后，Agent 会先调用 MapFlow MCP 的 `mapflow.whoami`，再调用 `mapflow.get_progress` 选择 `libraryEntryId`；编辑会话开始时调用 `mapflow.get_tree` 读取 revision。若 `create_tree` 不在 `tools/list`，说明连接的 server/relay 尚未更新。
+若未来将 Skill 合并到默认分支，简写命令才是：`npx skills add rongyan-123/MapFlow --skill mapflow --agent codex` 或 `--agent claude-code`。接入后，Agent 会先调用 MapFlow MCP 的 `mapflow.whoami`，再调用 `mapflow.get_progress` 选择 `libraryEntryId`；编辑会话开始时调用 `mapflow.get_tree` 读取 revision。若 `create_tree` 不在 `tools/list`，说明连接的服务端尚未提供该能力。
 
 ## 仓库边界
 
