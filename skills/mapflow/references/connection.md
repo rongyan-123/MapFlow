@@ -24,7 +24,7 @@ If the command or package is unavailable, say that the MCP connection is not rea
 
 For a local checkout, use the host's documented local Skill discovery/install flow and point it at skills/mapflow/. Verify the Skill is discoverable in an isolated test directory when packaging it; do not write a user's global Agent configuration as part of that check.
 
-For the public release, use the current “使用 MapFlow 接入 Skill” section in the repository README. That section is the source of truth for the locked commit and the complete Codex/Claude Code `npx skills add` commands. This Skill reference intentionally does not duplicate a commit URL, so an installed Skill cannot direct the Agent to an older release.
+For the public release, use the current “使用 MapFlow 接入 Skill” section in the repository README. That section is the source of truth for the locked commit and the complete Codex/Claude Code installation commands. This Skill reference intentionally does not duplicate a commit URL, so an installed Skill cannot direct the Agent to an older release.
 
 If a remote install fails, check the requested repository revision and package discovery result before reporting success or asking the user to retry. The current repository publication status belongs in the project README and onboarding plan.
 
