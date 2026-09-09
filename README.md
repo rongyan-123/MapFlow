@@ -55,6 +55,26 @@ npm run dev
 
 Skill 会引导确认学习方向和目标，并生成符合 MapFlow 数据结构的技能树。
 
+## 使用 MapFlow 接入 Skill
+
+skills/mapflow/ 面向 Codex 和 Claude Code 的在线接入工作流：它指导 Agent 通过 MapFlow MCP 读取账户进度、创建私人学习地图、补充节点和整理布局。它与 skill-tree-generator 分工不同，前者需要 MCP 连接后才会写入网站，后者只生成本地 SKILL_TREE.json。
+
+MCP 连接和 Skill 文件需要分别安装。连接器首次运行会引导浏览器完成 device authorization，不要把 token 粘贴到聊天中。当前 relay 包尚未随本仓库提交到远端发布渠道；包可用后，Codex 和 Claude Code 的连接命令分别是：
+
+~~~text
+codex mcp add mapflow -- npx -y @mapflow-publish/mcp
+claude mcp add --transport stdio mapflow -- npx -y @mapflow-publish/mcp
+~~~
+
+计划中的 Skill 公共分发命令是：
+
+~~~text
+npx skills add rongyan-123/MapFlow --skill mapflow --agent codex
+npx skills add rongyan-123/MapFlow --skill mapflow --agent claude-code
+~~~
+
+在仓库尚未 push、远端尚未报告 mapflow Skill 之前，不要把这条命令描述为已经可安装。接入后，Agent 会先调用 MapFlow MCP 的 mapflow.whoami，再调用 mapflow.get_progress 选择 libraryEntryId；编辑会话开始时调用 mapflow.get_tree 读取 revision。
+
 ## 仓库边界
 
 - `MapFlow`：公开前端与生成 Skill；
