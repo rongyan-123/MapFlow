@@ -66,11 +66,11 @@ codex mcp add mapflow -- npx -y @mapflow-publish/mcp
 claude mcp add --transport stdio mapflow -- npx -y @mapflow-publish/mcp
 ~~~
 
-已验证的 Skill 锁定源（提交 `e4193ff33c9c3562fb6c30f3c66a7506affdff4a`）和安装命令是：
+已验证的 Skill 锁定源（提交 `017b5f96111fa73297e7603645681a7e7f4dc411`）和安装命令是：
 
 ~~~text
-npx skills add https://github.com/rongyan-123/MapFlow/tree/e4193ff33c9c3562fb6c30f3c66a7506affdff4a/skills/mapflow --skill mapflow --agent codex
-npx skills add https://github.com/rongyan-123/MapFlow/tree/e4193ff33c9c3562fb6c30f3c66a7506affdff4a/skills/mapflow --skill mapflow --agent claude-code
+npx skills add https://github.com/rongyan-123/MapFlow/tree/017b5f96111fa73297e7603645681a7e7f4dc411/skills/mapflow --skill mapflow --agent codex
+npx skills add https://github.com/rongyan-123/MapFlow/tree/017b5f96111fa73297e7603645681a7e7f4dc411/skills/mapflow --skill mapflow --agent claude-code
 ~~~
 
 若未来将 Skill 合并到默认分支，简写命令才是：`npx skills add rongyan-123/MapFlow --skill mapflow --agent codex` 或 `--agent claude-code`。接入后，Agent 会先调用 MapFlow MCP 的 `mapflow.whoami`，再调用 `mapflow.get_progress` 选择 `libraryEntryId`；编辑会话开始时调用 `mapflow.get_tree` 读取 revision。若 `create_tree` 不在 `tools/list`，说明连接的服务端尚未提供该能力。
