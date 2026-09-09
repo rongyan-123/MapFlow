@@ -108,23 +108,37 @@ describe('LandingPage', () => {
       name: '在自己的 Agent 中连接 MapFlow',
     });
     expect(dialog).toBeInTheDocument();
-    expect(within(dialog).getByTestId('mcp-guide-install-command')).toHaveTextContent(
-      'npx @mapflow-publish/mcp',
+    expect(within(dialog).getByRole('button', { name: 'Claude Code' })).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: '下一步' }));
+    expect(within(dialog).getByTestId('mcp-guide-install-command')).toHaveValue(
+      'codex mcp add mapflow -- npx -y @mapflow-publish/mcp',
     );
-    expect(
-      within(dialog).getByRole('heading', { name: '如果你使用 Claude Code' }),
-    ).toBeInTheDocument();
-    expect(within(dialog).getByText(/浏览器会打开 MapFlow 授权页/)).toBeInTheDocument();
-    expect(within(dialog).getByText('mapflow.get_progress')).toBeInTheDocument();
 
     await user.click(
-      within(dialog).getByRole('button', { name: '复制 npx 安装命令' }),
+      within(dialog).getByRole('button', { name: '复制 Codex 注册命令' }),
     );
-    expect(clipboardWrite).toHaveBeenCalledWith('npx @mapflow-publish/mcp');
+    expect(clipboardWrite).toHaveBeenCalledWith(
+      'codex mcp add mapflow -- npx -y @mapflow-publish/mcp',
+    );
     expect(within(dialog).getByText('已复制')).toBeInTheDocument();
 
+    await user.click(within(dialog).getByRole('button', { name: '下一步' }));
+    expect(within(dialog).getByText(/浏览器会打开 MapFlow 授权页/)).toBeInTheDocument();
+    expect(within(dialog).getAllByText('mapflow.get_progress')).not.toHaveLength(0);
+
+    await user.click(within(dialog).getByRole('button', { name: '下一步' }));
+    expect(
+      within(dialog).getByRole('heading', { name: '安装 Skill，从当前项目建立地图' }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByDisplayValue(
+        'npx skills add https://github.com/rongyan-123/MapFlow/tree/017b5f96111fa73297e7603645681a7e7f4dc411/skills/mapflow --skill mapflow --agent codex',
+      ),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByDisplayValue(/根据当前项目建立我的学习地图/)).toBeInTheDocument();
+
     await user.click(
-      within(dialog).getByRole('button', { name: '关闭 Agent 接入教程' }),
+      within(dialog).getByRole('button', { name: '完成' }),
     );
     expect(
       screen.queryByRole('dialog', { name: '在自己的 Agent 中连接 MapFlow' }),

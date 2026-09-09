@@ -225,6 +225,29 @@ describe('KnowledgeChatPanel', () => {
     expect(onCreditChanged).toHaveBeenCalledOnce();
   });
 
+  it('notifies the learning flow only after an answer succeeds', async () => {
+    const user = userEvent.setup();
+    const onMessageSent = vi.fn();
+    chatApi.sendKnowledgeChatMessageStream.mockResolvedValueOnce({
+      answer: '可以从一个具体例子开始。',
+      usage: {
+        inputTokens: 1,
+        outputTokens: 1,
+        cacheHitInputTokens: 0,
+        cacheMissInputTokens: 1,
+      },
+      chargedCredits: 0,
+    });
+
+    renderPanel({ onMessageSent });
+    await waitForHistoryReady();
+    await user.type(screen.getByRole('textbox', { name: '输入问题' }), '从哪里开始？');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+
+    expect(await screen.findByText('可以从一个具体例子开始。')).toBeInTheDocument();
+    expect(onMessageSent).toHaveBeenCalledOnce();
+  });
+
   it('shows the user turn, disables duplicate sends, and renders a production-safe charge notice', async () => {
     const user = userEvent.setup();
     let resolveTurn!: (value: unknown) => void;

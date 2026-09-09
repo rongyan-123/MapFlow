@@ -14,6 +14,7 @@ interface KnowledgeChatPanelProps {
   csrfToken: string;
   onClose: () => void;
   onCreditChanged?: () => void | Promise<void>;
+  onMessageSent?: () => void | Promise<void>;
   isVisible?: boolean;
   initialDraft?: string;
   initialDraftRevision?: number;
@@ -25,6 +26,7 @@ export default function KnowledgeChatPanel({
   csrfToken,
   onClose,
   onCreditChanged,
+  onMessageSent,
   isVisible = true,
   initialDraft = '',
   initialDraftRevision = 0,
@@ -130,6 +132,7 @@ export default function KnowledgeChatPanel({
       setStreamingAnswer(null);
       setLastCharge(response.chargedCredits);
       await onCreditChanged?.();
+      await onMessageSent?.();
     } catch (caught: unknown) {
       setStreamingAnswer(null);
       setError(toChatError(caught, '知识聊天暂时不可用，请稍后重试。'));
@@ -234,6 +237,7 @@ export default function KnowledgeChatPanel({
         <textarea
           id="knowledge-chat-input"
           aria-label="输入问题"
+          data-mapflow-onboarding-target="chat-input"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
@@ -254,6 +258,7 @@ export default function KnowledgeChatPanel({
           <button
             type="submit"
             aria-label="发送"
+            data-mapflow-onboarding-target="chat-send"
             disabled={historyPending || pending || !draft.trim()}
             className="rounded-xl bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
           >

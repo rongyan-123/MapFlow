@@ -97,8 +97,16 @@ export default function SkillTreeCanvas({
     [snapshot.progress],
   );
   const positions = useMemo(
-    () => computeTreeLayout(snapshot.nodes, snapshot.edges),
-    [snapshot.nodes, snapshot.edges],
+    () =>
+      snapshot.tree.layout_mode === 'manual'
+        ? new Map(
+            snapshot.nodes.map((node) => [
+              node.id,
+              { x: node.position_x, y: node.position_y },
+            ]),
+          )
+        : computeTreeLayout(snapshot.nodes, snapshot.edges),
+    [snapshot.edges, snapshot.nodes, snapshot.tree.layout_mode],
   );
   const generatedNodes = useMemo<SkillFlowNode[]>(
     () =>
@@ -155,6 +163,7 @@ export default function SkillTreeCanvas({
     () =>
       [
         snapshot.tree.id,
+        snapshot.tree.layout_mode ?? 'auto',
         snapshot.current_node_id ?? '',
         snapshot.nodes.map((node) => node.id).join(','),
         snapshot.edges.map((edge) => edge.id).join(','),
@@ -164,6 +173,7 @@ export default function SkillTreeCanvas({
       snapshot.edges,
       snapshot.nodes,
       snapshot.tree.id,
+      snapshot.tree.layout_mode,
     ],
   );
 
@@ -337,6 +347,7 @@ export default function SkillTreeCanvas({
       ref={canvasRef}
       className="skill-tree-canvas"
       data-interaction-mode={interactionMode}
+      data-mapflow-onboarding-target="map-surface"
     >
       <ReactFlow
         nodes={nodes}

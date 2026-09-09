@@ -33,6 +33,7 @@ function SkillNodeComponent({ data, selected }: NodeProps<SkillFlowNode>) {
   return (
     <div
       data-mapflow-skill-node="true"
+      data-mapflow-onboarding-target="node"
       data-mapflow-display-mode={displayMode}
       data-mapflow-node-status={status}
       className={cn(

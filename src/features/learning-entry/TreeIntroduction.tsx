@@ -53,6 +53,7 @@ export default function TreeIntroduction({
           <div className="mapflow-introduction__actions">
             <button
               type="button"
+              data-mapflow-onboarding-target="map-entry"
               onClick={() => onStartExploring(guide.question)}
               className="mapflow-console-primary-button"
             >
@@ -61,6 +62,7 @@ export default function TreeIntroduction({
             </button>
             <button
               type="button"
+              data-mapflow-onboarding-target="map-entry"
               onClick={onPreviewMap}
               className="mapflow-console-secondary-button"
             >

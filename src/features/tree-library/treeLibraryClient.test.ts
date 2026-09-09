@@ -24,7 +24,9 @@ describe('treeLibraryClient', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(fetchPublicTrees()).resolves.toEqual({ trees: [tree] });
+    await expect(fetchPublicTrees()).resolves.toEqual({
+      trees: [{ ...tree, layout_mode: 'auto' }],
+    });
     await expect(fetchPublicTree('tree/id')).resolves.toMatchObject({
       view_mode: 'showcase',
       graph: { tree },
@@ -180,6 +182,24 @@ describe('treeLibraryClient', () => {
     expect(error).toBeInstanceOf(TreeLibraryApiError);
     expect(error).toMatchObject({
       status: 502,
+      code: 'tree_library.invalid_response',
+    });
+  });
+
+  it('preserves an explicit manual layout mode and rejects unknown modes', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ trees: [{ ...tree, layout_mode: 'manual' }] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchPublicTrees()).resolves.toEqual({
+      trees: [{ ...tree, layout_mode: 'manual' }],
+    });
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ trees: [{ ...tree, layout_mode: 'stored' }] }),
+    );
+    await expect(fetchPublicTrees()).rejects.toMatchObject({
       code: 'tree_library.invalid_response',
     });
   });

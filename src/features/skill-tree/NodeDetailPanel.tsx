@@ -12,6 +12,7 @@ interface NodeDetailPanelProps {
   onSetCompleted?: (nodeId: string, completed: boolean) => void;
   completionPending?: boolean;
   onOpenChat?: (prompt?: string) => void;
+  onJoinPersonal?: () => void;
   onTogglePanel?: () => void;
   explorationQuestion?: string | null;
   onUseExplorationQuestion?: () => void;
@@ -37,6 +38,7 @@ export default function NodeDetailPanel({
   onSetCompleted,
   completionPending = false,
   onOpenChat,
+  onJoinPersonal,
   onTogglePanel,
   explorationQuestion = null,
   onUseExplorationQuestion,
@@ -133,6 +135,7 @@ export default function NodeDetailPanel({
           </div>
           <button
             type="button"
+            data-mapflow-onboarding-target="chat-entry"
             onClick={() => onOpenChat()}
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/45 bg-cyan-400/10 px-3 py-2.5 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/15"
           >
@@ -159,6 +162,23 @@ export default function NodeDetailPanel({
             className="mt-3 w-full rounded-lg border border-amber-200/35 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:border-amber-100 hover:bg-amber-200/10"
           >
             {isAuthenticated ? '加入我的学习并带入聊天草稿' : '登录后带入聊天草稿'}
+          </button>
+        </section>
+      )}
+
+      {displayMode === 'showcase' && onJoinPersonal && (
+        <section className="mb-5 rounded-xl border border-amber-300/25 bg-amber-950/15 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-200">下一步</p>
+          <p className="mt-2 text-xs leading-5 text-slate-400">
+            加入我的学习后，你可以从这个节点提问，或用自己的话实践一次。
+          </p>
+          <button
+            type="button"
+            data-mapflow-onboarding-target="join-personal"
+            onClick={onJoinPersonal}
+            className="mt-3 w-full rounded-lg border border-amber-200/35 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:border-amber-100 hover:bg-amber-200/10"
+          >
+            {isAuthenticated ? '加入我的学习' : '登录并加入我的学习'}
           </button>
         </section>
       )}
@@ -223,6 +243,7 @@ export default function NodeDetailPanel({
           <p className="mt-2 text-xs leading-5 text-slate-500">完成记录只代表你手动留下的状态，不自动证明掌握。</p>
           <button
             type="button"
+            data-mapflow-onboarding-target="progress"
             disabled={completionPending}
             onClick={() => onSetCompleted(node.id, !completed)}
             className={`mt-3 w-full rounded-lg px-3 py-2 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-60 ${

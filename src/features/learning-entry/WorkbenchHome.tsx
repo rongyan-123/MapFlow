@@ -52,6 +52,7 @@ export default function WorkbenchHome({
           </div>
           <button
             type="button"
+            data-mapflow-onboarding-target="generate-map"
             onClick={onCreateTree}
             disabled={createTreeDisabled}
             className="mapflow-console-secondary-button"
@@ -156,6 +157,7 @@ function PublicTreeCard({
       <button
         type="button"
         aria-label={`查看 ${tree.title} 简介`}
+        data-mapflow-onboarding-target="map-entry"
         onClick={() => onOpen(tree.id)}
         className="mapflow-direction-card__action"
       >
@@ -202,6 +204,7 @@ function PersonalTreeRow({
       <button
         type="button"
         aria-label={`继续探索 ${entry.tree.title}`}
+        data-mapflow-onboarding-target="map-entry"
         onClick={() => onContinue(entry.library_entry_id)}
         className="mapflow-continue-row__action"
       >

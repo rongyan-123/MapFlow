@@ -256,6 +256,68 @@ describe('SkillTreeCanvas viewport lifecycle', () => {
     expect(getByTestId('minimap')).toHaveClass('skill-tree-canvas__minimap');
   });
 
+  it('uses stored node positions only when the tree explicitly has manual layout', async () => {
+    const manualRoot = { ...rootNode, position_x: 321, position_y: 654 };
+    const manualChild = { ...childNode, position_x: 987, position_y: 123 };
+    render(
+      <SkillTreeCanvas
+        snapshot={{
+          ...baseSnapshot(),
+          tree: { ...baseSnapshot().tree, layout_mode: 'manual' },
+          nodes: [manualRoot, manualChild],
+        }}
+        displayMode="personal"
+        selectedNodeId={manualRoot.id}
+        onSelectNode={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(flowMocks.nodes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: manualRoot.id, position: { x: 321, y: 654 } }),
+          expect.objectContaining({ id: manualChild.id, position: { x: 987, y: 123 } }),
+        ]),
+      );
+    });
+  });
+
+  it('refits when an existing tree switches layout mode', async () => {
+    const sharedTree = { ...baseSnapshot().tree };
+    const sharedInitialFitNodeIds: string[] = [];
+    const sharedSnapshot = {
+      ...baseSnapshot(),
+      tree: sharedTree,
+    };
+    const { rerender } = render(
+      <SkillTreeCanvas
+        snapshot={sharedSnapshot}
+        displayMode="personal"
+        selectedNodeId={rootNode.id}
+        onSelectNode={vi.fn()}
+        initialFitNodeIds={sharedInitialFitNodeIds}
+      />,
+    );
+
+    emitResize(1440, 900);
+    await waitFor(() => expect(flowMocks.fitView).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    flowMocks.fitView.mockClear();
+
+    sharedTree.layout_mode = 'manual';
+    rerender(
+      <SkillTreeCanvas
+        snapshot={{ ...sharedSnapshot }}
+        displayMode="personal"
+        selectedNodeId={rootNode.id}
+        onSelectNode={vi.fn()}
+        initialFitNodeIds={sharedInitialFitNodeIds}
+      />,
+    );
+
+    await waitFor(() => expect(flowMocks.fitView).toHaveBeenCalledTimes(1));
+  });
+
   it('keeps the selected node as the resize anchor ahead of the current node', async () => {
     render(
       <SkillTreeCanvas

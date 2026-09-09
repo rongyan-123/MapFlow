@@ -107,4 +107,21 @@ describe('NodeDetailPanel 知识聊天入口', () => {
     );
     expect(screen.queryByRole('button', { name: '与这棵树聊天' })).not.toBeInTheDocument();
   });
+
+  it('在公共节点详情里给出加入个人学习的下一步', async () => {
+    const user = userEvent.setup();
+    const onJoinPersonal = vi.fn();
+    render(
+      <NodeDetailPanel
+        snapshot={snapshot}
+        selectedNodeId="node-1"
+        displayMode="showcase"
+        onJoinPersonal={onJoinPersonal}
+      />,
+    );
+
+    expect(screen.getByText('下一步')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '登录并加入我的学习' }));
+    expect(onJoinPersonal).toHaveBeenCalledOnce();
+  });
 });

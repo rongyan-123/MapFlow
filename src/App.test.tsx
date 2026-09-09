@@ -319,6 +319,119 @@ describe('MapFlow tree library', () => {
     expect(treeApi.fetchPublicTree).not.toHaveBeenCalled();
   });
 
+  it('跳过引导后直接选择方向，返回工作台仍保持跳过状态', async () => {
+    const user = userEvent.setup();
+    renderApp('/console');
+
+    await screen.findByRole('heading', { name: '选择一个学习方向' });
+    await user.click(screen.getByRole('button', { name: '跳过引导' }));
+    await user.click(screen.getByRole('button', { name: '查看 NestJS 完整学习树 简介' }));
+    await user.click(screen.getByRole('button', { name: '返回工作台' }));
+
+    expect(screen.getByRole('button', { name: '重新打开新手引导' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '直接在网站开始' })).not.toBeInTheDocument();
+  });
+
+  it('匿名引导选择不会串到随后登录的账号状态', async () => {
+    const user = userEvent.setup();
+    identityApi.loginIdentity.mockResolvedValue(authenticated);
+    renderApp('/console');
+
+    await screen.findByRole('heading', { name: '选择一个学习方向' });
+    await user.click(screen.getByRole('button', { name: '连接自己的 Agent' }));
+    await user.click(screen.getByRole('button', { name: '登录 / 激活账号' }));
+    const dialog = screen.getByRole('dialog', { name: '登录学习账号' });
+    await user.type(within(dialog).getByLabelText('用户名'), authenticated.account.username);
+    await user.type(within(dialog).getByLabelText('密码'), 'safe-password-2026');
+    const loginButtons = within(dialog).getAllByRole('button', { name: '登录' });
+    await user.click(loginButtons[loginButtons.length - 1]);
+
+    expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '关闭 Agent 接入教程' }));
+    expect(screen.getByRole('button', { name: '直接在网站开始' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '连接自己的 Agent' })).toBeInTheDocument();
+  });
+
+  it('访客在非根节点加入并登录后，回到个人地图仍选中原节点', async () => {
+    const user = userEvent.setup();
+    identityApi.loginIdentity.mockResolvedValue(authenticated);
+    treeApi.addTreeToPersonalLibrary.mockResolvedValue({
+      library_entry_id: personalEntry.library_entry_id,
+      tree_id: nestjsTree.id,
+    });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp('/console');
+
+    await screen.findByRole('heading', { name: '选择一个学习方向' });
+    await user.click(screen.getByRole('button', { name: '直接在网站开始' }));
+    await user.click(await screen.findByRole('button', { name: '查看 NestJS 完整学习树 简介' }));
+    await user.click(screen.getByRole('button', { name: '先看地图' }));
+    await screen.findByTestId('react-flow-boundary');
+    await user.click(screen.getByRole('button', { name: '查看节点 进阶节点' }));
+    const actionBar = screen.getByTestId('map-action-bar');
+    await user.click(within(actionBar).getByRole('button', { name: '加入我的学习' }));
+
+    const dialog = screen.getByRole('dialog', { name: '登录学习账号' });
+    await user.type(within(dialog).getByLabelText('用户名'), authenticated.account.username);
+    await user.type(within(dialog).getByLabelText('密码'), 'safe-password-2026');
+    const loginButtons = within(dialog).getAllByRole('button', { name: '登录' });
+    await user.click(loginButtons[loginButtons.length - 1]);
+
+    const personalNode = await screen.findByRole('button', { name: '查看节点 进阶节点' });
+    expect(personalNode).toHaveAttribute('data-display-mode', 'personal');
+    expect(treeApi.addTreeToPersonalLibrary).toHaveBeenCalledOnce();
+  });
+
+  it('加入请求返回较晚且用户已切换公共方向时，不劫持当前地图', async () => {
+    const user = userEvent.setup();
+    let resolveAdd!: (value: { library_entry_id: string; tree_id: string }) => void;
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.addTreeToPersonalLibrary.mockImplementation(
+      () => new Promise((resolve) => { resolveAdd = resolve; }),
+    );
+    treeApi.fetchPublicTree.mockImplementation((treeId: string) =>
+      Promise.resolve({
+        view_mode: 'showcase',
+        graph: treeId === agentTree.id ? agentGraph : nestjsGraph,
+      }),
+    );
+    renderApp('/console');
+
+    await screen.findByRole('heading', { name: '选择一个学习方向' });
+    await user.click(screen.getByRole('button', { name: '直接在网站开始' }));
+    await user.click(await screen.findByRole('button', { name: '查看 NestJS 完整学习树 简介' }));
+    await user.click(screen.getByRole('button', { name: '先看地图' }));
+    await screen.findByTestId('react-flow-boundary');
+    await user.click(within(screen.getByTestId('map-action-bar')).getByRole('button', { name: '加入我的学习' }));
+    await waitFor(() => expect(treeApi.addTreeToPersonalLibrary).toHaveBeenCalledOnce());
+
+    await user.click(screen.getByRole('button', { name: `查看 ${agentTree.title}` }));
+    await screen.findByRole('button', { name: '查看节点 Agent 基础' });
+    resolveAdd({ library_entry_id: personalEntry.library_entry_id, tree_id: nestjsTree.id });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '查看节点 Agent 基础' })).toHaveAttribute('data-display-mode', 'showcase'));
+    expect(screen.queryByRole('button', { name: '查看节点 进阶节点' })).not.toBeInTheDocument();
+  });
+
+  it('普通加入失败时不会推进引导步骤', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.addTreeToPersonalLibrary.mockRejectedValue(new Error('加入失败'));
+    renderApp('/console');
+
+    await screen.findByRole('heading', { name: '选择一个学习方向' });
+    await user.click(screen.getByRole('button', { name: '直接在网站开始' }));
+    await user.click(await screen.findByRole('button', { name: '查看 NestJS 完整学习树 简介' }));
+    await user.click(screen.getByRole('button', { name: '先看地图' }));
+    await screen.findByTestId('react-flow-boundary');
+    await user.click(within(screen.getByTestId('map-action-bar')).getByRole('button', { name: '加入我的学习' }));
+    await screen.findByRole('alert');
+
+    await user.click(screen.getByRole('button', { name: '探索' }));
+    expect(screen.getByRole('heading', { name: '选择一个学习方向' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '拖动地图、缩放视图' })).toBeInTheDocument();
+  });
+
   it('公共工作台中的继续探索直接进入个人地图并使用个人树查询', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
