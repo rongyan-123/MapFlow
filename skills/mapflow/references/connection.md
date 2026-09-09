@@ -3,13 +3,13 @@
 There are two separate pieces:
 
 1. The mapflow Skill teaches the Agent how to reason about MapFlow work.
-2. The MapFlow MCP connection exposes account-scoped tools such as mapflow.whoami, mapflow.get_progress, mapflow.get_tree, mapflow.create_tree, and mapflow.apply_tree_mutation.
+2. The MapFlow MCP connection exposes account-scoped tools such as mapflow.whoami, mapflow.get_progress, mapflow.get_tree, and mapflow.apply_tree_mutation; mapflow.create_tree is available when the connected server advertises it.
 
 Installing one does not install the other. A local Skill folder cannot save data to the website, and an MCP connection without this workflow does not decide which tree or learning meaning is appropriate.
 
 ## MCP connection
 
-When the relay package is available, configure the host with the command that its local help confirms:
+The npm relay package is published as @mapflow-publish/mcp (currently latest 0.1.0). Configure the host with the command that its local help confirms:
 
 ~~~
 Codex:       codex mcp add mapflow -- npx -y @mapflow-publish/mcp
@@ -18,18 +18,20 @@ Claude Code: claude mcp add --transport stdio mapflow -- npx -y @mapflow-publish
 
 The first run may open MapFlow's device authorization page. Let the connector guide the browser flow and then call mapflow.whoami; do not read, request, or paste the token. The relay stores the local credential according to its own instructions; the Skill does not inspect that file.
 
-If the command or package is unavailable, say that the MCP relay/server release is not ready and stop the account operation. Do not substitute a guessed package name, a local JSON export, or an HTTP call that bypasses the connector.
+If the command or package is unavailable, say that the MCP connection is not ready and stop the account operation. If the connection starts but a requested tool is absent from tools/list, report that the connected server does not provide that capability yet. Do not substitute a guessed package name, a local JSON export, or an HTTP call that bypasses the connector.
 
 ## Skill distribution
 
 For a local checkout, use the host's documented local Skill discovery/install flow and point it at skills/mapflow/. Verify the Skill is discoverable in an isolated test directory when packaging it; do not write a user's global Agent configuration as part of that check.
 
-The public distribution commands, once the repository/package is available, are:
+The currently verified public Skill source is the locked commit below:
 
 ~~~
-npx skills add rongyan-123/MapFlow --skill mapflow --agent codex
-npx skills add rongyan-123/MapFlow --skill mapflow --agent claude-code
+npx skills add https://github.com/rongyan-123/MapFlow/tree/988ddda9e345983644f8073bf0335269dcdfff3d/skills/mapflow --skill mapflow --agent codex
+npx skills add https://github.com/rongyan-123/MapFlow/tree/988ddda9e345983644f8073bf0335269dcdfff3d/skills/mapflow --skill mapflow --agent claude-code
 ~~~
+
+After mapflow is merged to the repository's default branch, the shorthand source is `rongyan-123/MapFlow`.
 
 If a remote install fails, check the requested repository revision and package discovery result before reporting success or asking the user to retry. The current repository publication status belongs in the project README and onboarding plan.
 
