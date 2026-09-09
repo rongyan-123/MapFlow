@@ -231,39 +231,41 @@ export default function KnowledgeChatPanel({
         }}
         className="shrink-0 border-t border-slate-800 p-3 pb-[env(safe-area-inset-bottom)]"
       >
-        <label htmlFor="knowledge-chat-input" className="sr-only">
-          输入问题
-        </label>
-        <textarea
-          id="knowledge-chat-input"
-          aria-label="输入问题"
-          data-mapflow-onboarding-target="chat-input"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              void handleSubmit();
-            }
-          }}
-          placeholder="问问这棵技能树…"
-          rows={3}
-          disabled={historyPending || pending}
-          className="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm leading-6 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400/70 disabled:cursor-wait disabled:opacity-60"
-        />
-        <div className="mt-2 flex items-center justify-between gap-3">
-          <span className="text-[11px] text-slate-600">
-            支持长文本 · Shift+Enter 换行
-          </span>
-          <button
-            type="submit"
-            aria-label="发送"
-            data-mapflow-onboarding-target="chat-send"
-            disabled={historyPending || pending || !draft.trim()}
-            className="rounded-xl bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {pending ? '生成中…' : '发送'}
-          </button>
+        <div data-mapflow-onboarding-target="chat-compose">
+          <label htmlFor="knowledge-chat-input" className="sr-only">
+            输入问题
+          </label>
+          <textarea
+            id="knowledge-chat-input"
+            aria-label="输入问题"
+            data-mapflow-onboarding-target="chat-input"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                void handleSubmit();
+              }
+            }}
+            placeholder="问问这棵技能树…"
+            rows={3}
+            disabled={historyPending || pending}
+            className="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm leading-6 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400/70 disabled:cursor-wait disabled:opacity-60"
+          />
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <span className="text-[11px] text-slate-600">
+              支持长文本 · Shift+Enter 换行
+            </span>
+            <button
+              type="submit"
+              aria-label="发送"
+              data-mapflow-onboarding-target="chat-send"
+              disabled={historyPending || pending || !draft.trim()}
+              className="rounded-xl bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {pending ? '生成中…' : '发送'}
+            </button>
+          </div>
         </div>
       </form>
     </section>

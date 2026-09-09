@@ -78,3 +78,11 @@ mapflow.create_tree 接收（以当前 server `tools/list` 和 Postgres 写入�
 - PASS：在目标仓库运行 npx --yes skills add . --list，本地源发现 mapflow 与 skill-tree-generator；在两个临时项目目录分别以 Codex 和 Claude Code agent 做 copy 安装，skills list --json 分别返回 sourceType=local 的 mapflow。临时目录随后删除，未写用户全局 Agent 配置、未执行 device auth、未输出 token。
 - PASS：从 `https://github.com/rongyan-123/MapFlow/tree/017b5f96111fa73297e7603645681a7e7f4dc411/skills/mapflow` 远程发现到 `mapflow`；本次发布修正运行了远程 `--list`，并逐一比对发布工作树与 4232 工作树的五个 Skill 文件，未重复此前已完成的 Codex/Claude Code 隔离安装。README 与本计划标明 Skill 已可安装，relay 包已发布但 `create_tree` 仍等待 server 能力发布；skill-tree-generator 明确仍是离线 JSON 用途；create-tree 示例已按当前后端逐键核对，并覆盖三节点创建、add_node 的证据字符串兼容形态、add_edge 和 update_node 布局。
 - PASS：git diff --check 通过。diff 自审时保留了其他 agent 的未跟踪前端文件，不触碰它们；本任务只修改约定的 Skill、README、离线触发边界和计划文件。
+
+## 前端新手引导验证记录（2026-09-09）
+
+- PASS：网站路径在桌面与 390×844 移动视口完成实际操作验证：选择网站开始、生成说明、公共地图、我的学习、打开任意地图、选择节点、聊天输入区和记录进度。下一步只推进导览状态；没有自动生成、加入、发送或标记完成。
+- PASS：无目标、部分出视口或被固定底栏遮挡时释放暗遮罩、aria-modal 和焦点循环，并提示用户滚动详情面板找到“标记为已完成”；目标完整可操作时才显示聚光。
+- PASS：聊天输入框与发送按钮由同一 chat-compose 目标包围，移动端提示框不会覆盖发送控件；发送仍需用户明确点击。
+- PASS：桌面截图和移动截图保存在本机验证目录；个人地图后的聊天/进度使用隔离 fixture 账号及本地 API 响应，匿名公共页到登录/加入入口使用真实页面验证。没有使用真实凭据、发送真实消息或写入生产学习状态。
+- PASS：最后一次全量验证包含 Vitest、TypeScript --noEmit、Vite production build 和 staged diff 检查；build 仅保留既有大 chunk 警告。

@@ -199,6 +199,84 @@ describe('ConsoleOnboarding', () => {
     target.remove();
   });
 
+  it('releases the mask when an action target is only partially visible', () => {
+    const target = document.createElement('button');
+    target.dataset.mapflowOnboardingTarget = 'progress';
+    const rect = {
+      top: 740,
+      right: 320,
+      bottom: 820,
+      left: 120,
+      width: 200,
+      height: 80,
+      x: 120,
+      y: 740,
+      toJSON: () => ({}),
+    } as DOMRect;
+    target.getClientRects = (() => [rect]) as unknown as () => DOMRectList;
+    target.getBoundingClientRect = () => rect;
+    document.body.appendChild(target);
+
+    renderOnboarding({
+      state: {
+        ...createDefaultOnboardingState(),
+        path: 'website',
+        websiteStep: 'progress',
+      },
+    });
+
+    expect(screen.queryByTestId('mapflow-onboarding-spotlight')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '下一步' })).toBeDisabled();
+    expect(screen.getByRole('dialog')).not.toHaveAttribute('aria-modal', 'true');
+    target.remove();
+  });
+
+  it('releases the mask when a fixed surface covers the action target', () => {
+    const target = document.createElement('button');
+    target.dataset.mapflowOnboardingTarget = 'progress';
+    const blocker = document.createElement('footer');
+    const rect = {
+      top: 600,
+      right: 320,
+      bottom: 680,
+      left: 120,
+      width: 200,
+      height: 80,
+      x: 120,
+      y: 600,
+      toJSON: () => ({}),
+    } as DOMRect;
+    target.getClientRects = (() => [rect]) as unknown as () => DOMRectList;
+    target.getBoundingClientRect = () => rect;
+    document.body.append(target, blocker);
+    const elementFromPoint = document.elementFromPoint;
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => blocker,
+    });
+
+    try {
+      renderOnboarding({
+        state: {
+          ...createDefaultOnboardingState(),
+          path: 'website',
+          websiteStep: 'progress',
+        },
+      });
+
+      expect(screen.queryByTestId('mapflow-onboarding-spotlight')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '下一步' })).toBeDisabled();
+      expect(screen.getByRole('dialog')).not.toHaveAttribute('aria-modal', 'true');
+    } finally {
+      Object.defineProperty(document, 'elementFromPoint', {
+        configurable: true,
+        value: elementFromPoint,
+      });
+      target.remove();
+      blocker.remove();
+    }
+  });
+
   it('re-measures when a route target appears after the tour mounted', async () => {
     renderOnboarding({
       state: {

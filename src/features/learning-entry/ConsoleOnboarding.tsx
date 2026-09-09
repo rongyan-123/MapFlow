@@ -75,7 +75,7 @@ const WEBSITE_STEP_COPY: Record<
     label: '记录进度',
     title: '记录你的学习进度',
     detail: '理解一个节点后，在个人地图的详情面板里按你的理解标记完成。',
-    missingTarget: '进入个人地图并点开一个节点，就能记录学习进度。',
+    missingTarget: '进入个人地图并点开一个节点，再向下滚动详情面板找到“标记为已完成”。',
   },
 };
 
@@ -109,6 +109,7 @@ const TARGET_SELECTORS: Record<WebsiteOnboardingStep, readonly string[]> = {
   'map-node': ['[data-mapflow-onboarding-target="node"]'],
   chat: [
     '[data-mapflow-onboarding-target="chat-entry"]',
+    '[data-mapflow-onboarding-target="chat-compose"]',
     '[data-mapflow-onboarding-target="chat-input"]',
     '[data-mapflow-onboarding-target="chat-send"]',
   ],
@@ -152,6 +153,25 @@ function isLargeTargetRect(targetRect: ViewportRect | null) {
   if (!targetRect) return false;
   const viewport = getViewportSize();
   return targetRect.width >= viewport.width * 0.5 && targetRect.height >= viewport.height * 0.5;
+}
+
+function isTargetActionable(element: HTMLElement, rect: DOMRect) {
+  if (typeof document.elementFromPoint !== 'function') return true;
+
+  const points = [
+    [rect.left + 2, rect.top + 2],
+    [rect.right - 2, rect.top + 2],
+    [rect.left + 2, rect.bottom - 2],
+    [rect.right - 2, rect.bottom - 2],
+    [rect.left + rect.width / 2, rect.top + rect.height / 2],
+  ];
+
+  return points.every(([x, y]) => {
+    const hit = document.elementFromPoint(x, y);
+    if (!hit) return true;
+    if (element.contains(hit)) return true;
+    return Boolean(hit.closest('.mapflow-onboarding__layer'));
+  });
 }
 
 export default function ConsoleOnboarding({
@@ -219,6 +239,16 @@ export default function ConsoleOnboarding({
       const width = right - left;
       const height = bottom - top;
       if (width <= 0 || height <= 0) continue;
+      if (
+        requiresVisibleTarget &&
+        (rect.left < 0 ||
+          rect.right > viewport.width ||
+          rect.top < 0 ||
+          rect.bottom > viewport.height)
+      ) {
+        continue;
+      }
+      if (!isTargetActionable(element, rect)) continue;
 
       return { top, right, bottom, left, width, height };
     }
