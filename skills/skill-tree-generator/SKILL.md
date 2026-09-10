@@ -52,6 +52,7 @@ SKILL_TREE.json。字段规范见 references/，AI 看到即遵守，不设校�
 ## 触发器与加载说明
 
 - description 触发词：生成技能树 / skill tree / learning roadmap / 学习路线图 / 知识树
+- 本 Skill 只生成离线 SKILL_TREE.json；需要连接 MapFlow 账户、读取进度或把图保存到网站时，使用 skills/mapflow/ 与 MapFlow MCP，不要把文件生成当作网站写入。
 - 本 SKILL.md 只含流程；字段细节、搜索清单、质量标准分别按需加载
   references/field-schema.md、references/research-sources.md、references/quality-standards.md
 - 示例节点参考 examples/sample-node.md（展示"有质量"长什么样）
