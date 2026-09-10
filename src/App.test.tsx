@@ -306,6 +306,29 @@ describe('MapFlow tree library', () => {
     expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
   });
 
+  it('控制台顶部提供高对比的 Agent 接入教程入口', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    renderApp();
+
+    await screen.findByText(authenticated.account.playerId);
+    const guideButton = screen.getByRole('button', {
+      name: '如何在自己的 Agent 里连接 MapFlow',
+    });
+    expect(guideButton).toHaveClass('border-violet-300/70');
+
+    await user.click(guideButton);
+    expect(
+      screen.getByRole('dialog', { name: '在自己的 Agent 中连接 MapFlow' }),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: '关闭 Agent 接入教程' }),
+    );
+    expect(
+      screen.queryByRole('dialog', { name: '在自己的 Agent 中连接 MapFlow' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('从产品首页登录后直接进入控制台，不要求再次点击入口', async () => {
     const user = userEvent.setup();
     identityApi.loginIdentity.mockResolvedValue(authenticated);
@@ -1072,6 +1095,24 @@ describe('手机端抽屉', () => {
     ).not.toBeInTheDocument();
     expect(
       await screen.findByText('从公共树池加入一棵技能树后，就可以从零记录进度。'),
+    ).toBeInTheDocument();
+  });
+
+  it('移动端抽屉提供 Agent 接入教程入口', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    renderApp();
+    await screen.findByText(authenticated.account.playerId);
+
+    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    const drawer = screen.getByRole('dialog', { name: '功能菜单' });
+    await user.click(
+      within(drawer).getByRole('button', { name: 'Agent 接入教程' }),
+    );
+
+    expect(screen.queryByRole('dialog', { name: '功能菜单' })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: '在自己的 Agent 中连接 MapFlow' }),
     ).toBeInTheDocument();
   });
 

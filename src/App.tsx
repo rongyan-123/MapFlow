@@ -20,6 +20,7 @@ import AnnouncementsButton from './features/announcements/AnnouncementsButton';
 import AnnouncementsDialog from './features/announcements/AnnouncementsDialog';
 import FeedbackDialog from './features/feedback/FeedbackDialog';
 import LandingPage from './features/landing/LandingPage';
+import McpGuideDialog from './features/mcp/McpGuideDialog';
 import MobileDrawer from './features/navigation/MobileDrawer';
 import ThemeSwitcher from './features/theme/ThemeSwitcher';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
@@ -146,6 +147,7 @@ function ConsoleApp() {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatWidth, setChatWidth] = useState(DEFAULT_CHAT_WIDTH);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mcpGuideOpen, setMcpGuideOpen] = useState(false);
   const [announcementsOpen, setAnnouncementsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [personalSidebarOpen, setPersonalSidebarOpen] = useState(() =>
@@ -584,6 +586,17 @@ function ConsoleApp() {
           </a>
           <ThemeSwitcher />
           <div className="hidden lg:block">
+            <button
+              type="button"
+              aria-label="如何在自己的 Agent 里连接 MapFlow"
+              onClick={() => setMcpGuideOpen(true)}
+              className="rounded-xl border border-violet-300/70 bg-violet-400/15 px-3 py-1.5 text-xs font-bold text-violet-100 shadow-[0_0_16px_rgba(167,139,250,0.2)] transition hover:border-violet-200 hover:bg-violet-400/25 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+            >
+              <span aria-hidden="true" className="mr-1 text-violet-200">✦</span>
+              Agent 接入教程
+            </button>
+          </div>
+          <div className="hidden lg:block">
             <AnnouncementsButton />
           </div>
           <div className="hidden lg:block">
@@ -989,6 +1002,17 @@ function ConsoleApp() {
           >
             我的学习
           </DrawerItem>
+          <DrawerItem
+            onClick={() => {
+              setMcpGuideOpen(true);
+              setDrawerOpen(false);
+            }}
+          >
+            <span className="flex items-center gap-2 text-violet-200">
+              <span aria-hidden="true" className="text-violet-300">✦</span>
+              Agent 接入教程
+            </span>
+          </DrawerItem>
           {session?.account.isAdmin && (
             <DrawerItem
               active={view === 'admin'}
@@ -1030,6 +1054,7 @@ function ConsoleApp() {
       {feedbackOpen && session && (
         <FeedbackDialog onClose={() => setFeedbackOpen(false)} />
       )}
+      {mcpGuideOpen && <McpGuideDialog onClose={() => setMcpGuideOpen(false)} />}
 
       <LogoutConfirmDialog
         open={logoutConfirmOpen}
@@ -1116,7 +1141,7 @@ function DrawerItem({
 }: {
   active?: boolean;
   onClick: () => void;
-  children: string;
+  children: ReactNode;
 }) {
   return (
     <button
