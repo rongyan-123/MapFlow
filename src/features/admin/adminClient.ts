@@ -10,6 +10,8 @@ import type {
   AdminInvitation,
   AdminInvitationSummary,
   AdminInvitationsResponse,
+  AdminProviderConfiguration,
+  AdminProviderProfile,
   AdminRequestObservation,
   AdminRequestObservationsPage,
   AdminRequestStageSummary,
@@ -60,6 +62,64 @@ export async function fetchAdminDashboard(
     totalActiveMinutes: body.totalActiveMinutes,
     avgActiveMinutes: body.avgActiveMinutes,
     dailyConsumed7d: body.dailyConsumed7d,
+  };
+}
+
+export async function fetchAdminProviderConfiguration(
+  csrfToken: string,
+): Promise<AdminProviderConfiguration> {
+  void csrfToken;
+  const response = await request('/api/admin/provider', {
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' },
+  });
+  const body = await readJson(response);
+  if (
+    !isRecord(body) ||
+    !isAdminProviderProfile(body.active) ||
+    !isExactArray(body.options, isAdminProviderProfile) ||
+    (body.workerStatus !== 'running' && body.workerStatus !== 'unavailable') ||
+    (body.switchScope !== 'live' && body.switchScope !== 'generation_only')
+  ) {
+    throw invalidResponseError();
+  }
+  return {
+    active: body.active,
+    options: body.options,
+    workerStatus: body.workerStatus,
+    switchScope: body.switchScope,
+  };
+}
+
+export async function switchAdminProvider(
+  providerId: string,
+  csrfToken: string,
+): Promise<AdminProviderConfiguration> {
+  const response = await request('/api/admin/provider', {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify({ providerId }),
+  });
+  const body = await readJson(response);
+  if (
+    !isRecord(body) ||
+    !isAdminProviderProfile(body.active) ||
+    !isExactArray(body.options, isAdminProviderProfile) ||
+    (body.workerStatus !== 'running' && body.workerStatus !== 'unavailable') ||
+    (body.switchScope !== 'live' && body.switchScope !== 'generation_only')
+  ) {
+    throw invalidResponseError();
+  }
+  return {
+    active: body.active,
+    options: body.options,
+    workerStatus: body.workerStatus,
+    switchScope: body.switchScope,
   };
 }
 
@@ -367,6 +427,20 @@ function isAdminAccount(value: unknown): value is AdminAccount {
     typeof value.platformConsumedUsages === 'number' &&
     typeof value.activeMinutes === 'number' &&
     typeof value.creditBalance === 'number'
+  );
+}
+
+function isAdminProviderProfile(value: unknown): value is AdminProviderProfile {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.provider === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.modelId === 'string' &&
+    typeof value.endpoint === 'string' &&
+    isNonNegativeInteger(value.contextWindow) &&
+    isNonNegativeInteger(value.maxTokens) &&
+    typeof value.active === 'boolean'
   );
 }
 

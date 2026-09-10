@@ -242,3 +242,24 @@ export interface AdminAnnouncement {
   createdAt: string;
   readCount: number;
 }
+
+export interface AdminProviderProfile {
+  id: string;
+  provider: string;
+  name: string;
+  modelId: string;
+  endpoint: string;
+  contextWindow: number;
+  maxTokens: number;
+  active: boolean;
+}
+
+export type AdminProviderWorkerStatus = 'running' | 'unavailable';
+export type AdminProviderSwitchScope = 'live' | 'generation_only';
+
+export interface AdminProviderConfiguration {
+  active: AdminProviderProfile;
+  options: AdminProviderProfile[];
+  workerStatus: AdminProviderWorkerStatus;
+  switchScope: AdminProviderSwitchScope;
+}
