@@ -461,19 +461,9 @@ function ConsoleApp() {
     );
   }
 
-  if (publicCatalog.isPending) return <FullPageStatus message="正在读取公共技能树…" />;
-  if (publicCatalog.isError || !publicCatalog.data) {
-    return (
-      <FullPageStatus
-        title="公共技能树暂时无法读取"
-        message={readableError(publicCatalog.error)}
-        actionLabel="重新读取"
-        onAction={() => void publicCatalog.refetch()}
-      />
-    );
-  }
-
-  const selectedPublicTree = publicCatalog.data.trees.find(
+  const publicTrees = publicCatalog.data?.trees ?? [];
+  const publicCatalogUnavailable = !publicCatalog.data;
+  const selectedPublicTree = publicTrees.find(
     (tree) => tree.id === selectedPublicTreeId,
   );
   const selectedPersonalEntry = personalLibrary.data?.entries.find(
@@ -656,15 +646,39 @@ function ConsoleApp() {
 
           <div className="space-y-2">
             {view === 'public' ? (
-              publicCatalog.data.trees.map((tree) => (
-                <TreeChoice
-                  key={tree.id}
-                  title={tree.title}
-                  subtitle={`${tree.topic} · ${tree.total_nodes} 节点`}
-                  active={tree.id === selectedPublicTreeId}
-                  onClick={() => selectPublicTree(tree.id)}
-                />
-              ))
+              publicCatalog.isPending && publicCatalogUnavailable ? (
+                <SidebarMessage>正在读取公共技能树…</SidebarMessage>
+              ) : publicCatalogUnavailable ? (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-amber-400/30 bg-amber-400/5 px-3 py-3 text-xs leading-5 text-amber-100"
+                >
+                  <p className="font-semibold">公共技能树暂时无法读取</p>
+                  <p className="mt-1 text-amber-100/70">
+                    {readableError(publicCatalog.error)}
+                  </p>
+                  <button
+                    type="button"
+                    aria-label="重新读取公共树库"
+                    onClick={() => void publicCatalog.refetch()}
+                    className="mt-2 rounded-lg border border-amber-300/40 px-2.5 py-1.5 font-semibold text-amber-100 transition hover:bg-amber-300/10"
+                  >
+                    重新读取
+                  </button>
+                </div>
+              ) : publicTrees.length ? (
+                publicTrees.map((tree) => (
+                  <TreeChoice
+                    key={tree.id}
+                    title={tree.title}
+                    subtitle={`${tree.topic} · ${tree.total_nodes} 节点`}
+                    active={tree.id === selectedPublicTreeId}
+                    onClick={() => selectPublicTree(tree.id)}
+                  />
+                ))
+              ) : (
+                <SidebarMessage>当前还没有可浏览的公共技能树。</SidebarMessage>
+              )
             ) : personalLibrary.isPending ? (
               <SidebarMessage>正在读取个人树库…</SidebarMessage>
             ) : personalLibrary.isError ? (
@@ -778,6 +792,10 @@ function ConsoleApp() {
                 setMobileView('detail');
               }}
             />
+          ) : view === 'public' && publicCatalog.isPending ? (
+            <InlineStatus message="正在读取公共技能树…" />
+          ) : view === 'public' && publicCatalogUnavailable ? (
+            <InlineStatus message="公共技能树暂时无法读取，可先切换到其他功能。" />
           ) : treePending ? (
             <InlineStatus message="正在加载完整技能树…" />
           ) : treeError ? (

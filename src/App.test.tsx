@@ -279,6 +279,31 @@ describe('MapFlow tree library', () => {
     expect(await screen.findByText('公共树池')).toBeInTheDocument();
   });
 
+  it('公共树目录失败时保留控制台，并允许继续使用个人学习', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPublicTrees.mockRejectedValue(
+      new Error('技能树服务暂时不可用，请稍后重试。'),
+    );
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp('/console');
+
+    expect(
+      await screen.findByText(
+        '公共技能树暂时无法读取',
+        {},
+        { timeout: 4_000 },
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '重新读取公共树库' }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    expect((await screen.findAllByText('NestJS 完整学习树')).length).toBeGreaterThan(0);
+  });
+
   it('进入过控制台后再次访问根路径会自动回到控制台', async () => {
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     window.localStorage.setItem('mapflow.entry.has-entered-console', 'true');
