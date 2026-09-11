@@ -76,7 +76,9 @@ export function computeTreeLayout(
 
   orderedLevels.forEach(([lvl, levelNodes]) => {
     const sorted = [...levelNodes].sort((a, b) => {
-      if (lvl === 0) return a.order_in_level - b.order_in_level;
+      // A node's stored order/coordinates are Agent metadata, not a canvas API.
+      // Use a stable identity tie-breaker so MCP edits cannot manually place nodes.
+      if (lvl === 0) return a.id.localeCompare(b.id);
       const parentAvg = (id: string) => {
         const ps = parents.get(id) ?? [];
         return (

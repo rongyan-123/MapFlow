@@ -1,0 +1,3 @@
+interface:
+  display_name: "MapFlow MCP"
+  short_description: "创建和维护 MapFlow 学习树，遵守固定的关系与按块布局契约"

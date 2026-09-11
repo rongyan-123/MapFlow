@@ -9,8 +9,10 @@ import type {
 } from './types';
 import type {
   RecommendedDepth,
+  SkillBlock,
   SkillEdge,
   SkillNode,
+  SkillNodeBlockAssignment,
   SkillTree,
 } from '../../types/learning';
 
@@ -199,7 +201,21 @@ function parseGraph(value: unknown): TreeGraph {
     tree: parseSkillTree(value.tree),
     nodes: value.nodes.map(parseSkillNode),
     edges: value.edges.map(parseSkillEdge),
+    blocks: parseOptionalArray(value.blocks, parseSkillBlock),
+    node_block_assignments: parseOptionalArray(
+      value.node_block_assignments,
+      parseSkillNodeBlockAssignment,
+    ),
   };
+}
+
+function parseOptionalArray<T>(
+  value: unknown,
+  parser: (item: unknown) => T,
+): T[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw invalidResponseError();
+  return value.map(parser);
 }
 
 function parseSkillTree(value: unknown): SkillTree {
@@ -221,6 +237,12 @@ function parseSkillTree(value: unknown): SkillTree {
     description: value.description,
     difficulty_level: value.difficulty_level,
     total_nodes: value.total_nodes,
+    ...(isNonNegativeInteger(value.revision)
+      ? { revision: value.revision }
+      : {}),
+    ...(value.layout_mode === 'auto' || value.layout_mode === 'manual'
+      ? { layout_mode: value.layout_mode }
+      : {}),
   };
 }
 
@@ -285,6 +307,40 @@ function parseSkillEdge(value: unknown): SkillEdge {
     target_node_id: value.target_node_id,
     edge_type: value.edge_type,
     label: value.label,
+  };
+}
+
+function parseSkillBlock(value: unknown): SkillBlock {
+  if (
+    !isRecord(value) ||
+    typeof value.block_id !== 'string' ||
+    typeof value.name !== 'string' ||
+    !isNullableString(value.color) ||
+    !isNonNegativeInteger(value.sort_order)
+  ) {
+    throw invalidResponseError();
+  }
+  return {
+    id: value.block_id,
+    name: value.name,
+    color: value.color,
+    sort_order: value.sort_order,
+  };
+}
+
+function parseSkillNodeBlockAssignment(
+  value: unknown,
+): SkillNodeBlockAssignment {
+  if (
+    !isRecord(value) ||
+    typeof value.node_id !== 'string' ||
+    typeof value.block_id !== 'string'
+  ) {
+    throw invalidResponseError();
+  }
+  return {
+    node_id: value.node_id,
+    block_id: value.block_id,
   };
 }
 

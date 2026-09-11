@@ -28,9 +28,14 @@ claude mcp add mapflow -- npx @mapflow-publish/mcp
 | `mapflow.get_progress` | 列出所有树 + 完成进度(含证据) |
 | `mapflow.get_tree` | 读一棵树全量:节点/边/块/完成度 |
 | `mapflow.apply_tree_mutation` | 提交一条编辑命令(add_node / add_edge / add_block / set_node_block 等) |
+| `mapflow.create_tree` | 用完整节点图创建一棵私人树,可选同时写入块和节点归属 |
 | `mapflow.whoami` | 查看当前 token 身份与授权状态 |
 
 按语义把树重组成块的操作方法见 [BLOCKS.md](BLOCKS.md)。
+
+支持从 Git 仓库加载 Skill 的 Agent 可直接加载项目内的 [`skills/mapflow-mcp/SKILL.md`](../skills/mapflow-mcp/SKILL.md)。Skill 与本 README、服务器 `tools/list` 共享同一条规则：前端只有关系布局和按块布局两种，坐标字段不能改成自由画布。
+
+前端展示固定只有两种布局:默认的关系布局和按块布局。Agent 修改节点坐标、层内顺序或 `layoutMode: auto/manual` 都不能改变这两种布局,也不能创建第三种布局。依赖边或学习层级变化会改变学习图语义,从而影响自动计算结果;这不提供自由画布能力。需要按块布局时,树必须有至少一个块以及一个有效的节点归属;旧树没有块数据时仍可正常使用关系布局。
 
 ## 技术说明
 

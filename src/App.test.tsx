@@ -279,6 +279,38 @@ describe('MapFlow tree library', () => {
     expect(await screen.findByText('公共树池')).toBeInTheDocument();
   });
 
+  it('switches to the block layout when the graph contains block assignments', async () => {
+    const user = userEvent.setup();
+    treeApi.fetchPublicTree.mockResolvedValueOnce({
+      view_mode: 'showcase',
+      graph: {
+        ...nestjsGraph,
+        blocks: [
+          {
+            id: 'block-1',
+            name: '基础能力',
+            color: null,
+            sort_order: 0,
+          },
+        ],
+        node_block_assignments: [
+          { node_id: 'node-1', block_id: 'block-1' },
+        ],
+      },
+    });
+    renderApp('/console');
+
+    const blockLayoutButton = await screen.findByRole('button', {
+      name: '按块布局',
+    });
+    expect(blockLayoutButton).toBeEnabled();
+    expect(blockLayoutButton).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(blockLayoutButton);
+
+    expect(blockLayoutButton).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('公共树目录失败时保留控制台，并允许继续使用个人学习', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);

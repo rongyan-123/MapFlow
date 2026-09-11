@@ -37,6 +37,7 @@ import TreeExportMenu from './features/tree-library/TreeExportMenu';
 import type {
   LearningTreeSnapshot,
   SkillNode,
+  TreeLayoutMode,
   TreeDisplayMode,
 } from './types/learning';
 
@@ -142,6 +143,7 @@ function ConsoleApp() {
   const [generationSessionId, setGenerationSessionId] = useState<string | null>(
     readGenerationSessionId,
   );
+  const [layoutMode, setLayoutMode] = useState<TreeLayoutMode>('relationship');
   const [mobileView, setMobileView] = useState<MobileView>('list');
   const [chatOpen, setChatOpen] = useState(false);
   const [chatWidth, setChatWidth] = useState(DEFAULT_CHAT_WIDTH);
@@ -245,6 +247,7 @@ function ConsoleApp() {
     setCompletion(null);
     setChatOpen(false);
     setMobileView('list');
+    setLayoutMode('relationship');
   }, [accountPlayerId]);
 
   useEffect(() => {
@@ -312,6 +315,12 @@ function ConsoleApp() {
   const snapshot = activeGraph
     ? snapshotFromGraph(activeGraph, completedNodeIds)
     : null;
+  const hasBlockLayout = Boolean(
+    snapshot?.blocks?.length &&
+      snapshot.node_block_assignments?.some((assignment) =>
+        snapshot.blocks?.some((block) => block.id === assignment.block_id),
+      ),
+  );
 
   useEffect(() => {
     if (!activeGraph) return;
@@ -362,6 +371,7 @@ function ConsoleApp() {
     setSelectedNodeId(null);
     setCompletion(null);
     setChatOpen(false);
+    setLayoutMode('relationship');
     setMobileView('graph');
   };
   const selectPersonalTree = (libraryEntryId: string) => {
@@ -369,6 +379,7 @@ function ConsoleApp() {
     setSelectedNodeId(null);
     setCompletion(null);
     setChatOpen(false);
+    setLayoutMode('relationship');
     setMobileView('graph');
   };
   const showPersonalLibrary = () => {
@@ -522,6 +533,7 @@ function ConsoleApp() {
               setSelectedNodeId(null);
               setCompletion(null);
               setChatOpen(false);
+              setLayoutMode('relationship');
               setMobileView('list');
             }}
           >
@@ -782,16 +794,40 @@ function ConsoleApp() {
           className={`${mobileView === 'graph' ? 'block' : 'hidden'} relative min-w-0 flex-1 lg:block`}
         >
           {snapshot ? (
-            <SkillTreeCanvas
-              key={mobileView}
-              snapshot={snapshot}
-              displayMode={displayMode}
-              selectedNodeId={selectedNodeId}
-              onSelectNode={(nodeId) => {
-                setSelectedNodeId(nodeId);
-                setMobileView('detail');
-              }}
-            />
+            <>
+              <div className="pointer-events-none absolute right-4 top-4 z-10">
+                <div
+                  aria-label="技能树布局切换"
+                  className="pointer-events-auto flex items-center gap-1 rounded-xl border border-slate-700/90 bg-slate-950/90 p-1 text-xs shadow-xl backdrop-blur"
+                >
+                  <LayoutButton
+                    active={layoutMode === 'relationship'}
+                    onClick={() => setLayoutMode('relationship')}
+                  >
+                    关系布局
+                  </LayoutButton>
+                  <LayoutButton
+                    active={layoutMode === 'blocks'}
+                    disabled={!hasBlockLayout}
+                    title={hasBlockLayout ? undefined : '这棵树还没有可用的块分组'}
+                    onClick={() => setLayoutMode('blocks')}
+                  >
+                    按块布局
+                  </LayoutButton>
+                </div>
+              </div>
+              <SkillTreeCanvas
+                key={mobileView}
+                snapshot={snapshot}
+                displayMode={displayMode}
+                layoutMode={layoutMode}
+                selectedNodeId={selectedNodeId}
+                onSelectNode={(nodeId) => {
+                  setSelectedNodeId(nodeId);
+                  setMobileView('detail');
+                }}
+              />
+            </>
           ) : view === 'public' && publicCatalog.isPending ? (
             <InlineStatus message="正在读取公共技能树…" />
           ) : view === 'public' && publicCatalogUnavailable ? (
@@ -1099,6 +1135,8 @@ function snapshotFromGraph(
       status: 'completed',
       evidence: '',
     })),
+    blocks: graph.blocks ?? [],
+    node_block_assignments: graph.node_block_assignments ?? [],
   };
 }
 
@@ -1121,6 +1159,37 @@ function ViewButton({
           ? 'bg-cyan-300 text-slate-950'
           : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
       }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function LayoutButton({
+  active,
+  disabled,
+  title,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  title?: string;
+  onClick: () => void;
+  children: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      disabled={disabled}
+      title={title}
+      onClick={onClick}
+      className={`rounded-lg px-2.5 py-1.5 font-semibold transition ${
+        active
+          ? 'bg-cyan-300 text-slate-950'
+          : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+      } disabled:cursor-not-allowed disabled:opacity-40`}
     >
       {children}
     </button>

@@ -183,6 +183,43 @@ describe('treeLibraryClient', () => {
       code: 'tree_library.invalid_response',
     });
   });
+
+  it('reads block metadata while remaining compatible with legacy graphs', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        view_mode: 'showcase',
+        graph: {
+          ...graph,
+          blocks: [
+            {
+              block_id: 'block-1',
+              name: '基础能力',
+              color: '#22d3ee',
+              sort_order: 0,
+            },
+          ],
+          node_block_assignments: [
+            { node_id: 'node-1', block_id: 'block-1' },
+          ],
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchPublicTree(tree.id)).resolves.toMatchObject({
+      graph: {
+        blocks: [
+          {
+            id: 'block-1',
+            name: '基础能力',
+            color: '#22d3ee',
+            sort_order: 0,
+          },
+        ],
+        node_block_assignments: [{ node_id: 'node-1', block_id: 'block-1' }],
+      },
+    });
+  });
 });
 
 const tree = {

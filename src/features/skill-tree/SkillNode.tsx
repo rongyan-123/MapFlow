@@ -10,6 +10,7 @@ import { DEPTH_LABELS, ICON_EMOJI } from '../../lib/constants';
 import type {
   NodeLearningProgress,
   SkillNode as SkillNodeRecord,
+  TreeLayoutMode,
   TreeDisplayMode,
 } from '../../types/learning';
 
@@ -18,12 +19,14 @@ export interface SkillNodeData extends Record<string, unknown> {
   progress: NodeLearningProgress | null;
   isCurrent: boolean;
   displayMode: TreeDisplayMode;
+  layoutMode?: TreeLayoutMode;
+  blockName?: string;
 }
 
 export type SkillFlowNode = Node<SkillNodeData, 'skill'>;
 
 function SkillNodeComponent({ data, selected }: NodeProps<SkillFlowNode>) {
-  const { node, progress, isCurrent, displayMode } = data;
+  const { node, progress, isCurrent, displayMode, layoutMode, blockName } = data;
   const isShowcase = displayMode === 'showcase';
   const status = progress?.status ?? 'not_started';
   const isCompleted = status === 'completed';
@@ -53,6 +56,11 @@ function SkillNodeComponent({ data, selected }: NodeProps<SkillFlowNode>) {
         selected && 'scale-[1.04]',
       )}
     >
+      {layoutMode === 'blocks' && blockName && (
+        <span className="absolute -top-2 right-2 rounded-full border border-cyan-300/60 bg-slate-950 px-2 py-0.5 text-[10px] font-semibold text-cyan-200 shadow-lg">
+          {blockName}
+        </span>
+      )}
       <Handle
         type="target"
         position={Position.Top}

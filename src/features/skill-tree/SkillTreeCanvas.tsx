@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import {
   Background,
   Controls,
@@ -10,9 +10,11 @@ import {
 } from '@xyflow/react';
 import type {
   LearningTreeSnapshot,
+  TreeLayoutMode,
   TreeDisplayMode,
 } from '../../types/learning';
 import { computeTreeLayout } from './layoutTree';
+import { computeBlockLayout } from './layoutBlocks';
 import SkillNodeComponent, {
   type SkillFlowNode,
 } from './SkillNode';
@@ -22,6 +24,7 @@ const nodeTypes = { skill: SkillNodeComponent };
 interface SkillTreeCanvasProps {
   snapshot: LearningTreeSnapshot;
   displayMode: TreeDisplayMode;
+  layoutMode: TreeLayoutMode;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string) => void;
 }
@@ -29,6 +32,7 @@ interface SkillTreeCanvasProps {
 export default function SkillTreeCanvas({
   snapshot,
   displayMode,
+  layoutMode,
   selectedNodeId,
   onSelectNode,
 }: SkillTreeCanvasProps) {
@@ -36,9 +40,39 @@ export default function SkillTreeCanvas({
     () => new Map(snapshot.progress.map((item) => [item.node_id, item])),
     [snapshot.progress],
   );
+  const blockNameByNodeId = useMemo(() => {
+    const blockNameById = new Map(
+      (snapshot.blocks ?? []).map((block) => [block.id, block.name]),
+    );
+    return new Map(
+      (snapshot.node_block_assignments ?? [])
+        .map((assignment) => [
+          assignment.node_id,
+          blockNameById.get(assignment.block_id),
+        ])
+        .filter((entry): entry is [string, string] => Boolean(entry[1])),
+    );
+  }, [snapshot.blocks, snapshot.node_block_assignments]);
   const positions = useMemo(
-    () => computeTreeLayout(snapshot.nodes, snapshot.edges),
-    [snapshot.nodes, snapshot.edges],
+    () => {
+      if (layoutMode === 'blocks') {
+        const blockPositions = computeBlockLayout(
+          snapshot.nodes,
+          snapshot.edges,
+          snapshot.blocks ?? [],
+          snapshot.node_block_assignments ?? [],
+        );
+        if (blockPositions.size > 0) return blockPositions;
+      }
+      return computeTreeLayout(snapshot.nodes, snapshot.edges);
+    },
+    [
+      layoutMode,
+      snapshot.blocks,
+      snapshot.edges,
+      snapshot.node_block_assignments,
+      snapshot.nodes,
+    ],
   );
   const generatedNodes = useMemo<SkillFlowNode[]>(
     () =>
@@ -54,9 +88,19 @@ export default function SkillTreeCanvas({
           progress: progressMap.get(node.id) ?? null,
           isCurrent: node.id === snapshot.current_node_id,
           displayMode,
+          layoutMode,
+          blockName: blockNameByNodeId.get(node.id),
         },
       })),
-    [displayMode, positions, progressMap, snapshot.current_node_id, snapshot.nodes],
+    [
+      blockNameByNodeId,
+      displayMode,
+      layoutMode,
+      positions,
+      progressMap,
+      snapshot.current_node_id,
+      snapshot.nodes,
+    ],
   );
   const generatedEdges = useMemo<Edge[]>(
     () =>
@@ -90,18 +134,24 @@ export default function SkillTreeCanvas({
 
   const [nodes, setNodes, onNodesChange] = useNodesState<SkillFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const layoutKey = `${snapshot.tree.id}:${snapshot.tree.revision ?? 0}:${layoutMode}`;
+  const previousLayoutKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const layoutChanged = previousLayoutKeyRef.current !== layoutKey;
+    previousLayoutKeyRef.current = layoutKey;
     setNodes((existingNodes) => {
       const existingPositions = new Map(
-        existingNodes.map((node) => [node.id, node.position]),
+        layoutChanged
+          ? []
+          : existingNodes.map((node) => [node.id, node.position]),
       );
       return generatedNodes.map((node) => ({
         ...node,
         position: existingPositions.get(node.id) ?? node.position,
       }));
     });
-  }, [generatedNodes, setNodes]);
+  }, [generatedNodes, layoutKey, setNodes]);
 
   useEffect(() => {
     setEdges(generatedEdges);

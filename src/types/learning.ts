@@ -13,6 +13,8 @@ export type LearningStatus =
 
 export type TreeDisplayMode = 'showcase' | 'personal';
 
+export type TreeLayoutMode = 'relationship' | 'blocks';
+
 export interface SkillTree {
   id: string;
   topic: string;
@@ -20,6 +22,8 @@ export interface SkillTree {
   description: string | null;
   difficulty_level: string;
   total_nodes: number;
+  revision?: number;
+  layout_mode?: 'auto' | 'manual';
 }
 
 export interface SkillNode {
@@ -50,6 +54,18 @@ export interface SkillEdge {
   label: string | null;
 }
 
+export interface SkillBlock {
+  id: string;
+  name: string;
+  color: string | null;
+  sort_order: number;
+}
+
+export interface SkillNodeBlockAssignment {
+  node_id: string;
+  block_id: string;
+}
+
 export interface NodeLearningProgress {
   node_id: string;
   status: LearningStatus;
@@ -62,6 +78,9 @@ export interface LearningTreeSnapshot {
   edges: SkillEdge[];
   current_node_id: string | null;
   progress: NodeLearningProgress[];
+  /** Agent 创建/维护的分组；旧接口没有这些字段时按空分组处理。 */
+  blocks?: SkillBlock[];
+  node_block_assignments?: SkillNodeBlockAssignment[];
   /** 演示数据来源标识（如 'nestjs' / 'agent'），后端真实数据无此字段 */
   demo_source?: string | null;
 }
