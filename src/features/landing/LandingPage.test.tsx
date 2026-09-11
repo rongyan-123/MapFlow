@@ -15,11 +15,11 @@ describe('LandingPage', () => {
 
     expect(
       screen.getByRole('heading', {
-        name: /不想再看无聊的网课.*从你真正想学的地方开始/s,
+        name: '学习——什么时候变得如此困难？',
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/把一门复杂技术拆成一棵可以探索、可以执行的技能树/),
+      screen.getByText(/学习正在被异化成刷课、背题、追赶要求/),
     ).toBeInTheDocument();
     expect(screen.getByTestId('product-landing')).toHaveClass('h-full');
     expect(screen.getByTestId('landing-hero-grid')).toHaveClass('grid-cols-1', 'min-w-0');

@@ -8,30 +8,30 @@ import {
 const STORY_CHAPTERS = [
   {
     index: '01',
-    kicker: '从一个问题开始',
-    title: '先找到你真正想学的地方。',
-    detail: '不用先把整门课从头看完，先从眼前的问题出发。',
+    kicker: '选择方向',
+    title: '想进入一个领域，却不知道到底该学什么？',
+    detail: '比如 Agent 开发，需要哪些基础，又会遇到哪些工程问题？',
     accent: 'cyan',
   },
   {
     index: '02',
-    kicker: '拆成可执行的节点',
-    title: '把复杂技术，变成下一步。',
-    detail: '每个节点都有清晰目标，知道要理解什么，也知道怎样算完成。',
+    kicker: '展开全貌',
+    title: '先把学习与就业方向展开成地图。',
+    detail: '先看清全貌，再决定从哪里开始。',
     accent: 'blue',
   },
   {
     index: '03',
-    kicker: '沿着依赖关系前进',
-    title: '不是背目录，而是在走能力。',
-    detail: '前置关系把零散知识连成路径，卡住时也知道该回到哪里。',
+    kicker: '接入 MCP',
+    title: '让每次理解，都丰富自己的地图。',
+    detail: '学到一个概念，就把它放进地图；发现新的联系，就把它们连接起来。',
     accent: 'violet',
   },
   {
     index: '04',
-    kicker: '留下可以验证的结果',
-    title: '学会，不再只是“感觉会了”。',
-    detail: '完成节点、留下证据，再把这棵树带到下一次学习和实践里。',
+    kicker: '查看进度',
+    title: '学到了哪里，打开地图就知道。',
+    detail: '已经理解的、还没弄懂的、接下来想探索的，都能在地图上看见。',
     accent: 'amber',
   },
 ] as const;
@@ -142,13 +142,13 @@ export default function LandingStory() {
         </svg>
 
         <div className="relative mx-auto h-full min-h-[calc(100svh-4.5rem)] w-full max-w-7xl px-5 py-16 sm:px-8 lg:py-20">
-          <div className="absolute left-5 top-10 max-w-[19rem] sm:left-8 lg:left-[11%] lg:top-[9%]">
-            <p className="text-[11px] font-bold tracking-[0.18em] text-cyan-300">THE MAPFLOW ROUTE</p>
-            <h2 id="workflow-title" className="mt-4 text-3xl font-black tracking-[-0.045em] text-white sm:text-5xl">
-              把学习，变成一条可以走的路。
+          <div className="absolute left-5 top-10 max-w-[19rem] sm:left-8 lg:left-[11%] lg:top-[9%] lg:max-w-[36rem]">
+            <p className="text-[11px] font-bold tracking-[0.18em] text-cyan-300">从方向到地图</p>
+            <h2 id="workflow-title" className="mt-4 text-3xl font-black tracking-[-0.045em] text-white sm:text-5xl lg:whitespace-nowrap lg:text-[2.4rem]">
+              让每次理解，都丰富自己的地图。
             </h2>
-            <p className="mt-5 text-sm leading-7 text-slate-400 sm:text-base">
-              滚动不是换页面，而是在沿着能力路径前进。
+            <p className="mt-5 text-sm leading-7 text-slate-400 sm:text-base lg:whitespace-nowrap">
+              学到一个概念，就把它放进地图；发现新的联系，就把它们连接起来。
             </p>
           </div>
 
