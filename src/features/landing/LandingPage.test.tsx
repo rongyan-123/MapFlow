@@ -67,6 +67,15 @@ describe('LandingPage', () => {
       'npx @mapflow-publish/mcp',
     );
     expect(
+      within(dialog).getByRole('heading', { name: '先安装 MapFlow Skill' }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByTestId('mapflow-skill-install-command'),
+    ).toHaveTextContent('npx skills add rongyan-123/MapFlow --skill mapflow-mcp --global');
+    expect(
+      within(dialog).getByText(/Skill 负责告诉 Agent 如何理解 MapFlow 的树结构、节点、块，以及两种固定的布局方式/),
+    ).toBeInTheDocument();
+    expect(
       within(dialog).getByRole('heading', { name: '如果你使用 Claude Code' }),
     ).toBeInTheDocument();
     expect(within(dialog).getByText(/浏览器会打开 MapFlow 授权页/)).toBeInTheDocument();

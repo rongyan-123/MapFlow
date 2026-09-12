@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 const INSTALL_COMMAND = 'npx @mapflow-publish/mcp';
 const CLAUDE_COMMAND = 'claude mcp add mapflow -- npx @mapflow-publish/mcp';
+const SKILL_INSTALL_COMMAND = 'npx skills add rongyan-123/MapFlow --skill mapflow-mcp --global';
 
 interface McpGuideDialogProps {
   onClose: () => void;
@@ -58,7 +59,7 @@ export default function McpGuideDialog({ onClose }: McpGuideDialogProps) {
               在自己的 Agent 中连接 MapFlow
             </h2>
             <p id="mcp-guide-dialog-description" className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-              用一条命令，让支持 MCP 的 Agent 读取你的学习进度，并围绕你自己的技能树工作。
+              先安装 Skill 让 Agent 理解 MapFlow，再配置 MCP 连接你的账号和技能树。
             </p>
           </div>
           <button
@@ -83,7 +84,23 @@ export default function McpGuideDialog({ onClose }: McpGuideDialogProps) {
             </p>
           </GuideSection>
 
-          <GuideSection number="02" title="最简单的开始：一行 npx 命令">
+          <GuideSection number="02" title="先安装 MapFlow Skill">
+            <p>
+              Skill 负责告诉 Agent 如何理解 MapFlow 的树结构、节点、块，以及两种固定的布局方式。先安装 Skill，再配置 MCP，Agent 才能按 MapFlow 的规则工作。
+            </p>
+            <CommandBlock
+              command={SKILL_INSTALL_COMMAND}
+              testId="mapflow-skill-install-command"
+              copyLabel="复制 Skill 安装命令"
+              copied={copiedCommand === SKILL_INSTALL_COMMAND}
+              onCopy={copyCommand}
+            />
+            <p className="mt-3 text-slate-500">
+              <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-slate-300">--global</code> 会把 Skill 安装到当前电脑，供支持 Skills 的 Agent 使用；只想给当前项目使用时可以去掉它。
+            </p>
+          </GuideSection>
+
+          <GuideSection number="03" title="再配置 MCP：一行 npx 命令">
             <p>在终端里运行下面这条命令。第一次运行时，npx 会下载连接器并启动授权流程。</p>
             <CommandBlock
               command={INSTALL_COMMAND}
@@ -94,7 +111,7 @@ export default function McpGuideDialog({ onClose }: McpGuideDialogProps) {
             />
           </GuideSection>
 
-          <GuideSection number="03" title="如果你使用 Claude Code">
+          <GuideSection number="04" title="如果你使用 Claude Code">
             <p>可以直接把连接器注册到 Claude Code：</p>
             <CommandBlock
               command={CLAUDE_COMMAND}
@@ -107,7 +124,7 @@ export default function McpGuideDialog({ onClose }: McpGuideDialogProps) {
             </p>
           </GuideSection>
 
-          <GuideSection number="04" title="其他支持 MCP 的 Agent 怎么配？">
+          <GuideSection number="05" title="其他支持 MCP 的 Agent 怎么配？">
             <p>如果你的 Agent 提供通用的 MCP 配置项，填写下面两部分即可：</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <ConfigValue label="command" value="npx" />
@@ -119,7 +136,7 @@ export default function McpGuideDialog({ onClose }: McpGuideDialogProps) {
             </p>
           </GuideSection>
 
-          <GuideSection number="05" title="第一次运行会发生什么？">
+          <GuideSection number="06" title="第一次运行会发生什么？">
             <ol className="space-y-3 text-slate-300">
               <li className="flex gap-3"><StepDot>1</StepDot><span>浏览器会打开 MapFlow 授权页；如果尚未登录，先登录你的账号。</span></li>
               <li className="flex gap-3"><StepDot>2</StepDot><span>确认授权用途后点击“允许”。</span></li>
@@ -130,7 +147,7 @@ export default function McpGuideDialog({ onClose }: McpGuideDialogProps) {
             </p>
           </GuideSection>
 
-          <GuideSection number="06" title="连接以后，Agent 能做什么？">
+          <GuideSection number="07" title="连接以后，Agent 能做什么？">
             <div className="grid gap-3 sm:grid-cols-2">
               <CapabilityCard name="mapflow.get_progress" detail="查看所有技能树和完成进度。" />
               <CapabilityCard name="mapflow.get_tree" detail="读取一棵树的节点、边、块和完成情况。" />
@@ -139,7 +156,7 @@ export default function McpGuideDialog({ onClose }: McpGuideDialogProps) {
             </div>
           </GuideSection>
 
-          <GuideSection number="07" title="安全和常见问题">
+          <GuideSection number="08" title="安全和常见问题">
             <div className="space-y-3 text-sm leading-7 text-slate-300">
               <p><strong className="text-slate-100">令牌放在哪里？</strong> 明文令牌只在授权时写入你的本机；服务器只保存摘要，不能从数据库反推出原令牌。</p>
               <p><strong className="text-slate-100">写操作安全吗？</strong> 每次写入都会记录审计信息，包括哪棵树、什么操作和哪个授权令牌。</p>
