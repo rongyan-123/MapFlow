@@ -22,6 +22,7 @@ import FeedbackDialog from './features/feedback/FeedbackDialog';
 import LandingPage from './features/landing/LandingPage';
 import MobileDrawer from './features/navigation/MobileDrawer';
 import ThemeSwitcher from './features/theme/ThemeSwitcher';
+import McpGuideDialog from './features/mcp/McpGuideDialog';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
 import { readPlatformGenerationEntitlements } from './features/tree-generation/treeGenerationClient';
 import {
@@ -151,6 +152,7 @@ function ConsoleApp() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [completion, setCompletion] = useState<{ node: SkillNode; nonce: number } | null>(null);
   const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
+  const [mcpGuideOpen, setMcpGuideOpen] = useState(false);
   const [generationSessionId, setGenerationSessionId] = useState<string | null>(
     readGenerationSessionId,
   );
@@ -691,6 +693,14 @@ function ConsoleApp() {
           >
             产品首页
           </a>
+          <button
+            type="button"
+            aria-label="如何在自己的 Agent 里连接 MapFlow"
+            onClick={() => setMcpGuideOpen(true)}
+            className="hidden rounded-xl border border-violet-400/35 bg-violet-400/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:border-violet-300/70 hover:bg-violet-400/15 hover:text-white xl:inline-flex"
+          >
+            Agent 接入
+          </button>
           <ThemeSwitcher />
           <div className="hidden lg:block">
             <AnnouncementsButton />
@@ -1136,6 +1146,14 @@ function ConsoleApp() {
             产品首页
           </a>
           <DrawerItem
+            onClick={() => {
+              setMcpGuideOpen(true);
+              setDrawerOpen(false);
+            }}
+          >
+            Agent 接入教程
+          </DrawerItem>
+          <DrawerItem
             active={view === 'public'}
             onClick={() => {
               setView('public');
@@ -1198,6 +1216,8 @@ function ConsoleApp() {
       {feedbackOpen && session && (
         <FeedbackDialog onClose={() => setFeedbackOpen(false)} />
       )}
+
+      {mcpGuideOpen && <McpGuideDialog onClose={() => setMcpGuideOpen(false)} />}
 
       <LogoutConfirmDialog
         open={logoutConfirmOpen}

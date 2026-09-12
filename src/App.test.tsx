@@ -365,6 +365,21 @@ describe('MapFlow tree library', () => {
     expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
   });
 
+  it('控制台顶部可以打开 Agent 接入教程', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    renderApp('/console');
+
+    const guideButton = await screen.findByRole('button', {
+      name: '如何在自己的 Agent 里连接 MapFlow',
+    });
+    await user.click(guideButton);
+
+    expect(
+      await screen.findByRole('dialog', { name: '在自己的 Agent 中连接 MapFlow' }),
+    ).toBeInTheDocument();
+  });
+
   it('从产品首页登录后直接进入控制台，不要求再次点击入口', async () => {
     const user = userEvent.setup();
     identityApi.loginIdentity.mockResolvedValue(authenticated);
