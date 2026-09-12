@@ -18,10 +18,12 @@ const identityApi = vi.hoisted(() => ({
 
 const treeApi = vi.hoisted(() => ({
   addTreeToPersonalLibrary: vi.fn(),
+  deletePersonalTree: vi.fn(),
   fetchPersonalLibrary: vi.fn(),
   fetchPersonalTree: vi.fn(),
   fetchPublicTree: vi.fn(),
   fetchPublicTrees: vi.fn(),
+  renamePersonalTree: vi.fn(),
   setNodeCompletion: vi.fn(),
 }));
 
@@ -1006,8 +1008,8 @@ describe('手机端视图栈', () => {
     expect(deleteTriggers[0]).toHaveClass('mapflow-tree-action--delete');
     expect(renameTriggers).toHaveLength(2);
     expect(deleteTriggers).toHaveLength(2);
-    renameTriggers.forEach((button) => expect(button).toBeDisabled());
-    deleteTriggers.forEach((button) => expect(button).toBeDisabled());
+    renameTriggers.forEach((button) => expect(button).not.toBeDisabled());
+    deleteTriggers.forEach((button) => expect(button).not.toBeDisabled());
 
     await user.click(exportTriggers[1]);
     expect(treeApi.fetchPersonalTree).toHaveBeenCalledWith(
@@ -1016,6 +1018,56 @@ describe('手机端视图栈', () => {
     expect(
       await screen.findByRole('dialog', { name: '导出技能树' }),
     ).toBeInTheDocument();
+  });
+
+  it('can rename a personal tree and delete it after explicit confirmation', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    treeApi.renamePersonalTree.mockResolvedValue(undefined);
+    treeApi.deletePersonalTree.mockResolvedValue(undefined);
+    renderApp();
+
+    await screen.findByText(authenticated.account.playerId);
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
+
+    await user.click(screen.getByRole('button', { name: /重命名技能树：/ }));
+    const renameDialog = await screen.findByRole('dialog', { name: '重命名技能树' });
+    const titleInput = within(renameDialog).getByRole('textbox', {
+      name: '新的技能树名称',
+    });
+    await user.clear(titleInput);
+    await user.type(titleInput, '我的 NestJS 树');
+    await user.click(within(renameDialog).getByRole('button', { name: '保存名称' }));
+    await waitFor(() =>
+      expect(treeApi.renamePersonalTree).toHaveBeenCalledWith(
+        personalEntry.library_entry_id,
+        '我的 NestJS 树',
+        authenticated.csrfToken,
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: '重命名技能树' })).not.toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole('button', { name: /删除技能树：/ }));
+    const deleteDialog = await screen.findByRole('dialog', { name: '删除技能树' });
+    expect(
+      within(deleteDialog).getByText(/学习进度、聊天历史和个人修改都会被移除/),
+    ).toBeInTheDocument();
+    await user.click(
+      within(deleteDialog).getByRole('button', { name: '确认删除技能树' }),
+    );
+    await waitFor(() =>
+      expect(treeApi.deletePersonalTree).toHaveBeenCalledWith(
+        personalEntry.library_entry_id,
+        authenticated.csrfToken,
+      ),
+    );
   });
 
   it('登录后的个人树打开聊天并可返回详情，选中节点保持不变', async () => {

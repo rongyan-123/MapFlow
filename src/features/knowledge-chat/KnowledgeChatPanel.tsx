@@ -14,6 +14,7 @@ interface KnowledgeChatPanelProps {
   csrfToken: string;
   onClose: () => void;
   onCreditChanged?: () => void | Promise<void>;
+  onTreeChanged?: () => void | Promise<void>;
   isVisible?: boolean;
 }
 
@@ -23,6 +24,7 @@ export default function KnowledgeChatPanel({
   csrfToken,
   onClose,
   onCreditChanged,
+  onTreeChanged,
   isVisible = true,
 }: KnowledgeChatPanelProps) {
   const [messages, setMessages] = useState<KnowledgeChatMessage[]>([]);
@@ -90,6 +92,7 @@ export default function KnowledgeChatPanel({
     setLastCharge(null);
     setStreamingAnswer('');
     setPending(true);
+    let treeChanged = false;
 
     try {
       const response = await sendKnowledgeChatMessageStream(
@@ -107,6 +110,7 @@ export default function KnowledgeChatPanel({
           const confirmed = typeof window !== 'undefined' && typeof window.confirm === 'function'
             ? window.confirm(confirmationText)
             : false;
+          treeChanged = treeChanged || confirmed;
           await resolveKnowledgeChatApproval(
             libraryEntryId,
             approval.approvalRequestId,
@@ -123,6 +127,7 @@ export default function KnowledgeChatPanel({
       setStreamingAnswer(null);
       setLastCharge(response.chargedCredits);
       await onCreditChanged?.();
+      if (treeChanged) await onTreeChanged?.();
     } catch (caught: unknown) {
       setStreamingAnswer(null);
       setError(toChatError(caught, '知识聊天暂时不可用，请稍后重试。'));
@@ -162,9 +167,9 @@ export default function KnowledgeChatPanel({
           </div>
         ) : messages.length === 0 && !pending ? (
           <div className="rounded-xl border border-cyan-900/60 bg-cyan-950/20 p-4 text-sm leading-6 text-slate-400">
-            <p className="font-semibold text-cyan-200">只读知识助手</p>
+            <p className="font-semibold text-cyan-200">知识地图助手</p>
             <p className="mt-2">
-              我会读取这棵个人技能树的节点、目标和前置关系；需要补充资料时，只会进行只读网站搜索。
+              我会读取这棵个人技能树的节点、学习块和前置关系；你确认后，我也可以帮你补充节点、调整关系或新增学习块。
             </p>
           </div>
         ) : (

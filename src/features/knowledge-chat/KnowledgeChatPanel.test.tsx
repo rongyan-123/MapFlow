@@ -7,6 +7,7 @@ import { KnowledgeChatApiError } from './types';
 const chatApi = vi.hoisted(() => ({
   fetchKnowledgeChatHistory: vi.fn(),
   sendKnowledgeChatMessageStream: vi.fn(),
+  resolveKnowledgeChatApproval: vi.fn(),
 }));
 
 vi.mock('./knowledgeChatClient', () => chatApi);
@@ -15,6 +16,8 @@ beforeEach(() => {
   chatApi.fetchKnowledgeChatHistory.mockReset();
   chatApi.fetchKnowledgeChatHistory.mockResolvedValue({ messages: [] });
   chatApi.sendKnowledgeChatMessageStream.mockReset();
+  chatApi.resolveKnowledgeChatApproval.mockReset();
+  chatApi.resolveKnowledgeChatApproval.mockResolvedValue(undefined);
 });
 
 describe('KnowledgeChatPanel', () => {
@@ -123,6 +126,56 @@ describe('KnowledgeChatPanel', () => {
 
     expect(await screen.findByText('已完成回答。')).toBeInTheDocument();
     expect(onCreditChanged).toHaveBeenCalledOnce();
+  });
+
+  it('notifies the host after approving a tree mutation so block layout can refresh', async () => {
+    const user = userEvent.setup();
+    const onTreeChanged = vi.fn();
+    chatApi.sendKnowledgeChatMessageStream.mockImplementationOnce(
+      async (
+        _libraryEntryId: string,
+        _message: string,
+        _clientTurnId: string,
+        _csrfToken: string,
+        _onDelta: (delta: string) => void,
+        onApproval: (approval: unknown) => Promise<void>,
+      ) => {
+        await onApproval({
+          approvalRequestId: 'approval-block-1',
+          toolName: 'personal_tree_mutation',
+          action: '新增学习块',
+          target: '当前个人树',
+          destructive: false,
+        });
+        return {
+          answer: '已新增学习块。',
+          usage: {
+            inputTokens: 1,
+            outputTokens: 1,
+            cacheHitInputTokens: 0,
+            cacheMissInputTokens: 1,
+          },
+          chargedCredits: 0,
+        };
+      },
+    );
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderPanel({ onTreeChanged });
+    await waitForHistoryReady();
+
+    await user.type(screen.getByRole('textbox', { name: '输入问题' }), '新增一个块');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+
+    expect(await screen.findByText('已新增学习块。')).toBeInTheDocument();
+    expect(chatApi.resolveKnowledgeChatApproval).toHaveBeenCalledWith(
+      'entry-1',
+      'approval-block-1',
+      'allowed-once',
+      false,
+      'csrf-secret',
+    );
+    expect(onTreeChanged).toHaveBeenCalledOnce();
+    confirm.mockRestore();
   });
 
   it('shows the user turn, disables duplicate sends, and renders a production-safe charge notice', async () => {

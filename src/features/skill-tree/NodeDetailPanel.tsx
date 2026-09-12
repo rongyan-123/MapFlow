@@ -176,7 +176,7 @@ export default function NodeDetailPanel({
         </section>
       ) : (
         <section className="mb-5 rounded-xl border border-cyan-900/70 bg-cyan-950/20 p-3 text-xs leading-5 text-cyan-200/80">
-          当前是全亮示例预览。加入个人库后，这棵树会从 0 开始，节点默认全部未完成。
+          当前是官方示例预览。加入个人库后会复制成你的私有副本，从 0 开始独立记录进度。
         </section>
       )}
 

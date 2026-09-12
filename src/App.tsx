@@ -26,14 +26,19 @@ import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialo
 import { readPlatformGenerationEntitlements } from './features/tree-generation/treeGenerationClient';
 import {
   addTreeToPersonalLibrary,
+  deletePersonalTree,
   fetchPersonalLibrary,
   fetchPersonalTree,
   fetchPublicTree,
   fetchPublicTrees,
+  renamePersonalTree,
   setNodeCompletion,
 } from './features/tree-library/treeLibraryClient';
-import type { TreeGraph } from './features/tree-library/types';
+import type { PersonalLibrary, TreeGraph } from './features/tree-library/types';
 import TreeExportMenu from './features/tree-library/TreeExportMenu';
+import TreeLibraryActionDialog, {
+  type TreeLibraryAction,
+} from './features/tree-library/TreeLibraryActionDialog';
 import type {
   LearningTreeSnapshot,
   SkillNode,
@@ -43,6 +48,12 @@ import type {
 
 type AppView = 'public' | 'personal' | 'admin';
 type MobileView = 'list' | 'graph' | 'detail' | 'chat';
+
+interface TreeActionTarget {
+  action: TreeLibraryAction;
+  libraryEntryId: string;
+  title: string;
+}
 
 const CONSOLE_ENTRY_MEMORY_KEY = 'mapflow.entry.has-entered-console';
 const PENDING_CONSOLE_ENTRY_KEY = 'mapflow.entry.pending-console';
@@ -157,6 +168,7 @@ function ConsoleApp() {
     readBooleanPreference('mapflow.layout.node-detail-open', true),
   );
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [treeActionTarget, setTreeActionTarget] = useState<TreeActionTarget | null>(null);
   const completedGenerationSessionIdRef = useRef<string | null>(null);
   const accountPlayerId = session?.account.playerId ?? null;
   const personalTreeLibraryQueryKey = [
@@ -343,6 +355,80 @@ function ConsoleApp() {
     },
   });
 
+  const treeActionMutation = useMutation({
+    mutationFn: async (variables: {
+      action: TreeLibraryAction;
+      libraryEntryId: string;
+      title?: string;
+    }) => {
+      if (!session) throw new Error('个人技能树会话已失效，请重新登录。');
+      if (variables.action === 'rename') {
+        return renamePersonalTree(
+          variables.libraryEntryId,
+          variables.title ?? '',
+          session.csrfToken,
+        );
+      }
+      return deletePersonalTree(variables.libraryEntryId, session.csrfToken);
+    },
+    onSuccess: async (_, variables) => {
+      const libraryEntryId = variables.libraryEntryId;
+      if (variables.action === 'rename' && variables.title) {
+        queryClient.setQueryData<PersonalLibrary>(personalTreeLibraryQueryKey, (current) => {
+          if (!current) return current;
+          return {
+            entries: current.entries.map((entry) =>
+              entry.library_entry_id === libraryEntryId
+                ? { ...entry, tree: { ...entry.tree, title: variables.title! } }
+                : entry,
+            ),
+          };
+        });
+        queryClient.setQueryData(
+          [...personalTreeLibraryQueryKey, libraryEntryId],
+          (current: Awaited<ReturnType<typeof fetchPersonalTree>> | undefined) =>
+            current
+              ? {
+                  ...current,
+                  graph: {
+                    ...current.graph,
+                    tree: { ...current.graph.tree, title: variables.title! },
+                  },
+                }
+              : current,
+        );
+      } else {
+        queryClient.setQueryData<PersonalLibrary>(personalTreeLibraryQueryKey, (current) =>
+          current
+            ? {
+                entries: current.entries.filter(
+                  (entry) => entry.library_entry_id !== libraryEntryId,
+                ),
+              }
+            : current,
+        );
+        queryClient.removeQueries({
+          queryKey: [...personalTreeLibraryQueryKey, libraryEntryId],
+        });
+        if (selectedLibraryEntryId === libraryEntryId) {
+          setSelectedLibraryEntryId(null);
+          setSelectedNodeId(null);
+          setCompletion(null);
+          setChatOpen(false);
+          setMobileView('list');
+        }
+      }
+      setTreeActionTarget(null);
+      treeActionMutation.reset();
+      await queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
+      if (variables.action === 'rename') {
+        await queryClient.invalidateQueries({
+          queryKey: [...personalTreeLibraryQueryKey, libraryEntryId],
+        });
+      }
+    },
+  });
+
   const completionMutation = useMutation({
     mutationFn: ({ nodeId, completed }: { nodeId: string; completed: boolean }) => {
       if (!session || !selectedLibraryEntryId) {
@@ -422,6 +508,27 @@ function ConsoleApp() {
     setGenerationDialogOpen(false);
     rememberGenerationSession(null);
     void queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
+  };
+
+  const openTreeAction = (
+    action: TreeLibraryAction,
+    entry: { library_entry_id: string; tree: { title: string } },
+  ) => {
+    treeActionMutation.reset();
+    setTreeActionTarget({
+      action,
+      libraryEntryId: entry.library_entry_id,
+      title: entry.tree.title,
+    });
+  };
+
+  const confirmTreeAction = (title?: string) => {
+    if (!treeActionTarget) return;
+    treeActionMutation.mutate({
+      action: treeActionTarget.action,
+      libraryEntryId: treeActionTarget.libraryEntryId,
+      ...(title ? { title } : {}),
+    });
   };
 
   const openKnowledgeChat = () => {
@@ -642,7 +749,7 @@ function ConsoleApp() {
               </h2>
               <p className="mt-1 text-[11px] leading-5 text-slate-600">
                 {view === 'public'
-                  ? '所有人可浏览；加入后生成独立进度。'
+                  ? '所有人可浏览；加入后复制成你的私有副本，独立记录进度。'
                   : '这里只显示当前账号已加入的树。'}
               </p>
             </div>
@@ -720,12 +827,14 @@ function ConsoleApp() {
                         label="重命名"
                         title={entry.tree.title}
                         tone="rename"
+                        onClick={() => openTreeAction('rename', entry)}
                       />
                       <ReservedTreeAction
                         icon="×"
                         label="删除"
                         title={entry.tree.title}
                         tone="delete"
+                        onClick={() => openTreeAction('delete', entry)}
                       />
                     </>
                   }
@@ -926,6 +1035,11 @@ function ConsoleApp() {
               onCreditChanged={() => {
                 void creditQuery.refetch();
               }}
+              onTreeChanged={() =>
+                queryClient.invalidateQueries({
+                  queryKey: personalTreeLibraryQueryKey,
+                })
+              }
             />
           </ResizableChatPane>
         )}
@@ -1091,6 +1205,20 @@ function ConsoleApp() {
         error={logoutError ? readableError(logoutError) : null}
         onCancel={() => setLogoutConfirmOpen(false)}
         onConfirm={() => void confirmLogout()}
+      />
+
+      <TreeLibraryActionDialog
+        action={treeActionTarget?.action ?? null}
+        title={treeActionTarget?.title ?? ''}
+        pending={treeActionMutation.isPending}
+        error={treeActionMutation.error ? readableError(treeActionMutation.error) : null}
+        onCancel={() => {
+          if (!treeActionMutation.isPending) {
+            treeActionMutation.reset();
+            setTreeActionTarget(null);
+          }
+        }}
+        onConfirm={confirmTreeAction}
       />
 
     </div>
@@ -1392,19 +1520,21 @@ function ReservedTreeAction({
   label,
   title,
   tone,
+  onClick,
 }: {
   icon: string;
   label: string;
   title: string;
   tone: 'rename' | 'delete';
+  onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      disabled
-      title="即将支持"
+      title={label}
       aria-label={`${label}技能树：${title}`}
-      className={`mapflow-tree-action mapflow-tree-action--uniform mapflow-tree-action--${tone} flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-semibold leading-tight transition duration-200 disabled:cursor-not-allowed`}
+      onClick={onClick}
+      className={`mapflow-tree-action mapflow-tree-action--uniform mapflow-tree-action--${tone} flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-semibold leading-tight transition duration-200`}
     >
       <span aria-hidden="true" className="text-base leading-none">
         {icon}

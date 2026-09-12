@@ -6,6 +6,8 @@ import {
   fetchPersonalTree,
   fetchPublicTree,
   fetchPublicTrees,
+  deletePersonalTree,
+  renamePersonalTree,
   setNodeCompletion,
 } from './treeLibraryClient';
 
@@ -181,6 +183,35 @@ describe('treeLibraryClient', () => {
     expect(error).toMatchObject({
       status: 502,
       code: 'tree_library.invalid_response',
+    });
+  });
+
+  it('renames and deletes a personal tree with the account CSRF token', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await renamePersonalTree('entry/id', '我的树', 'csrf-secret');
+    await deletePersonalTree('entry/id', 'csrf-secret');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/me/tree-library/entry%2Fid', {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': 'csrf-secret',
+      },
+      body: JSON.stringify({ title: '我的树' }),
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/me/tree-library/entry%2Fid', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'X-CSRF-Token': 'csrf-secret',
+      },
     });
   });
 

@@ -7,6 +7,11 @@ description: Use MapFlow MCP to create, inspect, and update a private learning t
 
 Use this skill when an Agent is connected to MapFlow through `npx @mapflow-publish/mcp`, or when it is preparing a tree payload for MapFlow.
 
+The public catalog is immutable. When a user joins an official tree from the website, MapFlow
+creates an account-owned private copy; subsequent chat/MCP mutations target that copy and never
+the official source. The website chat Agent does not create new trees; use the website generation
+button or `mapflow.create_tree` for that separate workflow.
+
 ## Presentation contract
 
 MapFlow's frontend has exactly two display layouts:

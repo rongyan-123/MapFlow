@@ -103,6 +103,39 @@ export async function addTreeToPersonalLibrary(
   };
 }
 
+export async function renamePersonalTree(
+  libraryEntryId: string,
+  title: string,
+  csrfToken: string,
+): Promise<void> {
+  const entry = encodeURIComponent(libraryEntryId);
+  await request(`/api/me/tree-library/${entry}`, {
+    method: 'PATCH',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify({ title }),
+  });
+}
+
+export async function deletePersonalTree(
+  libraryEntryId: string,
+  csrfToken: string,
+): Promise<void> {
+  const entry = encodeURIComponent(libraryEntryId);
+  await request(`/api/me/tree-library/${entry}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+  });
+}
+
 export async function setNodeCompletion(
   libraryEntryId: string,
   nodeId: string,
