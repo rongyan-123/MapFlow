@@ -5,7 +5,7 @@ import type {
   SkillNode,
   SkillNodeBlockAssignment,
 } from '../../types/learning';
-import { computeBlockLayout } from './layoutBlocks';
+import { computeBlockLayout, computeBlockLayoutModel } from './layoutBlocks';
 
 const node = (id: string, depth_level = 0, order_in_level = 0): SkillNode => ({
   id,
@@ -40,7 +40,7 @@ const assignment = (
 ): SkillNodeBlockAssignment => ({ node_id, block_id });
 
 describe('computeBlockLayout', () => {
-  it('places each block in a deterministic lane and keeps unassigned nodes visible', () => {
+  it('stacks blocks vertically and keeps nodes in each block on one horizontal row', () => {
     const nodes = [node('a'), node('b', 1), node('c'), node('unassigned')];
     const edges: SkillEdge[] = [
       {
@@ -58,11 +58,11 @@ describe('computeBlockLayout', () => {
       [assignment('a', 'first'), assignment('b', 'first'), assignment('c', 'second')],
     );
 
-    expect(positions.get('a')).toEqual({ x: 0, y: 0 });
-    expect(positions.get('b')).toEqual({ x: 0, y: 136 });
-    expect(positions.get('c')?.x).toBeGreaterThan(0);
-    expect(positions.get('unassigned')?.x).toBeGreaterThan(
-      positions.get('c')!.x,
+    expect(positions.get('a')?.y).toBe(positions.get('b')?.y);
+    expect(positions.get('b')?.x).toBeGreaterThan(positions.get('a')!.x);
+    expect(positions.get('c')?.y).toBeGreaterThan(positions.get('a')!.y);
+    expect(positions.get('unassigned')?.y).toBeGreaterThan(
+      positions.get('c')!.y,
     );
   });
 
@@ -77,6 +77,24 @@ describe('computeBlockLayout', () => {
     expect(positions.size).toBe(0);
   });
 
+  it('returns one lane per active block in block sort order', () => {
+    const model = computeBlockLayoutModel(
+      [node('a'), node('b'), node('unassigned')],
+      [],
+      [block('second', 2), block('first', 1)],
+      [assignment('a', 'first'), assignment('b', 'second')],
+    );
+
+    expect(model.lanes.map((lane) => lane.name)).toEqual([
+      'first',
+      'second',
+      '未分组节点',
+    ]);
+    expect(model.lanes[0].y).toBe(0);
+    expect(model.lanes[1].y).toBeGreaterThan(model.lanes[0].y);
+    expect(model.lanes[2].y).toBeGreaterThan(model.lanes[1].y);
+  });
+
   it('keeps same-level nodes separated by the rendered card width', () => {
     const positions = computeBlockLayout(
       [node('a'), node('b')],
@@ -86,7 +104,7 @@ describe('computeBlockLayout', () => {
     );
 
     expect(Math.abs(positions.get('a')!.x - positions.get('b')!.x)).toBeGreaterThanOrEqual(
-      280,
+      200,
     );
   });
 });

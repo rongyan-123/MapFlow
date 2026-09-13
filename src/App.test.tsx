@@ -93,10 +93,12 @@ vi.mock('@xyflow/react', async () => {
 
   interface FlowNode {
     id: string;
+    type?: string;
     data: {
-      node: { title: string };
-      progress: { status: string } | null;
+      node?: { title: string };
+      progress?: { status: string } | null;
       displayMode?: string;
+      name?: string;
     };
   }
 
@@ -121,18 +123,24 @@ vi.mock('@xyflow/react', async () => {
   }) {
     return (
       <div data-testid="react-flow-boundary">
-        {nodes.map((node) => (
-          <button
-            key={node.id}
-            type="button"
-            aria-label={`查看节点 ${node.data.node.title}`}
-            data-status={node.data.progress?.status ?? 'not_started'}
-            data-display-mode={node.data.displayMode}
-            onClick={(event) => onNodeClick?.(event, node)}
-          >
-            {node.data.node.title}
-          </button>
-        ))}
+        {nodes.map((node) =>
+          node.type === 'block' ? (
+            <div key={node.id} data-mapflow-block-lane="true">
+              {node.data.name}
+            </div>
+          ) : (
+            <button
+              key={node.id}
+              type="button"
+              aria-label={`查看节点 ${node.data.node?.title ?? node.id}`}
+              data-status={node.data.progress?.status ?? 'not_started'}
+              data-display-mode={node.data.displayMode}
+              onClick={(event) => onNodeClick?.(event, node)}
+            >
+              {node.data.node?.title ?? node.id}
+            </button>
+          ),
+        )}
         {children}
       </div>
     );
@@ -311,6 +319,7 @@ describe('MapFlow tree library', () => {
     await user.click(blockLayoutButton);
 
     expect(blockLayoutButton).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByText('基础能力')).toBeInTheDocument();
   });
 
   it('公共树目录失败时保留控制台，并允许继续使用个人学习', async () => {
