@@ -18,6 +18,8 @@ import type {
 } from '../../types/learning';
 import { computeTreeLayout } from './layoutTree';
 import {
+  BLOCK_LABEL_GAP,
+  BLOCK_LABEL_WIDTH,
   computeBlockLayoutModel,
   type BlockLayoutModel,
 } from './layoutBlocks';
@@ -35,33 +37,47 @@ type BlockLaneFlowNode = Node<BlockLaneData, 'block'>;
 
 function BlockLaneComponent({ data }: NodeProps<BlockLaneFlowNode>) {
   const accent = data.color ?? '#38bdf8';
+  const labelOffset = BLOCK_LABEL_WIDTH + BLOCK_LABEL_GAP;
 
   return (
     <div
       data-mapflow-block-lane="true"
-      className="pointer-events-none flex h-full w-full items-center rounded-2xl border border-dashed bg-slate-950/55 px-5 py-4"
-      style={{
-        borderColor: `${accent}88`,
-        boxShadow: `inset 0 0 32px ${accent}12`,
-      }}
+      className="pointer-events-none relative h-full w-full"
     >
-      <div className="flex w-[180px] shrink-0 items-center gap-3 pr-4">
+      <div
+        className="absolute inset-y-0 right-0 rounded-2xl border border-dashed bg-slate-950/35"
+        style={{
+          left: labelOffset,
+          borderColor: `${accent}88`,
+          boxShadow: `inset 0 0 32px ${accent}12`,
+        }}
+      />
+      <div
+        className="absolute top-1/2 flex -translate-y-1/2 items-center gap-3 rounded-xl border bg-slate-900 px-4 py-3 shadow-[0_8px_24px_rgba(2,6,23,0.35)]"
+        style={{
+          left: 0,
+          width: BLOCK_LABEL_WIDTH,
+          borderColor: `${accent}88`,
+        }}
+      >
         <span
           aria-hidden="true"
           className="h-2.5 w-2.5 shrink-0 rounded-full"
           style={{ backgroundColor: accent, boxShadow: `0 0 12px ${accent}` }}
         />
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-100">
-            {data.name}
-          </div>
-          {data.description && (
-            <div className="mt-1 truncate text-[10px] text-slate-400">
-              {data.description}
-            </div>
-          )}
+        <div className="min-w-0 truncate text-sm font-semibold text-slate-100">
+          {data.name}
         </div>
       </div>
+      <span
+        aria-hidden="true"
+        className="absolute top-1/2 h-px -translate-y-1/2"
+        style={{
+          left: BLOCK_LABEL_WIDTH,
+          width: BLOCK_LABEL_GAP,
+          backgroundColor: `${accent}88`,
+        }}
+      />
     </div>
   );
 }
