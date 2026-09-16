@@ -24,8 +24,10 @@ const adminApi = vi.hoisted(() => ({
   revokeAdminInvitation: vi.fn(),
   fetchAdminFeedback: vi.fn(),
   fetchAdminAnnouncements: vi.fn(),
+  fetchAdminProviderConfiguration: vi.fn(),
   createAdminAnnouncement: vi.fn(),
   deleteAdminAnnouncement: vi.fn(),
+  switchAdminProvider: vi.fn(),
 }));
 
 vi.mock('./adminClient', () => adminApi);
@@ -177,7 +179,47 @@ beforeEach(() => {
   );
   adminApi.fetchAdminFeedback.mockResolvedValue({ items: [], total: 0 });
   adminApi.fetchAdminAnnouncements.mockResolvedValue([]);
+  adminApi.fetchAdminProviderConfiguration.mockResolvedValue(providerConfiguration());
 });
+
+function providerConfiguration() {
+  return {
+    active: {
+      id: 'siliconflow-qwen3-8b',
+      provider: 'SiliconFlow',
+      name: 'Qwen3-8B',
+      modelId: 'Qwen/Qwen3-8B',
+      endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+      contextWindow: 131072,
+      maxTokens: 8192,
+      active: true,
+    },
+    options: [
+      {
+        id: 'siliconflow-qwen3-8b',
+        provider: 'SiliconFlow',
+        name: 'Qwen3-8B',
+        modelId: 'Qwen/Qwen3-8B',
+        endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+        contextWindow: 131072,
+        maxTokens: 8192,
+        active: true,
+      },
+      {
+        id: 'siliconflow-qwen2.5-7b-instruct',
+        provider: 'SiliconFlow',
+        name: 'Qwen2.5-7B-Instruct',
+        modelId: 'Qwen/Qwen2.5-7B-Instruct',
+        endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+        contextWindow: 32768,
+        maxTokens: 8192,
+        active: false,
+      },
+    ],
+    workerStatus: 'running',
+    switchScope: 'live',
+  };
+}
 
 function renderAdminPanel() {
   const queryClient = new QueryClient({
@@ -195,7 +237,7 @@ function renderAdminPanel() {
 }
 
 describe('AdminPanel', () => {
-  it('renders the seven tabs, opens the overview by default, and goes back', async () => {
+  it('renders the provider tab, opens the overview by default, and goes back', async () => {
     const user = userEvent.setup();
     const { props } = renderAdminPanel();
 
@@ -209,6 +251,7 @@ describe('AdminPanel', () => {
     expect(screen.getByRole('tab', { name: '请求观测' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '反馈' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '公告' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '模型' })).toBeInTheDocument();
     expect(screen.getByRole('tablist')).toHaveClass('overflow-x-auto');
     expect(screen.getByRole('button', { name: '返回' })).toBeInTheDocument();
 
@@ -221,6 +264,13 @@ describe('AdminPanel', () => {
     expect(adminApi.fetchAdminRequestObservations).not.toHaveBeenCalled();
     expect(adminApi.fetchAdminFeedback).not.toHaveBeenCalled();
     expect(adminApi.fetchAdminAnnouncements).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('tab', { name: '模型' }));
+    await waitFor(() =>
+      expect(adminApi.fetchAdminProviderConfiguration).toHaveBeenCalledWith('csrf-secret'),
+    );
+    expect(screen.getByRole('heading', { name: 'Qwen3-8B' })).toBeInTheDocument();
+    expect(screen.getByText('Qwen2.5-7B-Instruct')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '返回' }));
     expect(props.onBack).toHaveBeenCalledTimes(1);
@@ -239,6 +289,33 @@ describe('AdminPanel', () => {
         { limit: 50, offset: 0 },
       ),
     );
+  });
+
+  it('switches the active provider from the model tab', async () => {
+    const user = userEvent.setup();
+    adminApi.switchAdminProvider.mockResolvedValue({
+      ...providerConfiguration(),
+      active: providerConfiguration().options[1],
+      options: providerConfiguration().options.map((profile, index) => ({
+        ...profile,
+        active: index === 1,
+      })),
+    });
+    renderAdminPanel();
+
+    await user.click(screen.getByRole('tab', { name: '模型' }));
+    await screen.findByRole('heading', { name: 'Qwen3-8B' });
+    await user.click(screen.getByRole('button', { name: '切换到此模型' }));
+
+    await waitFor(() =>
+      expect(adminApi.switchAdminProvider).toHaveBeenCalledWith(
+        'siliconflow-qwen2.5-7b-instruct',
+        'csrf-secret',
+      ),
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Qwen2.5-7B-Instruct' }),
+    ).toBeInTheDocument();
   });
 
   it('overview renders the metric cards and the tallest bar of the 7-day trend', async () => {

@@ -9,10 +9,12 @@ import {
   fetchAdminDashboard,
   fetchAdminFeedback,
   fetchAdminInvitations,
+  fetchAdminProviderConfiguration,
   fetchAdminRequestObservation,
   fetchAdminRequestObservations,
   revokeAdminInvitation,
   suspendAdminAccount,
+  switchAdminProvider,
 } from './adminClient';
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -22,6 +24,70 @@ afterEach(() => {
 });
 
 describe('adminClient', () => {
+  it('reads the provider configuration without exposing credentials', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        active: {
+          id: 'siliconflow-qwen3-8b',
+          provider: 'SiliconFlow',
+          name: 'Qwen3-8B',
+          modelId: 'Qwen/Qwen3-8B',
+          endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+          contextWindow: 131072,
+          maxTokens: 8192,
+          active: true,
+        },
+        options: [],
+        workerStatus: 'running',
+        switchScope: 'live',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchAdminProviderConfiguration('csrf-secret')).resolves.toMatchObject({
+      active: expect.objectContaining({ modelId: 'Qwen/Qwen3-8B' }),
+      options: [],
+      workerStatus: 'running',
+      switchScope: 'live',
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/provider', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    });
+  });
+
+  it('switches an allowlisted provider with the CSRF token', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        active: {
+          id: 'siliconflow-qwen2.5-7b-instruct',
+          provider: 'SiliconFlow',
+          name: 'Qwen2.5-7B-Instruct',
+          modelId: 'Qwen/Qwen2.5-7B-Instruct',
+          endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+          contextWindow: 32768,
+          maxTokens: 8192,
+          active: true,
+        },
+        options: [],
+        workerStatus: 'running',
+        switchScope: 'live',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await switchAdminProvider('siliconflow-qwen2.5-7b-instruct', 'csrf-secret');
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/provider', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': 'csrf-secret',
+      },
+      body: JSON.stringify({ providerId: 'siliconflow-qwen2.5-7b-instruct' }),
+    });
+  });
   it('reads the dashboard aggregates with same-origin credentials', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({

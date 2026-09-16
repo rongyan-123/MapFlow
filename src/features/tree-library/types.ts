@@ -1,9 +1,18 @@
-import type { SkillEdge, SkillNode, SkillTree } from '../../types/learning';
+import type {
+  SkillBlock,
+  SkillEdge,
+  SkillNode,
+  SkillNodeBlockAssignment,
+  SkillTree,
+} from '../../types/learning';
 
 export interface TreeGraph {
   tree: SkillTree;
   nodes: SkillNode[];
   edges: SkillEdge[];
+  /** 旧版接口可能没有块字段，客户端按空数组兼容。 */
+  blocks?: SkillBlock[];
+  node_block_assignments?: SkillNodeBlockAssignment[];
 }
 
 export interface PublicTreeCatalog {

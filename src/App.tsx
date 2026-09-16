@@ -40,17 +40,23 @@ import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialo
 import { readPlatformGenerationEntitlements } from './features/tree-generation/treeGenerationClient';
 import {
   addTreeToPersonalLibrary,
+  deletePersonalTree,
   fetchPersonalLibrary,
   fetchPersonalTree,
   fetchPublicTree,
   fetchPublicTrees,
+  renamePersonalTree,
   setNodeCompletion,
 } from './features/tree-library/treeLibraryClient';
-import type { TreeGraph } from './features/tree-library/types';
+import type { PersonalLibrary, TreeGraph } from './features/tree-library/types';
 import TreeExportMenu from './features/tree-library/TreeExportMenu';
+import TreeLibraryActionDialog, {
+  type TreeLibraryAction,
+} from './features/tree-library/TreeLibraryActionDialog';
 import type {
   LearningTreeSnapshot,
   SkillNode,
+  TreeLayoutMode,
   TreeDisplayMode,
 } from './types/learning';
 
@@ -83,6 +89,12 @@ interface AddTreeMutationVariables {
   treeId: string;
   exploration?: ExplorationAddRequest;
   join?: JoinAddRequest;
+}
+
+interface TreeActionTarget {
+  action: TreeLibraryAction;
+  libraryEntryId: string;
+  title: string;
 }
 
 const CONSOLE_ENTRY_MEMORY_KEY = 'mapflow.entry.has-entered-console';
@@ -176,9 +188,11 @@ function ConsoleApp() {
   const [initialChatDraftRevision, setInitialChatDraftRevision] = useState(0);
   const [completion, setCompletion] = useState<{ node: SkillNode; nonce: number } | null>(null);
   const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
+  const [mcpGuideOpen, setMcpGuideOpen] = useState(false);
   const [generationSessionId, setGenerationSessionId] = useState<string | null>(
     readGenerationSessionId,
   );
+  const [layoutMode, setLayoutMode] = useState<TreeLayoutMode>('relationship');
   const [mobileView, setMobileView] = useState<MobileView>('list');
   const [chatOpen, setChatOpen] = useState(false);
   const [chatWidth, setChatWidth] = useState(DEFAULT_CHAT_WIDTH);
@@ -186,7 +200,6 @@ function ConsoleApp() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [announcementsOpen, setAnnouncementsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [mcpGuideOpen, setMcpGuideOpen] = useState(false);
   const [personalSidebarOpen, setPersonalSidebarOpen] = useState(() =>
     readBooleanPreference('mapflow.layout.personal-sidebar-open', true),
   );
@@ -197,6 +210,7 @@ function ConsoleApp() {
   const [onboardingState, setOnboardingState] = useState<ConsoleOnboardingState>(() =>
     readStoredOnboardingState(session?.account.playerId ?? null),
   );
+  const [treeActionTarget, setTreeActionTarget] = useState<TreeActionTarget | null>(null);
   const completedGenerationSessionIdRef = useRef<string | null>(null);
   const pendingExplorationIntentRef = useRef<PendingExplorationIntent | null>(null);
   const pendingJoinIntentRef = useRef<PendingJoinIntent | null>(null);
@@ -395,6 +409,7 @@ function ConsoleApp() {
     setChatOpen(false);
     setConsoleMode('home');
     setMobileView('list');
+    setLayoutMode('relationship');
     if (!accountPlayerId) {
       clearPendingExplorationIntent();
       clearPendingJoinIntent();
@@ -499,6 +514,12 @@ function ConsoleApp() {
   const snapshot = activeGraph
     ? snapshotFromGraph(activeGraph, completedNodeIds)
     : null;
+  const hasBlockLayout = Boolean(
+    snapshot?.blocks?.length &&
+      snapshot.node_block_assignments?.some((assignment) =>
+        snapshot.blocks?.some((block) => block.id === assignment.block_id),
+      ),
+  );
 
   useEffect(() => {
     if (!activeGraph || consoleMode !== 'map') return;
@@ -633,6 +654,79 @@ function ConsoleApp() {
     activeJoinAddRequestRef.current = request;
     addTree.mutate({ treeId: request.treeId, join: request });
   }, [accountPlayerId, addTree, session]);
+  const treeActionMutation = useMutation({
+    mutationFn: async (variables: {
+      action: TreeLibraryAction;
+      libraryEntryId: string;
+      title?: string;
+    }) => {
+      if (!session) throw new Error('个人技能树会话已失效，请重新登录。');
+      if (variables.action === 'rename') {
+        return renamePersonalTree(
+          variables.libraryEntryId,
+          variables.title ?? '',
+          session.csrfToken,
+        );
+      }
+      return deletePersonalTree(variables.libraryEntryId, session.csrfToken);
+    },
+    onSuccess: async (_, variables) => {
+      const libraryEntryId = variables.libraryEntryId;
+      if (variables.action === 'rename' && variables.title) {
+        queryClient.setQueryData<PersonalLibrary>(personalTreeLibraryQueryKey, (current) => {
+          if (!current) return current;
+          return {
+            entries: current.entries.map((entry) =>
+              entry.library_entry_id === libraryEntryId
+                ? { ...entry, tree: { ...entry.tree, title: variables.title! } }
+                : entry,
+            ),
+          };
+        });
+        queryClient.setQueryData(
+          [...personalTreeLibraryQueryKey, libraryEntryId],
+          (current: Awaited<ReturnType<typeof fetchPersonalTree>> | undefined) =>
+            current
+              ? {
+                  ...current,
+                  graph: {
+                    ...current.graph,
+                    tree: { ...current.graph.tree, title: variables.title! },
+                  },
+                }
+              : current,
+        );
+      } else {
+        queryClient.setQueryData<PersonalLibrary>(personalTreeLibraryQueryKey, (current) =>
+          current
+            ? {
+                entries: current.entries.filter(
+                  (entry) => entry.library_entry_id !== libraryEntryId,
+                ),
+              }
+            : current,
+        );
+        queryClient.removeQueries({
+          queryKey: [...personalTreeLibraryQueryKey, libraryEntryId],
+        });
+        if (selectedLibraryEntryId === libraryEntryId) {
+          setSelectedLibraryEntryId(null);
+          setSelectedNodeId(null);
+          setCompletion(null);
+          setChatOpen(false);
+          setMobileView('list');
+        }
+      }
+      setTreeActionTarget(null);
+      treeActionMutation.reset();
+      await queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
+      if (variables.action === 'rename') {
+        await queryClient.invalidateQueries({
+          queryKey: [...personalTreeLibraryQueryKey, libraryEntryId],
+        });
+      }
+    },
+  });
 
   const completionMutation = useMutation({
     mutationFn: ({ nodeId, completed }: { nodeId: string; completed: boolean }) => {
@@ -668,6 +762,7 @@ function ConsoleApp() {
     setExplorationQuestion(null);
     setInitialChatDraft('');
     setConsoleMode('map');
+    setLayoutMode('relationship');
     setMobileView('graph');
     advanceWebsiteOnboarding('map-canvas');
   };
@@ -682,6 +777,7 @@ function ConsoleApp() {
     setExplorationQuestion(null);
     setInitialChatDraft('');
     setConsoleMode('map');
+    setLayoutMode('relationship');
     setMobileView('graph');
     advanceWebsiteOnboarding('map-canvas');
   };
@@ -805,6 +901,27 @@ function ConsoleApp() {
     void queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
   };
 
+  const openTreeAction = (
+    action: TreeLibraryAction,
+    entry: { library_entry_id: string; tree: { title: string } },
+  ) => {
+    treeActionMutation.reset();
+    setTreeActionTarget({
+      action,
+      libraryEntryId: entry.library_entry_id,
+      title: entry.tree.title,
+    });
+  };
+
+  const confirmTreeAction = (title?: string) => {
+    if (!treeActionTarget) return;
+    treeActionMutation.mutate({
+      action: treeActionTarget.action,
+      libraryEntryId: treeActionTarget.libraryEntryId,
+      ...(title ? { title } : {}),
+    });
+  };
+
   const openKnowledgeChat = (prompt?: string) => {
     if (!session) {
       openIdentityDialog();
@@ -887,19 +1004,9 @@ function ConsoleApp() {
     );
   }
 
-  if (publicCatalog.isPending) return <FullPageStatus message="正在读取公共技能树…" />;
-  if (publicCatalog.isError || !publicCatalog.data) {
-    return (
-      <FullPageStatus
-        title="公共技能树暂时无法读取"
-        message={readableError(publicCatalog.error)}
-        actionLabel="重新读取"
-        onAction={() => void publicCatalog.refetch()}
-      />
-    );
-  }
-
-  const selectedPublicTree = publicCatalog.data.trees.find(
+  const publicTrees = publicCatalog.data?.trees ?? [];
+  const publicCatalogUnavailable = !publicCatalog.data;
+  const selectedPublicTree = publicTrees.find(
     (tree) => tree.id === selectedPublicTreeId,
   );
   const selectedPersonalEntry = personalLibrary.data?.entries.find(
@@ -984,6 +1091,7 @@ function ConsoleApp() {
               setConsoleMode('home');
               setExplorationQuestion(null);
               setInitialChatDraft('');
+              setLayoutMode('relationship');
               setMobileView('list');
               setMoreOpen(false);
             }}
@@ -1045,6 +1153,18 @@ function ConsoleApp() {
                 >
                   产品首页
                 </a>
+                <button
+                  type="button"
+                  role="menuitem"
+                  aria-label="如何在自己的 Agent 里连接 MapFlow"
+                  onClick={() => {
+                    setMcpGuideOpen(true);
+                    setMoreOpen(false);
+                  }}
+                  className="rounded-xl px-3 py-2 text-left text-xs font-semibold text-violet-200 transition hover:bg-slate-900 hover:text-white"
+                >
+                  Agent 接入教程
+                </button>
                 <div role="none"><ThemeSwitcher /></div>
                 {session && (
                   <>
@@ -1121,7 +1241,7 @@ function ConsoleApp() {
         ) : (
           <WorkbenchHome
             mode={view === 'personal' ? 'personal' : 'public'}
-            publicTrees={publicCatalog.data.trees}
+            publicTrees={publicTrees}
             personalEntries={personalLibrary.data?.entries ?? []}
             personalLibraryPending={personalLibrary.isPending}
             personalLibraryError={
@@ -1176,7 +1296,7 @@ function ConsoleApp() {
               </h2>
               <p className="mt-1 text-[11px] leading-5 text-slate-600">
                 {view === 'public'
-                  ? '所有人可浏览；加入后生成独立进度。'
+                  ? '所有人可浏览；加入后复制成你的私有副本，独立记录进度。'
                   : '这里只显示当前账号已加入的树。'}
               </p>
             </div>
@@ -1192,15 +1312,39 @@ function ConsoleApp() {
 
           <div className="space-y-2">
             {view === 'public' ? (
-              publicCatalog.data.trees.map((tree) => (
-                <TreeChoice
-                  key={tree.id}
-                  title={tree.title}
-                  subtitle={`${tree.topic} · ${tree.total_nodes} 节点`}
-                  active={tree.id === selectedPublicTreeId}
-                  onClick={() => selectPublicTree(tree.id)}
-                />
-              ))
+              publicCatalog.isPending && publicCatalogUnavailable ? (
+                <SidebarMessage>正在读取公共技能树…</SidebarMessage>
+              ) : publicCatalogUnavailable ? (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-amber-400/30 bg-amber-400/5 px-3 py-3 text-xs leading-5 text-amber-100"
+                >
+                  <p className="font-semibold">公共技能树暂时无法读取</p>
+                  <p className="mt-1 text-amber-100/70">
+                    {readableError(publicCatalog.error)}
+                  </p>
+                  <button
+                    type="button"
+                    aria-label="重新读取公共树库"
+                    onClick={() => void publicCatalog.refetch()}
+                    className="mt-2 rounded-lg border border-amber-300/40 px-2.5 py-1.5 font-semibold text-amber-100 transition hover:bg-amber-300/10"
+                  >
+                    重新读取
+                  </button>
+                </div>
+              ) : publicTrees.length ? (
+                publicTrees.map((tree) => (
+                  <TreeChoice
+                    key={tree.id}
+                    title={tree.title}
+                    subtitle={`${tree.topic} · ${tree.total_nodes} 节点`}
+                    active={tree.id === selectedPublicTreeId}
+                    onClick={() => selectPublicTree(tree.id)}
+                  />
+                ))
+              ) : (
+                <SidebarMessage>当前还没有可浏览的公共技能树。</SidebarMessage>
+              )
             ) : personalLibrary.isPending ? (
               <SidebarMessage>正在读取个人树库…</SidebarMessage>
             ) : personalLibrary.isError ? (
@@ -1230,12 +1374,14 @@ function ConsoleApp() {
                         label="重命名"
                         title={entry.tree.title}
                         tone="rename"
+                        onClick={() => openTreeAction('rename', entry)}
                       />
                       <ReservedTreeAction
                         icon="×"
                         label="删除"
                         title={entry.tree.title}
                         tone="delete"
+                        onClick={() => openTreeAction('delete', entry)}
                       />
                     </>
                   }
@@ -1293,17 +1439,45 @@ function ConsoleApp() {
           className={`${mobileView === 'graph' ? 'block' : 'hidden'} relative min-w-0 flex-1 lg:block`}
         >
           {snapshot ? (
-            <SkillTreeCanvas
-              key={mobileView}
-              snapshot={snapshot}
-              displayMode={displayMode}
-              selectedNodeId={selectedNodeId}
-              onSelectNode={(nodeId) => {
-                setSelectedNodeId(nodeId);
-                setMobileView('detail');
-              }}
-            />
-          ) : mobileView !== 'graph' ? null : treePending ? (
+            <>
+              <div className="pointer-events-none absolute right-4 top-4 z-10">
+                <div
+                  aria-label="技能树布局切换"
+                  className="pointer-events-auto flex items-center gap-1 rounded-xl border border-slate-700/90 bg-slate-950/90 p-1 text-xs shadow-xl backdrop-blur"
+                >
+                  <LayoutButton
+                    active={layoutMode === 'relationship'}
+                    onClick={() => setLayoutMode('relationship')}
+                  >
+                    关系布局
+                  </LayoutButton>
+                  <LayoutButton
+                    active={layoutMode === 'blocks'}
+                    disabled={!hasBlockLayout}
+                    title={hasBlockLayout ? undefined : '这棵树还没有可用的块分组'}
+                    onClick={() => setLayoutMode('blocks')}
+                  >
+                    按块布局
+                  </LayoutButton>
+                </div>
+              </div>
+              <SkillTreeCanvas
+                key={mobileView}
+                snapshot={snapshot}
+                displayMode={displayMode}
+                layoutMode={layoutMode}
+                selectedNodeId={selectedNodeId}
+                onSelectNode={(nodeId) => {
+                  setSelectedNodeId(nodeId);
+                  setMobileView('detail');
+                }}
+              />
+            </>
+          ) : mobileView !== 'graph' ? null : view === 'public' && publicCatalog.isPending ? (
+            <InlineStatus message="正在读取公共技能树…" />
+          ) : view === 'public' && publicCatalogUnavailable ? (
+            <InlineStatus message="公共技能树暂时无法读取，可先切换到其他功能。" />
+          ) : treePending ? (
             <InlineStatus message="正在加载完整技能树…" />
           ) : treeError ? (
             <InlineStatus
@@ -1420,6 +1594,11 @@ function ConsoleApp() {
               onMessageSent={() => {
                 advanceWebsiteOnboarding('progress');
               }}
+              onTreeChanged={() =>
+                queryClient.invalidateQueries({
+                  queryKey: personalTreeLibraryQueryKey,
+                })
+              }
             />
           </ResizableChatPane>
         )}
@@ -1536,6 +1715,14 @@ function ConsoleApp() {
             产品首页
           </a>
           <DrawerItem
+            onClick={() => {
+              setMcpGuideOpen(true);
+              setDrawerOpen(false);
+            }}
+          >
+            Agent 接入教程
+          </DrawerItem>
+          <DrawerItem
             active={view === 'public'}
             onClick={() => {
               clearPendingExplorationIntent();
@@ -1612,6 +1799,20 @@ function ConsoleApp() {
         onConfirm={() => void confirmLogout()}
       />
 
+      <TreeLibraryActionDialog
+        action={treeActionTarget?.action ?? null}
+        title={treeActionTarget?.title ?? ''}
+        pending={treeActionMutation.isPending}
+        error={treeActionMutation.error ? readableError(treeActionMutation.error) : null}
+        onCancel={() => {
+          if (!treeActionMutation.isPending) {
+            treeActionMutation.reset();
+            setTreeActionTarget(null);
+          }
+        }}
+        onConfirm={confirmTreeAction}
+      />
+
     </div>
   );
 }
@@ -1654,6 +1855,8 @@ function snapshotFromGraph(
       status: 'completed',
       evidence: '',
     })),
+    blocks: graph.blocks ?? [],
+    node_block_assignments: graph.node_block_assignments ?? [],
   };
 }
 
@@ -1685,6 +1888,37 @@ function ViewButton({
           ? 'text-slate-600 hover:bg-white hover:text-teal-800'
           : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
       }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function LayoutButton({
+  active,
+  disabled,
+  title,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  title?: string;
+  onClick: () => void;
+  children: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      disabled={disabled}
+      title={title}
+      onClick={onClick}
+      className={`rounded-lg px-2.5 py-1.5 font-semibold transition ${
+        active
+          ? 'bg-cyan-300 text-slate-950'
+          : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+      } disabled:cursor-not-allowed disabled:opacity-40`}
     >
       {children}
     </button>
@@ -1887,19 +2121,21 @@ function ReservedTreeAction({
   label,
   title,
   tone,
+  onClick,
 }: {
   icon: string;
   label: string;
   title: string;
   tone: 'rename' | 'delete';
+  onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      disabled
-      title="即将支持"
+      title={label}
       aria-label={`${label}技能树：${title}`}
-      className={`mapflow-tree-action mapflow-tree-action--uniform mapflow-tree-action--${tone} flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-semibold leading-tight transition duration-200 disabled:cursor-not-allowed`}
+      onClick={onClick}
+      className={`mapflow-tree-action mapflow-tree-action--uniform mapflow-tree-action--${tone} flex w-full flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-semibold leading-tight transition duration-200`}
     >
       <span aria-hidden="true" className="text-base leading-none">
         {icon}

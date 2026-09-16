@@ -7,13 +7,22 @@ import {
   useEdgesState,
   useNodesState,
   type Edge,
+  type Node,
+  type NodeProps,
   type ReactFlowInstance,
 } from '@xyflow/react';
 import type {
   LearningTreeSnapshot,
+  TreeLayoutMode,
   TreeDisplayMode,
 } from '../../types/learning';
 import { computeTreeLayout } from './layoutTree';
+import {
+  BLOCK_LABEL_GAP,
+  BLOCK_LABEL_WIDTH,
+  computeBlockLayoutModel,
+  type BlockLayoutModel,
+} from './layoutBlocks';
 import SkillNodeComponent, {
   type SkillFlowNode,
 } from './SkillNode';
@@ -25,13 +34,72 @@ import {
 } from './skillTreeViewport';
 import './skill-tree-canvas.css';
 
-const nodeTypes = { skill: SkillNodeComponent };
-type SkillTreeFlowInstance = ReactFlowInstance<SkillFlowNode, Edge>;
+interface BlockLaneData extends Record<string, unknown> {
+  name: string;
+  description: string | null;
+  color: string | null;
+}
+
+type BlockLaneFlowNode = Node<BlockLaneData, 'block'>;
+type SkillTreeFlowNode = SkillFlowNode | BlockLaneFlowNode;
+type SkillTreeFlowInstance = ReactFlowInstance<SkillTreeFlowNode, Edge>;
+
+function BlockLaneComponent({ data }: NodeProps<BlockLaneFlowNode>) {
+  const accent = data.color ?? '#38bdf8';
+  const labelOffset = BLOCK_LABEL_WIDTH + BLOCK_LABEL_GAP;
+
+  return (
+    <div
+      data-mapflow-block-lane="true"
+      className="pointer-events-none relative h-full w-full"
+    >
+      <div
+        className="absolute inset-y-0 right-0 rounded-2xl border border-dashed bg-slate-950/35"
+        style={{
+          left: labelOffset,
+          borderColor: `${accent}88`,
+          boxShadow: `inset 0 0 32px ${accent}12`,
+        }}
+      />
+      <div
+        className="absolute top-1/2 flex -translate-y-1/2 items-center gap-3 rounded-xl border bg-slate-900 px-4 py-3 shadow-[0_8px_24px_rgba(2,6,23,0.35)]"
+        style={{
+          left: 0,
+          width: BLOCK_LABEL_WIDTH,
+          borderColor: `${accent}88`,
+        }}
+      >
+        <span
+          aria-hidden="true"
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: accent, boxShadow: `0 0 12px ${accent}` }}
+        />
+        <div className="min-w-0 truncate text-sm font-semibold text-slate-100">
+          {data.name}
+        </div>
+      </div>
+      <span
+        aria-hidden="true"
+        className="absolute top-1/2 h-px -translate-y-1/2"
+        style={{
+          left: BLOCK_LABEL_WIDTH,
+          width: BLOCK_LABEL_GAP,
+          backgroundColor: `${accent}88`,
+        }}
+      />
+    </div>
+  );
+}
+
+const nodeTypes = {
+  skill: SkillNodeComponent,
+  block: BlockLaneComponent,
+};
 export type SkillTreeInteractionMode = 'default' | 'landing-preview' | 'passive';
 export type SkillTreeSurfaceTheme = 'default' | 'light';
 
 function getViewportAnchorId(
-  nodes: SkillFlowNode[],
+  nodes: SkillTreeFlowNode[],
   edges: Edge[],
   preferredNodeId: string | null,
   fallbackNodeId: string | null,
@@ -60,6 +128,7 @@ function isUsableViewportSize(size: ViewportSize): boolean {
 interface SkillTreeCanvasProps {
   snapshot: LearningTreeSnapshot;
   displayMode: TreeDisplayMode;
+  layoutMode?: TreeLayoutMode;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string) => void;
   interactionMode?: SkillTreeInteractionMode;
@@ -70,6 +139,7 @@ interface SkillTreeCanvasProps {
 export default function SkillTreeCanvas({
   snapshot,
   displayMode,
+  layoutMode = 'relationship',
   selectedNodeId,
   onSelectNode,
   interactionMode = 'default',
@@ -96,39 +166,121 @@ export default function SkillTreeCanvas({
     () => new Map(snapshot.progress.map((item) => [item.node_id, item])),
     [snapshot.progress],
   );
-  const positions = useMemo(
+  const blockNameByNodeId = useMemo(() => {
+    const blockNameById = new Map(
+      (snapshot.blocks ?? []).map((block) => [block.id, block.name]),
+    );
+    return new Map(
+      (snapshot.node_block_assignments ?? [])
+        .map((assignment) => [
+          assignment.node_id,
+          blockNameById.get(assignment.block_id),
+        ])
+        .filter((entry): entry is [string, string] => Boolean(entry[1])),
+    );
+  }, [snapshot.blocks, snapshot.node_block_assignments]);
+  const blockLayout = useMemo<BlockLayoutModel>(
     () =>
-      snapshot.tree.layout_mode === 'manual'
-        ? new Map(
-            snapshot.nodes.map((node) => [
-              node.id,
-              { x: node.position_x, y: node.position_y },
-            ]),
-          )
-        : computeTreeLayout(snapshot.nodes, snapshot.edges),
-    [snapshot.edges, snapshot.nodes, snapshot.tree.layout_mode],
+      computeBlockLayoutModel(
+        snapshot.nodes,
+        snapshot.edges,
+        snapshot.blocks ?? [],
+        snapshot.node_block_assignments ?? [],
+      ),
+    [
+      snapshot.blocks,
+      snapshot.edges,
+      snapshot.node_block_assignments,
+      snapshot.nodes,
+    ],
   );
-  const generatedNodes = useMemo<SkillFlowNode[]>(
-    () =>
-      snapshot.nodes.map((node) => ({
+  const positions = useMemo(() => {
+    if (layoutMode === 'blocks' && blockLayout.positions.size > 0) {
+      return blockLayout.positions;
+    }
+    return snapshot.tree.layout_mode === 'manual'
+      ? new Map(
+          snapshot.nodes.map((node) => [
+            node.id,
+            { x: node.position_x, y: node.position_y },
+          ]),
+        )
+      : computeTreeLayout(snapshot.nodes, snapshot.edges);
+  }, [
+    blockLayout.positions,
+    layoutMode,
+    snapshot.edges,
+    snapshot.nodes,
+    snapshot.tree.layout_mode,
+  ]);
+  const generatedNodes = useMemo<
+    Array<SkillFlowNode | BlockLaneFlowNode>
+  >(
+    () => {
+      const lanes: BlockLaneFlowNode[] =
+        layoutMode === 'blocks'
+          ? blockLayout.lanes.map((lane) => ({
+              id: `block-${lane.blockId}`,
+              type: 'block',
+              position: { x: lane.x, y: lane.y },
+              width: lane.width,
+              height: lane.height,
+              draggable: false,
+              selectable: false,
+              zIndex: 0,
+              style: { pointerEvents: 'none' },
+              data: {
+                name: lane.name,
+                description: null,
+                color: lane.color,
+              },
+            }))
+          : [];
+      const skills: SkillFlowNode[] = snapshot.nodes.map((node) => ({
         id: node.id,
         type: 'skill',
         position: positions.get(node.id) ?? {
           x: node.position_x,
           y: node.position_y,
         },
+        zIndex: 1,
         data: {
           node,
           progress: progressMap.get(node.id) ?? null,
           isCurrent: node.id === snapshot.current_node_id,
           displayMode,
+          layoutMode,
+          // 块模式由泳道统一标注，避免每个节点重复显示块名造成拥挤。
+          blockName:
+            layoutMode === 'blocks' ? undefined : blockNameByNodeId.get(node.id),
         },
-      })),
-    [displayMode, positions, progressMap, snapshot.current_node_id, snapshot.nodes],
+      }));
+      return [...lanes, ...skills];
+    },
+    [
+      blockLayout.lanes,
+      blockNameByNodeId,
+      displayMode,
+      layoutMode,
+      positions,
+      progressMap,
+      snapshot.current_node_id,
+      snapshot.nodes,
+    ],
   );
   const generatedEdges = useMemo<Edge[]>(
-    () =>
-      snapshot.edges.map((edge) => {
+    () => {
+      const visibleEdges =
+        layoutMode === 'blocks' && !selectedNodeId
+          ? []
+          : layoutMode === 'blocks'
+            ? snapshot.edges.filter(
+                (edge) =>
+                  edge.source_node_id === selectedNodeId ||
+                  edge.target_node_id === selectedNodeId,
+              )
+            : snapshot.edges;
+      return visibleEdges.map((edge) => {
         const sourceStatus = progressMap.get(edge.source_node_id)?.status;
         const mastered = sourceStatus === 'mastered';
         const completed = sourceStatus === 'completed';
@@ -152,11 +304,12 @@ export default function SkillTreeCanvas({
             strokeWidth: completed || mastered ? 2 : 1.2,
           },
         };
-      }),
-    [displayMode, progressMap, snapshot.edges],
+      });
+    },
+    [displayMode, layoutMode, progressMap, selectedNodeId, snapshot.edges],
   );
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<SkillFlowNode>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<SkillTreeFlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   const graphSignature = useMemo(
@@ -164,6 +317,7 @@ export default function SkillTreeCanvas({
       [
         snapshot.tree.id,
         snapshot.tree.layout_mode ?? 'auto',
+        layoutMode,
         snapshot.current_node_id ?? '',
         snapshot.nodes.map((node) => node.id).join(','),
         snapshot.edges.map((edge) => edge.id).join(','),
@@ -171,6 +325,7 @@ export default function SkillTreeCanvas({
     [
       snapshot.current_node_id,
       snapshot.edges,
+      layoutMode,
       snapshot.nodes,
       snapshot.tree.id,
       snapshot.tree.layout_mode,
@@ -356,7 +511,9 @@ export default function SkillTreeCanvas({
         onInit={handleFlowInit}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onNodeClick={(_, node) => onSelectNode(node.id)}
+        onNodeClick={(_, node) => {
+          if (node.type === 'skill') onSelectNode(node.id);
+        }}
         nodesDraggable={!isLandingPreview && !isPassive}
         nodesConnectable={!isLandingPreview && !isPassive}
         panOnDrag={!isPassive}

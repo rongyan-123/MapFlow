@@ -5,6 +5,7 @@ import AuditLogTab from './AuditLogTab';
 import FeedbackTab from './FeedbackTab';
 import InvitationsTab from './InvitationsTab';
 import OverviewTab from './OverviewTab';
+import ProviderTab from './ProviderTab';
 import RequestObservationsTab from './RequestObservationsTab';
 
 export interface AdminPanelProps {
@@ -19,7 +20,8 @@ type AdminTab =
   | 'audit'
   | 'requests'
   | 'feedback'
-  | 'announcements';
+  | 'announcements'
+  | 'provider';
 
 const TABS: { id: AdminTab; label: string }[] = [
   { id: 'overview', label: '概览' },
@@ -29,6 +31,7 @@ const TABS: { id: AdminTab; label: string }[] = [
   { id: 'requests', label: '请求观测' },
   { id: 'feedback', label: '反馈' },
   { id: 'announcements', label: '公告' },
+  { id: 'provider', label: '模型' },
 ];
 
 export default function AdminPanel({ onBack, csrfToken }: AdminPanelProps) {
@@ -84,6 +87,7 @@ export default function AdminPanel({ onBack, csrfToken }: AdminPanelProps) {
         )}
         {activeTab === 'feedback' && <FeedbackTab csrfToken={csrfToken} />}
         {activeTab === 'announcements' && <AnnouncementsTab csrfToken={csrfToken} />}
+        {activeTab === 'provider' && <ProviderTab csrfToken={csrfToken} />}
       </main>
     </div>
   );

@@ -6,6 +6,8 @@ import {
   fetchPersonalTree,
   fetchPublicTree,
   fetchPublicTrees,
+  deletePersonalTree,
+  renamePersonalTree,
   setNodeCompletion,
 } from './treeLibraryClient';
 
@@ -24,9 +26,7 @@ describe('treeLibraryClient', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(fetchPublicTrees()).resolves.toEqual({
-      trees: [{ ...tree, layout_mode: 'auto' }],
-    });
+    await expect(fetchPublicTrees()).resolves.toEqual({ trees: [tree] });
     await expect(fetchPublicTree('tree/id')).resolves.toMatchObject({
       view_mode: 'showcase',
       graph: { tree },
@@ -186,21 +186,69 @@ describe('treeLibraryClient', () => {
     });
   });
 
-  it('preserves an explicit manual layout mode and rejects unknown modes', async () => {
+  it('renames and deletes a personal tree with the account CSRF token', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await renamePersonalTree('entry/id', '我的树', 'csrf-secret');
+    await deletePersonalTree('entry/id', 'csrf-secret');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/me/tree-library/entry%2Fid', {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': 'csrf-secret',
+      },
+      body: JSON.stringify({ title: '我的树' }),
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/me/tree-library/entry%2Fid', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'X-CSRF-Token': 'csrf-secret',
+      },
+    });
+  });
+
+  it('reads block metadata while remaining compatible with legacy graphs', async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ trees: [{ ...tree, layout_mode: 'manual' }] }),
+      jsonResponse({
+        view_mode: 'showcase',
+        graph: {
+          ...graph,
+          blocks: [
+            {
+              block_id: 'block-1',
+              name: '基础能力',
+              color: '#22d3ee',
+              sort_order: 0,
+            },
+          ],
+          node_block_assignments: [
+            { node_id: 'node-1', block_id: 'block-1' },
+          ],
+        },
+      }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(fetchPublicTrees()).resolves.toEqual({
-      trees: [{ ...tree, layout_mode: 'manual' }],
-    });
-
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ trees: [{ ...tree, layout_mode: 'stored' }] }),
-    );
-    await expect(fetchPublicTrees()).rejects.toMatchObject({
-      code: 'tree_library.invalid_response',
+    await expect(fetchPublicTree(tree.id)).resolves.toMatchObject({
+      graph: {
+        blocks: [
+          {
+            id: 'block-1',
+            name: '基础能力',
+            color: '#22d3ee',
+            sort_order: 0,
+          },
+        ],
+        node_block_assignments: [{ node_id: 'node-1', block_id: 'block-1' }],
+      },
     });
   });
 });

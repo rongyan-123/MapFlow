@@ -15,6 +15,7 @@ interface KnowledgeChatPanelProps {
   onClose: () => void;
   onCreditChanged?: () => void | Promise<void>;
   onMessageSent?: () => void | Promise<void>;
+  onTreeChanged?: () => void | Promise<void>;
   isVisible?: boolean;
   initialDraft?: string;
   initialDraftRevision?: number;
@@ -27,6 +28,7 @@ export default function KnowledgeChatPanel({
   onClose,
   onCreditChanged,
   onMessageSent,
+  onTreeChanged,
   isVisible = true,
   initialDraft = '',
   initialDraftRevision = 0,
@@ -99,6 +101,7 @@ export default function KnowledgeChatPanel({
     setLastCharge(null);
     setStreamingAnswer('');
     setPending(true);
+    let treeChanged = false;
 
     try {
       const response = await sendKnowledgeChatMessageStream(
@@ -116,6 +119,7 @@ export default function KnowledgeChatPanel({
           const confirmed = typeof window !== 'undefined' && typeof window.confirm === 'function'
             ? window.confirm(confirmationText)
             : false;
+          treeChanged = treeChanged || confirmed;
           await resolveKnowledgeChatApproval(
             libraryEntryId,
             approval.approvalRequestId,
@@ -133,6 +137,7 @@ export default function KnowledgeChatPanel({
       setLastCharge(response.chargedCredits);
       await onCreditChanged?.();
       await onMessageSent?.();
+      if (treeChanged) await onTreeChanged?.();
     } catch (caught: unknown) {
       setStreamingAnswer(null);
       setError(toChatError(caught, '知识聊天暂时不可用，请稍后重试。'));

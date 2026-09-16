@@ -9,10 +9,11 @@ import type {
 } from './types';
 import type {
   RecommendedDepth,
+  SkillBlock,
   SkillEdge,
   SkillNode,
+  SkillNodeBlockAssignment,
   SkillTree,
-  TreeLayoutMode,
 } from '../../types/learning';
 
 const JSON_GET: RequestInit = {
@@ -100,6 +101,39 @@ export async function addTreeToPersonalLibrary(
     library_entry_id: body.library_entry_id,
     tree_id: body.tree_id,
   };
+}
+
+export async function renamePersonalTree(
+  libraryEntryId: string,
+  title: string,
+  csrfToken: string,
+): Promise<void> {
+  const entry = encodeURIComponent(libraryEntryId);
+  await request(`/api/me/tree-library/${entry}`, {
+    method: 'PATCH',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify({ title }),
+  });
+}
+
+export async function deletePersonalTree(
+  libraryEntryId: string,
+  csrfToken: string,
+): Promise<void> {
+  const entry = encodeURIComponent(libraryEntryId);
+  await request(`/api/me/tree-library/${entry}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+  });
 }
 
 export async function setNodeCompletion(
@@ -200,7 +234,21 @@ function parseGraph(value: unknown): TreeGraph {
     tree: parseSkillTree(value.tree),
     nodes: value.nodes.map(parseSkillNode),
     edges: value.edges.map(parseSkillEdge),
+    blocks: parseOptionalArray(value.blocks, parseSkillBlock),
+    node_block_assignments: parseOptionalArray(
+      value.node_block_assignments,
+      parseSkillNodeBlockAssignment,
+    ),
   };
+}
+
+function parseOptionalArray<T>(
+  value: unknown,
+  parser: (item: unknown) => T,
+): T[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw invalidResponseError();
+  return value.map(parser);
 }
 
 function parseSkillTree(value: unknown): SkillTree {
@@ -211,8 +259,7 @@ function parseSkillTree(value: unknown): SkillTree {
     typeof value.title !== 'string' ||
     !isNullableString(value.description) ||
     typeof value.difficulty_level !== 'string' ||
-    !isNonNegativeInteger(value.total_nodes) ||
-    (value.layout_mode !== undefined && !isTreeLayoutMode(value.layout_mode))
+    !isNonNegativeInteger(value.total_nodes)
   ) {
     throw invalidResponseError();
   }
@@ -223,7 +270,12 @@ function parseSkillTree(value: unknown): SkillTree {
     description: value.description,
     difficulty_level: value.difficulty_level,
     total_nodes: value.total_nodes,
-    layout_mode: value.layout_mode === 'manual' ? 'manual' : 'auto',
+    ...(isNonNegativeInteger(value.revision)
+      ? { revision: value.revision }
+      : {}),
+    ...(value.layout_mode === 'auto' || value.layout_mode === 'manual'
+      ? { layout_mode: value.layout_mode }
+      : {}),
   };
 }
 
@@ -291,6 +343,40 @@ function parseSkillEdge(value: unknown): SkillEdge {
   };
 }
 
+function parseSkillBlock(value: unknown): SkillBlock {
+  if (
+    !isRecord(value) ||
+    typeof value.block_id !== 'string' ||
+    typeof value.name !== 'string' ||
+    !isNullableString(value.color) ||
+    !isNonNegativeInteger(value.sort_order)
+  ) {
+    throw invalidResponseError();
+  }
+  return {
+    id: value.block_id,
+    name: value.name,
+    color: value.color,
+    sort_order: value.sort_order,
+  };
+}
+
+function parseSkillNodeBlockAssignment(
+  value: unknown,
+): SkillNodeBlockAssignment {
+  if (
+    !isRecord(value) ||
+    typeof value.node_id !== 'string' ||
+    typeof value.block_id !== 'string'
+  ) {
+    throw invalidResponseError();
+  }
+  return {
+    node_id: value.node_id,
+    block_id: value.block_id,
+  };
+}
+
 function invalidResponseError(): TreeLibraryApiError {
   return new TreeLibraryApiError(
     502,
@@ -327,8 +413,4 @@ function isRecommendedDepth(value: unknown): value is RecommendedDepth {
     value === 'Transfer' ||
     value === 'DeepMastery'
   );
-}
-
-function isTreeLayoutMode(value: unknown): value is TreeLayoutMode {
-  return value === 'auto' || value === 'manual';
 }

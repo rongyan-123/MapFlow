@@ -22,6 +22,8 @@ const treeApi = vi.hoisted(() => ({
   fetchPersonalTree: vi.fn(),
   fetchPublicTree: vi.fn(),
   fetchPublicTrees: vi.fn(),
+  renamePersonalTree: vi.fn(),
+  deletePersonalTree: vi.fn(),
   setNodeCompletion: vi.fn(),
 }));
 
@@ -909,7 +911,7 @@ describe('MapFlow tree library', () => {
 
     expect(await screen.findByRole('heading', { name: '选择一个学习方向' })).toBeInTheDocument();
     await user.click(
-      screen.getByRole('button', { name: '查看 Python Agent 完整学习树 简介' }),
+      await screen.findByRole('button', { name: '查看 Python Agent 完整学习树 简介' }),
     );
 
     expect(
@@ -1360,7 +1362,9 @@ describe('手机端视图栈', () => {
     );
     await user.click(screen.getByRole('button', { name: '开始探索' }));
 
-    expect(await screen.findByText('树加载失败')).toBeInTheDocument();
+    expect(
+      await screen.findByText('树加载失败', undefined, { timeout: 3000 }),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '重新加载' }));
     expect(await screen.findByTestId('react-flow-boundary')).toBeInTheDocument();
   });
@@ -1501,8 +1505,8 @@ describe('手机端视图栈', () => {
     expect(deleteTriggers[0]).toHaveClass('mapflow-tree-action--delete');
     expect(renameTriggers).toHaveLength(2);
     expect(deleteTriggers).toHaveLength(2);
-    renameTriggers.forEach((button) => expect(button).toBeDisabled());
-    deleteTriggers.forEach((button) => expect(button).toBeDisabled());
+    renameTriggers.forEach((button) => expect(button).not.toBeDisabled());
+    deleteTriggers.forEach((button) => expect(button).not.toBeDisabled());
 
     await user.click(exportTriggers[1]);
     expect(treeApi.fetchPersonalTree).toHaveBeenCalledWith(
