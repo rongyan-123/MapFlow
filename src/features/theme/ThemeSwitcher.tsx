@@ -11,18 +11,21 @@ export const THEME_OPTIONS = [
 
 export type MapFlowTheme = (typeof THEME_OPTIONS)[number]['value'];
 
+export function ThemeInitializer() {
+  const [theme] = useState<MapFlowTheme>(readStoredTheme);
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  return null;
+}
+
 export default function ThemeSwitcher() {
   const [theme, setTheme] = useState<MapFlowTheme>(readStoredTheme);
 
   useEffect(() => {
-    document.documentElement.dataset.mapflowTheme = theme;
-    document.documentElement.style.colorScheme =
-      theme === 'dark' || theme === 'blue-gray' ? 'dark' : 'light';
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-    } catch {
-      // Theme still applies for this page when storage is unavailable.
-    }
+    applyTheme(theme);
   }, [theme]);
 
   return (
@@ -43,6 +46,17 @@ export default function ThemeSwitcher() {
       </select>
     </label>
   );
+}
+
+function applyTheme(theme: MapFlowTheme) {
+  document.documentElement.dataset.mapflowTheme = theme;
+  document.documentElement.style.colorScheme =
+    theme === 'dark' || theme === 'blue-gray' ? 'dark' : 'light';
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // Theme still applies for this page when storage is unavailable.
+  }
 }
 
 function readStoredTheme(): MapFlowTheme {

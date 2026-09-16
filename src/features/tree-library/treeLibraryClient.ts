@@ -12,6 +12,7 @@ import type {
   SkillEdge,
   SkillNode,
   SkillTree,
+  TreeLayoutMode,
 } from '../../types/learning';
 
 const JSON_GET: RequestInit = {
@@ -210,7 +211,8 @@ function parseSkillTree(value: unknown): SkillTree {
     typeof value.title !== 'string' ||
     !isNullableString(value.description) ||
     typeof value.difficulty_level !== 'string' ||
-    !isNonNegativeInteger(value.total_nodes)
+    !isNonNegativeInteger(value.total_nodes) ||
+    (value.layout_mode !== undefined && !isTreeLayoutMode(value.layout_mode))
   ) {
     throw invalidResponseError();
   }
@@ -221,6 +223,7 @@ function parseSkillTree(value: unknown): SkillTree {
     description: value.description,
     difficulty_level: value.difficulty_level,
     total_nodes: value.total_nodes,
+    layout_mode: value.layout_mode === 'manual' ? 'manual' : 'auto',
   };
 }
 
@@ -324,4 +327,8 @@ function isRecommendedDepth(value: unknown): value is RecommendedDepth {
     value === 'Transfer' ||
     value === 'DeepMastery'
   );
+}
+
+function isTreeLayoutMode(value: unknown): value is TreeLayoutMode {
+  return value === 'auto' || value === 'manual';
 }

@@ -1,15 +1,26 @@
-import { useEffect, useState } from 'react';
-
-const INSTALL_COMMAND = 'npx @mapflow-publish/mcp';
-const CLAUDE_COMMAND = 'claude mcp add mapflow -- npx @mapflow-publish/mcp';
+import { useEffect, useRef, useState } from 'react';
+import {
+  MAPFLOW_PROJECT_TASK,
+  MAPFLOW_SKILL_SOURCE,
+  MCP_VERIFICATION_COMMANDS,
+  getMcpClientConfig,
+  getSkillInstallCommand,
+} from './mcpConfig';
+import type { OnboardingAgentClient } from '../learning-entry/onboardingState';
 
 interface McpGuideDialogProps {
   onClose: () => void;
 }
 
+const clients: Array<{ id: OnboardingAgentClient; label: string }> = [
+  { id: 'codex', label: 'Codex' },
+  { id: 'claude-code', label: 'Claude Code' },
+  { id: 'other', label: '其他 MCP Agent' },
+];
+
 export default function McpGuideDialog({ onClose }: McpGuideDialogProps) {
-  const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
-  const [copyError, setCopyError] = useState(false);
+  const [client, setClient] = useState<OnboardingAgentClient>('codex');
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -20,26 +31,12 @@ export default function McpGuideDialog({ onClose }: McpGuideDialogProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const copyCommand = async (command: string) => {
-    if (!navigator.clipboard) {
-      setCopiedCommand(null);
-      setCopyError(true);
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(command);
-      setCopiedCommand(command);
-      setCopyError(false);
-    } catch {
-      setCopiedCommand(null);
-      setCopyError(true);
-    }
-  };
+  const config = getMcpClientConfig(client);
+  const steps = ['选择客户端', '注册 MCP', '授权验证', '开始使用'];
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/85 p-3 backdrop-blur-sm"
+      className="fixed inset-0 z-50 grid place-items-center bg-slate-900/25 p-3 backdrop-blur-sm"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -49,109 +46,150 @@ export default function McpGuideDialog({ onClose }: McpGuideDialogProps) {
         aria-modal="true"
         aria-labelledby="mcp-guide-dialog-title"
         aria-describedby="mcp-guide-dialog-description"
-        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-cyan-200/20 bg-[#07111f] shadow-[0_30px_100px_-30px_rgba(34,211,238,0.45)]"
+        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-[#f7fbf9] text-slate-900 shadow-[0_30px_100px_-30px_rgba(15,118,110,0.22)]"
       >
-        <header className="flex items-start justify-between gap-5 border-b border-white/10 px-5 py-5 sm:px-7">
+        <header className="flex items-start justify-between gap-5 border-b border-slate-200 px-5 py-5 sm:px-7">
           <div>
-            <p className="text-[11px] font-bold tracking-[0.2em] text-cyan-300">MAPFLOW / AGENT</p>
-            <h2 id="mcp-guide-dialog-title" className="mt-2 text-xl font-black tracking-tight text-white sm:text-2xl">
+            <p className="text-[11px] font-bold tracking-[0.2em] text-teal-700">MAPFLOW / AGENT</p>
+            <h2 id="mcp-guide-dialog-title" className="mt-2 text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
               在自己的 Agent 中连接 MapFlow
             </h2>
-            <p id="mcp-guide-dialog-description" className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-              用一条命令，让支持 MCP 的 Agent 读取你的学习进度，并围绕你自己的技能树工作。
+            <p id="mcp-guide-dialog-description" className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              选择客户端，完成一次本机授权，再让 Agent 读取你的学习进度。
             </p>
           </div>
           <button
             type="button"
             aria-label="关闭 Agent 接入教程"
             onClick={onClose}
-            className="shrink-0 rounded-xl px-2.5 py-1 text-2xl leading-none text-slate-500 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
+            className="shrink-0 rounded-xl px-2.5 py-1 text-2xl leading-none text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
           >
             ×
           </button>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-7 sm:px-7">
-          <div className="mt-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.08] p-4 text-sm leading-7 text-cyan-50">
-            <strong className="font-bold text-cyan-200">开始前准备：</strong> Node.js 18+、一个已注册的 MapFlow 账号，以及支持 MCP 的 Agent。你不需要下载或部署一个新的 MapFlow 服务。
-          </div>
+          <ol className="grid grid-cols-4 gap-2 border-b border-slate-200 py-5" aria-label="Agent 接入步骤">
+            {steps.map((label, index) => (
+              <li
+                key={label}
+                className={`flex min-w-0 items-center gap-2 text-xs ${index <= step ? 'text-teal-800' : 'text-slate-500'}`}
+              >
+                <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-[10px] font-bold ${index <= step ? 'border-teal-300 bg-teal-100' : 'border-slate-300'}`}>
+                  {index + 1}
+                </span>
+                <span className="truncate">{label}</span>
+              </li>
+            ))}
+          </ol>
 
-          <GuideSection number="01" title="它到底是什么？">
-            <p>
-              <code className="rounded-md bg-white/10 px-1.5 py-0.5 font-mono text-cyan-200">@mapflow-publish/mcp</code>{' '}
-              是 MapFlow 提供的连接器。它运行在你的电脑上，负责把 Agent 和 MapFlow 账号安全地连起来；你的学习数据仍然留在自己的账号里。
-            </p>
-          </GuideSection>
+          {step === 0 && (
+            <section className="py-6" aria-labelledby="mcp-guide-client-title">
+              <p className="text-[11px] font-bold tracking-[0.16em] text-teal-700">第 1 步</p>
+              <h3 id="mcp-guide-client-title" className="mt-2 text-lg font-bold text-slate-950">选择你正在使用的客户端</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">Codex 和 Claude Code 会显示各自的注册命令，其他客户端使用通用配置。</p>
+              <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                {clients.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    aria-pressed={client === item.id}
+                    onClick={() => setClient(item.id)}
+                    className={`rounded-xl border px-3 py-3 text-left text-sm font-semibold transition ${client === item.id ? 'border-teal-400 bg-teal-100 text-teal-900' : 'border-slate-200 bg-white text-slate-600 hover:border-teal-300 hover:text-teal-800'}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-5 rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm leading-7 text-teal-900">
+                <strong className="font-bold text-teal-800">Node.js 18+：</strong>先准备好本机 Node.js，下一步会把 MCP 注册到你选中的客户端。
+              </div>
+              <div className="mt-5 flex justify-end">
+                <button type="button" onClick={() => setStep(1)} className="rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800">
+                  下一步
+                  <span aria-hidden="true"> →</span>
+                </button>
+              </div>
+            </section>
+          )}
 
-          <GuideSection number="02" title="最简单的开始：一行 npx 命令">
-            <p>在终端里运行下面这条命令。第一次运行时，npx 会下载连接器并启动授权流程。</p>
-            <CommandBlock
-              command={INSTALL_COMMAND}
-              testId="mcp-guide-install-command"
-              copyLabel="复制 npx 安装命令"
-              copied={copiedCommand === INSTALL_COMMAND}
-              onCopy={copyCommand}
-            />
-          </GuideSection>
+          {step === 1 && (
+            <section className="py-6" aria-labelledby="mcp-guide-config-title">
+              <p className="text-[11px] font-bold tracking-[0.16em] text-teal-700">第 2 步</p>
+              <h3 id="mcp-guide-config-title" className="mt-2 text-lg font-bold text-slate-950">在 {config.label} 中注册 MCP</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">执行注册命令后，客户端会知道如何启动 MapFlow 连接器。</p>
+              {config.registrationCommand ? (
+                <CommandBlock
+                  command={config.registrationCommand}
+                  testId="mcp-guide-install-command"
+                  copyLabel={`复制 ${config.label} 注册命令`}
+                />
+              ) : (
+                <>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <ConfigValue label="command" value={config.command} />
+                    <ConfigValue label="args" value={config.args.join(' ')} />
+                  </div>
+                  <CommandBlock
+                    command={`${config.command} ${config.args.join(' ')}`}
+                    copyLabel="复制通用 MCP 配置"
+                  />
+                </>
+              )}
+              <p className="mt-4 text-xs leading-5 text-slate-500">单独运行 npx 只会启动连接器；请在客户端完成注册。</p>
+              <NavigationButtons onBack={() => setStep(0)} onNext={() => setStep(2)} />
+            </section>
+          )}
 
-          <GuideSection number="03" title="如果你使用 Claude Code">
-            <p>可以直接把连接器注册到 Claude Code：</p>
-            <CommandBlock
-              command={CLAUDE_COMMAND}
-              copyLabel="复制 Claude Code 配置命令"
-              copied={copiedCommand === CLAUDE_COMMAND}
-              onCopy={copyCommand}
-            />
-            <p className="mt-3 text-slate-500">
-              配置完成后，你可以直接说“读一下我的学习进度”或“把安全相关的节点整理成块”。
-            </p>
-          </GuideSection>
+          {step === 2 && (
+            <section className="py-6" aria-labelledby="mcp-guide-auth-title">
+              <p className="text-[11px] font-bold tracking-[0.16em] text-teal-700">第 3 步</p>
+              <h3 id="mcp-guide-auth-title" className="mt-2 text-lg font-bold text-slate-950">授权并确认连接账号</h3>
+              <ol className="mt-5 space-y-3 text-sm leading-6 text-slate-700">
+                <li className="flex gap-3"><StepDot>1</StepDot><span>首次运行时，浏览器会打开 MapFlow 授权页；如果尚未登录，先登录你的账号。</span></li>
+                <li className="flex gap-3"><StepDot>2</StepDot><span>确认授权用途后，在页面中允许连接。</span></li>
+                <li className="flex gap-3"><StepDot>3</StepDot><span>让 Agent 调用 <code className="rounded bg-teal-50 px-1.5 py-0.5 font-mono text-teal-800">mapflow.whoami</code> 和 <code className="rounded bg-teal-50 px-1.5 py-0.5 font-mono text-teal-800">mapflow.get_progress</code>，确认账号与进度属于你。</span></li>
+              </ol>
+              <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                {MCP_VERIFICATION_COMMANDS.map((command) => (
+                  <code key={command} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-mono text-xs text-teal-800">mapflow.{command}</code>
+                ))}
+              </div>
+              <NavigationButtons onBack={() => setStep(1)} onNext={() => setStep(3)} />
+            </section>
+          )}
 
-          <GuideSection number="04" title="其他支持 MCP 的 Agent 怎么配？">
-            <p>如果你的 Agent 提供通用的 MCP 配置项，填写下面两部分即可：</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <ConfigValue label="command" value="npx" />
-              <ConfigValue label="args" value="@mapflow-publish/mcp" />
-            </div>
-            <p className="mt-3 text-slate-500">
-              有些客户端会把它们写成“命令”和“参数”，本质上就是让客户端执行：
-              <code className="ml-1 rounded bg-white/10 px-1.5 py-0.5 font-mono text-slate-300">npx @mapflow-publish/mcp</code>。
-            </p>
-          </GuideSection>
-
-          <GuideSection number="05" title="第一次运行会发生什么？">
-            <ol className="space-y-3 text-slate-300">
-              <li className="flex gap-3"><StepDot>1</StepDot><span>浏览器会打开 MapFlow 授权页；如果尚未登录，先登录你的账号。</span></li>
-              <li className="flex gap-3"><StepDot>2</StepDot><span>确认授权用途后点击“允许”。</span></li>
-              <li className="flex gap-3"><StepDot>3</StepDot><span>授权令牌会保存在本机 <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-cyan-200">~/.mapflow/token</code>，之后启动通常会静默连接。</span></li>
-            </ol>
-            <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/[0.07] p-3 text-sm leading-6 text-amber-100">
-              授权只针对你自己的 MapFlow 账号。不要把本机 token 文件复制给别人，也不要把它提交到 Git 仓库。
-            </p>
-          </GuideSection>
-
-          <GuideSection number="06" title="连接以后，Agent 能做什么？">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <CapabilityCard name="mapflow.get_progress" detail="查看所有技能树和完成进度。" />
-              <CapabilityCard name="mapflow.get_tree" detail="读取一棵树的节点、边、块和完成情况。" />
-              <CapabilityCard name="mapflow.apply_tree_mutation" detail="按你的指令添加或整理节点、边和块。" />
-              <CapabilityCard name="mapflow.whoami" detail="查看当前连接的是哪个账号和授权状态。" />
-            </div>
-          </GuideSection>
-
-          <GuideSection number="07" title="安全和常见问题">
-            <div className="space-y-3 text-sm leading-7 text-slate-300">
-              <p><strong className="text-slate-100">令牌放在哪里？</strong> 明文令牌只在授权时写入你的本机；服务器只保存摘要，不能从数据库反推出原令牌。</p>
-              <p><strong className="text-slate-100">写操作安全吗？</strong> 每次写入都会记录审计信息，包括哪棵树、什么操作和哪个授权令牌。</p>
-              <p><strong className="text-slate-100">npx 不是命令怎么办？</strong> 安装 Node.js 18 或更高版本后重新打开终端，再运行上面的命令。</p>
-              <p><strong className="text-slate-100">想换账号怎么办？</strong> 删除本机的 <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-cyan-200">~/.mapflow/token</code> 后重新运行命令，就会重新授权。</p>
-            </div>
-          </GuideSection>
-
-          {copyError && (
-            <p role="alert" className="mt-5 rounded-xl border border-rose-300/20 bg-rose-300/[0.07] p-3 text-sm text-rose-100">
-              当前浏览器不允许自动复制，请手动选中命令复制。
-            </p>
+          {step === 3 && (
+            <section className="py-6" aria-labelledby="mcp-guide-start-title">
+              <p className="text-[11px] font-bold tracking-[0.16em] text-teal-700">第 4 步</p>
+              <h3 id="mcp-guide-start-title" className="mt-2 text-lg font-bold text-slate-950">安装 Skill，从当前项目建立地图</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">MCP 负责连接账号，Skill 负责把项目整理成学习地图。下面是已核实的 GitHub Skill 来源。</p>
+              <div
+                data-testid="mcp-guide-video-placeholder"
+                role="img"
+                aria-label="Agent 接入视频教程占位"
+                className="mt-5 flex min-h-28 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-100 px-4 text-center text-sm text-slate-500"
+              >
+                <span><strong className="font-semibold text-slate-700">视频教程即将上线</strong><br />当前为占位内容，暂不可播放。</span>
+              </div>
+              <CommandBlock
+                command={getSkillInstallCommand(client)}
+                copyLabel="复制 Skill 安装命令"
+              />
+              <p className="mt-3 text-xs leading-5 text-slate-500">
+                <a href={MAPFLOW_SKILL_SOURCE} target="_blank" rel="noreferrer" className="text-teal-800 underline underline-offset-2">查看已核实的 GitHub Skill 来源</a>。安装 Skill 只准备本地工作流，下一步仍需让 Agent 生成并确认地图。
+              </p>
+              <p className="mt-5 text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">给 Agent 的建图任务</p>
+              <CommandBlock
+                command={MAPFLOW_PROJECT_TASK}
+                copyLabel="复制建图任务"
+              />
+              <p className="mt-3 text-xs leading-5 text-slate-500">当前预览环境的服务端创建入口仍在部署验证；安装 Skill 不会自动创建地图，实际创建以服务端版本为准。</p>
+              <div className="flex justify-between gap-3 pt-5">
+                <button type="button" onClick={() => setStep(2)} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-teal-400 hover:text-teal-800">上一步</button>
+                <button type="button" onClick={onClose} className="rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800">完成</button>
+              </div>
+            </section>
           )}
         </div>
       </section>
@@ -159,29 +197,18 @@ export default function McpGuideDialog({ onClose }: McpGuideDialogProps) {
   );
 }
 
-function GuideSection({
-  number,
-  title,
-  children,
+function NavigationButtons({
+  onBack,
+  onNext,
 }: {
-  number: string;
-  title: string;
-  children: React.ReactNode;
+  onBack: () => void;
+  onNext: () => void;
 }) {
   return (
-    <section className="border-b border-white/10 py-6 last:border-b-0" aria-labelledby={`mcp-guide-section-${number}`}>
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-cyan-300/30 bg-cyan-300/10 font-mono text-[11px] font-bold text-cyan-200">
-          {number}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h3 id={`mcp-guide-section-${number}`} className="text-base font-bold text-white sm:text-lg">
-            {title}
-          </h3>
-          <div className="mt-3 text-sm leading-7 text-slate-300">{children}</div>
-        </div>
-      </div>
-    </section>
+    <div className="flex justify-between gap-3 pt-6">
+      <button type="button" onClick={onBack} className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-teal-400 hover:text-teal-800">上一步</button>
+      <button type="button" onClick={onNext} className="rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800">下一步<span aria-hidden="true"> →</span></button>
+    </div>
   );
 }
 
@@ -189,55 +216,61 @@ function CommandBlock({
   command,
   testId,
   copyLabel,
-  copied,
-  onCopy,
 }: {
   command: string;
   testId?: string;
   copyLabel: string;
-  copied: boolean;
-  onCopy: (command: string) => void;
 }) {
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+  const fallbackRef = useRef<HTMLTextAreaElement>(null);
+
+  async function copyCommand() {
+    try {
+      if (!navigator.clipboard) throw new Error('clipboard unavailable');
+      await navigator.clipboard.writeText(command);
+      setCopied(true);
+      setCopyError(false);
+    } catch {
+      setCopied(false);
+      setCopyError(true);
+      fallbackRef.current?.focus();
+      fallbackRef.current?.select();
+    }
+  }
+
   return (
-    <div className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-slate-950/70">
-      <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
+    <div className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-2">
         <span className="text-[10px] font-bold tracking-[0.16em] text-slate-500">TERMINAL</span>
-        <button
-          type="button"
-          aria-label={copyLabel}
-          onClick={() => onCopy(command)}
-          className="rounded-lg px-2.5 py-1 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-300/10 hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200"
-        >
+        <button type="button" aria-label={copyLabel} onClick={() => void copyCommand()} className="rounded-lg px-2.5 py-1 text-xs font-semibold text-teal-800 transition hover:bg-teal-100 hover:text-teal-900">
           {copied ? '已复制' : '复制'}
         </button>
       </div>
-      <pre className="overflow-x-auto px-4 py-3 text-sm leading-6 text-cyan-100"><code data-testid={testId}>{command}</code></pre>
+      <textarea
+        ref={fallbackRef}
+        aria-label="命令文本，可手动复制"
+        readOnly
+        value={command}
+        rows={2}
+        data-testid={testId}
+        onFocus={(event) => event.currentTarget.select()}
+        className="w-full resize-none bg-transparent px-4 py-3 font-mono text-sm leading-6 text-slate-800 outline-none"
+      />
+      {copyError && <p role="alert" className="border-t border-rose-200 px-4 py-2 text-xs text-rose-700">当前浏览器不允许自动复制，命令已选中，请按 Ctrl/Cmd+C。</p>}
     </div>
   );
 }
 
 function ConfigValue({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
       <div className="text-[10px] font-bold tracking-[0.14em] text-slate-500">{label}</div>
-      <code className="mt-1 block break-all font-mono text-sm text-cyan-200">{value}</code>
+      <code className="mt-1 block break-all font-mono text-sm text-teal-800">{value}</code>
     </div>
   );
 }
 
 function StepDot({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-300/15 font-mono text-[10px] font-bold text-cyan-200">
-      {children}
-    </span>
-  );
-}
-
-function CapabilityCard({ name, detail }: { name: string; detail: string }) {
-  return (
-    <article className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
-      <code className="break-all font-mono text-xs font-bold text-cyan-200">{name}</code>
-      <p className="mt-1 text-xs leading-5 text-slate-400">{detail}</p>
-    </article>
-  );
+  return <span className="mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-teal-100 font-mono text-[10px] font-bold text-teal-800">{children}</span>;
 }

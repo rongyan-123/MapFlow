@@ -1,0 +1,55 @@
+.skill-tree-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  container-type: inline-size;
+}
+
+.skill-tree-canvas[data-interaction-mode='passive'] .react-flow__pane {
+  touch-action: auto !important;
+}
+
+.skill-tree-canvas[data-interaction-mode='landing-preview'] .react-flow__pane {
+  touch-action: none;
+}
+
+@container (max-width: 1023px) {
+  .skill-tree-canvas .react-flow__controls.skill-tree-canvas__controls {
+    bottom: max(0.75rem, env(safe-area-inset-bottom)) !important;
+    left: 0.75rem !important;
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.25rem;
+  }
+
+  .skill-tree-canvas .react-flow__controls.skill-tree-canvas__controls button {
+    width: 2.75rem !important;
+    min-width: 2.75rem;
+    height: 2.75rem !important;
+    min-height: 2.75rem;
+    padding: 0;
+  }
+
+  .skill-tree-canvas .react-flow__minimap.skill-tree-canvas__minimap {
+    right: 0.75rem !important;
+    bottom: max(0.75rem, env(safe-area-inset-bottom)) !important;
+    width: 6.25rem !important;
+    height: 4.5rem !important;
+  }
+
+  .skill-tree-canvas
+    .react-flow__minimap.skill-tree-canvas__minimap
+    .react-flow__minimap-svg {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
+}
+
+@container (max-width: 359px) {
+  .skill-tree-canvas .react-flow__minimap.skill-tree-canvas__minimap {
+    display: none !important;
+  }
+}

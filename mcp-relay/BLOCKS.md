@@ -17,6 +17,12 @@ MapFlow 的树由 AI 生成,默认按「难度/推荐顺序」排布,适合顺�
 
 ## 四步流程
 
+### 第 0 步:需要新树时先创建(写)
+
+如果目标是用户自己的新学习地图，调用 `mapflow.create_tree` 提交一次完整图。`tree` 必须包含 `topic`、`title`、`difficultyLevel`、`layoutMode`(`auto` 或 `manual`)；`nodes` 至少一个，`edges` 可为空；请求还必须带 `idempotencyKey`。学习目标、关键概念和可观察证据优先传 `string[]`。Agent 已经计算坐标时传 `layoutMode: "manual"`，交给 MapFlow 排布时传 `"auto"`。服务端会校验数量、字段、边端点和有向无环性，并原子写入当前账户的 private/ai_generated/ready 树与库条目，不调用平台模型，也不会创建公共树。
+
+响应里的 `treeId`、`libraryEntryId` 和 `revision: 1` 是后续操作的唯一依据。前端当前没有稳定的树深链，不能自行拼接网站 URL；需要读取时直接用 `libraryEntryId` 调用 `mapflow.get_tree`。
+
 ### 第 1 步:找到目标树(只读)
 
 调用 `mapflow.get_progress`,从返回的树列表里挑出目标树,
@@ -94,6 +100,8 @@ MapFlow 的树由 AI 生成,默认按「难度/推荐顺序」排布,适合顺�
   服务器只会回固定文案「变更命令无效,请检查节点/边/块 id 与 patch 字段。」,
   不会指明具体错在哪;需重读树,自行核对引用的 id 与 patch 字段后重发。
 - `mutation.not_private_tree` → 只允许改自己的私有树,核对 `libraryEntryId`。
+- `create.invalid` → 完整图未通过字段/数量/端点/无环校验；修正请求后使用新的幂等键重试。
+- `create.idempotency_conflict` → 该账号已经用同一幂等键提交过另一份图；不要覆盖原树，换新的幂等键并重新确认意图。
 - HTTP 401 + `auth.token_revoked` → 本机 token 已被吊销:relay 会自动清掉缓存 token
   并重新授权一次,无需手动处理;401 + `auth.invalid_token` → token 文件损坏或不被识别,
   删除 `~/.mapflow/token` 后重新授权(见 README「重新授权」)。
