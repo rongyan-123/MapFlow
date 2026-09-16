@@ -2,7 +2,7 @@
 
 一行命令,让你的 Agent(Claude Code / Codex / Cursor)连接 MapFlow:
 读取学习进度、读写你自己的私有技能树,还能按你的语义把树重组成「块」。
-所有写入都有审计记录。需要已注册的 xxian.fun 账号。
+树定义写入都有审计记录；完成状态沿用账号进度记录，不修改树定义。需要已注册的 xxian.fun 账号。
 
 ## 一行命令(首次约 3 秒授权)
 
@@ -33,8 +33,9 @@ codex mcp add mapflow -- npx -y @mapflow-publish/mcp
 
 | 工具 | 作用 |
 |---|---|
-| `mapflow.get_progress` | 列出所有树 + 完成进度(含证据) |
+| `mapflow.get_progress` | 列出所有树 + 完成节点 ID 的二值进度 |
 | `mapflow.get_tree` | 读一棵树全量:节点/边/块/完成度 |
+| `mapflow.set_node_completion` | 按用户明确要求设置/取消当前账号私人树的二值完成状态 |
 | `mapflow.create_tree` | 用完整节点图创建一棵私人树,可选同时写入块和节点归属 |
 | `mapflow.apply_tree_mutation` | 提交一条编辑命令(add_node / add_edge / add_block / set_node_block 等) |
 | `mapflow.whoami` | 查看当前 token 身份与授权状态 |
@@ -46,6 +47,15 @@ codex mcp add mapflow -- npx -y @mapflow-publish/mcp
 前端展示固定只有两种布局:默认的关系布局和按块布局。Agent 修改节点坐标、层内顺序或 `layoutMode: auto/manual` 都不能改变这两种布局,也不能创建第三种布局。依赖边或学习层级变化会改变学习图语义,从而影响自动计算结果;这不提供自由画布能力。需要按块布局时,树必须有至少一个块以及一个有效的节点归属;旧树没有块数据时仍可正常使用关系布局。
 
 公共官方树始终只读。用户在网站点击“加入我的学习”时会得到一份属于自己的私有副本，之后网站聊天 Agent 和 MCP 的节点、关系、学习块修改都只作用于这份副本；网站聊天 Agent 不负责创建新树。
+
+`mapflow.get_tree` 返回每个节点的 `recommended_depth`、`depth_rationale`、
+`learning_objectives`、`key_concepts` 和 `observable_evidence`。这些字段描述学习目标、
+推荐掌握层次及可验证的达标证据；它们不是用户已经掌握的证明。当前进度模型仍是二值的：
+`completedNodeIds` 只表示完成/未完成，没有单独的实际掌握深度或证据提交记录。
+
+只有用户明确要求记录进度时，才调用 `mapflow.set_node_completion`，并传入
+`libraryEntryId`、`nodeId` 和 `completed`。这个操作只更新当前账号的学习进度，不修改树定义或
+`revision`；目标树/节点不属于当前账号时按不存在处理。
 
 ## 创建与排布一棵树
 

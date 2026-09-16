@@ -321,6 +321,39 @@ describe('MapFlow tree library', () => {
     expect(treeApi.fetchPublicTree).not.toHaveBeenCalled();
   });
 
+  it('重新挂载控制台后仍保留刚才打开的公共地图和节点', async () => {
+    const user = userEvent.setup();
+    renderApp('/console');
+
+    await openPublicMap(user, nestjsTree.title);
+    await user.click(screen.getByRole('button', { name: '查看节点 基础节点' }));
+    expect(screen.getByRole('heading', { name: '基础节点' })).toBeInTheDocument();
+
+    cleanup();
+    renderApp('/console');
+
+    expect(await screen.findByTestId('react-flow-boundary')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '基础节点' })).toBeInTheDocument();
+  });
+
+  it('重新挂载控制台后按账号恢复个人地图和节点', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp('/console');
+
+    await openPersonalMap(user, personalEntry.tree.title);
+    await user.click(screen.getByRole('button', { name: '查看节点 基础节点' }));
+    expect(screen.getByRole('heading', { name: '基础节点' })).toBeInTheDocument();
+
+    cleanup();
+    renderApp('/console');
+
+    expect(await screen.findByTestId('react-flow-boundary')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '基础节点' })).toBeInTheDocument();
+  });
+
   it('跳过引导后直接选择方向，返回工作台仍保持跳过状态', async () => {
     const user = userEvent.setup();
     renderApp('/console');

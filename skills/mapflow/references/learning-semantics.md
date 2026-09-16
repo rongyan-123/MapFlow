@@ -14,6 +14,16 @@ Natural explanations, comparisons, and follow-up questions are valid outcomes ev
 
 Use evidence that a third party could inspect: an explanation in the user's own words, a small implementation, a test or request result, a diagram, a comparison, or a diagnosis of a failure. Choose evidence that fits the user's goal; it is guidance, not a mandatory template.
 
+When reading a tree through MCP, preserve the distinction between the node fields: `recommended_depth`
+and `depth_rationale` describe the intended learning depth, while `learning_objectives`,
+`key_concepts`, and `observable_evidence` describe what to learn and how it could be checked.
+`observable_evidence` is an acceptance criterion, not a stored submission from the learner.
+
+MapFlow currently records progress as a binary `completedNodeIds` set. It does not claim a separate
+achieved mastery depth or evidence log. If the user explicitly asks to record or undo completion and
+the connected server advertises `mapflow.set_node_completion`, call it with the exact private
+`libraryEntryId`, node id, and boolean state; do not infer completion from the Agent's work.
+
 Do not mark a node complete because the Agent generated text, the project contains related code, or a command ran successfully. A generated map is a plan. A node's completion belongs to the user's actual progress and should remain untouched while creating, adding, or rearranging nodes unless the user explicitly asks for a separate progress action and the connected tool supports it.
 
 ## Adding or changing concepts

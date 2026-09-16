@@ -63,6 +63,19 @@ import type {
 type AppView = 'public' | 'personal' | 'admin';
 type MobileView = 'list' | 'graph' | 'detail' | 'chat';
 type ConsoleMode = 'home' | 'introduction' | 'map';
+type PersistedAppView = Exclude<AppView, 'admin'>;
+
+interface PersistedConsoleState {
+  version: 1;
+  view: PersistedAppView;
+  consoleMode: ConsoleMode;
+  selectedPublicTreeId: string | null;
+  selectedLibraryEntryId: string | null;
+  selectedNodeId: string | null;
+  layoutMode: TreeLayoutMode;
+  mobileView: MobileView;
+  chatOpen: boolean;
+}
 
 interface PendingExplorationIntent {
   treeId: string;
@@ -99,6 +112,7 @@ interface TreeActionTarget {
 
 const CONSOLE_ENTRY_MEMORY_KEY = 'mapflow.entry.has-entered-console';
 const PENDING_CONSOLE_ENTRY_KEY = 'mapflow.entry.pending-console';
+const CONSOLE_STATE_STORAGE_KEY_PREFIX = 'mapflow.console.state.v1.';
 
 export default function App() {
   const { session, sessionPending, openIdentityDialog } = useIdentity();
@@ -218,6 +232,8 @@ function ConsoleApp() {
   const explorationIntentVersionRef = useRef(0);
   const activeExplorationAddRequestRef = useRef<ExplorationAddRequest | null>(null);
   const previousAccountPlayerIdRef = useRef<string | null>(null);
+  const consoleStateHydratedRef = useRef(false);
+  const skipConsoleStateWriteRef = useRef(false);
   const previousIdentityDialogOpenRef = useRef(false);
   const currentAccountPlayerIdRef = useRef<string | null>(null);
   const currentSelectedPublicTreeIdRef = useRef<string | null>(null);
@@ -376,22 +392,82 @@ function ConsoleApp() {
   }, [publicCatalog.data, selectedPublicTreeId]);
 
   useEffect(() => {
+    if (view !== 'personal' || !session || !personalLibrary.data) return;
+    const selectedEntryExists = personalLibrary.data.entries.some(
+      (entry) => entry.library_entry_id === selectedLibraryEntryId,
+    );
+    const selectedTreeDetailLoaded =
+      personalTree.data?.library_entry_id === selectedLibraryEntryId;
     if (
-      view === 'personal' &&
-      session &&
-      !selectedLibraryEntryId &&
-      personalLibrary.data?.entries[0]
+      selectedLibraryEntryId &&
+      !selectedEntryExists &&
+      !personalTree.isPending &&
+      !selectedTreeDetailLoaded
     ) {
+      setSelectedLibraryEntryId(null);
+      setSelectedNodeId(null);
+      setCompletion(null);
+      setChatOpen(false);
+      setConsoleMode('home');
+      setMobileView('list');
+      return;
+    }
+    if (!selectedLibraryEntryId && personalLibrary.data.entries[0]) {
       setSelectedLibraryEntryId(personalLibrary.data.entries[0].library_entry_id);
     }
-  }, [personalLibrary.data, selectedLibraryEntryId, session, view]);
+  }, [
+    personalLibrary.data,
+    personalTree.data?.library_entry_id,
+    personalTree.isPending,
+    selectedLibraryEntryId,
+    session,
+    view,
+  ]);
+
+  useEffect(() => {
+    if (sessionPending || consoleStateHydratedRef.current) return;
+
+    consoleStateHydratedRef.current = true;
+    skipConsoleStateWriteRef.current = true;
+    previousAccountPlayerIdRef.current = accountPlayerId;
+    const stored = readStoredConsoleState(accountPlayerId);
+    if (!stored) return;
+
+    const restoredView: PersistedAppView = accountPlayerId ? stored.view : 'public';
+    const hasSelectedTree =
+      restoredView === 'public'
+        ? stored.selectedPublicTreeId !== null
+        : stored.selectedLibraryEntryId !== null;
+    const restoredMode =
+      (stored.consoleMode === 'map' && hasSelectedTree) ||
+      (stored.consoleMode === 'introduction' && restoredView === 'public')
+        ? stored.consoleMode
+        : 'home';
+    const restoredIsMap = restoredMode === 'map';
+    const restoredChatOpen =
+      restoredIsMap && restoredView === 'personal' && accountPlayerId
+        ? stored.chatOpen
+        : false;
+
+    setView(restoredView);
+    setConsoleMode(restoredMode);
+    setSelectedPublicTreeId(stored.selectedPublicTreeId);
+    setSelectedLibraryEntryId(
+      restoredView === 'personal' ? stored.selectedLibraryEntryId : null,
+    );
+    setSelectedNodeId(restoredIsMap ? stored.selectedNodeId : null);
+    setLayoutMode(stored.layoutMode);
+    setMobileView(restoredIsMap ? stored.mobileView : 'list');
+    setChatOpen(restoredChatOpen);
+  }, [accountPlayerId, sessionPending]);
 
   useEffect(() => {
     const previousAccountPlayerId = previousAccountPlayerIdRef.current;
-    const accountChanged =
-      previousAccountPlayerId !== null && previousAccountPlayerId !== accountPlayerId;
+    if (!consoleStateHydratedRef.current) return;
+    const accountChanged = previousAccountPlayerId !== accountPlayerId;
     previousAccountPlayerIdRef.current = accountPlayerId;
-    if (accountChanged) {
+    if (!accountChanged) return;
+    if (previousAccountPlayerId !== null) {
       clearPendingExplorationIntent();
       if (!accountPlayerId) clearPendingJoinIntent();
     }
@@ -415,6 +491,35 @@ function ConsoleApp() {
       clearPendingJoinIntent();
     }
   }, [accountPlayerId, clearPendingExplorationIntent, clearPendingJoinIntent]);
+
+  useEffect(() => {
+    if (!consoleStateHydratedRef.current || skipConsoleStateWriteRef.current) {
+      skipConsoleStateWriteRef.current = false;
+      return;
+    }
+    if (view === 'admin') return;
+    writeStoredConsoleState(accountPlayerId, {
+      version: 1,
+      view,
+      consoleMode,
+      selectedPublicTreeId,
+      selectedLibraryEntryId,
+      selectedNodeId,
+      layoutMode,
+      mobileView,
+      chatOpen,
+    });
+  }, [
+    accountPlayerId,
+    chatOpen,
+    consoleMode,
+    layoutMode,
+    mobileView,
+    selectedLibraryEntryId,
+    selectedNodeId,
+    selectedPublicTreeId,
+    view,
+  ]);
 
   useEffect(() => {
     const wasOpen = previousIdentityDialogOpenRef.current;
@@ -2259,6 +2364,69 @@ function writeBooleanPreference(key: string, value: boolean): void {
   } catch {
     // 隐私模式或禁用存储时仍保持当前页面可用。
   }
+}
+
+function readStoredConsoleState(accountPlayerId: string | null): PersistedConsoleState | null {
+  try {
+    const raw = window.localStorage.getItem(consoleStateStorageKey(accountPlayerId));
+    if (!raw) return null;
+    const value: unknown = JSON.parse(raw);
+    if (!isRecord(value) || value.version !== 1) return null;
+
+    const view = readOneOf(value.view, ['public', 'personal'] as const);
+    const consoleMode = readOneOf(value.consoleMode, ['home', 'introduction', 'map'] as const);
+    const layoutMode = readOneOf(value.layoutMode, ['relationship', 'blocks'] as const);
+    const mobileView = readOneOf(value.mobileView, ['list', 'graph', 'detail', 'chat'] as const);
+    if (!view || !consoleMode || !layoutMode || !mobileView || typeof value.chatOpen !== 'boolean') {
+      return null;
+    }
+    return {
+      version: 1,
+      view,
+      consoleMode,
+      selectedPublicTreeId: readStoredId(value.selectedPublicTreeId),
+      selectedLibraryEntryId: readStoredId(value.selectedLibraryEntryId),
+      selectedNodeId: readStoredId(value.selectedNodeId),
+      layoutMode,
+      mobileView,
+      chatOpen: value.chatOpen,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredConsoleState(
+  accountPlayerId: string | null,
+  state: PersistedConsoleState,
+): void {
+  try {
+    window.localStorage.setItem(
+      consoleStateStorageKey(accountPlayerId),
+      JSON.stringify(state),
+    );
+  } catch {
+    // 隐私模式或禁用存储时仍保持当前页面可用。
+  }
+}
+
+function consoleStateStorageKey(accountPlayerId: string | null): string {
+  return `${CONSOLE_STATE_STORAGE_KEY_PREFIX}${accountPlayerId ?? 'visitor'}`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readStoredId(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 && value.length <= 240 ? value : null;
+}
+
+function readOneOf<const T extends readonly string[]>(
+  value: unknown,
+  options: T,
+): T[number] | null {
+  return typeof value === 'string' && options.includes(value) ? value : null;
 }
 
 function readStoredOnboardingState(

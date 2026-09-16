@@ -25,6 +25,20 @@ Block metadata is optional for backwards compatibility. A tree without valid `bl
 
 Read [references/block-layout.md](references/block-layout.md) before creating or reorganizing blocks.
 
+## Learning depth and completion
+
+`mapflow.get_tree` exposes the node knowledge context in the server's snake_case response fields:
+`recommended_depth`, `depth_rationale`, `learning_objectives`, `key_concepts`, and
+`observable_evidence`. `recommended_depth` is the target learning depth, not the learner's achieved
+mastery. `observable_evidence` describes evidence that could verify learning later; it is not proof
+that the user has already provided that evidence.
+
+Progress is currently binary. `completedNodeIds` means only completed or unfinished; there is no
+separate mastery-depth or submitted-evidence record. On an explicit user request, call
+`mapflow.set_node_completion` with `libraryEntryId`, `nodeId`, and `completed`. This changes only
+the current account's progress and does not change the tree definition or revision. Never mark a
+node complete because the Agent generated an explanation, code, or a plan.
+
 ## Safe workflow
 
 1. Call `mapflow.get_progress` and choose the target private tree.
