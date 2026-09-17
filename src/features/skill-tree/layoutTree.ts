@@ -1,9 +1,9 @@
 import type { SkillEdge, SkillNode } from '../../types/learning';
 
-const NODE_WIDTH = 200;
-const NODE_HEIGHT = 80;
-const HORIZONTAL_GAP = 32;
-const VERTICAL_GAP = 56;
+const NODE_WIDTH = 240;
+const NODE_HEIGHT = 104;
+const HORIZONTAL_GAP = 36;
+const VERTICAL_GAP = 64;
 
 /**
  * 树状瀑布布局：从根节点开始按真实依赖关系逐层展开。

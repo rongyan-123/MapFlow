@@ -38,6 +38,11 @@ const chatApi = vi.hoisted(() => ({
   sendKnowledgeChatMessageStream: vi.fn(),
 }));
 
+const flowLifecycle = vi.hoisted(() => ({
+  mounts: 0,
+  unmounts: 0,
+}));
+
 const adminApi = vi.hoisted(() => ({
   fetchAdminDashboard: vi.fn(),
   fetchAdminAccounts: vi.fn(),
@@ -121,6 +126,13 @@ vi.mock('@xyflow/react', async () => {
     onNodeClick?: (event: React.MouseEvent, node: FlowNode) => void;
     children?: React.ReactNode;
   }) {
+    React.useEffect(() => {
+      flowLifecycle.mounts += 1;
+      return () => {
+        flowLifecycle.unmounts += 1;
+      };
+    }, []);
+
     return (
       <div data-testid="react-flow-boundary">
         {nodes.map((node) =>
@@ -219,6 +231,8 @@ beforeEach(() => {
   );
   announcementsApi.getAnnouncements.mockReset();
   announcementsApi.getAnnouncements.mockResolvedValue({ items: [], unreadCount: 0 });
+  flowLifecycle.mounts = 0;
+  flowLifecycle.unmounts = 0;
   adminApi.fetchAdminDashboard.mockResolvedValue({
     registeredAccounts: 12,
     availableInvites: 3,
@@ -264,6 +278,7 @@ beforeEach(() => {
   });
   legacyApi.fetchLearningTree.mockResolvedValue(legacySnapshot);
   window.localStorage.clear();
+  window.localStorage.setItem('mapflow.guide.public.v1.seen', 'true');
   window.history.replaceState({}, '', '/console');
 });
 
@@ -289,8 +304,20 @@ describe('MapFlow tree library', () => {
     expect(await screen.findByText('公共树池')).toBeInTheDocument();
   });
 
-  it('switches to the block layout when the graph contains block assignments', async () => {
-    const user = userEvent.setup();
+  it('公共树默认使用关系布局，不向游客展示块布局切换', async () => {
+    window.localStorage.setItem(
+      'mapflow.console.state.v1.visitor',
+      JSON.stringify({
+        version: 1,
+        view: 'public',
+        selectedPublicTreeId: nestjsTree.id,
+        selectedLibraryEntryId: null,
+        selectedNodeId: null,
+        layoutMode: 'blocks',
+        mobileView: 'graph',
+        chatOpen: false,
+      }),
+    );
     treeApi.fetchPublicTree.mockResolvedValueOnce({
       view_mode: 'showcase',
       graph: {
@@ -310,16 +337,49 @@ describe('MapFlow tree library', () => {
     });
     renderApp('/console');
 
-    const blockLayoutButton = await screen.findByRole('button', {
-      name: '按块布局',
-    });
-    expect(blockLayoutButton).toBeEnabled();
-    expect(blockLayoutButton).toHaveAttribute('aria-pressed', 'false');
+    expect(await screen.findByRole('heading', { name: 'NestJS 完整学习树' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '按块布局' })).not.toBeInTheDocument();
+    const flowBoundary = await screen.findByTestId('react-flow-boundary');
+    expect(flowBoundary.querySelector('[data-mapflow-block-lane]')).toBeNull();
+  });
 
-    await user.click(blockLayoutButton);
+  it('首次进入公共树时展示通用引导，查看引导按钮可以重播', async () => {
+    const user = userEvent.setup();
+    window.localStorage.removeItem('mapflow.guide.public.v1.seen');
+    renderApp('/console');
 
-    expect(blockLayoutButton).toHaveAttribute('aria-pressed', 'true');
-    expect(await screen.findByText('基础能力')).toBeInTheDocument();
+    const guideCopy =
+      '你现在看到的，就是公共的学习地图，之后用户自己生成的地图，都可以申请加入公共池，进行展示。';
+    expect(await screen.findByText(guideCopy)).toBeInTheDocument();
+    expect(screen.getByTestId('mobile-graph')).toHaveClass('block');
+    expect(screen.queryByRole('dialog', { name: '登录学习账号' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '关闭引导' }));
+    expect(screen.queryByText(guideCopy)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '查看引导' }));
+    expect(await screen.findByText(guideCopy)).toBeInTheDocument();
+  });
+
+  it('游客看到生成入口时会明确提示登录后可使用', async () => {
+    renderApp('/console');
+
+    expect(
+      await screen.findByRole('button', { name: '登录后可使用' }),
+    ).toBeInTheDocument();
+  });
+
+  it('点击公共树节点不会重新挂载画布', async () => {
+    const user = userEvent.setup();
+    renderApp('/console');
+
+    const node = await screen.findByRole('button', { name: '查看节点 基础节点' });
+    expect(flowLifecycle.mounts).toBe(1);
+
+    await user.click(node);
+
+    expect(flowLifecycle.unmounts).toBe(0);
+    expect(flowLifecycle.mounts).toBe(1);
   });
 
   it('公共树目录失败时保留控制台，并允许继续使用个人学习', async () => {
@@ -591,7 +651,7 @@ describe('MapFlow tree library', () => {
     const user = userEvent.setup();
     renderApp();
 
-    const button = await screen.findByRole('button', { name: '开始生成技能树' });
+    const button = await screen.findByRole('button', { name: '登录后可使用' });
     expect(button).toBeInTheDocument();
 
     await user.click(button);

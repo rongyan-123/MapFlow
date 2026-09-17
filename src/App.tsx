@@ -21,6 +21,9 @@ import AnnouncementsDialog from './features/announcements/AnnouncementsDialog';
 import FeedbackDialog from './features/feedback/FeedbackDialog';
 import LandingPage from './features/landing/LandingPage';
 import MobileDrawer from './features/navigation/MobileDrawer';
+import PublicMapGuide, {
+  PUBLIC_GUIDE_STORAGE_KEY,
+} from './features/onboarding/PublicMapGuide';
 import ThemeSwitcher from './features/theme/ThemeSwitcher';
 import McpGuideDialog from './features/mcp/McpGuideDialog';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
@@ -166,6 +169,9 @@ function ConsoleApp() {
   const [completion, setCompletion] = useState<{ node: SkillNode; nonce: number } | null>(null);
   const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
   const [mcpGuideOpen, setMcpGuideOpen] = useState(false);
+  const [publicGuideOpen, setPublicGuideOpen] = useState(() =>
+    !readBooleanPreference(PUBLIC_GUIDE_STORAGE_KEY, false),
+  );
   const [generationSessionId, setGenerationSessionId] = useState<string | null>(
     readGenerationSessionId,
   );
@@ -184,6 +190,7 @@ function ConsoleApp() {
   );
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [treeActionTarget, setTreeActionTarget] = useState<TreeActionTarget | null>(null);
+  const publicMapSectionRef = useRef<HTMLElement | null>(null);
   const completedGenerationSessionIdRef = useRef<string | null>(null);
   const previousAccountPlayerIdRef = useRef<string | null>(null);
   const consoleStateHydratedRef = useRef(false);
@@ -278,21 +285,32 @@ function ConsoleApp() {
     skipConsoleStateWriteRef.current = true;
     previousAccountPlayerIdRef.current = accountPlayerId;
     const stored = readStoredConsoleState(accountPlayerId);
-    if (!stored) return;
+    if (!stored) {
+      if (publicGuideOpen) {
+        setView('public');
+        setLayoutMode('relationship');
+        setMobileView('graph');
+      }
+      return;
+    }
 
-    const restoredView: PersistedAppView = accountPlayerId ? stored.view : 'public';
+    const restoredView: PersistedAppView = publicGuideOpen
+      ? 'public'
+      : accountPlayerId
+        ? stored.view
+        : 'public';
     setView(restoredView);
     setSelectedPublicTreeId(stored.selectedPublicTreeId);
     setSelectedLibraryEntryId(
       restoredView === 'personal' ? stored.selectedLibraryEntryId : null,
     );
     setSelectedNodeId(stored.selectedNodeId);
-    setLayoutMode(stored.layoutMode);
-    setMobileView(stored.mobileView);
+    setLayoutMode(restoredView === 'public' ? 'relationship' : stored.layoutMode);
+    setMobileView(publicGuideOpen ? 'graph' : stored.mobileView);
     setChatOpen(
       restoredView === 'personal' && accountPlayerId ? stored.chatOpen : false,
     );
-  }, [accountPlayerId, sessionPending]);
+  }, [accountPlayerId, publicGuideOpen, sessionPending]);
 
   useEffect(() => {
     if (!consoleStateHydratedRef.current) return;
@@ -553,6 +571,19 @@ function ConsoleApp() {
     setCompletion(null);
     setChatOpen(false);
   };
+  const replayPublicGuide = () => {
+    setView('public');
+    setSelectedNodeId(null);
+    setCompletion(null);
+    setChatOpen(false);
+    setLayoutMode('relationship');
+    setMobileView('graph');
+    setPublicGuideOpen(true);
+  };
+  const closePublicGuide = () => {
+    setPublicGuideOpen(false);
+    writeBooleanPreference(PUBLIC_GUIDE_STORAGE_KEY, true);
+  };
   const joinSelectedTree = () => {
     if (!session) {
       openIdentityDialog();
@@ -735,9 +766,11 @@ function ConsoleApp() {
             <button
               type="button"
               data-testid="top-generate-tree"
-              aria-label="开始生成技能树"
+              aria-label={session ? '开始生成技能树' : '登录后可使用'}
               title={
-                session && (capabilitiesPending || capabilitiesError)
+                !session
+                  ? '登录后可使用'
+                  : capabilitiesPending || capabilitiesError
                   ? '正在检查生成能力，请稍候'
                   : undefined
               }
@@ -755,8 +788,10 @@ function ConsoleApp() {
               <span aria-hidden="true" className="mr-1 transition-transform group-hover:rotate-12">
                 ✦
               </span>
-              <span className="hidden sm:inline">开始生成</span>
-              <span className="sm:hidden">生成</span>
+              <span className="hidden sm:inline">
+                {session ? '开始生成' : '登录后可使用'}
+              </span>
+              <span className="sm:hidden">{session ? '生成' : '登录'}</span>
             </button>
           )}
           <a
@@ -773,6 +808,14 @@ function ConsoleApp() {
             className="hidden rounded-xl border border-violet-400/35 bg-violet-400/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:border-violet-300/70 hover:bg-violet-400/15 hover:text-white xl:inline-flex"
           >
             Agent 接入
+          </button>
+          <button
+            type="button"
+            aria-label="查看引导"
+            onClick={replayPublicGuide}
+            className="hidden rounded-xl border border-fuchsia-300/60 bg-fuchsia-400/10 px-3 py-1.5 text-xs font-semibold text-fuchsia-200 transition hover:-translate-y-0.5 hover:border-fuchsia-200 hover:bg-fuchsia-400/20 hover:text-white md:inline-flex"
+          >
+            查看引导
           </button>
           <ThemeSwitcher />
           <div className="hidden lg:block">
@@ -982,38 +1025,41 @@ function ConsoleApp() {
         </aside>
 
         <section
+          ref={publicMapSectionRef}
           data-testid="mobile-graph"
           className={`${mobileView === 'graph' ? 'block' : 'hidden'} relative min-w-0 flex-1 lg:block`}
         >
           {snapshot ? (
             <>
-              <div className="pointer-events-none absolute right-4 top-4 z-10">
-                <div
-                  aria-label="技能树布局切换"
-                  className="pointer-events-auto flex items-center gap-1 rounded-xl border border-slate-700/90 bg-slate-950/90 p-1 text-xs shadow-xl backdrop-blur"
-                >
-                  <LayoutButton
-                    active={layoutMode === 'relationship'}
-                    onClick={() => setLayoutMode('relationship')}
+              {view === 'personal' && (
+                <div className="pointer-events-none absolute right-4 top-4 z-10">
+                  <div
+                    aria-label="技能树布局切换"
+                    className="pointer-events-auto flex items-center gap-1 rounded-xl border border-slate-700/90 bg-slate-950/90 p-1 text-xs shadow-xl backdrop-blur"
                   >
-                    关系布局
-                  </LayoutButton>
-                  <LayoutButton
-                    active={layoutMode === 'blocks'}
-                    disabled={!hasBlockLayout}
-                    title={hasBlockLayout ? undefined : '这棵树还没有可用的块分组'}
-                    onClick={() => setLayoutMode('blocks')}
-                  >
-                    按块布局
-                  </LayoutButton>
+                    <LayoutButton
+                      active={layoutMode === 'relationship'}
+                      onClick={() => setLayoutMode('relationship')}
+                    >
+                      关系布局
+                    </LayoutButton>
+                    <LayoutButton
+                      active={layoutMode === 'blocks'}
+                      disabled={!hasBlockLayout}
+                      title={hasBlockLayout ? undefined : '这棵树还没有可用的块分组'}
+                      onClick={() => setLayoutMode('blocks')}
+                    >
+                      按块布局
+                    </LayoutButton>
+                  </div>
                 </div>
-              </div>
+              )}
               <SkillTreeCanvas
-                key={mobileView}
                 snapshot={snapshot}
                 displayMode={displayMode}
                 layoutMode={layoutMode}
                 selectedNodeId={selectedNodeId}
+                isGraphVisible={mobileView === 'graph'}
                 onSelectNode={(nodeId) => {
                   setSelectedNodeId(nodeId);
                   setMobileView('detail');
@@ -1163,6 +1209,13 @@ function ConsoleApp() {
           />
         )}
 
+      {publicGuideOpen && view === 'public' && snapshot && (
+        <PublicMapGuide
+          targetRef={publicMapSectionRef}
+          onClose={closePublicGuide}
+        />
+      )}
+
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         {(identityEnabled || session) && (
           <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2.5">
@@ -1225,6 +1278,14 @@ function ConsoleApp() {
             }}
           >
             Agent 接入教程
+          </DrawerItem>
+          <DrawerItem
+            onClick={() => {
+              replayPublicGuide();
+              setDrawerOpen(false);
+            }}
+          >
+            查看引导
           </DrawerItem>
           <DrawerItem
             active={view === 'public'}

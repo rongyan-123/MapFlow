@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import SkillNodeComponent, { type SkillFlowNode } from './SkillNode';
 
@@ -10,7 +10,10 @@ vi.mock('@xyflow/react', async () => {
   };
 });
 
-function makeFlowNode(displayMode: 'showcase' | 'personal'): SkillFlowNode {
+function makeFlowNode(
+  displayMode: 'showcase' | 'personal',
+  title = '测试节点',
+): SkillFlowNode {
   return {
     id: 'node-1',
     type: 'skill',
@@ -19,7 +22,7 @@ function makeFlowNode(displayMode: 'showcase' | 'personal'): SkillFlowNode {
       node: {
         id: 'node-1',
         tree_id: 'tree-1',
-        title: '测试节点',
+        title,
         description: null,
         icon: '🐍',
         category: '测试',
@@ -42,8 +45,8 @@ function makeFlowNode(displayMode: 'showcase' | 'personal'): SkillFlowNode {
   };
 }
 
-function renderNode(displayMode: 'showcase' | 'personal') {
-  const node = makeFlowNode(displayMode);
+function renderNode(displayMode: 'showcase' | 'personal', title?: string) {
+  const node = makeFlowNode(displayMode, title);
   const props = {
     data: node.data,
     selected: false,
@@ -81,5 +84,15 @@ describe('SkillNode 渲染', () => {
 
     expect(node).toHaveAttribute('data-mapflow-skill-node', 'true');
     expect(node).toHaveAttribute('data-mapflow-node-status', 'not_started');
+  });
+
+  it('长标题在节点内换行并保留完整标题提示', () => {
+    const title = '生产级 Agent AI 应用后端完整体系（NestJS）';
+    renderNode('showcase', title);
+
+    const heading = screen.getByRole('heading', { name: title });
+    expect(heading).toHaveAttribute('title', title);
+    expect(heading).toHaveClass('whitespace-normal');
+    expect(heading).not.toHaveClass('truncate');
   });
 });

@@ -39,7 +39,7 @@ function SkillNodeComponent({ data, selected }: NodeProps<SkillFlowNode>) {
       data-mapflow-display-mode={displayMode}
       data-mapflow-node-status={status}
       className={cn(
-        'mapflow-skill-node relative min-w-[150px] max-w-[200px] cursor-pointer select-none rounded-xl border-2 px-4 py-3 transition-all duration-500',
+        'mapflow-skill-node relative min-h-[104px] w-[240px] min-w-[240px] max-w-[240px] cursor-pointer select-none rounded-xl border-2 px-4 py-3 transition-all duration-500',
         isShowcase &&
           // 兜底底色 + 强制独立合成层：移动端渐变瓦片不稳定时露出亮蓝且纹理不随缩放重绘
           'border-cyan-200/80 bg-cyan-400 bg-gradient-to-br from-cyan-400 to-violet-400 text-slate-950 shadow-[0_0_30px_rgba(34,211,238,0.48)] will-change-transform',
@@ -75,7 +75,12 @@ function SkillNodeComponent({ data, selected }: NodeProps<SkillFlowNode>) {
       <div className="flex items-center gap-2">
         <span className="text-lg">{ICON_EMOJI[node.icon] ?? '📖'}</span>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-semibold">{node.title}</h3>
+          <h3
+            title={node.title}
+            className="line-clamp-3 whitespace-normal break-words text-sm font-semibold leading-5"
+          >
+            {node.title}
+          </h3>
           <span
             className={cn(
               'mt-1 inline-flex rounded-full border px-1.5 py-0.5 text-[10px]',
