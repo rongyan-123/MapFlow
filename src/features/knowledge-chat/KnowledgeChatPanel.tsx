@@ -14,11 +14,8 @@ interface KnowledgeChatPanelProps {
   csrfToken: string;
   onClose: () => void;
   onCreditChanged?: () => void | Promise<void>;
-  onMessageSent?: () => void | Promise<void>;
   onTreeChanged?: () => void | Promise<void>;
   isVisible?: boolean;
-  initialDraft?: string;
-  initialDraftRevision?: number;
 }
 
 export default function KnowledgeChatPanel({
@@ -27,11 +24,8 @@ export default function KnowledgeChatPanel({
   csrfToken,
   onClose,
   onCreditChanged,
-  onMessageSent,
   onTreeChanged,
   isVisible = true,
-  initialDraft = '',
-  initialDraftRevision = 0,
 }: KnowledgeChatPanelProps) {
   const [messages, setMessages] = useState<KnowledgeChatMessage[]>([]);
   const [draft, setDraft] = useState('');
@@ -47,6 +41,7 @@ export default function KnowledgeChatPanel({
     let active = true;
     setHistoryPending(true);
     setMessages([]);
+    setDraft('');
     setError(null);
     setLastCharge(null);
     setStreamingAnswer(null);
@@ -68,10 +63,6 @@ export default function KnowledgeChatPanel({
       active = false;
     };
   }, [libraryEntryId]);
-
-  useEffect(() => {
-    setDraft(initialDraft);
-  }, [initialDraft, initialDraftRevision]);
 
   useLayoutEffect(() => {
     if (!isVisible || historyPending) return;
@@ -136,7 +127,6 @@ export default function KnowledgeChatPanel({
       setStreamingAnswer(null);
       setLastCharge(response.chargedCredits);
       await onCreditChanged?.();
-      await onMessageSent?.();
       if (treeChanged) await onTreeChanged?.();
     } catch (caught: unknown) {
       setStreamingAnswer(null);
@@ -177,8 +167,10 @@ export default function KnowledgeChatPanel({
           </div>
         ) : messages.length === 0 && !pending ? (
           <div className="rounded-xl border border-cyan-900/60 bg-cyan-950/20 p-4 text-sm leading-6 text-slate-400">
-            <p className="font-semibold text-cyan-200">从一个具体问题开始</p>
-            <p className="mt-2">你可以先问当前节点的含义、要怎样用，或者它和前置节点为什么有关。写好后点击发送，才会开始一轮对话。</p>
+            <p className="font-semibold text-cyan-200">知识地图助手</p>
+            <p className="mt-2">
+              我会读取这棵个人技能树的节点、学习块和前置关系；你确认后，我也可以帮你补充节点、调整关系或新增学习块。
+            </p>
           </div>
         ) : (
           messages.map((message) => (
@@ -236,41 +228,37 @@ export default function KnowledgeChatPanel({
         }}
         className="shrink-0 border-t border-slate-800 p-3 pb-[env(safe-area-inset-bottom)]"
       >
-        <div data-mapflow-onboarding-target="chat-compose">
-          <label htmlFor="knowledge-chat-input" className="sr-only">
-            输入问题
-          </label>
-          <textarea
-            id="knowledge-chat-input"
-            aria-label="输入问题"
-            data-mapflow-onboarding-target="chat-input"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                void handleSubmit();
-              }
-            }}
-            placeholder="问问这棵技能树…"
-            rows={3}
-            disabled={historyPending || pending}
-            className="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm leading-6 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400/70 disabled:cursor-wait disabled:opacity-60"
-          />
-          <div className="mt-2 flex items-center justify-between gap-3">
-            <span className="text-[11px] text-slate-600">
-              支持长文本 · Shift+Enter 换行
-            </span>
-            <button
-              type="submit"
-              aria-label="发送"
-              data-mapflow-onboarding-target="chat-send"
-              disabled={historyPending || pending || !draft.trim()}
-              className="rounded-xl bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {pending ? '生成中…' : '发送'}
-            </button>
-          </div>
+        <label htmlFor="knowledge-chat-input" className="sr-only">
+          输入问题
+        </label>
+        <textarea
+          id="knowledge-chat-input"
+          aria-label="输入问题"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              void handleSubmit();
+            }
+          }}
+          placeholder="问问这棵技能树…"
+          rows={3}
+          disabled={historyPending || pending}
+          className="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm leading-6 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400/70 disabled:cursor-wait disabled:opacity-60"
+        />
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <span className="text-[11px] text-slate-600">
+            支持长文本 · Shift+Enter 换行
+          </span>
+          <button
+            type="submit"
+            aria-label="发送"
+            disabled={historyPending || pending || !draft.trim()}
+            className="rounded-xl bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {pending ? '生成中…' : '发送'}
+          </button>
         </div>
       </form>
     </section>

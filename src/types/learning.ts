@@ -12,6 +12,7 @@ export type LearningStatus =
   | 'mastered';
 
 export type TreeDisplayMode = 'showcase' | 'personal';
+
 export type TreeLayoutMode = 'relationship' | 'blocks';
 
 export interface SkillTree {
@@ -21,7 +22,6 @@ export interface SkillTree {
   description: string | null;
   difficulty_level: string;
   total_nodes: number;
-  /** Stored coordinates are authoritative only when this is explicitly manual. */
   revision?: number;
   layout_mode?: 'auto' | 'manual';
 }
