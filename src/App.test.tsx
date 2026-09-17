@@ -863,6 +863,47 @@ describe('管理面板入口', () => {
 });
 
 describe('手机端视图栈', () => {
+  it('重新加载控制台后仍保留公共树和当前节点', async () => {
+    const user = userEvent.setup();
+    renderApp('/console');
+
+    await user.click(
+      await screen.findByRole('button', { name: '查看 Python Agent 完整学习树' }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: '查看节点 Agent 基础' }),
+    );
+    expect(screen.getByRole('heading', { name: 'Agent 基础' })).toBeInTheDocument();
+
+    cleanup();
+    renderApp('/console');
+
+    expect(await screen.findByRole('heading', { name: 'Agent 基础' })).toBeInTheDocument();
+  });
+
+  it('重新加载控制台后仍保留个人树和当前节点', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp('/console');
+
+    await screen.findByText(authenticated.account.playerId);
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: '查看节点 进阶节点' }),
+    );
+    expect(screen.getByRole('heading', { name: '进阶节点' })).toBeInTheDocument();
+
+    cleanup();
+    renderApp('/console');
+
+    expect(await screen.findByRole('heading', { name: '进阶节点' })).toBeInTheDocument();
+  });
+
   it('初始显示列表页：列表可见、图与详情隐藏、无返回按钮', async () => {
     renderApp();
     await screen.findByText('NestJS 完整学习树');
