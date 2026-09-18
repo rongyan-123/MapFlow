@@ -3,6 +3,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type RefObject,
   type ReactNode,
 } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -67,6 +68,7 @@ interface TreeGenerationDialogProps {
   onPlatformEntitlementsChanged: () => void | Promise<unknown>;
   onComplete: (libraryEntryId: string) => void;
   onClose: () => void;
+  dialogRef?: RefObject<HTMLElement>;
 }
 
 type RevisionKind = 'replan' | 'adjust';
@@ -88,6 +90,7 @@ export default function TreeGenerationDialog({
   onPlatformEntitlementsChanged,
   onComplete,
   onClose,
+  dialogRef,
 }: TreeGenerationDialogProps) {
   const queryClient = useQueryClient();
   const [currentSessionId, setCurrentSessionId] = useState(sessionId);
@@ -581,6 +584,7 @@ export default function TreeGenerationDialog({
       }}
     >
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="tree-generation-dialog-title"

@@ -5,10 +5,10 @@ import type {
   SkillNodeBlockAssignment,
 } from '../../types/learning';
 
-export const BLOCK_NODE_WIDTH = 200;
-export const BLOCK_NODE_HEIGHT = 80;
-export const BLOCK_HORIZONTAL_GAP = 32;
-export const BLOCK_VERTICAL_GAP = 96;
+export const BLOCK_NODE_WIDTH = 240;
+export const BLOCK_NODE_HEIGHT = 104;
+export const BLOCK_HORIZONTAL_GAP = 36;
+export const BLOCK_VERTICAL_GAP = 112;
 export const BLOCK_PADDING = 24;
 export const BLOCK_LABEL_WIDTH = 180;
 export const BLOCK_LABEL_GAP = 24;

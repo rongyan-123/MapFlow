@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Background,
   Controls,
   MiniMap,
   ReactFlow,
+  useNodesInitialized,
   useEdgesState,
   useNodesState,
   type Edge,
@@ -26,6 +27,7 @@ import {
 import SkillNodeComponent, {
   type SkillFlowNode,
 } from './SkillNode';
+import { getReadableInitialZoom } from './viewport';
 
 interface BlockLaneData extends Record<string, unknown> {
   name: string;
@@ -92,6 +94,7 @@ interface SkillTreeCanvasProps {
   displayMode: TreeDisplayMode;
   layoutMode: TreeLayoutMode;
   selectedNodeId: string | null;
+  isGraphVisible: boolean;
   onSelectNode: (nodeId: string) => void;
 }
 
@@ -100,6 +103,7 @@ export default function SkillTreeCanvas({
   displayMode,
   layoutMode,
   selectedNodeId,
+  isGraphVisible,
   onSelectNode,
 }: SkillTreeCanvasProps) {
   const progressMap = useMemo(
@@ -266,21 +270,29 @@ export default function SkillTreeCanvas({
     setEdges(generatedEdges);
   }, [generatedEdges, setEdges]);
 
-  useEffect(() => {
-    if (!flowRef.current || generatedNodes.length === 0) return;
-    const timer = window.setTimeout(() => {
-      flowRef.current?.fitView({
+  const fitGraphView = useCallback(() => {
+    const flow = flowRef.current;
+    if (!flow || generatedNodes.length === 0) return;
+
+    void flow
+      .fitView({
         nodes:
           layoutMode === 'relationship' && snapshot.current_node_id
             ? [{ id: snapshot.current_node_id }]
             : undefined,
-        padding: layoutMode === 'blocks' ? 0.2 : 0.5,
-        maxZoom: layoutMode === 'blocks' ? 1 : 1.5,
-        duration: 180,
+        padding: layoutMode === 'blocks' ? 0.2 : 0.18,
+        maxZoom: layoutMode === 'blocks' ? 1 : 1.15,
+        duration: 0,
+      })
+      .then((didFit) => {
+        if (!didFit || layoutMode !== 'relationship') return;
+        const fittedZoom = flow.getZoom();
+        const readableZoom = getReadableInitialZoom(fittedZoom);
+        if (readableZoom > fittedZoom + 0.01) {
+          void flow.zoomTo(readableZoom, { duration: 180 });
+        }
       });
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [generatedNodes.length, layoutKey, layoutMode, snapshot.current_node_id]);
+  }, [generatedNodes.length, layoutMode, snapshot.current_node_id]);
 
   return (
     <ReactFlow
@@ -293,20 +305,16 @@ export default function SkillTreeCanvas({
       onInit={(instance) => {
         flowRef.current = instance;
       }}
-      fitView
-      fitViewOptions={{
-        nodes:
-          layoutMode === 'relationship' && snapshot.current_node_id
-            ? [{ id: snapshot.current_node_id }]
-            : undefined,
-        padding: layoutMode === 'blocks' ? 0.2 : 0.5,
-        maxZoom: layoutMode === 'blocks' ? 1 : 1.5,
-      }}
       minZoom={0.1}
       maxZoom={2.5}
       defaultEdgeOptions={{ type: 'smoothstep' }}
       proOptions={{ hideAttribution: true }}
     >
+      <FitViewWhenReady
+        fitGraphView={fitGraphView}
+        isGraphVisible={isGraphVisible}
+        layoutKey={layoutKey}
+      />
       <Background color="#1e293b" gap={20} />
       <Controls className="!rounded-lg !border-slate-700 !bg-slate-900" />
       <MiniMap
@@ -327,4 +335,37 @@ export default function SkillTreeCanvas({
       />
     </ReactFlow>
   );
+}
+
+interface FitViewWhenReadyProps {
+  fitGraphView: () => void;
+  isGraphVisible: boolean;
+  layoutKey: string;
+}
+
+function FitViewWhenReady({
+  fitGraphView,
+  isGraphVisible,
+  layoutKey,
+}: FitViewWhenReadyProps) {
+  const nodesInitialized = useNodesInitialized();
+  const previousGraphVisibleRef = useRef(false);
+
+  useEffect(() => {
+    if (!nodesInitialized) return;
+
+    const timer = window.setTimeout(fitGraphView, 0);
+    return () => window.clearTimeout(timer);
+  }, [fitGraphView, layoutKey, nodesInitialized]);
+
+  useEffect(() => {
+    const wasVisible = previousGraphVisibleRef.current;
+    previousGraphVisibleRef.current = isGraphVisible;
+    if (!nodesInitialized || !isGraphVisible || wasVisible) return;
+
+    const timer = window.setTimeout(fitGraphView, 0);
+    return () => window.clearTimeout(timer);
+  }, [fitGraphView, isGraphVisible, nodesInitialized]);
+
+  return null;
 }

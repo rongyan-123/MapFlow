@@ -64,7 +64,8 @@ it('lets any child open the real dialog, observe registration, and log out', asy
   renderIdentityProbe();
 
   expect(await screen.findByText('identity-enabled')).toBeInTheDocument();
-  expect(screen.getByText('generation-enabled')).toBeInTheDocument();
+  expect(screen.getByText('generation-disabled')).toBeInTheDocument();
+  expect(api.fetchCapabilities).not.toHaveBeenCalled();
   expect(screen.getByText('anonymous')).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'open identity dialog' }));
   expect(screen.getByRole('dialog')).toBeInTheDocument();

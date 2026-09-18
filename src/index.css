@@ -26,6 +26,17 @@ body,
   overflow: hidden;
 }
 
+@keyframes mapflow-guide-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(-0.4deg);
+  }
+
+  50% {
+    transform: translate3d(0, -8px, 0) rotate(0.4deg);
+  }
+}
+
 button,
 input,
 textarea,

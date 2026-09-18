@@ -63,23 +63,30 @@ describe('LandingPage', () => {
       name: '在自己的 Agent 中连接 MapFlow',
     });
     expect(dialog).toBeInTheDocument();
-    expect(within(dialog).getByTestId('mcp-guide-install-command')).toHaveTextContent(
-      'npx @mapflow-publish/mcp',
-    );
     expect(
-      within(dialog).getByRole('heading', { name: '先安装 MapFlow Skill' }),
+      within(dialog).getByRole('heading', { name: '快速开始' }),
     ).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: '安装 Skill' }));
     expect(
       within(dialog).getByTestId('mapflow-skill-install-command'),
     ).toHaveTextContent('npx skills add rongyan-123/MapFlow --skill mapflow-mcp --global');
     expect(
       within(dialog).getByText(/Skill 负责告诉 Agent 如何理解 MapFlow 的树结构、节点、块，以及两种固定的布局方式/),
     ).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: '配置 MCP' }));
+    expect(within(dialog).getByTestId('mcp-guide-install-command')).toHaveTextContent(
+      'npx @mapflow-publish/mcp',
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Claude Code' }));
     expect(
-      within(dialog).getByRole('heading', { name: '如果你使用 Claude Code' }),
+      within(dialog).getByRole('heading', { name: 'Claude Code' }),
     ).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: '首次授权' }));
     expect(within(dialog).getByText(/浏览器会打开 MapFlow 授权页/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Agent 能做什么' }));
     expect(within(dialog).getByText('mapflow.get_progress')).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: '配置 MCP' }));
 
     await user.click(
       within(dialog).getByRole('button', { name: '复制 npx 安装命令' }),
