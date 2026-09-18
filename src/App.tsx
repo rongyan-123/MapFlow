@@ -23,9 +23,12 @@ import LandingPage from './features/landing/LandingPage';
 import MobileDrawer from './features/navigation/MobileDrawer';
 import PublicMapGuide, {
   PUBLIC_GUIDE_STORAGE_KEY,
+  type PublicGuideStep,
 } from './features/onboarding/PublicMapGuide';
 import ThemeSwitcher from './features/theme/ThemeSwitcher';
-import McpGuideDialog from './features/mcp/McpGuideDialog';
+import McpGuideDialog, {
+  type AgentGuideSectionId,
+} from './features/mcp/McpGuideDialog';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
 import { readPlatformGenerationEntitlements } from './features/tree-generation/treeGenerationClient';
 import {
@@ -43,6 +46,8 @@ import TreeExportMenu from './features/tree-library/TreeExportMenu';
 import TreeLibraryActionDialog, {
   type TreeLibraryAction,
 } from './features/tree-library/TreeLibraryActionDialog';
+import IdentityGate from './features/identity/IdentityGate';
+import { DEMO_TREES } from './lib/demoTrees';
 import type {
   LearningTreeSnapshot,
   SkillNode,
@@ -71,29 +76,39 @@ interface TreeActionTarget {
   title: string;
 }
 
-const CONSOLE_ENTRY_MEMORY_KEY = 'mapflow.entry.has-entered-console';
-const PENDING_CONSOLE_ENTRY_KEY = 'mapflow.entry.pending-console';
 const CONSOLE_STATE_STORAGE_KEY_PREFIX = 'mapflow.console.state.v1.';
+const DEMO_PUBLIC_SNAPSHOTS = Object.values(DEMO_TREES);
+const DEMO_PUBLIC_TREES = DEMO_PUBLIC_SNAPSHOTS.map((snapshot) => snapshot.tree);
 
 export default function App() {
-  const { session, sessionPending, openIdentityDialog } = useIdentity();
+  const queryClient = useQueryClient();
+  const { session, sessionPending } = useIdentity();
   const [currentPath, setCurrentPath] = useState(() => readCurrentPath());
+  const previousSessionPlayerIdRef = useRef<string | null>(null);
   const marketingRequested =
     currentPath === '/' &&
     new URLSearchParams(window.location.search).get('marketing') === '1';
   const generationRouteRequested = readGenerationSessionId() !== null;
-  const hasEnteredConsole = readBooleanPreference(CONSOLE_ENTRY_MEMORY_KEY, false);
-  const pendingConsoleEntry = readBooleanPreference(PENDING_CONSOLE_ENTRY_KEY, false);
-
   useEffect(() => {
     const handlePopState = () => setCurrentPath(readCurrentPath());
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  useEffect(() => {
+    const playerId = session?.account.playerId ?? null;
+    const previousPlayerId = previousSessionPlayerIdRef.current;
+    if (previousPlayerId && !playerId) {
+      queryClient.removeQueries({
+        predicate: (query) => query.queryKey[0] !== 'identity',
+      });
+      queryClient.removeQueries({ queryKey: ['identity', 'capabilities'] });
+      removeStoredConsoleState(previousPlayerId);
+    }
+    previousSessionPlayerIdRef.current = playerId;
+  }, [queryClient, session]);
+
   const navigateToConsole = useCallback((replace = false) => {
-    writeBooleanPreference(CONSOLE_ENTRY_MEMORY_KEY, true);
-    writeBooleanPreference(PENDING_CONSOLE_ENTRY_KEY, false);
     const method = replace ? 'replaceState' : 'pushState';
     window.history[method]({}, '', '/console');
     setCurrentPath('/console');
@@ -101,48 +116,38 @@ export default function App() {
 
   useEffect(() => {
     if (
+      session &&
       currentPath === '/' &&
       !marketingRequested &&
-      !generationRouteRequested &&
-      !sessionPending &&
-      session &&
-      (hasEnteredConsole || pendingConsoleEntry)
+      !generationRouteRequested
     ) {
       navigateToConsole(true);
     }
   }, [
     currentPath,
     generationRouteRequested,
-    hasEnteredConsole,
     marketingRequested,
     navigateToConsole,
-    pendingConsoleEntry,
     session,
-    sessionPending,
   ]);
 
-  const requestLandingLogin = () => {
-    writeBooleanPreference(PENDING_CONSOLE_ENTRY_KEY, true);
-    openIdentityDialog();
-  };
+  if (sessionPending) return <EntryLoading />;
+  if (!session) {
+    return <IdentityGate onAuthenticated={() => navigateToConsole(true)} />;
+  }
 
   const rootRoute = currentPath === '/' && !generationRouteRequested;
   if (rootRoute) {
-    if (!marketingRequested) {
-      if (hasEnteredConsole && sessionPending) {
-        return <EntryLoading />;
-      }
-      if (hasEnteredConsole && session) {
-        return <ConsoleApp />;
-      }
+    if (marketingRequested) {
+      return (
+        <LandingPage
+          session={session}
+          onEnterConsole={() => navigateToConsole()}
+          onLogin={() => navigateToConsole()}
+        />
+      );
     }
-    return (
-      <LandingPage
-        session={session}
-        onEnterConsole={() => navigateToConsole()}
-        onLogin={session ? () => navigateToConsole() : requestLandingLogin}
-      />
-    );
+    return <ConsoleApp />;
   }
 
   return <ConsoleApp />;
@@ -169,9 +174,13 @@ function ConsoleApp() {
   const [completion, setCompletion] = useState<{ node: SkillNode; nonce: number } | null>(null);
   const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
   const [mcpGuideOpen, setMcpGuideOpen] = useState(false);
+  const [mcpGuideInitialSection, setMcpGuideInitialSection] = useState<
+    AgentGuideSectionId | undefined
+  >(undefined);
   const [publicGuideOpen, setPublicGuideOpen] = useState(() =>
     !readBooleanPreference(PUBLIC_GUIDE_STORAGE_KEY, false),
   );
+  const [publicGuideStep, setPublicGuideStep] = useState<PublicGuideStep>('map');
   const [generationSessionId, setGenerationSessionId] = useState<string | null>(
     readGenerationSessionId,
   );
@@ -191,6 +200,10 @@ function ConsoleApp() {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [treeActionTarget, setTreeActionTarget] = useState<TreeActionTarget | null>(null);
   const publicMapSectionRef = useRef<HTMLElement | null>(null);
+  const publicLibrarySectionRef = useRef<HTMLElement | null>(null);
+  const generationButtonRef = useRef<HTMLButtonElement | null>(null);
+  const generationDialogRef = useRef<HTMLElement>(null);
+  const completionButtonRef = useRef<HTMLButtonElement | null>(null);
   const completedGenerationSessionIdRef = useRef<string | null>(null);
   const previousAccountPlayerIdRef = useRef<string | null>(null);
   const consoleStateHydratedRef = useRef(false);
@@ -211,13 +224,15 @@ function ConsoleApp() {
   const publicCatalog = useQuery({
     queryKey: ['trees', 'public'],
     queryFn: fetchPublicTrees,
+    enabled: session !== null,
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
   const publicTree = useQuery({
     queryKey: ['trees', 'public', selectedPublicTreeId],
     queryFn: () => fetchPublicTree(selectedPublicTreeId ?? ''),
-    enabled: view === 'public' && selectedPublicTreeId !== null,
+    enabled:
+      session !== null && view === 'public' && selectedPublicTreeId !== null,
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
@@ -258,14 +273,14 @@ function ConsoleApp() {
   });
 
   useEffect(() => {
-    const trees = publicCatalog.data?.trees ?? [];
+    const trees = publicCatalog.data?.trees ?? (publicGuideOpen ? DEMO_PUBLIC_TREES : []);
     if (
       trees.length > 0 &&
       (!selectedPublicTreeId || !trees.some((tree) => tree.id === selectedPublicTreeId))
     ) {
       setSelectedPublicTreeId(trees[0].id);
     }
-  }, [publicCatalog.data, selectedPublicTreeId]);
+  }, [publicCatalog.data, publicGuideOpen, selectedPublicTreeId]);
 
   useEffect(() => {
     if (
@@ -362,6 +377,16 @@ function ConsoleApp() {
   }, [session, sessionPending, view]);
 
   useEffect(() => {
+    if (
+      publicGuideOpen &&
+      view === 'personal' &&
+      (publicGuideStep === 'map' || publicGuideStep === 'library')
+    ) {
+      setPublicGuideStep('personal');
+    }
+  }, [publicGuideOpen, publicGuideStep, view]);
+
+  useEffect(() => {
     if (!session && !sessionPending) {
       setAnnouncementsOpen(false);
       setFeedbackOpen(false);
@@ -412,8 +437,14 @@ function ConsoleApp() {
     session,
   ]);
 
+  const demoPublicSnapshot =
+    publicGuideOpen && view === 'public'
+      ? DEMO_PUBLIC_SNAPSHOTS.find((snapshot) => snapshot.tree.id === selectedPublicTreeId)
+      : undefined;
   const activeGraph =
-    view === 'public' ? publicTree.data?.graph : personalTree.data?.graph;
+    view === 'public'
+      ? publicTree.data?.graph ?? demoPublicSnapshot
+      : personalTree.data?.graph;
   const completedNodeIds =
     view === 'personal' ? personalTree.data?.completed_node_ids ?? [] : [];
   const displayMode: TreeDisplayMode = view === 'public' ? 'showcase' : 'personal';
@@ -542,6 +573,10 @@ function ConsoleApp() {
       } else {
         setCompletion(null);
       }
+      if (publicGuideOpen && publicGuideStep === 'personal-status') {
+        setPublicGuideStep('generation-button');
+        setMobileView('list');
+      }
     },
   });
 
@@ -571,18 +606,114 @@ function ConsoleApp() {
     setCompletion(null);
     setChatOpen(false);
   };
+  const openMcpGuide = (initialSectionId?: AgentGuideSectionId) => {
+    setMcpGuideInitialSection(initialSectionId);
+    setMcpGuideOpen(true);
+  };
+  const closeMcpGuide = () => {
+    setMcpGuideOpen(false);
+    setMcpGuideInitialSection(undefined);
+  };
   const replayPublicGuide = () => {
     setView('public');
+    setPublicGuideStep('map');
     setSelectedNodeId(null);
     setCompletion(null);
     setChatOpen(false);
     setLayoutMode('relationship');
     setMobileView('graph');
+    setPersonalSidebarOpen(true);
     setPublicGuideOpen(true);
+  };
+  const advancePublicGuide = () => {
+    if (publicGuideStep === 'map') {
+      setPublicGuideStep('library');
+      setMobileView('list');
+      setPersonalSidebarOpen(true);
+      return;
+    }
+    if (publicGuideStep === 'library') {
+      showPersonalLibrary();
+      setPublicGuideStep('personal');
+      setMobileView('list');
+      setPersonalSidebarOpen(true);
+      return;
+    }
+    if (publicGuideStep === 'personal') {
+      const guideLibraryEntryId =
+        selectedLibraryEntryId ?? personalLibrary.data?.entries[0]?.library_entry_id;
+      if (!guideLibraryEntryId) {
+        setPublicGuideStep('generation-button');
+        setMobileView('list');
+        return;
+      }
+      if (!selectedLibraryEntryId) setSelectedLibraryEntryId(guideLibraryEntryId);
+      setPublicGuideStep('personal-status');
+      setNodeDetailOpen(true);
+      setMobileView('detail');
+      return;
+    }
+    if (publicGuideStep === 'personal-status') {
+      setPublicGuideStep('generation-button');
+      setMobileView('list');
+      return;
+    }
+    if (publicGuideStep === 'generation-button') {
+      openTreeGenerator();
+      return;
+    }
+    if (publicGuideStep === 'generation-panel') {
+      closePublicGuide();
+    }
+  };
+  const rewindPublicGuide = () => {
+    if (publicGuideStep === 'generation-panel') {
+      setGenerationDialogOpen(false);
+      setPublicGuideStep('generation-button');
+      return;
+    }
+    if (publicGuideStep === 'generation-button') {
+      if (!selectedLibraryEntryId) {
+        setPublicGuideStep('personal');
+        return;
+      }
+      setPublicGuideStep('personal-status');
+      setNodeDetailOpen(true);
+      setMobileView('detail');
+      return;
+    }
+    if (publicGuideStep === 'personal-status') {
+      setMobileView('list');
+      setPublicGuideStep('personal');
+      return;
+    }
+    if (publicGuideStep === 'personal') {
+      setView('public');
+      setSelectedNodeId(null);
+      setCompletion(null);
+      setChatOpen(false);
+      setLayoutMode('relationship');
+      setMobileView('list');
+      setPersonalSidebarOpen(true);
+      setPublicGuideStep('library');
+      return;
+    }
+    if (publicGuideStep === 'library') {
+      setMobileView('graph');
+      setPersonalSidebarOpen(true);
+      setPublicGuideStep('map');
+    }
   };
   const closePublicGuide = () => {
     setPublicGuideOpen(false);
+    setPublicGuideStep('map');
     writeBooleanPreference(PUBLIC_GUIDE_STORAGE_KEY, true);
+  };
+  const closeGenerationDialog = () => {
+    setGenerationDialogOpen(false);
+    if (publicGuideOpen && publicGuideStep === 'generation-panel') {
+      closePublicGuide();
+    }
   };
   const joinSelectedTree = () => {
     if (!session) {
@@ -599,6 +730,9 @@ function ConsoleApp() {
     if (!generationCapabilities?.enabled) return;
     setView('personal');
     setGenerationDialogOpen(true);
+    if (publicGuideOpen && publicGuideStep === 'generation-button') {
+      setPublicGuideStep('generation-panel');
+    }
   };
   const rememberGenerationSession = (nextSessionId: string | null) => {
     setGenerationSessionId(nextSessionId);
@@ -612,6 +746,9 @@ function ConsoleApp() {
     setChatOpen(false);
     setView('personal');
     setGenerationDialogOpen(false);
+    if (publicGuideOpen && publicGuideStep === 'generation-panel') {
+      closePublicGuide();
+    }
     rememberGenerationSession(null);
     void queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
   };
@@ -669,6 +806,10 @@ function ConsoleApp() {
     setMobileView(mobileView === 'detail' ? 'graph' : 'list');
   };
 
+  // App already enforces this boundary; this guard keeps the console safe if
+  // its session disappears during a render before the parent unmounts it.
+  if (!session) return null;
+
   // admin 视图整体替换页面（卸载个人/公共内容，返回时重新挂载）；
   // 放在公共树库加载分支之前，避免树库重试失败时把管理员踢出面板。
   if (view === 'admin' && session) {
@@ -685,7 +826,10 @@ function ConsoleApp() {
     );
   }
 
-  const publicTrees = publicCatalog.data?.trees ?? [];
+  const guideDemoCatalogVisible =
+    publicGuideOpen && view === 'public' && !publicCatalog.data;
+  const publicTrees = publicCatalog.data?.trees ??
+    (guideDemoCatalogVisible ? DEMO_PUBLIC_TREES : []);
   const publicCatalogUnavailable = !publicCatalog.data;
   const selectedPublicTree = publicTrees.find(
     (tree) => tree.id === selectedPublicTreeId,
@@ -693,6 +837,9 @@ function ConsoleApp() {
   const selectedPersonalEntry = personalLibrary.data?.entries.find(
     (entry) => entry.library_entry_id === selectedLibraryEntryId,
   );
+  const graphVisible =
+    mobileView === 'graph' ||
+    (publicGuideOpen && view === 'public' && publicGuideStep === 'map');
   const activeTitle =
     activeGraph?.tree.title ??
     (view === 'public' ? selectedPublicTree?.title : selectedPersonalEntry?.tree.title) ??
@@ -702,6 +849,22 @@ function ConsoleApp() {
       ? selectedPublicTreeId !== null && publicTree.isPending
       : selectedLibraryEntryId !== null && personalTree.isPending;
   const treeError = view === 'public' ? publicTree.error : personalTree.error;
+  const visiblePublicGuideStep =
+    publicGuideOpen &&
+    view === 'personal' &&
+    (publicGuideStep === 'map' || publicGuideStep === 'library')
+      ? 'personal'
+      : publicGuideStep;
+  const isPersonalGuideStep =
+    visiblePublicGuideStep === 'personal' ||
+    visiblePublicGuideStep === 'personal-status' ||
+    visiblePublicGuideStep === 'generation-button' ||
+    visiblePublicGuideStep === 'generation-panel';
+  const publicGuideVisible =
+    publicGuideOpen &&
+    ((view === 'public' &&
+      (visiblePublicGuideStep === 'map' || visiblePublicGuideStep === 'library')) ||
+      (view === 'personal' && isPersonalGuideStep));
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
@@ -774,6 +937,7 @@ function ConsoleApp() {
                   ? '正在检查生成能力，请稍候'
                   : undefined
               }
+              ref={generationButtonRef}
               onClick={openTreeGenerator}
               disabled={
                 Boolean(
@@ -804,7 +968,7 @@ function ConsoleApp() {
           <button
             type="button"
             aria-label="如何在自己的 Agent 里连接 MapFlow"
-            onClick={() => setMcpGuideOpen(true)}
+            onClick={() => openMcpGuide()}
             className="hidden rounded-xl border border-violet-400/35 bg-violet-400/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:border-violet-300/70 hover:bg-violet-400/15 hover:text-white xl:inline-flex"
           >
             Agent 接入
@@ -860,6 +1024,7 @@ function ConsoleApp() {
           </button>
         )}
         <aside
+          ref={publicLibrarySectionRef}
           data-testid="mobile-list"
           data-mapflow-tree-sidebar="true"
           className={`${
@@ -891,9 +1056,9 @@ function ConsoleApp() {
 
           <div className="space-y-2">
             {view === 'public' ? (
-              publicCatalog.isPending && publicCatalogUnavailable ? (
+              publicCatalog.isPending && publicCatalogUnavailable && !guideDemoCatalogVisible ? (
                 <SidebarMessage>正在读取公共技能树…</SidebarMessage>
-              ) : publicCatalogUnavailable ? (
+              ) : publicCatalogUnavailable && !guideDemoCatalogVisible ? (
                 <div
                   role="alert"
                   className="rounded-xl border border-amber-400/30 bg-amber-400/5 px-3 py-3 text-xs leading-5 text-amber-100"
@@ -1027,7 +1192,7 @@ function ConsoleApp() {
         <section
           ref={publicMapSectionRef}
           data-testid="mobile-graph"
-          className={`${mobileView === 'graph' ? 'block' : 'hidden'} relative min-w-0 flex-1 lg:block`}
+          className={`${graphVisible ? 'block' : 'hidden'} relative min-w-0 flex-1 lg:block`}
         >
           {snapshot ? (
             <>
@@ -1059,16 +1224,16 @@ function ConsoleApp() {
                 displayMode={displayMode}
                 layoutMode={layoutMode}
                 selectedNodeId={selectedNodeId}
-                isGraphVisible={mobileView === 'graph'}
+                isGraphVisible={graphVisible}
                 onSelectNode={(nodeId) => {
                   setSelectedNodeId(nodeId);
                   setMobileView('detail');
                 }}
               />
             </>
-          ) : view === 'public' && publicCatalog.isPending ? (
+          ) : view === 'public' && publicCatalog.isPending && !guideDemoCatalogVisible ? (
             <InlineStatus message="正在读取公共技能树…" />
-          ) : view === 'public' && publicCatalogUnavailable ? (
+          ) : view === 'public' && publicCatalogUnavailable && !guideDemoCatalogVisible ? (
             <InlineStatus message="公共技能树暂时无法读取，可先切换到其他功能。" />
           ) : treePending ? (
             <InlineStatus message="正在加载完整技能树…" />
@@ -1101,6 +1266,7 @@ function ConsoleApp() {
                 selectedNodeId={selectedNodeId}
                 onTogglePanel={() => setNodeDetailOpen((current) => !current)}
                 completionPending={completionMutation.isPending}
+                completionButtonRef={completionButtonRef}
                 onSetCompleted={
                   view === 'personal'
                     ? (nodeId, completed) =>
@@ -1205,14 +1371,35 @@ function ConsoleApp() {
               void creditQuery.refetch();
             }}
             onComplete={showGeneratedTree}
-            onClose={() => setGenerationDialogOpen(false)}
+            onClose={closeGenerationDialog}
+            dialogRef={generationDialogRef}
           />
         )}
 
-      {publicGuideOpen && view === 'public' && snapshot && (
+      {publicGuideVisible && (
         <PublicMapGuide
-          targetRef={publicMapSectionRef}
+          step={visiblePublicGuideStep}
+          targetRef={
+            visiblePublicGuideStep === 'library'
+              ? publicLibrarySectionRef
+              : visiblePublicGuideStep === 'personal-status'
+                ? completionButtonRef
+                : visiblePublicGuideStep === 'generation-button'
+                  ? generationButtonRef
+                  : visiblePublicGuideStep === 'generation-panel'
+                    ? generationDialogRef
+                    : publicMapSectionRef
+          }
+          additionalTargetRef={
+            visiblePublicGuideStep === 'personal'
+              ? publicLibrarySectionRef
+              : undefined
+          }
+          onNext={advancePublicGuide}
+          onPrevious={rewindPublicGuide}
           onClose={closePublicGuide}
+          onOpenAgentGuide={() => openMcpGuide('manage-progress')}
+          statusStepEnabled={Boolean(selectedLibraryEntryId)}
         />
       )}
 
@@ -1273,7 +1460,7 @@ function ConsoleApp() {
           </a>
           <DrawerItem
             onClick={() => {
-              setMcpGuideOpen(true);
+              openMcpGuide();
               setDrawerOpen(false);
             }}
           >
@@ -1351,7 +1538,12 @@ function ConsoleApp() {
         <FeedbackDialog onClose={() => setFeedbackOpen(false)} />
       )}
 
-      {mcpGuideOpen && <McpGuideDialog onClose={() => setMcpGuideOpen(false)} />}
+      {mcpGuideOpen && (
+        <McpGuideDialog
+          initialSectionId={mcpGuideInitialSection}
+          onClose={closeMcpGuide}
+        />
+      )}
 
       <LogoutConfirmDialog
         open={logoutConfirmOpen}
@@ -1754,12 +1946,15 @@ function FullPageStatus({
 
 function EntryLoading() {
   return (
-    <div className="flex h-screen items-center justify-center bg-slate-950 px-6 text-slate-300">
+    <div
+      data-testid="session-loading"
+      className="flex h-screen items-center justify-center bg-slate-950 px-6 text-slate-300"
+    >
       <p
         role="status"
         className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm"
       >
-        正在恢复你的控制台…
+        正在检查登录状态…
       </p>
     </div>
   );
@@ -1770,6 +1965,7 @@ function readableError(error: unknown): string {
 }
 
 function readStoredConsoleState(accountPlayerId: string | null): PersistedConsoleState | null {
+  if (!accountPlayerId) return null;
   try {
     const raw = window.localStorage.getItem(consoleStateStorageKey(accountPlayerId));
     if (!raw) return null;
@@ -1801,6 +1997,7 @@ function writeStoredConsoleState(
   accountPlayerId: string | null,
   state: PersistedConsoleState,
 ): void {
+  if (!accountPlayerId) return;
   try {
     window.localStorage.setItem(
       consoleStateStorageKey(accountPlayerId),
@@ -1811,8 +2008,16 @@ function writeStoredConsoleState(
   }
 }
 
-function consoleStateStorageKey(accountPlayerId: string | null): string {
-  return `${CONSOLE_STATE_STORAGE_KEY_PREFIX}${accountPlayerId ?? 'visitor'}`;
+function removeStoredConsoleState(accountPlayerId: string): void {
+  try {
+    window.localStorage.removeItem(consoleStateStorageKey(accountPlayerId));
+  } catch {
+    // 隐私模式或禁用存储时没有需要清理的本地副本。
+  }
+}
+
+function consoleStateStorageKey(accountPlayerId: string): string {
+  return `${CONSOLE_STATE_STORAGE_KEY_PREFIX}${accountPlayerId}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

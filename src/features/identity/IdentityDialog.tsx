@@ -23,6 +23,7 @@ import { IdentityApiError, type ClaimedInvitation } from './identityClient';
 import TurnstileVerifier from './TurnstileVerifier';
 
 interface IdentityDialogProps {
+  presentation?: 'dialog' | 'page';
   pending: boolean;
   requestError: unknown;
   onClose: () => void;
@@ -65,6 +66,7 @@ const EMPTY_TOUCHED: Record<RegistrationField, boolean> = {
 };
 
 export default function IdentityDialog({
+  presentation = 'dialog',
   pending,
   requestError,
   onClose,
@@ -73,6 +75,7 @@ export default function IdentityDialog({
   onRegister,
   onClaimInvitation,
 }: IdentityDialogProps) {
+  const isPage = presentation === 'page';
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [registration, setRegistration] =
     useState<RegistrationFormValues>(EMPTY_REGISTRATION);
@@ -120,12 +123,13 @@ export default function IdentityDialog({
   }, [requestClaim]);
 
   useEffect(() => {
+    if (isPage) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !pending) onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, pending]);
+  }, [isPage, onClose, pending]);
 
   const changeMode = (nextMode: 'login' | 'register') => {
     setMode(nextMode);
@@ -202,14 +206,23 @@ export default function IdentityDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !pending) onClose();
-      }}
+      data-testid={isPage ? 'identity-gate' : undefined}
+      className={
+        isPage
+          ? 'grid min-h-screen place-items-center bg-slate-950 p-4 text-slate-100'
+          : 'fixed inset-0 z-50 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-sm'
+      }
+      onMouseDown={
+        isPage
+          ? undefined
+          : (event) => {
+              if (event.target === event.currentTarget && !pending) onClose();
+            }
+      }
     >
       <section
-        role="dialog"
-        aria-modal="true"
+        role={isPage ? undefined : 'dialog'}
+        aria-modal={isPage ? undefined : true}
         aria-labelledby="identity-dialog-title"
         className="max-h-[calc(100dvh-2rem)] w-full max-w-[min(28rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl shadow-cyan-950/40"
       >
@@ -222,15 +235,17 @@ export default function IdentityDialog({
               {mode === 'login' ? '登录学习账号' : '用邀请码激活账号'}
             </h2>
           </div>
-          <button
-            type="button"
-            aria-label="关闭账号窗口"
-            disabled={pending}
-            onClick={onClose}
-            className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40"
-          >
-            ×
-          </button>
+          {!isPage && (
+            <button
+              type="button"
+              aria-label="关闭账号窗口"
+              disabled={pending}
+              onClick={onClose}
+              className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 transition hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40"
+            >
+              ×
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-2 border-b border-slate-800 p-1.5">

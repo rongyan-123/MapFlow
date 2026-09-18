@@ -1,4 +1,5 @@
 import { DEPTH_LABELS, ICON_EMOJI } from '../../lib/constants';
+import type { RefObject } from 'react';
 import type {
   LearningTreeSnapshot,
   TreeDisplayMode,
@@ -10,6 +11,7 @@ interface NodeDetailPanelProps {
   displayMode: TreeDisplayMode;
   onSetCompleted?: (nodeId: string, completed: boolean) => void;
   completionPending?: boolean;
+  completionButtonRef?: RefObject<HTMLButtonElement>;
   onOpenChat?: () => void;
   onTogglePanel?: () => void;
 }
@@ -32,6 +34,7 @@ export default function NodeDetailPanel({
   displayMode,
   onSetCompleted,
   completionPending = false,
+  completionButtonRef,
   onOpenChat,
   onTogglePanel,
 }: NodeDetailPanelProps) {
@@ -159,6 +162,7 @@ export default function NodeDetailPanel({
           </p>
           <button
             type="button"
+            ref={completionButtonRef}
             disabled={completionPending}
             onClick={() => onSetCompleted(node.id, !completed)}
             className={`mt-3 w-full rounded-lg px-3 py-2 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-60 ${

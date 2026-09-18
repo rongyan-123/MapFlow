@@ -34,7 +34,7 @@ beforeEach(() => {
 });
 
 describe('IdentityAccess', () => {
-  it('stays out of the anonymous browsing UI when identity is disabled', async () => {
+  it('does not request capabilities for an anonymous login entry', async () => {
     api.fetchCapabilities.mockResolvedValue({
       identity: { registrationEnabled: false },
     });
@@ -42,11 +42,12 @@ describe('IdentityAccess', () => {
 
     renderIdentityAccess();
 
-    await waitFor(() => expect(api.fetchCapabilities).toHaveBeenCalledOnce());
+    await waitFor(() => expect(api.fetchCurrentSession).toHaveBeenCalledOnce());
+    expect(api.fetchCapabilities).not.toHaveBeenCalled();
     expect(api.fetchCurrentSession).toHaveBeenCalled();
     expect(
-      screen.queryByRole('button', { name: '登录 / 激活账号' }),
-    ).not.toBeInTheDocument();
+      await screen.findByRole('button', { name: '登录 / 激活账号' }),
+    ).toBeInTheDocument();
   });
 
   it('keeps the login entry visible when capabilities fail', async () => {

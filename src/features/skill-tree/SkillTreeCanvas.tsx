@@ -4,6 +4,7 @@ import {
   Controls,
   MiniMap,
   ReactFlow,
+  useNodesInitialized,
   useEdgesState,
   useNodesState,
   type Edge,
@@ -248,7 +249,6 @@ export default function SkillTreeCanvas({
   );
   const layoutKey = `${snapshot.tree.id}:${snapshot.tree.revision ?? 0}:${layoutMode}`;
   const previousLayoutKeyRef = useRef<string | null>(null);
-  const previousGraphVisibleRef = useRef(false);
 
   useEffect(() => {
     const layoutChanged = previousLayoutKeyRef.current !== layoutKey;
@@ -294,20 +294,6 @@ export default function SkillTreeCanvas({
       });
   }, [generatedNodes.length, layoutMode, snapshot.current_node_id]);
 
-  useEffect(() => {
-    const timer = window.setTimeout(fitGraphView, 0);
-    return () => window.clearTimeout(timer);
-  }, [fitGraphView, layoutKey]);
-
-  useEffect(() => {
-    const wasVisible = previousGraphVisibleRef.current;
-    previousGraphVisibleRef.current = isGraphVisible;
-    if (!isGraphVisible || wasVisible) return;
-
-    const timer = window.setTimeout(fitGraphView, 0);
-    return () => window.clearTimeout(timer);
-  }, [fitGraphView, isGraphVisible]);
-
   return (
     <ReactFlow
       nodes={nodes}
@@ -324,6 +310,11 @@ export default function SkillTreeCanvas({
       defaultEdgeOptions={{ type: 'smoothstep' }}
       proOptions={{ hideAttribution: true }}
     >
+      <FitViewWhenReady
+        fitGraphView={fitGraphView}
+        isGraphVisible={isGraphVisible}
+        layoutKey={layoutKey}
+      />
       <Background color="#1e293b" gap={20} />
       <Controls className="!rounded-lg !border-slate-700 !bg-slate-900" />
       <MiniMap
@@ -344,4 +335,37 @@ export default function SkillTreeCanvas({
       />
     </ReactFlow>
   );
+}
+
+interface FitViewWhenReadyProps {
+  fitGraphView: () => void;
+  isGraphVisible: boolean;
+  layoutKey: string;
+}
+
+function FitViewWhenReady({
+  fitGraphView,
+  isGraphVisible,
+  layoutKey,
+}: FitViewWhenReadyProps) {
+  const nodesInitialized = useNodesInitialized();
+  const previousGraphVisibleRef = useRef(false);
+
+  useEffect(() => {
+    if (!nodesInitialized) return;
+
+    const timer = window.setTimeout(fitGraphView, 0);
+    return () => window.clearTimeout(timer);
+  }, [fitGraphView, layoutKey, nodesInitialized]);
+
+  useEffect(() => {
+    const wasVisible = previousGraphVisibleRef.current;
+    previousGraphVisibleRef.current = isGraphVisible;
+    if (!nodesInitialized || !isGraphVisible || wasVisible) return;
+
+    const timer = window.setTimeout(fitGraphView, 0);
+    return () => window.clearTimeout(timer);
+  }, [fitGraphView, isGraphVisible, nodesInitialized]);
+
+  return null;
 }
