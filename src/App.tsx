@@ -221,6 +221,12 @@ function ConsoleApp() {
   ] as const;
   const creditQueryKey = ['me', accountPlayerId, 'credit'] as const;
 
+  useEffect(() => {
+    if (publicGuideOpen) {
+      writeBooleanPreference(PUBLIC_GUIDE_STORAGE_KEY, true);
+    }
+  }, [publicGuideOpen]);
+
   const publicCatalog = useQuery({
     queryKey: ['trees', 'public'],
     queryFn: fetchPublicTrees,

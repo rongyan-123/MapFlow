@@ -383,6 +383,23 @@ describe('MapFlow tree library', () => {
     expect(await screen.findByText(guideCopy)).toBeInTheDocument();
   });
 
+  it('首次显示引导后重新挂载不会再次自动显示', async () => {
+    window.localStorage.removeItem('mapflow.guide.public.v1.seen');
+    const firstRender = renderApp('/console');
+
+    expect(await screen.findByTestId('public-map-guide')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.localStorage.getItem('mapflow.guide.public.v1.seen')).toBe('true');
+    });
+
+    firstRender.unmount();
+    renderApp('/console');
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('public-map-guide')).not.toBeInTheDocument();
+    });
+  });
+
   it('加入公共技能树后自动进入我的学习引导', async () => {
     const user = userEvent.setup();
     window.localStorage.removeItem('mapflow.guide.public.v1.seen');
