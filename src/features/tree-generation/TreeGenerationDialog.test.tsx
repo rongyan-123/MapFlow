@@ -120,6 +120,26 @@ describe('TreeGenerationDialog', () => {
     expect(screen.queryByRole('button', { name: '查看诊断信息' })).not.toBeInTheDocument();
   });
 
+  it('sends a copied API key after trimming surrounding whitespace', async () => {
+    const user = userEvent.setup();
+    generationApi.createTreeGeneration.mockResolvedValue(planReadySession());
+    renderDialog();
+
+    await fillGenerationForm(user);
+    fireEvent.change(screen.getByLabelText('DeepSeek API Key'), {
+      target: { value: '  sk-copied-from-console\r\n' },
+    });
+    await user.click(screen.getByRole('button', { name: '生成规划' }));
+
+    await waitFor(() =>
+      expect(generationApi.createTreeGeneration).toHaveBeenCalledWith(
+        generationInput,
+        expect.objectContaining({ apiKey: 'sk-copied-from-console' }),
+        'csrf-secret',
+      ),
+    );
+  });
+
   it('identifies the exact oversized learning field before sending a request', async () => {
     const user = userEvent.setup();
     renderDialog();

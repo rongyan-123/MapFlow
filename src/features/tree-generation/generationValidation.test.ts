@@ -50,4 +50,8 @@ describe('generationValidation', () => {
       'DeepSeek API Key 不能超过 512 个字符。',
     );
   });
+
+  it('accepts an API key copied with surrounding whitespace', () => {
+    expect(validateGenerationApiKey('  sk-copied-from-console\r\n')).toBeNull();
+  });
 });

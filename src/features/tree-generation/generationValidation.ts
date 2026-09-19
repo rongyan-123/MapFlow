@@ -34,11 +34,12 @@ export function validateGenerationText(
 }
 
 export function validateGenerationApiKey(value: string): string | null {
-  if (!value.trim()) return '请输入 DeepSeek API Key。';
-  if (countUnicodeCharacters(value) > GENERATION_API_KEY_MAX_CHARS) {
+  const normalizedValue = value.trim();
+  if (!normalizedValue) return '请输入 DeepSeek API Key。';
+  if (countUnicodeCharacters(normalizedValue) > GENERATION_API_KEY_MAX_CHARS) {
     return `DeepSeek API Key 不能超过 ${GENERATION_API_KEY_MAX_CHARS} 个字符。`;
   }
-  if (containsControlCharacter(value)) {
+  if (containsControlCharacter(normalizedValue)) {
     return 'DeepSeek API Key 不能包含换行或不可见控制字符，请重新粘贴。';
   }
   return null;
