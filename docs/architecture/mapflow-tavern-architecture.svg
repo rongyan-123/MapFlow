@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1200" viewBox="0 0 1800 1200" role="img" aria-labelledby="title desc">
+  <title id="title">MapFlow 当前架构与酒馆接入落点</title>
+  <desc id="desc">从 React 浏览器经过 Rust 服务端、Node harness worker、DSH 到模型与 PostgreSQL 的架构图，突出酒馆新增模块、持久化边界和五分钟会话回收。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#050914"/>
+      <stop offset="1" stop-color="#0b1326"/>
+    </linearGradient>
+    <linearGradient id="newNode" x1="0" x2="1">
+      <stop offset="0" stop-color="#0d5367"/>
+      <stop offset="1" stop-color="#173759"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowBlue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#43d9ff"/>
+    </marker>
+    <marker id="arrowPurple" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#b896ff"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#62e6a7"/>
+    </marker>
+    <style>
+      .title { font: 700 38px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #f4f8ff; }
+      .subtitle { font: 18px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #90a0bd; }
+      .lane-title { font: 700 22px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #dce8ff; letter-spacing: 1px; }
+      .node-title { font: 700 20px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #f5fbff; }
+      .node-text { font: 16px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #b8c6df; }
+      .small { font: 14px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #93a3c0; }
+      .tag { font: 700 14px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #00131a; }
+      .arrow-label { font: 15px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #c4d2eb; }
+      .lane { fill: #0b1221; stroke: #24334e; stroke-width: 2; }
+      .existing { fill: #121c30; stroke: #50617e; stroke-width: 2; }
+      .new { fill: url(#newNode); stroke: #43d9ff; stroke-width: 2.5; }
+      .runtime { fill: #241c3e; stroke: #b896ff; stroke-width: 2; }
+      .data { fill: #102c28; stroke: #62e6a7; stroke-width: 2; }
+      .external { fill: #33251a; stroke: #ffbf69; stroke-width: 2; }
+      .blue-line { fill: none; stroke: #43d9ff; stroke-width: 3; marker-end: url(#arrowBlue); }
+      .purple-line { fill: none; stroke: #b896ff; stroke-width: 3; marker-end: url(#arrowPurple); }
+      .green-line { fill: none; stroke: #62e6a7; stroke-width: 3; marker-end: url(#arrowGreen); }
+      .restore-line { fill: none; stroke: #62e6a7; stroke-width: 3; stroke-dasharray: 10 8; marker-end: url(#arrowGreen); }
+    </style>
+  </defs>
+
+  <rect width="1800" height="1200" fill="url(#bg)"/>
+  <text class="title" x="70" y="68">MapFlow 当前架构与酒馆接入落点</text>
+  <text class="subtitle" x="70" y="101">蓝色 = 酒馆新增模块　灰色 = 现有业务　紫色 = 可回收 Runtime　绿色 = 持久化事实</text>
+
+  <rect class="lane" x="55" y="140" width="350" height="870" rx="24"/>
+  <rect class="lane" x="430" y="140" width="700" height="870" rx="24"/>
+  <rect class="lane" x="1155" y="140" width="360" height="870" rx="24"/>
+  <rect class="lane" x="1540" y="140" width="210" height="870" rx="24"/>
+
+  <text class="lane-title" x="80" y="184">① React 浏览器</text>
+  <text class="lane-title" x="455" y="184">② Rust / Axum：业务事实与权限</text>
+  <text class="lane-title" x="1180" y="184">③ Node / DSH Runtime</text>
+  <text class="lane-title" x="1565" y="184">④ 数据与模型</text>
+
+  <rect class="existing" x="90" y="235" width="280" height="105" rx="18"/>
+  <text class="node-title" x="115" y="273">现有技能树 Console</text>
+  <text class="node-text" x="115" y="305">树浏览 · 进度 · 知识聊天</text>
+
+  <rect class="new" x="90" y="405" width="280" height="125" rx="18" filter="url(#glow)"/>
+  <rect x="280" y="420" width="70" height="26" rx="13" fill="#43d9ff"/>
+  <text class="tag" x="297" y="438">新增</text>
+  <text class="node-title" x="115" y="452">TavernPage 酒馆</text>
+  <text class="node-text" x="115" y="485">角色库 · 会话 · 文本输入</text>
+  <text class="small" x="115" y="511">词表可选，不传即普通聊天</text>
+
+  <rect class="new" x="90" y="590" width="280" height="115" rx="18"/>
+  <text class="node-title" x="115" y="632">CardImportModule</text>
+  <text class="node-text" x="115" y="663">PNG / JSON → 规范化契约</text>
+  <text class="small" x="115" y="688">本地解析，服务端重新校验</text>
+
+  <rect class="existing" x="465" y="225" width="630" height="90" rx="18"/>
+  <text class="node-title" x="490" y="262">Axum Router + Identity + CSRF + Rate Limit</text>
+  <text class="node-text" x="490" y="292">浏览器请求首先穿过统一身份与协议边界</text>
+
+  <rect class="existing" x="470" y="370" width="265" height="110" rx="18"/>
+  <text class="node-title" x="495" y="410">KnowledgeChatService</text>
+  <text class="node-text" x="495" y="441">现有树聊天业务</text>
+  <text class="small" x="495" y="465">保留工具白名单，不改协议</text>
+
+  <rect class="new" x="790" y="350" width="290" height="145" rx="18"/>
+  <text class="node-title" x="815" y="390">TavernChatModule</text>
+  <text class="node-text" x="815" y="421">所有权 · 幂等 · 并发</text>
+  <text class="node-text" x="815" y="449">历史 · 回合事务 · 错误语义</text>
+  <text class="small" x="815" y="477">唯一酒馆生成入口</text>
+
+  <rect class="new" x="470" y="555" width="290" height="125" rx="18"/>
+  <text class="node-title" x="495" y="595">TavernContextProjector</text>
+  <text class="node-text" x="495" y="626">世界书选择 · 可选词表</text>
+  <text class="small" x="495" y="654">输出结构化 TavernTurnContext</text>
+
+  <rect class="new" x="805" y="555" width="275" height="125" rx="18"/>
+  <text class="node-title" x="830" y="595">TavernRuntime interface</text>
+  <text class="node-text" x="830" y="626">独立协议 · 稳定会话键</text>
+  <text class="small" x="830" y="654">只暴露角色聊天所需能力</text>
+
+  <rect class="data" x="470" y="760" width="285" height="125" rx="18"/>
+  <text class="node-title" x="495" y="800">业务存储 Adapter</text>
+  <text class="node-text" x="495" y="831">角色 · 会话 · 原始回合</text>
+  <text class="small" x="495" y="859">业务事实，不能被 TTL 删除</text>
+
+  <rect class="data" x="805" y="760" width="275" height="125" rx="18"/>
+  <text class="node-title" x="830" y="800">Credit Usage Ledger</text>
+  <text class="node-text" x="830" y="831">成功回合 + 扣费同事务</text>
+  <text class="small" x="830" y="859">统一余额来源，防止双扣</text>
+
+  <rect class="runtime" x="1190" y="245" width="290" height="110" rx="18"/>
+  <text class="node-title" x="1215" y="285">知识聊天 Profile</text>
+  <text class="node-text" x="1215" y="316">web_search / 改树审批</text>
+  <text class="small" x="1215" y="340">scope 内关闭动态 context</text>
+
+  <rect class="new" x="1190" y="430" width="290" height="150" rx="18" filter="url(#glow)"/>
+  <text class="node-title" x="1215" y="470">酒馆 Profile</text>
+  <text class="node-text" x="1215" y="501">tavern_chat_message</text>
+  <text class="node-text" x="1215" y="529">无工具 · maxSteps = 1</text>
+  <text class="small" x="1215" y="557">唯一位置渲染 runtime context</text>
+
+  <rect class="runtime" x="1190" y="675" width="290" height="140" rx="18"/>
+  <text class="node-title" x="1215" y="715">SessionStore</text>
+  <text class="node-text" x="1215" y="746">TTL 300 秒 · bounded LRU</text>
+  <text class="node-text" x="1215" y="774">只回收空闲 Agent Handle</text>
+  <text class="small" x="1215" y="800">session_missing → 历史恢复一次</text>
+
+  <rect class="runtime" x="1190" y="875" width="290" height="90" rx="18"/>
+  <text class="node-title" x="1215" y="914">DSH Agent</text>
+  <text class="node-text" x="1215" y="944">组装 prompt · 流式生成</text>
+
+  <rect class="data" x="1570" y="395" width="150" height="135" rx="18"/>
+  <text class="node-title" x="1590" y="437">PostgreSQL</text>
+  <text class="node-text" x="1590" y="469">角色与历史</text>
+  <text class="node-text" x="1590" y="497">积分与用量</text>
+
+  <rect class="external" x="1570" y="850" width="150" height="115" rx="18"/>
+  <text class="node-title" x="1590" y="893">模型服务</text>
+  <text class="node-text" x="1590" y="925">SiliconFlow</text>
+  <text class="small" x="1590" y="949">真实成本发生点</text>
+
+  <path class="blue-line" d="M370 458 H430 V270 H465"/>
+  <path class="blue-line" d="M370 645 H415 V445 H790"/>
+  <path class="blue-line" d="M1095 270 H1155 V300 H1190"/>
+  <path class="blue-line" d="M1080 422 H1135 V505 H1190"/>
+  <path class="blue-line" d="M790 422 H760 V618 H760"/>
+  <path class="blue-line" d="M760 618 H805"/>
+  <path class="purple-line" d="M1080 618 H1140 V505 H1190"/>
+  <path class="purple-line" d="M1335 580 V675"/>
+  <path class="purple-line" d="M1335 815 V875"/>
+  <path class="purple-line" d="M1335 965 H1540 V908 H1570"/>
+  <path class="green-line" d="M755 823 H805"/>
+  <path class="green-line" d="M1080 823 H1505 V463 H1570"/>
+  <path class="green-line" d="M470 823 H440 V705 H405 V463 H790"/>
+  <path class="restore-line" d="M1570 500 H1515 V620 H1110 V690 H790 V470"/>
+
+  <text class="arrow-label" x="475" y="342">统一 HTTP 边界</text>
+  <text class="arrow-label" x="1095" y="600">tavern_chat_message</text>
+  <text class="arrow-label" x="1385" y="646">热 Session</text>
+  <text class="arrow-label" x="1210" y="649">动态 context</text>
+  <text class="arrow-label" x="1175" y="848">可丢弃</text>
+  <text class="arrow-label" x="1350" y="603">无工具</text>
+  <text class="arrow-label" x="1240" y="662">5 分钟</text>
+  <text class="arrow-label" x="1175" y="680">运行时状态</text>
+  <text class="arrow-label" x="1210" y="624">结构化输入</text>
+  <text class="arrow-label" x="1190" y="1035">紫色链路可以释放；绿色链路才是续聊依据</text>
+
+  <rect x="55" y="1045" width="1695" height="105" rx="20" fill="#0d1628" stroke="#2b3b59" stroke-width="2"/>
+  <text class="node-title" x="85" y="1083">Review 的四个问题</text>
+  <text class="node-text" x="85" y="1118">① 谁拥有状态？　② 绕过 UI 后权限是否仍成立？　③ 失败与重试会留下什么？　④ 模型调用与扣费是否严格一一对应？</text>
+</svg>
