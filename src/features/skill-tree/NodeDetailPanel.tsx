@@ -1,5 +1,6 @@
 import { DEPTH_LABELS, ICON_EMOJI } from '../../lib/constants';
-import type { RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
+import { progressPercentForNode } from '../../types/learning';
 import type {
   LearningTreeSnapshot,
   TreeDisplayMode,
@@ -11,6 +12,8 @@ interface NodeDetailPanelProps {
   displayMode: TreeDisplayMode;
   onSetCompleted?: (nodeId: string, completed: boolean) => void;
   completionPending?: boolean;
+  onSetProgress?: (nodeId: string, progressPercent: number) => void;
+  progressPending?: boolean;
   completionButtonRef?: RefObject<HTMLButtonElement>;
   onOpenChat?: () => void;
   onTogglePanel?: () => void;
@@ -34,11 +37,28 @@ export default function NodeDetailPanel({
   displayMode,
   onSetCompleted,
   completionPending = false,
+  onSetProgress,
+  progressPending = false,
   completionButtonRef,
   onOpenChat,
   onTogglePanel,
 }: NodeDetailPanelProps) {
   const node = snapshot.nodes.find((item) => item.id === selectedNodeId);
+  const progress = node
+    ? snapshot.progress.find((item) => item.node_id === node.id)
+    : undefined;
+  const status = progress?.status ?? 'not_started';
+  const completed = status === 'completed' || status === 'mastered';
+  const progressPercent = progressPercentForNode(progress);
+  const [detailProgressOpen, setDetailProgressOpen] = useState(false);
+  const [progressInput, setProgressInput] = useState(String(progressPercent));
+  const [progressInputError, setProgressInputError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setProgressInput(String(progressPercent));
+    setProgressInputError(null);
+  }, [node?.id, progressPercent]);
+
   if (!node) {
     return (
       <aside className="flex w-full shrink-0 flex-col border-t border-slate-800 bg-slate-950/95 p-5 lg:w-80 lg:border-l lg:border-t-0">
@@ -64,9 +84,6 @@ export default function NodeDetailPanel({
     );
   }
 
-  const progress = snapshot.progress.find((item) => item.node_id === node.id);
-  const status = progress?.status ?? 'not_started';
-  const completed = status === 'completed' || status === 'mastered';
   const objectives = parseStringList(node.learning_objectives);
   const expectedEvidence = parseStringList(node.observable_evidence);
   const prerequisites = snapshot.edges
@@ -152,15 +169,19 @@ export default function NodeDetailPanel({
         </section>
       )}
 
-      {displayMode === 'personal' && onSetCompleted ? (
+      {displayMode === 'personal' && (onSetCompleted || onSetProgress) ? (
         <section className="mb-5 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             我的学习进度
           </h3>
           <p className="mt-2 text-xs leading-5 text-slate-500">
-            首版只记录“未完成 / 已完成”，以后可以继续扩展证据和熟练度。
+            可直接标记完成，也可以填写当前已经学会的百分比。
           </p>
-          <button
+          <p className="mt-3 text-sm font-semibold text-cyan-200">
+            当前完成度：<span>{progressPercent}%</span>
+          </p>
+          {onSetCompleted && (
+            <button
             type="button"
             ref={completionButtonRef}
             disabled={completionPending}
@@ -176,7 +197,69 @@ export default function NodeDetailPanel({
               : completed
                 ? '取消完成'
                 : '标记为已完成'}
-          </button>
+            </button>
+          )}
+          {onSetProgress && (
+            <div className="mt-3 border-t border-slate-800 pt-3">
+              <button
+                type="button"
+                className="text-xs text-slate-500 underline decoration-slate-700 underline-offset-4 transition hover:text-cyan-200"
+                onClick={() => {
+                  setDetailProgressOpen((current) => !current);
+                  setProgressInputError(null);
+                }}
+              >
+                {detailProgressOpen ? '收起详细进度' : '填写详细进度'}
+              </button>
+              {detailProgressOpen && (
+                <div className="mt-3 space-y-2">
+                  <label className="block text-xs text-slate-500" htmlFor="node-progress-percent">
+                    节点完成百分比
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="node-progress-percent"
+                      aria-label="节点完成百分比"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={progressInput}
+                      onChange={(event) => {
+                        setProgressInput(event.target.value);
+                        setProgressInputError(null);
+                      }}
+                      className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400"
+                    />
+                    <button
+                      type="button"
+                      disabled={progressPending}
+                      onClick={() => {
+                        const trimmed = progressInput.trim();
+                        const value = Number(trimmed);
+                        if (
+                          trimmed === '' ||
+                          !Number.isInteger(value) ||
+                          value < 0 ||
+                          value > 100
+                        ) {
+                          setProgressInputError('请输入 0–100 的整数。');
+                          return;
+                        }
+                        onSetProgress(node.id, value);
+                      }}
+                      className="rounded-lg border border-cyan-400/50 px-3 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {progressPending ? '保存中…' : '保存详细进度'}
+                    </button>
+                  </div>
+                  {progressInputError && (
+                    <p className="text-xs text-rose-300">{progressInputError}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </section>
       ) : (
         <section className="mb-5 rounded-xl border border-cyan-900/70 bg-cyan-950/20 p-3 text-xs leading-5 text-cyan-200/80">

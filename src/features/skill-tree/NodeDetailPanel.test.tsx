@@ -78,4 +78,41 @@ describe('NodeDetailPanel 知识聊天入口', () => {
     );
     expect(screen.queryByRole('button', { name: '与这棵树聊天' })).not.toBeInTheDocument();
   });
+
+  it('允许编辑部分完成百分比并拒绝空输入', async () => {
+    const user = userEvent.setup();
+    const onSetProgress = vi.fn();
+    const partialSnapshot: LearningTreeSnapshot = {
+      ...snapshot,
+      progress: [
+        {
+          node_id: 'node-1',
+          status: 'in_progress',
+          evidence: '',
+          progress_percent: 37,
+        },
+      ],
+    };
+    render(
+      <NodeDetailPanel
+        snapshot={partialSnapshot}
+        selectedNodeId="node-1"
+        displayMode="personal"
+        onSetProgress={onSetProgress}
+      />,
+    );
+
+    expect(screen.getByText('37%')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '填写详细进度' }));
+    const input = screen.getByRole('spinbutton', { name: '节点完成百分比' });
+    expect(input).toHaveValue(37);
+    await user.clear(input);
+    await user.click(screen.getByRole('button', { name: '保存详细进度' }));
+    expect(screen.getByText('请输入 0–100 的整数。')).toBeInTheDocument();
+    expect(onSetProgress).not.toHaveBeenCalled();
+
+    await user.type(input, '37');
+    await user.click(screen.getByRole('button', { name: '保存详细进度' }));
+    expect(onSetProgress).toHaveBeenCalledWith('node-1', 37);
+  });
 });

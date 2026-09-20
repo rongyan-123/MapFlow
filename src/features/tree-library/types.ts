@@ -28,6 +28,7 @@ export interface PersonalLibraryEntry {
   library_entry_id: string;
   tree: SkillTree;
   completed_nodes: number;
+  progress_percent?: number;
 }
 
 export interface PersonalLibrary {
@@ -39,6 +40,13 @@ export interface PersonalTreeDetail {
   library_entry_id: string;
   graph: TreeGraph;
   completed_node_ids: string[];
+  node_progress?: NodeProgress[];
+  progress_percent?: number;
+}
+
+export interface NodeProgress {
+  node_id: string;
+  progress_percent: number;
 }
 
 export interface AddedTree {

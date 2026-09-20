@@ -40,8 +40,13 @@ import {
   fetchPublicTrees,
   renamePersonalTree,
   setNodeCompletion,
+  setNodeProgress,
 } from './features/tree-library/treeLibraryClient';
-import type { PersonalLibrary, TreeGraph } from './features/tree-library/types';
+import type {
+  NodeProgress,
+  PersonalLibrary,
+  TreeGraph,
+} from './features/tree-library/types';
 import TreeExportMenu from './features/tree-library/TreeExportMenu';
 import TreeLibraryActionDialog, {
   type TreeLibraryAction,
@@ -53,6 +58,10 @@ import type {
   SkillNode,
   TreeLayoutMode,
   TreeDisplayMode,
+} from './types/learning';
+import {
+  learningStatusFromProgressPercent,
+  normalizeProgressPercent,
 } from './types/learning';
 
 type AppView = 'public' | 'personal' | 'admin';
@@ -453,9 +462,11 @@ function ConsoleApp() {
       : personalTree.data?.graph;
   const completedNodeIds =
     view === 'personal' ? personalTree.data?.completed_node_ids ?? [] : [];
+  const nodeProgress =
+    view === 'personal' ? personalTree.data?.node_progress : undefined;
   const displayMode: TreeDisplayMode = view === 'public' ? 'showcase' : 'personal';
   const snapshot = activeGraph
-    ? snapshotFromGraph(activeGraph, completedNodeIds)
+    ? snapshotFromGraph(activeGraph, completedNodeIds, nodeProgress)
     : null;
   const hasBlockLayout = Boolean(
     snapshot?.blocks?.length &&
@@ -582,6 +593,39 @@ function ConsoleApp() {
       if (publicGuideOpen && publicGuideStep === 'personal-status') {
         setPublicGuideStep('generation-button');
         setMobileView('list');
+      }
+    },
+  });
+
+  const progressMutation = useMutation({
+    mutationFn: ({
+      nodeId,
+      progressPercent,
+    }: {
+      nodeId: string;
+      progressPercent: number;
+    }) => {
+      if (!session || !selectedLibraryEntryId) {
+        throw new Error('个人技能树会话已失效，请重新登录。');
+      }
+      return setNodeProgress(
+        selectedLibraryEntryId,
+        nodeId,
+        progressPercent,
+        session.csrfToken,
+      );
+    },
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
+      if (variables.progressPercent === 100) {
+        const node = activeGraph?.nodes.find((item) => item.id === variables.nodeId);
+        if (node) setCompletion({ node, nonce: Date.now() });
+        if (publicGuideOpen && publicGuideStep === 'personal-status') {
+          setPublicGuideStep('generation-button');
+          setMobileView('list');
+        }
+      } else {
+        setCompletion(null);
       }
     },
   });
@@ -1193,6 +1237,7 @@ function ConsoleApp() {
           )}
           {addTree.error && <MutationError error={addTree.error} />}
           {completionMutation.error && <MutationError error={completionMutation.error} />}
+          {progressMutation.error && <MutationError error={progressMutation.error} />}
         </aside>
 
         <section
@@ -1272,11 +1317,18 @@ function ConsoleApp() {
                 selectedNodeId={selectedNodeId}
                 onTogglePanel={() => setNodeDetailOpen((current) => !current)}
                 completionPending={completionMutation.isPending}
+                progressPending={progressMutation.isPending}
                 completionButtonRef={completionButtonRef}
                 onSetCompleted={
                   view === 'personal'
                     ? (nodeId, completed) =>
                         completionMutation.mutate({ nodeId, completed })
+                    : undefined
+                }
+                onSetProgress={
+                  view === 'personal'
+                    ? (nodeId, progressPercent) =>
+                        progressMutation.mutate({ nodeId, progressPercent })
                     : undefined
                 }
                 onOpenChat={
@@ -1604,17 +1656,34 @@ function writeGenerationSessionId(sessionId: string | null) {
 function snapshotFromGraph(
   graph: TreeGraph,
   completedNodeIds: readonly string[],
+  nodeProgress?: readonly NodeProgress[],
 ): LearningTreeSnapshot {
+  const progressByNodeId = new Map(
+    (nodeProgress ?? []).map((item) => [
+      item.node_id,
+      normalizeProgressPercent(item.progress_percent),
+    ]),
+  );
+  for (const nodeId of completedNodeIds) {
+    if (!progressByNodeId.has(nodeId)) {
+      progressByNodeId.set(nodeId, 100);
+    }
+  }
   return {
     tree: graph.tree,
     nodes: graph.nodes,
     edges: graph.edges,
     current_node_id: null,
-    progress: completedNodeIds.map((nodeId) => ({
-      node_id: nodeId,
-      status: 'completed',
-      evidence: '',
-    })),
+    progress: [...progressByNodeId.entries()]
+      .filter(([nodeId, progressPercent]) =>
+        graph.nodes.some((node) => node.id === nodeId) && progressPercent > 0,
+      )
+      .map(([nodeId, progressPercent]) => ({
+        node_id: nodeId,
+        status: learningStatusFromProgressPercent(progressPercent),
+        evidence: '',
+        progress_percent: progressPercent,
+      })),
     blocks: graph.blocks ?? [],
     node_block_assignments: graph.node_block_assignments ?? [],
   };

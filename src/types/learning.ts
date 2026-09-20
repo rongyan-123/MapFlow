@@ -70,6 +70,37 @@ export interface NodeLearningProgress {
   node_id: string;
   status: LearningStatus;
   evidence: string;
+  /** Backend stores an integer 0..100; old demo snapshots may omit it. */
+  progress_percent?: number;
+}
+
+export function normalizeProgressPercent(
+  value: unknown,
+  fallback = 0,
+): number {
+  return typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= 100
+    ? value
+    : fallback;
+}
+
+export function progressPercentForNode(
+  progress: NodeLearningProgress | null | undefined,
+): number {
+  return normalizeProgressPercent(
+    progress?.progress_percent,
+    progress?.status === 'completed' || progress?.status === 'mastered' ? 100 : 0,
+  );
+}
+
+export function learningStatusFromProgressPercent(
+  progressPercent: number,
+): LearningStatus {
+  if (progressPercent >= 100) return 'completed';
+  if (progressPercent > 0) return 'in_progress';
+  return 'not_started';
 }
 
 export interface LearningTreeSnapshot {

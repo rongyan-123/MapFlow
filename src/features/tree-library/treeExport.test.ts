@@ -68,7 +68,9 @@ const detail: PersonalTreeDetail = {
       },
     ],
   },
-  completed_node_ids: ['node-1'],
+  completed_node_ids: [],
+  node_progress: [{ node_id: 'node-1', progress_percent: 37 }],
+  progress_percent: 19,
 };
 
 describe('tree export', () => {
@@ -80,8 +82,9 @@ describe('tree export', () => {
       tree: detail.graph.tree,
       nodes: detail.graph.nodes,
       edges: detail.graph.edges,
-      completedNodeIds: ['node-1'],
-      progress: { completed: 1, total: 2 },
+      completedNodeIds: [],
+      nodeProgress: [{ nodeId: 'node-1', progressPercent: 37 }],
+      progress: { completed: 0, inProgress: 1, percentage: 19, total: 2 },
     });
     expect(JSON.stringify(exported)).not.toContain('private-entry-id');
     expect(JSON.stringify(exported)).not.toContain('apiKey');
@@ -91,8 +94,8 @@ describe('tree export', () => {
     const markdown = buildTreeExportMarkdown(detail);
 
     expect(markdown).toContain('# Rust 学习树');
-    expect(markdown).toContain('进度：1/2');
-    expect(markdown).toContain('- [x] 所有权');
+    expect(markdown).toContain('进度：19%（0/2 已完成）');
+    expect(markdown).toContain('- [ ] 所有权（37%）');
     expect(markdown).toContain('- [ ] 借用');
     expect(markdown).toContain('所有权 → 借用（前置知识）');
     expect(markdown).not.toContain('private-entry-id');

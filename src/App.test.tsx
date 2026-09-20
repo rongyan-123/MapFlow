@@ -25,6 +25,7 @@ const treeApi = vi.hoisted(() => ({
   fetchPublicTrees: vi.fn(),
   renamePersonalTree: vi.fn(),
   setNodeCompletion: vi.fn(),
+  setNodeProgress: vi.fn(),
 }));
 
 const generationApi = vi.hoisted(() => ({
@@ -724,6 +725,40 @@ describe('MapFlow tree library', () => {
       ),
     );
     expect(await screen.findByText('总进度 0%')).toBeInTheDocument();
+  });
+
+  it('saves a partial node percentage through the personal tree flow', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary
+      .mockResolvedValueOnce({ entries: [] })
+      .mockResolvedValue({ entries: [personalEntry] });
+    treeApi.addTreeToPersonalLibrary.mockResolvedValue({
+      library_entry_id: personalEntry.library_entry_id,
+      tree_id: nestjsTree.id,
+    });
+    treeApi.fetchPersonalTree
+      .mockResolvedValueOnce(personalDetail([]))
+      .mockResolvedValueOnce(personalDetail([], [{ node_id: 'node-1', progress_percent: 37 }], 19));
+    treeApi.setNodeProgress.mockResolvedValue(undefined);
+    renderApp();
+
+    await user.click(await screen.findByRole('button', { name: '加入我的学习' }));
+    await user.click(await screen.findByRole('button', { name: '填写详细进度' }));
+    const input = screen.getByRole('spinbutton', { name: '节点完成百分比' });
+    await user.clear(input);
+    await user.type(input, '37');
+    await user.click(screen.getByRole('button', { name: '保存详细进度' }));
+
+    await waitFor(() =>
+      expect(treeApi.setNodeProgress).toHaveBeenCalledWith(
+        personalEntry.library_entry_id,
+        'node-1',
+        37,
+        'csrf-secret',
+      ),
+    );
+    expect(await screen.findByText('总进度 19%')).toBeInTheDocument();
   });
 
   it('switches between the two catalog trees without using the old canary endpoint', async () => {
@@ -1846,12 +1881,21 @@ const personalEntry = {
   completed_nodes: 0,
 };
 
-function personalDetail(completedNodeIds: string[]) {
+function personalDetail(
+  completedNodeIds: string[],
+  nodeProgress: Array<{ node_id: string; progress_percent: number }> = [],
+  progress_percent = completedNodeIds.length ? 50 : 0,
+) {
+  const effectiveNodeProgress = nodeProgress.length
+    ? nodeProgress
+    : completedNodeIds.map((node_id) => ({ node_id, progress_percent: 100 }));
   return {
     view_mode: 'personal',
     library_entry_id: personalEntry.library_entry_id,
     graph: nestjsGraph,
     completed_node_ids: completedNodeIds,
+    node_progress: effectiveNodeProgress,
+    progress_percent,
   };
 }
 

@@ -7,6 +7,7 @@ import {
 } from '@xyflow/react';
 import { cn } from '../../lib/cn';
 import { DEPTH_LABELS, ICON_EMOJI } from '../../lib/constants';
+import { progressPercentForNode } from '../../types/learning';
 import type {
   NodeLearningProgress,
   SkillNode as SkillNodeRecord,
@@ -32,6 +33,7 @@ function SkillNodeComponent({ data, selected }: NodeProps<SkillFlowNode>) {
   const isCompleted = status === 'completed';
   const isMastered = status === 'mastered';
   const isInProgress = status === 'in_progress';
+  const progressPercent = progressPercentForNode(progress);
 
   return (
     <div
@@ -93,6 +95,11 @@ function SkillNodeComponent({ data, selected }: NodeProps<SkillFlowNode>) {
           >
             {DEPTH_LABELS[node.recommended_depth]} · {node.recommended_depth}
           </span>
+          {!isShowcase && (
+            <span className="ml-1 inline-flex rounded-full border border-current/30 px-1.5 py-0.5 text-[10px]">
+              {progressPercent}%
+            </span>
+          )}
         </div>
         {!isShowcase && isCompleted && <span className="text-lg font-black">✓</span>}
         {!isShowcase && isMastered && <span className="text-lg font-black">★</span>}

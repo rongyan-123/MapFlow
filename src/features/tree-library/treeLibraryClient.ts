@@ -1,5 +1,6 @@
 import type {
   AddedTree,
+  NodeProgress,
   PersonalLibrary,
   PersonalLibraryEntry,
   PersonalTreeDetail,
@@ -67,11 +68,17 @@ export async function fetchPersonalTree(
   ) {
     throw invalidResponseError();
   }
+  const graph = parseGraph(body.graph);
+  const nodeProgress = parseNodeProgress(body.node_progress, body.completed_node_ids);
   return {
     view_mode: 'personal',
     library_entry_id: body.library_entry_id,
-    graph: parseGraph(body.graph),
+    graph,
     completed_node_ids: [...body.completed_node_ids],
+    node_progress: nodeProgress,
+    progress_percent: isProgressPercent(body.progress_percent)
+      ? body.progress_percent
+      : deriveProgressPercent(graph.nodes.length, nodeProgress),
   };
 }
 
@@ -154,6 +161,33 @@ export async function setNodeCompletion(
   });
 }
 
+export async function setNodeProgress(
+  libraryEntryId: string,
+  nodeId: string,
+  progressPercent: number,
+  csrfToken: string,
+): Promise<void> {
+  if (!isProgressPercent(progressPercent)) {
+    throw new TreeLibraryApiError(
+      400,
+      'tree_library.invalid_progress',
+      '节点完成度必须是 0 到 100 的整数。',
+    );
+  }
+  const entry = encodeURIComponent(libraryEntryId);
+  const node = encodeURIComponent(nodeId);
+  await request(`/api/me/tree-library/${entry}/nodes/${node}/progress`, {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify({ progressPercent }),
+  });
+}
+
 async function getJson(path: string): Promise<unknown> {
   return readJson(await request(path, JSON_GET));
 }
@@ -215,11 +249,58 @@ function parsePersonalLibraryEntry(value: unknown): PersonalLibraryEntry {
   ) {
     throw invalidResponseError();
   }
+  const tree = parseSkillTree(value.tree);
   return {
     library_entry_id: value.library_entry_id,
-    tree: parseSkillTree(value.tree),
+    tree,
     completed_nodes: value.completed_nodes,
+    progress_percent: isProgressPercent(value.progress_percent)
+      ? value.progress_percent
+      : tree.total_nodes > 0
+        ? Math.round(
+            (Math.min(value.completed_nodes, tree.total_nodes) / tree.total_nodes) *
+              100,
+          )
+        : 0,
   };
+}
+
+function parseNodeProgress(
+  value: unknown,
+  completedNodeIds: string[],
+): NodeProgress[] {
+  if (value === undefined) {
+    return completedNodeIds.map((node_id) => ({
+      node_id,
+      progress_percent: 100,
+    }));
+  }
+  if (!Array.isArray(value)) throw invalidResponseError();
+  return value.map((item) => {
+    if (
+      !isRecord(item) ||
+      typeof item.node_id !== 'string' ||
+      !isProgressPercent(item.progress_percent)
+    ) {
+      throw invalidResponseError();
+    }
+    return {
+      node_id: item.node_id,
+      progress_percent: item.progress_percent,
+    };
+  });
+}
+
+function deriveProgressPercent(
+  totalNodes: number,
+  nodeProgress: NodeProgress[],
+): number {
+  if (totalNodes <= 0) return 0;
+  const sum = nodeProgress.reduce(
+    (total, item) => total + item.progress_percent,
+    0,
+  );
+  return Math.max(0, Math.min(100, Math.round(sum / totalNodes)));
 }
 
 function parseGraph(value: unknown): TreeGraph {
@@ -399,6 +480,15 @@ function isStringArray(value: unknown): value is string[] {
 
 function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+function isProgressPercent(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= 100
+  );
 }
 
 function isFiniteNumber(value: unknown): value is number {

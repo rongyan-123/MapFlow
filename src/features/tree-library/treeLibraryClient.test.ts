@@ -9,6 +9,7 @@ import {
   deletePersonalTree,
   renamePersonalTree,
   setNodeCompletion,
+  setNodeProgress,
 } from './treeLibraryClient';
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -129,6 +130,43 @@ describe('treeLibraryClient', () => {
         'X-CSRF-Token': 'csrf-secret',
       },
     });
+  });
+
+  it('reads partial node progress and writes an integer percentage payload', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          view_mode: 'personal',
+          library_entry_id: 'entry-id',
+          graph,
+          completed_node_ids: [],
+          node_progress: [{ node_id: 'node-1', progress_percent: 37 }],
+          progress_percent: 19,
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchPersonalTree('entry-id')).resolves.toMatchObject({
+      node_progress: [{ node_id: 'node-1', progress_percent: 37 }],
+      progress_percent: 19,
+    });
+    await setNodeProgress('entry-id', 'node-1', 37, 'csrf-secret');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/me/tree-library/entry-id/nodes/node-1/progress',
+      {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': 'csrf-secret',
+        },
+        body: JSON.stringify({ progressPercent: 37 }),
+      },
+    );
   });
 
   it.each([
