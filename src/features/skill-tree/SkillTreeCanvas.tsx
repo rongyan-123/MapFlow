@@ -248,6 +248,7 @@ export default function SkillTreeCanvas({
     null,
   );
   const layoutKey = `${snapshot.tree.id}:${snapshot.tree.revision ?? 0}:${layoutMode}`;
+  const fitViewKey = `${layoutKey}:${snapshot.current_node_id ?? ''}`;
   const previousLayoutKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -312,8 +313,8 @@ export default function SkillTreeCanvas({
     >
       <FitViewWhenReady
         fitGraphView={fitGraphView}
+        fitViewKey={fitViewKey}
         isGraphVisible={isGraphVisible}
-        layoutKey={layoutKey}
       />
       <Background color="#1e293b" gap={20} />
       <Controls className="!rounded-lg !border-slate-700 !bg-slate-900" />
@@ -339,33 +340,49 @@ export default function SkillTreeCanvas({
 
 interface FitViewWhenReadyProps {
   fitGraphView: () => void;
+  fitViewKey: string;
   isGraphVisible: boolean;
-  layoutKey: string;
 }
 
 function FitViewWhenReady({
   fitGraphView,
+  fitViewKey,
   isGraphVisible,
-  layoutKey,
 }: FitViewWhenReadyProps) {
   const nodesInitialized = useNodesInitialized();
   const previousGraphVisibleRef = useRef(false);
+  const lastFittedViewKeyRef = useRef<string | null>(null);
+  const lastVisibleFittedViewKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!nodesInitialized) return;
+    if (!nodesInitialized || lastFittedViewKeyRef.current === fitViewKey) return;
+
+    lastFittedViewKeyRef.current = fitViewKey;
+    if (isGraphVisible) {
+      lastVisibleFittedViewKeyRef.current = fitViewKey;
+    }
 
     const timer = window.setTimeout(fitGraphView, 0);
     return () => window.clearTimeout(timer);
-  }, [fitGraphView, layoutKey, nodesInitialized]);
+  }, [fitGraphView, fitViewKey, isGraphVisible, nodesInitialized]);
 
   useEffect(() => {
     const wasVisible = previousGraphVisibleRef.current;
     previousGraphVisibleRef.current = isGraphVisible;
-    if (!nodesInitialized || !isGraphVisible || wasVisible) return;
+    if (
+      !nodesInitialized ||
+      !isGraphVisible ||
+      wasVisible ||
+      lastVisibleFittedViewKeyRef.current === fitViewKey
+    ) {
+      return;
+    }
+
+    lastVisibleFittedViewKeyRef.current = fitViewKey;
 
     const timer = window.setTimeout(fitGraphView, 0);
     return () => window.clearTimeout(timer);
-  }, [fitGraphView, isGraphVisible, nodesInitialized]);
+  }, [fitGraphView, fitViewKey, isGraphVisible, nodesInitialized]);
 
   return null;
 }

@@ -136,4 +136,44 @@ describe('SkillTreeCanvas', () => {
     await waitFor(() => expect(flowProbe.fitView).toHaveBeenCalledTimes(1));
     expect(flowProbe.fitViewBeforeNodesInitialized).toEqual([false]);
   });
+
+  it('节点详情切换导致画布重新显示时保留用户当前视口，不再次 fitView', async () => {
+    const { rerender } = render(
+      <SkillTreeCanvas
+        snapshot={snapshot}
+        displayMode="personal"
+        layoutMode="relationship"
+        selectedNodeId={null}
+        isGraphVisible
+        onSelectNode={() => undefined}
+      />,
+    );
+
+    await waitFor(() => expect(flowProbe.fitView).toHaveBeenCalledTimes(1));
+    flowProbe.fitView.mockClear();
+
+    rerender(
+      <SkillTreeCanvas
+        snapshot={snapshot}
+        displayMode="personal"
+        layoutMode="relationship"
+        selectedNodeId="node-1"
+        isGraphVisible={false}
+        onSelectNode={() => undefined}
+      />,
+    );
+    rerender(
+      <SkillTreeCanvas
+        snapshot={snapshot}
+        displayMode="personal"
+        layoutMode="relationship"
+        selectedNodeId="node-1"
+        isGraphVisible
+        onSelectNode={() => undefined}
+      />,
+    );
+    await new Promise((resolve) => window.setTimeout(resolve, 20));
+
+    expect(flowProbe.fitView).not.toHaveBeenCalled();
+  });
 });
