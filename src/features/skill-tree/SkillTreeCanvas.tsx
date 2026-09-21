@@ -28,6 +28,8 @@ import SkillNodeComponent, {
   type SkillFlowNode,
 } from './SkillNode';
 import { getReadableInitialZoom } from './viewport';
+import BlockConnectionEdge from './BlockConnectionEdge';
+import { buildBlockConnections } from './blockConnections';
 
 interface BlockLaneData extends Record<string, unknown> {
   name: string;
@@ -88,6 +90,7 @@ const nodeTypes = {
   skill: SkillNodeComponent,
   block: BlockLaneComponent,
 };
+const edgeTypes = { blockConnection: BlockConnectionEdge };
 
 interface SkillTreeCanvasProps {
   snapshot: LearningTreeSnapshot;
@@ -144,6 +147,20 @@ export default function SkillTreeCanvas({
     }
     return computeTreeLayout(snapshot.nodes, snapshot.edges);
   }, [blockLayout.positions, layoutMode, snapshot.edges, snapshot.nodes]);
+  const blockConnections = useMemo(
+    () => buildBlockConnections(snapshot.edges, selectedNodeId),
+    [snapshot.edges, selectedNodeId],
+  );
+  const connectionRoles = useMemo(() => {
+    const roles = new Map<string, 'focus' | 'incoming' | 'outgoing'>();
+    if (layoutMode !== 'blocks' || !selectedNodeId) return roles;
+    for (const edge of blockConnections) {
+      if (edge.source !== selectedNodeId) roles.set(edge.source, 'incoming');
+      if (edge.target !== selectedNodeId) roles.set(edge.target, 'outgoing');
+    }
+    roles.set(selectedNodeId, 'focus');
+    return roles;
+  }, [blockConnections, layoutMode, selectedNodeId]);
   const generatedNodes = useMemo<
     Array<SkillFlowNode | BlockLaneFlowNode>
   >(
@@ -181,6 +198,7 @@ export default function SkillTreeCanvas({
           isCurrent: node.id === snapshot.current_node_id,
           displayMode,
           layoutMode,
+          connectionRole: connectionRoles.get(node.id),
           // 块模式由泳道统一标注，避免每个节点重复显示块名造成拥挤。
           blockName:
             layoutMode === 'blocks' ? undefined : blockNameByNodeId.get(node.id),
@@ -191,6 +209,7 @@ export default function SkillTreeCanvas({
     [
       blockLayout.lanes,
       blockNameByNodeId,
+      connectionRoles,
       displayMode,
       layoutMode,
       positions,
@@ -201,17 +220,8 @@ export default function SkillTreeCanvas({
   );
   const generatedEdges = useMemo<Edge[]>(
     () => {
-      const visibleEdges =
-        layoutMode === 'blocks' && !selectedNodeId
-          ? []
-          : layoutMode === 'blocks'
-            ? snapshot.edges.filter(
-                (edge) =>
-                  edge.source_node_id === selectedNodeId ||
-                  edge.target_node_id === selectedNodeId,
-              )
-            : snapshot.edges;
-      return visibleEdges.map((edge) => {
+      if (layoutMode === 'blocks') return blockConnections;
+      return snapshot.edges.map((edge) => {
         const sourceStatus = progressMap.get(edge.source_node_id)?.status;
         const mastered = sourceStatus === 'mastered';
         const completed = sourceStatus === 'completed';
@@ -237,7 +247,7 @@ export default function SkillTreeCanvas({
         };
       });
     },
-    [displayMode, layoutMode, progressMap, selectedNodeId, snapshot.edges],
+    [blockConnections, displayMode, layoutMode, progressMap, snapshot.edges],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState<
@@ -300,6 +310,7 @@ export default function SkillTreeCanvas({
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onNodeClick={(_, node) => onSelectNode(node.id)}
@@ -311,6 +322,15 @@ export default function SkillTreeCanvas({
       defaultEdgeOptions={{ type: 'smoothstep' }}
       proOptions={{ hideAttribution: true }}
     >
+      {layoutMode === 'blocks' && selectedNodeId && (
+        <div className="pointer-events-none absolute left-4 top-4 z-10 flex items-center gap-2 rounded-lg border border-slate-700/70 bg-slate-950/90 px-3 py-2 text-[11px] shadow-lg">
+          <span className="text-cyan-300">前置流入</span>
+          <span className="text-slate-500">→</span>
+          <span className="text-slate-100">选中节点</span>
+          <span className="text-slate-500">→</span>
+          <span className="text-purple-300">后置流出</span>
+        </div>
+      )}
       <FitViewWhenReady
         fitGraphView={fitGraphView}
         fitViewKey={fitViewKey}

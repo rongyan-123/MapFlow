@@ -65,6 +65,72 @@ select {
   overflow: hidden;
 }
 
+/* 块视图：实线保留完整关系，短光段沿 source → target 流动。 */
+.mapflow-block-connection {
+  pointer-events: none;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mapflow-connection-halo {
+  stroke: var(--connection-color);
+  stroke-width: 9;
+  opacity: 0.2;
+  filter: blur(4px);
+}
+
+.mapflow-connection-outline {
+  stroke: #020617;
+  stroke-width: 6;
+  opacity: 0.85;
+}
+
+.mapflow-connection-line {
+  stroke: var(--connection-color);
+  stroke-width: 2.5;
+  opacity: 0.92;
+}
+
+.mapflow-connection-flow {
+  stroke: #ecfeff;
+  stroke-width: 3;
+  stroke-dasharray: 14 90;
+  filter: drop-shadow(0 0 3px var(--connection-color));
+  animation: mapflow-connection-travel 1.6s linear infinite;
+  animation-delay: var(--flow-delay);
+}
+
+.mapflow-connection-port {
+  fill: var(--connection-color);
+  stroke: #ecfeff;
+  stroke-width: 1;
+  filter: drop-shadow(0 0 4px var(--connection-color));
+}
+
+.mapflow-skill-node[data-connection-role='incoming'] {
+  outline: 2px solid #22d3ee;
+  outline-offset: 3px;
+}
+
+.mapflow-skill-node[data-connection-role='outgoing'] {
+  outline: 2px solid #c084fc;
+  outline-offset: 3px;
+}
+
+.mapflow-skill-node[data-connection-role='focus'] {
+  outline: 3px solid #f8fafc;
+  outline-offset: 4px;
+}
+
+@keyframes mapflow-connection-travel {
+  to { stroke-dashoffset: -104; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mapflow-connection-flow { animation: none; display: none; }
+}
+
 /* 技能树卡片：正文宽度固定，动作卡片从右侧向外展开，不挤压标题。 */
 .mapflow-tree-choice {
   --mapflow-tree-card-background: linear-gradient(

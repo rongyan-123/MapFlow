@@ -22,6 +22,7 @@ export interface SkillNodeData extends Record<string, unknown> {
   displayMode: TreeDisplayMode;
   layoutMode?: TreeLayoutMode;
   blockName?: string;
+  connectionRole?: 'focus' | 'incoming' | 'outgoing';
 }
 
 export type SkillFlowNode = Node<SkillNodeData, 'skill'>;
@@ -40,6 +41,7 @@ function SkillNodeComponent({ data, selected }: NodeProps<SkillFlowNode>) {
       data-mapflow-skill-node="true"
       data-mapflow-display-mode={displayMode}
       data-mapflow-node-status={status}
+      data-connection-role={data.connectionRole}
       className={cn(
         'mapflow-skill-node relative min-h-[104px] w-[240px] min-w-[240px] max-w-[240px] cursor-pointer select-none rounded-xl border-2 px-4 py-3 transition-all duration-500',
         isShowcase &&
@@ -55,7 +57,7 @@ function SkillNodeComponent({ data, selected }: NodeProps<SkillFlowNode>) {
           'border-yellow-100 bg-amber-200/90 text-amber-950 shadow-[0_0_38px_rgba(250,204,21,0.8)]',
         !isShowcase && isCurrent &&
           'ring-2 ring-cyan-300 ring-offset-2 ring-offset-slate-950',
-        selected && 'scale-[1.04]',
+        selected && layoutMode !== 'blocks' && 'scale-[1.04]',
       )}
     >
       {layoutMode === 'blocks' && blockName && (
