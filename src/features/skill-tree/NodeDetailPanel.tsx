@@ -53,6 +53,7 @@ export default function NodeDetailPanel({
   const [detailProgressOpen, setDetailProgressOpen] = useState(false);
   const [progressInput, setProgressInput] = useState(String(progressPercent));
   const [progressInputError, setProgressInputError] = useState<string | null>(null);
+  const progressWritePending = completionPending || progressPending;
 
   useEffect(() => {
     setProgressInput(String(progressPercent));
@@ -184,7 +185,7 @@ export default function NodeDetailPanel({
             <button
             type="button"
             ref={completionButtonRef}
-            disabled={completionPending}
+            disabled={progressWritePending}
             onClick={() => onSetCompleted(node.id, !completed)}
             className={`mt-3 w-full rounded-lg px-3 py-2 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-60 ${
               completed
@@ -203,7 +204,8 @@ export default function NodeDetailPanel({
             <div className="mt-3 border-t border-slate-800 pt-3">
               <button
                 type="button"
-                className="text-xs text-slate-500 underline decoration-slate-700 underline-offset-4 transition hover:text-cyan-200"
+                disabled={progressWritePending}
+                className="text-xs text-slate-500 underline decoration-slate-700 underline-offset-4 transition hover:text-cyan-200 disabled:cursor-wait disabled:opacity-60"
                 onClick={() => {
                   setDetailProgressOpen((current) => !current);
                   setProgressInputError(null);
@@ -225,6 +227,7 @@ export default function NodeDetailPanel({
                       max={100}
                       step={1}
                       value={progressInput}
+                      disabled={progressWritePending}
                       onChange={(event) => {
                         setProgressInput(event.target.value);
                         setProgressInputError(null);
@@ -233,7 +236,7 @@ export default function NodeDetailPanel({
                     />
                     <button
                       type="button"
-                      disabled={progressPending}
+                      disabled={progressWritePending}
                       onClick={() => {
                         const trimmed = progressInput.trim();
                         const value = Number(trimmed);

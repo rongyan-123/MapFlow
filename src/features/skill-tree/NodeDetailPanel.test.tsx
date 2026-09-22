@@ -115,4 +115,23 @@ describe('NodeDetailPanel 知识聊天入口', () => {
     await user.click(screen.getByRole('button', { name: '保存详细进度' }));
     expect(onSetProgress).toHaveBeenCalledWith('node-1', 37);
   });
+
+  it('任一进度写入进行中时都会锁住两种写入入口', async () => {
+    const user = userEvent.setup();
+    const props = {
+      snapshot,
+      selectedNodeId: 'node-1',
+      displayMode: 'personal' as const,
+      onSetCompleted: vi.fn(),
+      onSetProgress: vi.fn(),
+    };
+    const { rerender } = render(<NodeDetailPanel {...props} />);
+
+    await user.click(screen.getByRole('button', { name: '填写详细进度' }));
+    rerender(<NodeDetailPanel {...props} progressPending />);
+    expect(screen.getByRole('button', { name: '标记为已完成' })).toBeDisabled();
+
+    rerender(<NodeDetailPanel {...props} completionPending />);
+    expect(screen.getByRole('button', { name: '保存详细进度' })).toBeDisabled();
+  });
 });
