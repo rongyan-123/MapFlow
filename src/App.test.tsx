@@ -34,6 +34,9 @@ const generationApi = vi.hoisted(() => ({
 
 const legacyApi = vi.hoisted(() => ({ fetchLearningTree: vi.fn() }));
 
+const tavernApi = vi.hoisted(() => ({ fetchCharacters: vi.fn(), fetchConversations: vi.fn() }));
+vi.mock('./features/tavern/tavernClient', () => tavernApi);
+
 const chatApi = vi.hoisted(() => ({
   fetchKnowledgeChatHistory: vi.fn(),
   sendKnowledgeChatMessageStream: vi.fn(),
@@ -284,12 +287,46 @@ beforeEach(() => {
   });
   legacyApi.fetchLearningTree.mockResolvedValue(legacySnapshot);
   window.localStorage.clear();
+  tavernApi.fetchCharacters.mockReset().mockResolvedValue([]);
+  tavernApi.fetchConversations.mockReset().mockResolvedValue([]);
   window.localStorage.setItem('mapflow.guide.public.v1.seen', 'true');
   window.history.replaceState({}, '', '/console');
 });
 
 afterEach(() => {
   cleanup();
+});
+
+describe('Tavern navigation', () => {
+  it('gates direct /tavern visits behind the existing login and preserves the destination after login', async () => {
+    identityApi.fetchCurrentSession.mockResolvedValue(null);
+    identityApi.loginIdentity.mockResolvedValue(authenticated);
+    const user = userEvent.setup(); renderApp('/tavern');
+    const gate = await screen.findByTestId('identity-gate');
+    expect(tavernApi.fetchCharacters).not.toHaveBeenCalled();
+    await user.type(within(gate).getByLabelText('用户名'), 'firstuser');
+    await user.type(within(gate).getByLabelText('密码'), 'password123');
+    const loginButtons = within(gate).getAllByRole('button', { name: '登录' });
+    await user.click(loginButtons[loginButtons.length - 1]);
+    expect(await screen.findByRole('heading', { name: '酒馆' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/tavern');
+  });
+  it('opens the standalone page from desktop navigation and restores it through popstate', async () => {
+    const user = userEvent.setup(); renderApp('/console');
+    await user.click(await screen.findByRole('button', { name: '酒馆' }));
+    expect(await screen.findByRole('heading', { name: '酒馆' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/tavern');
+    await user.click(screen.getByRole('button', { name: '返回学习控制台' }));
+    expect(window.location.pathname).toBe('/console');
+    window.history.pushState({}, '', '/tavern'); fireEvent.popState(window);
+    expect(await screen.findByRole('heading', { name: '酒馆' })).toBeInTheDocument();
+  });
+  it('offers Tavern in the existing mobile navigation drawer', async () => {
+    const user = userEvent.setup(); renderApp('/console');
+    await user.click(await screen.findByRole('button', { name: '打开功能菜单' }));
+    await user.click(within(screen.getByRole('dialog', { name: '功能菜单' })).getByRole('button', { name: '酒馆' }));
+    expect(await screen.findByRole('heading', { name: '酒馆' })).toBeInTheDocument();
+  });
 });
 
 describe('MapFlow tree library', () => {

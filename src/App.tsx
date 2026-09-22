@@ -52,6 +52,7 @@ import TreeLibraryActionDialog, {
   type TreeLibraryAction,
 } from './features/tree-library/TreeLibraryActionDialog';
 import IdentityGate from './features/identity/IdentityGate';
+import TavernPage from './features/tavern/TavernPage';
 import { DEMO_TREES } from './lib/demoTrees';
 import type {
   LearningTreeSnapshot,
@@ -142,7 +143,17 @@ export default function App() {
 
   if (sessionPending) return <EntryLoading />;
   if (!session) {
-    return <IdentityGate onAuthenticated={() => navigateToConsole(true)} />;
+    return <IdentityGate onAuthenticated={() => {
+      if (currentPath !== '/tavern') navigateToConsole(true);
+    }} />;
+  }
+
+  const navigateToTavern = () => {
+    window.history.pushState({}, '', '/tavern');
+    setCurrentPath('/tavern');
+  };
+  if (currentPath === '/tavern') {
+    return <TavernPage onNavigateConsole={() => navigateToConsole()} />;
   }
 
   const rootRoute = currentPath === '/' && !generationRouteRequested;
@@ -156,13 +167,13 @@ export default function App() {
         />
       );
     }
-    return <ConsoleApp />;
+    return <ConsoleApp onNavigateTavern={navigateToTavern} />;
   }
 
-  return <ConsoleApp />;
+  return <ConsoleApp onNavigateTavern={navigateToTavern} />;
 }
 
-function ConsoleApp() {
+function ConsoleApp({ onNavigateTavern }: { onNavigateTavern: () => void }) {
   const queryClient = useQueryClient();
   const {
     identityEnabled,
@@ -968,6 +979,7 @@ function ConsoleApp() {
           <ViewButton active={view === 'personal'} onClick={showPersonalLibrary}>
             我的学习
           </ViewButton>
+          <ViewButton active={false} onClick={onNavigateTavern}>酒馆</ViewButton>
           {session?.account.isAdmin && (
             <ViewButton active={view === 'admin'} onClick={() => setView('admin')}>
               管理面板
@@ -1565,6 +1577,7 @@ function ConsoleApp() {
               管理面板
             </DrawerItem>
           )}
+          <DrawerItem onClick={onNavigateTavern}>酒馆</DrawerItem>
         </nav>
 
         {session && (
