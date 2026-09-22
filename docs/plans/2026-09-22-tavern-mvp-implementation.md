@@ -13,7 +13,7 @@
 - [x] 4. 独立 DSH Runtime：新协议、零工具、单步、动态上下文、TTL/LRU 与恢复；worker 测试与 Rust 假 worker 契约测试。
 - [x] 5. 酒馆业务与 HTTP：规范化卡片校验、快照、世界书选择、数据库事务、账号隔离、幂等并发、SSE；领域/数据库/路由测试。
 - [x] 6. 集成观测与全量回归：前端 build/typecheck/test，worker build/typecheck/test，Rust fmt/check/clippy/test，独立代码审查。
-- [ ] 7. 真实浏览器验收：普通/学习会话、五轮对话、刷新、300 秒回收后续聊、用量和请求观测交叉核验。
+- [x] 7. 真实浏览器验收：普通/学习会话、五轮对话、刷新、300 秒回收后续聊、用量和请求观测交叉核验。详见 `2026-09-22-tavern-live-ui-acceptance.md`。
 
 ## 跨模块实现契约
 
@@ -78,5 +78,9 @@ Rust 对外 `pub mod tavern` 包含领域模型与 `TavernRuntime` trait。Runti
 - 本机证据在同级 `acceptance/api-live-evidence.json`、`api-observation-evidence.json`，包含测试对话，不纳入产品或日志。前端独立浏览器脚本另已验证 4 主题、桌面/320/390px，使用模拟 HTTP；与真实后端 UI 验收严格区分。
 - 真实模型 TTL 已验证：上一轮结束 `07:42:50 UTC`，空闲超过 6 分钟后追问第一轮包裹名称，回答准确保留 **BLUE LANTERN / 没有打开**。观测为 `ttlEvictions=2`、`historyRestores=1`、`historyRestoreFailures=0`、`sessions=1`、`pending=0`。Rust 同时回收自己的复用提示，直接冷恢复，因此 `sessionMissing=0` 正常，并不表示没有回收。新增 0.001157 积分，总计 7 次生成花费 0.006347，余额 1.993653。
 - 真实 TTL 证据为 `acceptance/api-ttl-evidence.json`；最终观测脚本验证了全部 8 个请求（7 次生成＋1 次重放），并核对回收计数、恢复计数和正文脱敏。
-- **唯一未完成项：完整 Browser Harness 真实后端 UI 点击验收。** 前端模拟 HTTP 的真实浏览器测试已通过，但不能替代此项，故仍不勾选最终验收。Chrome 自动启动曾被工具拒绝，改为用户开启远程调试；安装的 Harness 还遇到本机 WMI 查询卡住，临时测试 wrapper 只跳过已知 Windows OS 名称查询，保留 CDP/Chrome Allow 安全校验。确认窗口超时后等待用户重新确认，不绕过权限；本任务遗留的两个失效 helper 已停止，没有关闭用户 Chrome。
-- 测试实例继续保持隔离，入口仍为 `https://localhost:18444/tavern`。需要用户确认 Chrome 调试后新建测试页，登录已有测试账号，真实上传卡片、发送、刷新、查看管理观测。正式站点、原始工作区和模型密钥未改动。
+- 浏览器授权曾阻塞验收，现已解除：用户开启 Chrome 远程调试并授权连接后，Browser Harness 新建测试页，完成真实导入、普通会话 1 轮、学习会话 5 轮及空闲后续聊 1 轮。WMI 临时 wrapper 仅跳过已知 Windows OS 名称查询，没有关闭用户 Chrome 或绕过调试授权。
+- UI 路径额外验证生成中刷新与重试：中断尝试未落库/未扣费，重试成功后仅一条 turn 和一条用量；完成后再次刷新，逐字核对持久化历史一致。
+- UI 学习会话在 `08:13:46` 至 `08:21:34 UTC` 之间空闲约 7 分 48 秒后，准确回答 **SILVER ACORN / remains sealed**。Worker 累计快照 `ttlEvictions: 4 → 5`、`historyRestores: 2 → 3`、`historyRestoreFailures=0`、`pending=0`；不是把刷新当成 TTL 证明。
+- 最终数据库共 14 个完成回合、14 条用量，10,169 micro-credit，余额 `1.989831`；本次 UI 7 个完成回合占 3,822 micro-credit。所有账号/数据库均为独立测试环境。
+- 最后重新验证：前端默认套件 388 passed / 1 opt-in skipped，再启用真实 PNG fixture 单独验证 1 passed；worker 78 passed / 1 opt-in real-clock skipped（此前独立 361.5 秒已通过）；两端 build/typecheck 通过；Rust 全量 544 测试、严格 clippy、fmt 全通过。两个功能工作区及原始工作区状态已核对，保留原有修改。
+- 测试入口仍为 `https://localhost:18444/tavern`，依赖本机代理和 SSH 隧道。正式站点、原始工作区和模型密钥未改动；没有合并或推送功能分支，也没有执行正式数据库迁移。
