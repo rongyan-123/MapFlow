@@ -76,4 +76,7 @@ Rust 对外 `pub mod tavern` 包含领域模型与 `TavernRuntime` trait。Runti
 - 5 个学习回答中，按单词边界和简单复数形式计数覆盖 18/24 个目标词；这是接入证据，不是记忆或学习成效证据。
 - 首 delta 0.537–3.55 秒；总完成时间 7.476–143.478 秒。个别流式回合很慢，回答也未严格遵守 Persona 的约 90 词要求，并模仿了卡片中的转义引号。不能宣称叙事质量已达成最终效果。
 - 本机证据在同级 `acceptance/api-live-evidence.json`、`api-observation-evidence.json`，包含测试对话，不纳入产品或日志。前端独立浏览器脚本另已验证 4 主题、桌面/320/390px，使用模拟 HTTP；与真实后端 UI 验收严格区分。
-- 真实模型 TTL 续聊及完整 Browser Harness UI 验收仍在继续；尚不勾选最终验收项。Chrome 自动启动曾被工具拒绝，改为用户开启远程调试；安装的 Harness 还遇到本机 WMI 查询卡住，临时测试 wrapper 只跳过已知 Windows OS 名称查询，保留 CDP/Chrome Allow 安全校验。确认窗口超时后等待用户重新确认，不绕过权限。
+- 真实模型 TTL 已验证：上一轮结束 `07:42:50 UTC`，空闲超过 6 分钟后追问第一轮包裹名称，回答准确保留 **BLUE LANTERN / 没有打开**。观测为 `ttlEvictions=2`、`historyRestores=1`、`historyRestoreFailures=0`、`sessions=1`、`pending=0`。Rust 同时回收自己的复用提示，直接冷恢复，因此 `sessionMissing=0` 正常，并不表示没有回收。新增 0.001157 积分，总计 7 次生成花费 0.006347，余额 1.993653。
+- 真实 TTL 证据为 `acceptance/api-ttl-evidence.json`；最终观测脚本验证了全部 8 个请求（7 次生成＋1 次重放），并核对回收计数、恢复计数和正文脱敏。
+- **唯一未完成项：完整 Browser Harness 真实后端 UI 点击验收。** 前端模拟 HTTP 的真实浏览器测试已通过，但不能替代此项，故仍不勾选最终验收。Chrome 自动启动曾被工具拒绝，改为用户开启远程调试；安装的 Harness 还遇到本机 WMI 查询卡住，临时测试 wrapper 只跳过已知 Windows OS 名称查询，保留 CDP/Chrome Allow 安全校验。确认窗口超时后等待用户重新确认，不绕过权限；本任务遗留的两个失效 helper 已停止，没有关闭用户 Chrome。
+- 测试实例继续保持隔离，入口仍为 `https://localhost:18444/tavern`。需要用户确认 Chrome 调试后新建测试页，登录已有测试账号，真实上传卡片、发送、刷新、查看管理观测。正式站点、原始工作区和模型密钥未改动。
