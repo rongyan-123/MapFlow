@@ -274,6 +274,7 @@ export default function RequestObservationsTab({
               ['identity', '身份与账号'],
               ['generation', '技能树生成'],
               ['knowledge_chat', '知识聊天'],
+              ['tavern', '酒馆'],
               ['admin', '管理端'],
               ['general', '其他 API'],
             ]}

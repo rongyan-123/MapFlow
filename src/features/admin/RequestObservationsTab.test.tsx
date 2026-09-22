@@ -230,13 +230,17 @@ it('filters by terminal lifecycle stage', async () => {
   );
 });
 
-it('applies advanced request-id and route-family filters as one query', async () => {
+it.each([
+  ['knowledge_chat', '知识聊天'],
+  ['tavern', '酒馆'],
+])('applies advanced request-id and %s route-family filters as one query', async (routeFamily, label) => {
   const user = userEvent.setup();
   renderTab();
   await screen.findByText('邀请码领取频率守卫拒绝了请求');
 
   await user.click(screen.getByText('高级筛选'));
-  await user.selectOptions(screen.getByLabelText('路由族'), 'knowledge_chat');
+  const routeFamilySelect = screen.getByLabelText('路由族');
+  await user.selectOptions(routeFamilySelect, within(routeFamilySelect).getByRole('option', { name: label }));
   await user.type(screen.getByLabelText('请求 ID'), REQUEST_ID);
   await user.click(screen.getByRole('button', { name: '应用高级筛选' }));
 
@@ -244,7 +248,7 @@ it('applies advanced request-id and route-family filters as one query', async ()
     expect(adminApi.fetchAdminRequestObservations).toHaveBeenLastCalledWith(
       'csrf-secret',
       {
-        routeFamily: 'knowledge_chat',
+        routeFamily,
         requestId: REQUEST_ID,
         limit: 50,
         offset: 0,
