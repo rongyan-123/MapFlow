@@ -42,6 +42,15 @@ export interface PersonalTreeDetail {
   completed_node_ids: string[];
   node_progress?: NodeProgress[];
   progress_percent?: number;
+  noted_node_ids?: string[];
+}
+
+export interface NodeNote {
+  node_id: string;
+  markdown: string;
+  has_note: boolean;
+  version: number;
+  updated_at: string | null;
 }
 
 export interface NodeProgress {

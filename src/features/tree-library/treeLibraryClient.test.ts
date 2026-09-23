@@ -10,6 +10,9 @@ import {
   renamePersonalTree,
   setNodeCompletion,
   setNodeProgress,
+  fetchNodeNote,
+  saveNodeNote,
+  deleteNodeNote,
 } from './treeLibraryClient';
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -167,6 +170,20 @@ describe('treeLibraryClient', () => {
         body: JSON.stringify({ progressPercent: 37 }),
       },
     );
+  });
+
+  it('reads, replaces and explicitly deletes a versioned node note', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ node_id:'node/中文', markdown:'# 理解', has_note:true, version:3, updated_at:'2026-09-23T00:00:00Z' }))
+      .mockResolvedValueOnce(jsonResponse({ node_id:'node/中文', markdown:'新版', has_note:true, version:4, updated_at:'2026-09-23T00:01:00Z' }))
+      .mockResolvedValueOnce(jsonResponse({ node_id:'node/中文', markdown:'', has_note:false, version:5, updated_at:'2026-09-23T00:02:00Z' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchNodeNote('entry/id','node/中文')).resolves.toMatchObject({version:3,has_note:true});
+    await saveNodeNote('entry/id','node/中文','新版',3,'csrf-secret');
+    await deleteNodeNote('entry/id','node/中文',4,'csrf-secret');
+    const path='/api/me/tree-library/entry%2Fid/nodes/node%2F%E4%B8%AD%E6%96%87/note';
+    expect(fetchMock).toHaveBeenNthCalledWith(2,path,expect.objectContaining({method:'PUT',body:JSON.stringify({markdown:'新版',expectedVersion:3})}));
+    expect(fetchMock).toHaveBeenNthCalledWith(3,path,expect.objectContaining({method:'DELETE',body:JSON.stringify({expectedVersion:4})}));
   });
 
   it.each([

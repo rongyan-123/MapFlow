@@ -30,6 +30,7 @@ import McpGuideDialog, {
   type AgentGuideSectionId,
 } from './features/mcp/McpGuideDialog';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
+import NodeNoteDialog from './features/node-notes/NodeNoteDialog';
 import { readPlatformGenerationEntitlements } from './features/tree-generation/treeGenerationClient';
 import {
   addTreeToPersonalLibrary,
@@ -180,6 +181,7 @@ function ConsoleApp() {
   const [selectedPublicTreeId, setSelectedPublicTreeId] = useState<string | null>(null);
   const [selectedLibraryEntryId, setSelectedLibraryEntryId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [noteNodeId, setNoteNodeId] = useState<string | null>(null);
   const [completion, setCompletion] = useState<{ node: SkillNode; nonce: number } | null>(null);
   const [generationDialogOpen, setGenerationDialogOpen] = useState(false);
   const [mcpGuideOpen, setMcpGuideOpen] = useState(false);
@@ -1311,6 +1313,12 @@ function ConsoleApp() {
             } lg:w-80 lg:flex-none`}
           >
             {nodeDetailOpen ? (
+              <div className="flex min-h-0 flex-1 flex-col">
+              {view === 'personal' && selectedNodeId && selectedLibraryEntryId && session && (
+                <button type="button" onClick={()=>setNoteNodeId(selectedNodeId)} className="mx-3 mt-3 rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20">
+                  {(personalTree.data?.noted_node_ids??[]).includes(selectedNodeId)?'查看 / 编辑笔记':'写下我的总结'}
+                </button>
+              )}
               <NodeDetailPanel
                 snapshot={snapshot}
                 displayMode={displayMode}
@@ -1337,6 +1345,7 @@ function ConsoleApp() {
                     : undefined
                 }
               />
+              </div>
             ) : (
               <button
                 type="button"
@@ -1600,6 +1609,15 @@ function ConsoleApp() {
         <McpGuideDialog
           initialSectionId={mcpGuideInitialSection}
           onClose={closeMcpGuide}
+        />
+      )}
+      {noteNodeId && selectedLibraryEntryId && session && snapshot && (
+        <NodeNoteDialog
+          libraryEntryId={selectedLibraryEntryId}
+          nodeId={noteNodeId}
+          nodeTitle={snapshot.nodes.find(node=>node.id===noteNodeId)?.title??'节点'}
+          csrfToken={session.csrfToken}
+          onClose={()=>setNoteNodeId(null)}
         />
       )}
 

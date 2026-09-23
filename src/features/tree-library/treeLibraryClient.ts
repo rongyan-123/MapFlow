@@ -1,6 +1,7 @@
 import type {
   AddedTree,
   NodeProgress,
+  NodeNote,
   PersonalLibrary,
   PersonalLibraryEntry,
   PersonalTreeDetail,
@@ -79,7 +80,30 @@ export async function fetchPersonalTree(
     progress_percent: isProgressPercent(body.progress_percent)
       ? body.progress_percent
       : deriveProgressPercent(graph.nodes.length, nodeProgress),
+    noted_node_ids: isStringArray(body.noted_node_ids) ? [...body.noted_node_ids] : [],
   };
+}
+
+export async function fetchNodeNote(libraryEntryId:string,nodeId:string):Promise<NodeNote>{
+  const body=await getJson(nodeNotePath(libraryEntryId,nodeId));
+  return parseNodeNote(body);
+}
+
+export async function saveNodeNote(libraryEntryId:string,nodeId:string,markdown:string,expectedVersion:number,csrfToken:string):Promise<NodeNote>{
+  const response=await request(nodeNotePath(libraryEntryId,nodeId),{method:'PUT',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({markdown,expectedVersion})});
+  return parseNodeNote(await readJson(response));
+}
+
+export async function deleteNodeNote(libraryEntryId:string,nodeId:string,expectedVersion:number,csrfToken:string):Promise<NodeNote>{
+  const response=await request(nodeNotePath(libraryEntryId,nodeId),{method:'DELETE',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({expectedVersion})});
+  return parseNodeNote(await readJson(response));
+}
+
+function nodeNotePath(entry:string,node:string):string{return `/api/me/tree-library/${encodeURIComponent(entry)}/nodes/${encodeURIComponent(node)}/note`;}
+
+function parseNodeNote(value:unknown):NodeNote{
+  if(!isRecord(value)||typeof value.node_id!=='string'||typeof value.markdown!=='string'||typeof value.has_note!=='boolean'||!isNonNegativeInteger(value.version)||!(value.updated_at===null||typeof value.updated_at==='string')) throw invalidResponseError();
+  return {node_id:value.node_id,markdown:value.markdown,has_note:value.has_note,version:value.version,updated_at:value.updated_at};
 }
 
 export async function addTreeToPersonalLibrary(
