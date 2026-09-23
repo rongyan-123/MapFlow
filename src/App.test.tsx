@@ -1329,7 +1329,7 @@ describe('手机端视图栈', () => {
       firstActionGroup.querySelector('.mapflow-tree-choice__drawer'),
     ).toHaveClass('mapflow-tree-choice__drawer--uniform');
     const firstActionButtons = within(firstActionGroup).getAllByRole('button');
-    expect(firstActionButtons).toHaveLength(3);
+    expect(firstActionButtons).toHaveLength(4);
     firstActionButtons.forEach((button) => {
       expect(button).toHaveClass('mapflow-tree-action--uniform');
     });

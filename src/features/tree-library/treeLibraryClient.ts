@@ -8,6 +8,10 @@ import type {
   PublicTreeCatalog,
   PublicTreeDetail,
   TreeGraph,
+  PublicTreeAttribution,
+  PublicationPrepare,
+  PublicationResult,
+  PublicationStatus,
 } from './types';
 import type {
   RecommendedDepth,
@@ -40,14 +44,24 @@ export class TreeLibraryApiError extends Error {
 export async function fetchPublicTrees(): Promise<PublicTreeCatalog> {
   const body = await getJson('/api/trees/public');
   if (!isRecord(body) || !Array.isArray(body.trees)) throw invalidResponseError();
-  return { trees: body.trees.map(parseSkillTree) };
+  const attributions:Record<string,PublicTreeAttribution>={};
+  if(isRecord(body.attributions)) for(const [id,value] of Object.entries(body.attributions)) attributions[id]=parseAttribution(value);
+  return { trees: body.trees.map(parseSkillTree), attributions, next_cursor:typeof body.next_cursor==='string'?body.next_cursor:null };
 }
 
 export async function fetchPublicTree(treeId: string): Promise<PublicTreeDetail> {
   const body = await getJson(`/api/trees/public/${encodeURIComponent(treeId)}`);
   if (!isRecord(body) || body.view_mode !== 'showcase') throw invalidResponseError();
-  return { view_mode: 'showcase', graph: parseGraph(body.graph) };
+  return { view_mode: 'showcase', graph: parseGraph(body.graph), attribution:body.attribution===null||body.attribution===undefined?null:parseAttribution(body.attribution) };
 }
+
+export async function fetchPublicationStatus(entry:string):Promise<PublicationStatus>{const body=await getJson(`/api/me/tree-library/${encodeURIComponent(entry)}/publication`);if(!isRecord(body)||!isNonNegativeInteger(body.source_revision)||!(body.public_tree_id===null||typeof body.public_tree_id==='string')||typeof body.is_public!=='boolean')throw invalidResponseError();return body as unknown as PublicationStatus;}
+export async function prepareTreePublication(entry:string,csrf:string,unpublish=false):Promise<PublicationPrepare>{const suffix=unpublish?'/publication/unpublish/prepare':'/publication/prepare';const response=await request(`/api/me/tree-library/${encodeURIComponent(entry)}${suffix}`,{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-Token':csrf}});return parsePublicationPrepare(await readJson(response));}
+export async function executeTreePublication(entry:string,token:string,csrf:string,idempotencyKey:string,unpublish=false):Promise<PublicationResult>{const response=await request(`/api/me/tree-library/${encodeURIComponent(entry)}/publication`,{method:unpublish?'DELETE':'POST',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-Token':csrf,'Idempotency-Key':idempotencyKey},body:JSON.stringify({confirmationToken:token})});const body=await readJson(response);if(!isRecord(body)||typeof body.state!=='string'||!isNonNegativeInteger(body.source_revision))throw invalidResponseError();return body as unknown as PublicationResult;}
+
+function parsePublicationPrepare(body:unknown):PublicationPrepare{if(!isRecord(body)||!['publish','update','unpublish'].includes(String(body.action))||typeof body.title!=='string'||typeof body.publisher_display_name!=='string'||!isNonNegativeInteger(body.source_revision)||!isNonNegativeInteger(body.node_count)||!isNonNegativeInteger(body.edge_count)||!isNonNegativeInteger(body.block_count)||!isStringArray(body.excludes)||!(body.expected_public_tree_id===null||typeof body.expected_public_tree_id==='string')||typeof body.confirmation_token!=='string'||!isNonNegativeInteger(body.expires_in_seconds))throw invalidResponseError();return body as unknown as PublicationPrepare;}
+function parseAttribution(value:unknown):PublicTreeAttribution{if(!isRecord(value)||typeof value.publisher_display_name!=='string')throw invalidResponseError();return {publisher_display_name:value.publisher_display_name,derived_from_public_tree_id:nullable(value.derived_from_public_tree_id),root_public_tree_id:nullable(value.root_public_tree_id),derived_from_title:nullable(value.derived_from_title),derived_from_publisher_display_name:nullable(value.derived_from_publisher_display_name)};}
+function nullable(value:unknown):string|null{if(value===null||value===undefined)return null;if(typeof value==='string')return value;throw invalidResponseError();}
 
 export async function fetchPersonalLibrary(): Promise<PersonalLibrary> {
   const body = await getJson('/api/me/tree-library');

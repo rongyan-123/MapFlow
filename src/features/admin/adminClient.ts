@@ -12,6 +12,7 @@ import type {
   AdminInvitationsResponse,
   AdminProviderConfiguration,
   AdminProviderProfile,
+  AdminPublicationsPage,
   AdminRequestObservation,
   AdminRequestObservationsPage,
   AdminRequestStageSummary,
@@ -19,6 +20,29 @@ import type {
   AuditFilter,
   RequestObservationFilter,
 } from './types';
+
+export async function fetchAdminPublications(
+  csrfToken: string,
+  limit = 50,
+  offset = 0,
+): Promise<AdminPublicationsPage> {
+  void csrfToken;
+  const response = await request(`/api/admin/publications?limit=${limit}&offset=${offset}`, {
+    credentials: 'same-origin', headers: { Accept: 'application/json' },
+  });
+  const body = await readJson(response);
+  if (!isRecord(body) || !Array.isArray(body.items) || typeof body.total !== 'number') {
+    throw invalidResponseError();
+  }
+  return { items: body.items as AdminPublicationsPage['items'], total: body.total };
+}
+
+export async function removeAdminPublication(publicationId: string, csrfToken: string) {
+  await request(`/api/admin/publications/${encodeURIComponent(publicationId)}`, {
+    method: 'DELETE', credentials: 'same-origin',
+    headers: { Accept: 'application/json', 'X-CSRF-Token': csrfToken },
+  });
+}
 
 export async function fetchAdminDashboard(
   csrfToken: string,

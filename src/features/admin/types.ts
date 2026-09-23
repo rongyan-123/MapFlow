@@ -31,6 +31,22 @@ export interface AdminAccount {
   creditBalance: number;
 }
 
+export interface AdminPublication {
+  publicationId: string;
+  publicTreeId: string;
+  title: string;
+  publisherDisplayName: string;
+  state: string;
+  publishedAt: string;
+  endedAt: string | null;
+  endedReason: string | null;
+}
+
+export interface AdminPublicationsPage {
+  items: AdminPublication[];
+  total: number;
+}
+
 /** 绝不包含邀请码明文或摘要字段（后端响应类型编译期保证）。 */
 export interface AdminInvitation {
   inviteId: string;

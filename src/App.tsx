@@ -52,6 +52,7 @@ import TreeExportMenu from './features/tree-library/TreeExportMenu';
 import TreeLibraryActionDialog, {
   type TreeLibraryAction,
 } from './features/tree-library/TreeLibraryActionDialog';
+import TreePublicationDialog from './features/tree-library/TreePublicationDialog';
 import IdentityGate from './features/identity/IdentityGate';
 import { DEMO_TREES } from './lib/demoTrees';
 import type {
@@ -210,6 +211,10 @@ function ConsoleApp() {
   );
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [treeActionTarget, setTreeActionTarget] = useState<TreeActionTarget | null>(null);
+  const [publicationTarget, setPublicationTarget] = useState<{
+    libraryEntryId: string;
+    title: string;
+  } | null>(null);
   const publicMapSectionRef = useRef<HTMLElement | null>(null);
   const publicLibrarySectionRef = useRef<HTMLElement | null>(null);
   const generationButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -1133,7 +1138,7 @@ function ConsoleApp() {
                   <TreeChoice
                     key={tree.id}
                     title={tree.title}
-                    subtitle={`${tree.topic} · ${tree.total_nodes} 节点`}
+                    subtitle={`${tree.topic} · ${tree.total_nodes} 节点${publicCatalog.data?.attributions?.[tree.id]?.publisher_display_name ? ` · 发布者 ${publicCatalog.data.attributions[tree.id].publisher_display_name}` : ''}`}
                     active={tree.id === selectedPublicTreeId}
                     onClick={() => selectPublicTree(tree.id)}
                   />
@@ -1164,6 +1169,13 @@ function ConsoleApp() {
                         }
                         loadDetail={() => fetchPersonalTree(entry.library_entry_id)}
                         triggerAriaLabel={`导出技能树：${entry.tree.title}`}
+                      />
+                      <ReservedTreeAction
+                        icon="◎"
+                        label="公开"
+                        title={entry.tree.title}
+                        tone="rename"
+                        onClick={() => setPublicationTarget({libraryEntryId:entry.library_entry_id,title:entry.tree.title})}
                       />
                       <ReservedTreeAction
                         icon="✎"
@@ -1642,6 +1654,14 @@ function ConsoleApp() {
         }}
         onConfirm={confirmTreeAction}
       />
+      {publicationTarget && session && (
+        <TreePublicationDialog
+          libraryEntryId={publicationTarget.libraryEntryId}
+          title={publicationTarget.title}
+          csrfToken={session.csrfToken}
+          onClose={() => setPublicationTarget(null)}
+        />
+      )}
 
     </div>
   );

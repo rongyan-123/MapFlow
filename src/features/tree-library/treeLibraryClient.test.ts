@@ -30,7 +30,7 @@ describe('treeLibraryClient', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(fetchPublicTrees()).resolves.toEqual({ trees: [tree] });
+    await expect(fetchPublicTrees()).resolves.toEqual({ trees: [tree], attributions: {}, next_cursor: null });
     await expect(fetchPublicTree('tree/id')).resolves.toMatchObject({
       view_mode: 'showcase',
       graph: { tree },

@@ -17,11 +17,16 @@ export interface TreeGraph {
 
 export interface PublicTreeCatalog {
   trees: SkillTree[];
+  attributions: Record<string, PublicTreeAttribution>;
+  next_cursor: string | null;
 }
+
+export interface PublicTreeAttribution { publisher_display_name:string; derived_from_public_tree_id:string|null; root_public_tree_id:string|null; derived_from_title:string|null; derived_from_publisher_display_name:string|null }
 
 export interface PublicTreeDetail {
   view_mode: 'showcase';
   graph: TreeGraph;
+  attribution: PublicTreeAttribution | null;
 }
 
 export interface PersonalLibraryEntry {
@@ -52,6 +57,10 @@ export interface NodeNote {
   version: number;
   updated_at: string | null;
 }
+
+export interface PublicationStatus { source_revision:number; public_tree_id:string|null; is_public:boolean }
+export interface PublicationPrepare { action:'publish'|'update'|'unpublish'; title:string; publisher_display_name:string; source_revision:number; node_count:number; edge_count:number; block_count:number; excludes:string[]; expected_public_tree_id:string|null; confirmation_token:string; expires_in_seconds:number }
+export interface PublicationResult { action:'publish'|'update'|'unpublish'; publication_id:string|null; public_tree_id:string|null; source_revision:number; state:string }
 
 export interface NodeProgress {
   node_id: string;
