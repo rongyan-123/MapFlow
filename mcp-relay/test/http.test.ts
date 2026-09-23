@@ -14,6 +14,7 @@ describe('rpc forwarding', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://x.test/mcp');
     expect(init.headers).toMatchObject({ authorization: 'Bearer ' + 't'.repeat(64), 'content-type': 'application/json' });
+    expect(init.headers).toMatchObject({ 'x-mapflow-relay-version': '0.2.0' });
     expect(JSON.parse(String(init.body)).method).toBe('tools/list');
   });
 

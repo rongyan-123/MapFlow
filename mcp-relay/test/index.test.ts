@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { MapflowRpcError } from '../src/http.js';
 import {
   formatFatalError, formatToolError, isDirectRun, listToolsAtStartup, runToolCall,
+  toolRegistrationOptions,
 } from '../src/index.js';
 import type { ToolCallContext } from '../src/index.js';
 
@@ -52,6 +53,13 @@ describe('startup tools/list with revoke recovery', () => {
     await expect(listToolsAtStartup({ baseUrl: 'https://x.test', token: 'a'.repeat(64), fetchImpl: fetchMock as never, reauthorize }))
       .rejects.toMatchObject({ operationCode: 'mutation.revision_conflict' });
     expect(reauthorize).not.toHaveBeenCalled();
+  });
+});
+
+describe('tool safety annotations', () => {
+  it('forwards known and future annotation fields unchanged', () => {
+    const annotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true, futureHint: 'keep-me' };
+    expect(toolRegistrationOptions({ name: 'mapflow.unpublish_tree', description: 'x', inputSchema: { type: 'object' }, annotations }).annotations).toEqual(annotations);
   });
 });
 

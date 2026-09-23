@@ -1,6 +1,6 @@
 {
   "name": "@mapflow-publish/mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MapFlow 外部 Agent 接入:一行命令让 Claude Code/Codex 等读写你的学习树(需先授权一次)。",
   "license": "MIT",
   "type": "module",

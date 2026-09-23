@@ -7,7 +7,7 @@
 ## 一行命令(首次约 3 秒授权)
 
 ```bash
-npx -y @mapflow-publish/mcp
+npx -y --prefer-online @mapflow-publish/mcp@latest
 ```
 
 首次运行自动打开浏览器 → 在 xxian.fun 授权页点「允许」(复用你的登录态)→
@@ -16,7 +16,7 @@ token 存入本机 `~/.mapflow/token`(权限 600)。之后每次运行静默直�
 ## 接入 Claude Code
 
 ```bash
-claude mcp add mapflow -- npx -y @mapflow-publish/mcp
+claude mcp add mapflow -- npx -y --prefer-online @mapflow-publish/mcp@latest
 ```
 
 之后在 Claude Code 里直接说「读一下我的学习进度」「把安全相关的节点整理成块」即可。
@@ -24,7 +24,7 @@ claude mcp add mapflow -- npx -y @mapflow-publish/mcp
 ## 接入 Codex CLI
 
 ```bash
-codex mcp add mapflow -- npx -y @mapflow-publish/mcp
+codex mcp add mapflow -- npx -y --prefer-online @mapflow-publish/mcp@latest
 ```
 
 运行 `npx` 只会启动本地 stdio relay；上面的 `codex mcp add` 或对应客户端的配置步骤才会把它注册到 Agent。
@@ -39,6 +39,12 @@ codex mcp add mapflow -- npx -y @mapflow-publish/mcp
 | `mapflow.create_tree` | 用完整节点图创建一棵私人树,可选同时写入块和节点归属 |
 | `mapflow.apply_tree_mutation` | 提交一条编辑命令(add_node / add_edge / add_block / set_node_block 等) |
 | `mapflow.whoami` | 查看当前 token 身份与授权状态 |
+| `mapflow.get_usage_guide` | 获取会话期指南及 Skill/relay 最低版本 |
+| `mapflow.get_node_note` / `set_node_note` / `delete_node_note` | 读取、整份替换或显式删除版本化 Markdown 节点笔记 |
+| `mapflow.prepare_tree_publication` / `publish_tree` | 两阶段确认后发布或更新公共快照 |
+| `mapflow.prepare_tree_unpublication` / `unpublish_tree` | 两阶段确认后取消当前公共快照 |
+
+relay 启动时动态获取工具目录，所以服务端新增只读工具通常只需重启客户端。`0.2.0` 起 relay 会转发 MCP safety annotations 并发送自身版本；使用旧版时不必卸载，重新运行上面的 `@latest` 命令并重启 Agent 即可。`get_usage_guide` 同步的是会话期规则，不会改写本机 Skill 文件。
 
 按语义把树重组成块的操作方法见 [BLOCKS.md](BLOCKS.md)。
 

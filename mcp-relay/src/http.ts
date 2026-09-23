@@ -10,6 +10,7 @@ export function isRevokedResponse(status: number, dataCode: unknown): boolean {
   return status === 401 && dataCode === 'auth.token_revoked';
 }
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
+export const MAPFLOW_RELAY_VERSION = '0.2.0';
 
 export interface RpcDeps { baseUrl: string; token: string; method: string; params: unknown; fetchImpl: FetchLike; }
 export async function rpcCall(deps: RpcDeps): Promise<unknown> {
@@ -17,7 +18,7 @@ export async function rpcCall(deps: RpcDeps): Promise<unknown> {
   try {
     response = await deps.fetchImpl(`${deps.baseUrl}/mcp`, {
       method: 'POST',
-      headers: { authorization: `Bearer ${deps.token}`, 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${deps.token}`, 'content-type': 'application/json', 'x-mapflow-relay-version': MAPFLOW_RELAY_VERSION },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: deps.method, params: deps.params }),
     });
   } catch {

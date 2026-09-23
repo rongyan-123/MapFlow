@@ -71,7 +71,12 @@ export function formatFatalError(error: unknown): string {
 }
 
 export interface StartupToolList {
-  tools: Array<{ name: string; description?: string; inputSchema: unknown }>;
+  tools: StartupTool[];
+}
+export interface StartupTool { name: string; description?: string; inputSchema: unknown; annotations?: Record<string, unknown> }
+
+export function toolRegistrationOptions(tool: StartupTool) {
+  return { description: tool.description ?? '', inputSchema: toZodSchema(tool.inputSchema), annotations: tool.annotations };
 }
 /** 启动期 tools/list:遇吊销(401 + auth.token_revoked)经 reauthorize 换新 token 后重试一次,与工具回调内的吊销恢复同构 */
 export async function listToolsAtStartup(deps: {
@@ -111,7 +116,7 @@ async function main(): Promise<void> {
   ctx.token = startup.token;
   const listed = startup.listed;
   for (const tool of listed.tools) {
-    server.registerTool(tool.name, { description: tool.description ?? '', inputSchema: toZodSchema(tool.inputSchema) }, async (args: unknown) => {
+    server.registerTool(tool.name, toolRegistrationOptions(tool), async (args: unknown) => {
       try {
         const result = await runToolCall(ctx, 'tools/call', { name: tool.name, arguments: args });
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
