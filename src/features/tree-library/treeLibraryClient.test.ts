@@ -49,6 +49,25 @@ describe('treeLibraryClient', () => {
     );
   });
 
+  it('reads a cursor page from the public catalog', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ trees: [tree], next_cursor: 'next/page' }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchPublicTrees({ cursor: 'current/page', limit: 50 })).resolves.toMatchObject({
+      trees: [tree],
+      next_cursor: 'next/page',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/trees/public?limit=50&cursor=current%2Fpage',
+      {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+      },
+    );
+  });
+
   it('reads only the authenticated account personal library and detail', async () => {
     fetchMock
       .mockResolvedValueOnce(

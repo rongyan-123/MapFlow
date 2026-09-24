@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import AdminPanel from './features/admin/AdminPanel';
 import CreditPill from './features/credit/CreditPill';
 import { readCreditSummary } from './features/credit/creditClient';
@@ -46,6 +46,7 @@ import {
 import type {
   NodeProgress,
   PersonalLibrary,
+  PublicTreeCatalog,
   TreeGraph,
 } from './features/tree-library/types';
 import TreeExportMenu from './features/tree-library/TreeExportMenu';
@@ -53,6 +54,11 @@ import TreeLibraryActionDialog, {
   type TreeLibraryAction,
 } from './features/tree-library/TreeLibraryActionDialog';
 import TreePublicationDialog from './features/tree-library/TreePublicationDialog';
+import { PublicTreeCatalogPanel } from './features/tree-library/PublicTreeCatalogPanel';
+import {
+  PublicTreeEmptyPreview,
+  PublicTreePreviewHeader,
+} from './features/tree-library/PublicTreePreview';
 import IdentityGate from './features/identity/IdentityGate';
 import { DEMO_TREES } from './lib/demoTrees';
 import type {
@@ -243,9 +249,11 @@ function ConsoleApp() {
     }
   }, [publicGuideOpen]);
 
-  const publicCatalog = useQuery({
+  const publicCatalog = useInfiniteQuery({
     queryKey: ['trees', 'public'],
-    queryFn: fetchPublicTrees,
+    queryFn: ({ pageParam }) => fetchPublicTrees({ cursor: pageParam, limit: 50 }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     enabled: session !== null,
     staleTime: 5 * 60 * 1000,
     retry: 1,
@@ -258,6 +266,9 @@ function ConsoleApp() {
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
+  const loadMorePublicTrees = useCallback(() => {
+    void publicCatalog.fetchNextPage();
+  }, [publicCatalog.fetchNextPage]);
   const personalLibrary = useQuery({
     queryKey: personalTreeLibraryQueryKey,
     queryFn: fetchPersonalLibrary,
@@ -295,14 +306,13 @@ function ConsoleApp() {
   });
 
   useEffect(() => {
-    const trees = publicCatalog.data?.trees ?? (publicGuideOpen ? DEMO_PUBLIC_TREES : []);
-    if (
-      trees.length > 0 &&
-      (!selectedPublicTreeId || !trees.some((tree) => tree.id === selectedPublicTreeId))
-    ) {
-      setSelectedPublicTreeId(trees[0].id);
+    if (!publicGuideOpen || view !== 'public' || publicGuideStep !== 'map' || selectedPublicTreeId) {
+      return;
     }
-  }, [publicCatalog.data, publicGuideOpen, selectedPublicTreeId]);
+    const firstTree = mergePublicCatalogPages(publicCatalog.data?.pages ?? []).trees[0]
+      ?? DEMO_PUBLIC_TREES[0];
+    if (firstTree) setSelectedPublicTreeId(firstTree.id);
+  }, [publicCatalog.data?.pages, publicGuideOpen, publicGuideStep, selectedPublicTreeId, view]);
 
   useEffect(() => {
     if (
@@ -337,7 +347,7 @@ function ConsoleApp() {
         ? stored.view
         : 'public';
     setView(restoredView);
-    setSelectedPublicTreeId(stored.selectedPublicTreeId);
+    setSelectedPublicTreeId(null);
     setSelectedLibraryEntryId(
       restoredView === 'personal' ? stored.selectedLibraryEntryId : null,
     );
@@ -484,10 +494,12 @@ function ConsoleApp() {
 
   useEffect(() => {
     if (!activeGraph) return;
-    if (!activeGraph.nodes.some((node) => node.id === selectedNodeId)) {
+    if (selectedNodeId && !activeGraph.nodes.some((node) => node.id === selectedNodeId)) {
+      setSelectedNodeId(null);
+    } else if (view === 'personal' && !selectedNodeId) {
       setSelectedNodeId(activeGraph.nodes[0]?.id ?? null);
     }
-  }, [activeGraph, selectedNodeId]);
+  }, [activeGraph, selectedNodeId, view]);
 
   const addTree = useMutation({
     mutationFn: (treeId: string) => {
@@ -885,7 +897,10 @@ function ConsoleApp() {
 
   const guideDemoCatalogVisible =
     publicGuideOpen && view === 'public' && !publicCatalog.data;
-  const publicTrees = publicCatalog.data?.trees ??
+  const loadedPublicCatalog = mergePublicCatalogPages(publicCatalog.data?.pages ?? []);
+  const publicTrees = loadedPublicCatalog.trees.length
+    ? loadedPublicCatalog.trees
+    :
     (guideDemoCatalogVisible ? DEMO_PUBLIC_TREES : []);
   const publicCatalogUnavailable = !publicCatalog.data;
   const selectedPublicTree = publicTrees.find(
@@ -963,6 +978,7 @@ function ConsoleApp() {
             active={view === 'public'}
             onClick={() => {
               setView('public');
+              setSelectedPublicTreeId(null);
               setSelectedNodeId(null);
               setCompletion(null);
               setChatOpen(false);
@@ -1069,7 +1085,7 @@ function ConsoleApp() {
       </header>
 
       <main className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
-        {!personalSidebarOpen && (
+        {!personalSidebarOpen && (view === 'personal' || !selectedPublicTree) && (
           <button
             type="button"
             aria-label="展开左侧树库"
@@ -1088,17 +1104,36 @@ function ConsoleApp() {
             mobileView === 'list' ? 'flex' : 'hidden'
           } ${
             personalSidebarOpen ? 'lg:flex' : 'lg:hidden'
-          } mapflow-tree-sidebar w-full min-h-0 flex-1 flex-col overflow-y-auto border-b border-slate-800 bg-slate-950/95 p-3 max-lg:pb-24 lg:w-64 lg:flex-none lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r`}
+          } mapflow-tree-sidebar w-full min-h-0 flex-1 flex-col border-b border-slate-800 bg-slate-950/95 lg:flex-none lg:flex-col lg:border-b-0 lg:border-r ${
+            view === 'public'
+              ? 'overflow-clip p-0 lg:w-[42%] lg:max-w-[42rem]'
+              : 'overflow-y-auto p-3 max-lg:pb-24 lg:w-64 lg:overflow-y-auto'
+          }`}
         >
+          {view === 'public' ? (
+            <PublicTreeCatalogPanel
+              trees={publicTrees}
+              attributions={loadedPublicCatalog.attributions}
+              selectedTreeId={selectedPublicTreeId}
+              onSelect={selectPublicTree}
+              onCollapse={() => setPersonalSidebarOpen(false)}
+              hasNextPage={Boolean(publicCatalog.hasNextPage)}
+              isFetchingNextPage={publicCatalog.isFetchingNextPage}
+              nextPageError={publicCatalog.isFetchNextPageError ? publicCatalog.error : undefined}
+              onLoadMore={loadMorePublicTrees}
+              initialLoading={publicCatalog.isPending && !guideDemoCatalogVisible}
+              initialError={publicCatalogUnavailable && !guideDemoCatalogVisible ? publicCatalog.error : undefined}
+              onRetry={() => void publicCatalog.refetch()}
+            />
+          ) : (
+            <>
           <div className="mb-3 flex items-start justify-between gap-2 px-1">
             <div>
               <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                {view === 'public' ? '公共树池' : '个人树库'}
+                 个人树库
               </h2>
               <p className="mt-1 text-[11px] leading-5 text-slate-600">
-                {view === 'public'
-                  ? '所有人可浏览；加入后复制成你的私有副本，独立记录进度。'
-                  : '这里只显示当前账号已加入的树。'}
+                 这里只显示当前账号已加入的树。
               </p>
             </div>
             <button
@@ -1112,41 +1147,7 @@ function ConsoleApp() {
           </div>
 
           <div className="space-y-2">
-            {view === 'public' ? (
-              publicCatalog.isPending && publicCatalogUnavailable && !guideDemoCatalogVisible ? (
-                <SidebarMessage>正在读取公共技能树…</SidebarMessage>
-              ) : publicCatalogUnavailable && !guideDemoCatalogVisible ? (
-                <div
-                  role="alert"
-                  className="rounded-xl border border-amber-400/30 bg-amber-400/5 px-3 py-3 text-xs leading-5 text-amber-100"
-                >
-                  <p className="font-semibold">公共技能树暂时无法读取</p>
-                  <p className="mt-1 text-amber-100/70">
-                    {readableError(publicCatalog.error)}
-                  </p>
-                  <button
-                    type="button"
-                    aria-label="重新读取公共树库"
-                    onClick={() => void publicCatalog.refetch()}
-                    className="mt-2 rounded-lg border border-amber-300/40 px-2.5 py-1.5 font-semibold text-amber-100 transition hover:bg-amber-300/10"
-                  >
-                    重新读取
-                  </button>
-                </div>
-              ) : publicTrees.length ? (
-                publicTrees.map((tree) => (
-                  <TreeChoice
-                    key={tree.id}
-                    title={tree.title}
-                    subtitle={`${tree.topic} · ${tree.total_nodes} 节点${publicCatalog.data?.attributions?.[tree.id]?.publisher_display_name ? ` · 发布者 ${publicCatalog.data.attributions[tree.id].publisher_display_name}` : ''}`}
-                    active={tree.id === selectedPublicTreeId}
-                    onClick={() => selectPublicTree(tree.id)}
-                  />
-                ))
-              ) : (
-                <SidebarMessage>当前还没有可浏览的公共技能树。</SidebarMessage>
-              )
-            ) : personalLibrary.isPending ? (
+            {personalLibrary.isPending ? (
               <SidebarMessage>正在读取个人树库…</SidebarMessage>
             ) : personalLibrary.isError ? (
               <SidebarMessage>{readableError(personalLibrary.error)}</SidebarMessage>
@@ -1239,26 +1240,28 @@ function ConsoleApp() {
               </div>
             )}
 
-          {view === 'public' && selectedPublicTreeId && (
-            <button
-              type="button"
-              disabled={addTree.isPending}
-              onClick={joinSelectedTree}
-              className="mt-4 w-full rounded-xl bg-cyan-300 px-3 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-wait disabled:opacity-60"
-            >
-              {addTree.isPending ? '正在加入…' : '加入我的学习'}
-            </button>
-          )}
-          {addTree.error && <MutationError error={addTree.error} />}
           {completionMutation.error && <MutationError error={completionMutation.error} />}
           {progressMutation.error && <MutationError error={progressMutation.error} />}
+            </>
+          )}
         </aside>
 
         <section
           ref={publicMapSectionRef}
           data-testid="mobile-graph"
-          className={`${graphVisible ? 'block' : 'hidden'} relative min-w-0 flex-1 lg:block`}
+          className={`${graphVisible || (view === 'public' && mobileView === 'detail') ? 'block' : 'hidden'} relative min-w-0 flex-1 overflow-clip lg:block`}
         >
+          {view === 'public' && selectedPublicTree && (
+            <PublicTreePreviewHeader
+              tree={selectedPublicTree}
+              attribution={loadedPublicCatalog.attributions[selectedPublicTree.id]}
+              joining={addTree.isPending}
+              joinError={addTree.error}
+              catalogCollapsed={!personalSidebarOpen}
+              onJoin={joinSelectedTree}
+              onExpandCatalog={() => setPersonalSidebarOpen(true)}
+            />
+          )}
           {snapshot ? (
             <>
               {view === 'personal' && (
@@ -1284,22 +1287,22 @@ function ConsoleApp() {
                   </div>
                 </div>
               )}
-              <SkillTreeCanvas
-                snapshot={snapshot}
-                displayMode={displayMode}
-                layoutMode={layoutMode}
-                selectedNodeId={selectedNodeId}
-                isGraphVisible={graphVisible}
-                onSelectNode={(nodeId) => {
-                  setSelectedNodeId(nodeId);
-                  setMobileView('detail');
-                }}
-              />
+              <div className={`h-full ${view === 'public' ? 'pt-20' : ''}`}>
+                <SkillTreeCanvas
+                  snapshot={snapshot}
+                  displayMode={displayMode}
+                  layoutMode={layoutMode}
+                  selectedNodeId={selectedNodeId}
+                  isGraphVisible={graphVisible}
+                  onSelectNode={(nodeId) => {
+                    setSelectedNodeId(nodeId);
+                    setMobileView('detail');
+                  }}
+                />
+              </div>
             </>
-          ) : view === 'public' && publicCatalog.isPending && !guideDemoCatalogVisible ? (
-            <InlineStatus message="正在读取公共技能树…" />
-          ) : view === 'public' && publicCatalogUnavailable && !guideDemoCatalogVisible ? (
-            <InlineStatus message="公共技能树暂时无法读取，可先切换到其他功能。" />
+          ) : view === 'public' && selectedPublicTreeId === null ? (
+            <PublicTreeEmptyPreview onExpandCatalog={() => setPersonalSidebarOpen(true)} />
           ) : treePending ? (
             <InlineStatus message="正在加载完整技能树…" />
           ) : treeError ? (
@@ -1309,13 +1312,30 @@ function ConsoleApp() {
               message={
                 view === 'personal'
                   ? '从公共树池加入一棵技能树后，就可以从零记录进度。'
-                  : '请选择一棵公共技能树。'
+                  : '选择一张地图查看路线'
               }
             />
           )}
+
+          {view === 'public' && snapshot && selectedNodeId && (
+            <div
+              data-testid="mobile-detail"
+              className={`${mobileView === 'detail' ? 'flex' : 'hidden'} absolute inset-0 z-30 min-h-0 flex-col overflow-y-auto border-l border-slate-800 bg-slate-950/97 shadow-[-24px_0_55px_rgba(2,6,23,0.72)] lg:bottom-0 lg:left-auto lg:right-0 lg:top-20 lg:flex lg:w-80`}
+            >
+              <NodeDetailPanel
+                snapshot={snapshot}
+                displayMode={displayMode}
+                selectedNodeId={selectedNodeId}
+                onTogglePanel={() => {
+                  setSelectedNodeId(null);
+                  setMobileView('graph');
+                }}
+              />
+            </div>
+          )}
         </section>
 
-        {snapshot ? (
+        {view === 'personal' && (snapshot ? (
           <div
             data-testid="mobile-detail"
             className={`${
@@ -1378,9 +1398,9 @@ function ConsoleApp() {
           >
             选择并加载技能树后，可在这里查看节点详情。
           </aside>
-        )}
+        ))}
 
-        {snapshot && !nodeDetailOpen && !chatOpen && (
+        {view === 'personal' && snapshot && !nodeDetailOpen && !chatOpen && (
           <button
             type="button"
             aria-label="展开节点详情"
@@ -2075,6 +2095,22 @@ function EntryLoading() {
 
 function readableError(error: unknown): string {
   return error instanceof Error ? error.message : '技能树服务暂时不可用，请稍后重试。';
+}
+
+function mergePublicCatalogPages(pages: PublicTreeCatalog[]): PublicTreeCatalog {
+  const treesById = new Map<string, PublicTreeCatalog['trees'][number]>();
+  const attributions: PublicTreeCatalog['attributions'] = {};
+  for (const page of pages) {
+    for (const tree of page.trees) {
+      if (!treesById.has(tree.id)) treesById.set(tree.id, tree);
+    }
+    Object.assign(attributions, page.attributions ?? {});
+  }
+  return {
+    trees: [...treesById.values()],
+    attributions,
+    next_cursor: pages[pages.length - 1]?.next_cursor ?? null,
+  };
 }
 
 function readStoredConsoleState(accountPlayerId: string | null): PersistedConsoleState | null {

@@ -293,6 +293,55 @@ afterEach(() => {
 });
 
 describe('MapFlow tree library', () => {
+  it('进入公共树库时先展示目录，选择地图后才加载节点图', async () => {
+    const user = userEvent.setup();
+    renderApp('/console');
+
+    expect(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('选择一张地图查看路线')).toBeInTheDocument();
+    expect(treeApi.fetchPublicTree).not.toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'NestJS 完整学习树' }),
+    ).toBeInTheDocument();
+    expect(treeApi.fetchPublicTree).toHaveBeenCalledWith(nestjsTree.id);
+    expect(screen.getByRole('button', { name: '加入我的学习' })).toBeInTheDocument();
+  });
+
+  it('合并游标目录页并按树 ID 去重', async () => {
+    const user = userEvent.setup();
+    treeApi.fetchPublicTrees.mockImplementation((options?: { cursor?: string | null }) =>
+      Promise.resolve(
+        options?.cursor === 'page-2'
+          ? { trees: [nestjsTree, agentTree], attributions: {}, next_cursor: null }
+          : { trees: [nestjsTree], attributions: {}, next_cursor: 'page-2' },
+      ),
+    );
+    renderApp('/console');
+
+    expect(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '加载更多地图' }));
+
+    expect(
+      await screen.findByRole('button', { name: '查看 Python Agent 完整学习树' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', { name: '查看 NestJS 完整学习树' }),
+    ).toHaveLength(1);
+    expect(treeApi.fetchPublicTrees).toHaveBeenCalledWith({
+      cursor: 'page-2',
+      limit: 50,
+    });
+  });
+
   it('已登录访问产品首页仍可进入控制台', async () => {
     const user = userEvent.setup();
     renderApp('/?marketing=1');
@@ -311,6 +360,7 @@ describe('MapFlow tree library', () => {
   });
 
   it('公共树默认使用关系布局，不向游客展示块布局切换', async () => {
+    const user = userEvent.setup();
     window.localStorage.setItem(
       'mapflow.console.state.v1.visitor',
       JSON.stringify({
@@ -343,6 +393,9 @@ describe('MapFlow tree library', () => {
     });
     renderApp('/console');
 
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
     expect(await screen.findByRole('heading', { name: 'NestJS 完整学习树' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '按块布局' })).not.toBeInTheDocument();
     const flowBoundary = await screen.findByTestId('react-flow-boundary');
@@ -415,6 +468,9 @@ describe('MapFlow tree library', () => {
     renderApp('/console');
 
     await user.click(await screen.findByRole('button', { name: '下一步' }));
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
     await user.click(await screen.findByRole('button', { name: '加入我的学习' }));
 
     expect(
@@ -565,6 +621,9 @@ describe('MapFlow tree library', () => {
     const user = userEvent.setup();
     renderApp('/console');
 
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
     const node = await screen.findByRole('button', { name: '查看节点 基础节点' });
     expect(flowLifecycle.mounts).toBe(1);
 
@@ -685,6 +744,9 @@ describe('MapFlow tree library', () => {
 
     expect(await screen.findByText('MF-7K3P-9D2Q-X8CW')).toBeInTheDocument();
     await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
+    await user.click(
       await screen.findByRole('button', { name: '加入我的学习' }),
     );
     await waitFor(() =>
@@ -743,6 +805,9 @@ describe('MapFlow tree library', () => {
     treeApi.setNodeProgress.mockResolvedValue(undefined);
     renderApp();
 
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
     await user.click(await screen.findByRole('button', { name: '加入我的学习' }));
     await user.click(await screen.findByRole('button', { name: '填写详细进度' }));
     const input = screen.getByRole('spinbutton', { name: '节点完成百分比' });
@@ -765,6 +830,9 @@ describe('MapFlow tree library', () => {
     const user = userEvent.setup();
     renderApp();
 
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
     expect(await screen.findByRole('heading', { name: 'NestJS 完整学习树' })).toBeInTheDocument();
     await user.click(
       screen.getByRole('button', { name: '查看 Python Agent 完整学习树' }),
@@ -1134,7 +1202,7 @@ describe('管理面板入口', () => {
 });
 
 describe('手机端视图栈', () => {
-  it('重新加载控制台后仍保留公共树和当前节点', async () => {
+  it('重新加载控制台后回到公共目录，不恢复历史节点', async () => {
     const user = userEvent.setup();
     renderApp('/console');
 
@@ -1149,7 +1217,8 @@ describe('手机端视图栈', () => {
     cleanup();
     renderApp('/console');
 
-    expect(await screen.findByRole('heading', { name: 'Agent 基础' })).toBeInTheDocument();
+    expect(await screen.findByText('选择一张地图查看路线')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Agent 基础' })).not.toBeInTheDocument();
   });
 
   it('重新加载控制台后仍保留个人树和当前节点', async () => {
@@ -1181,7 +1250,7 @@ describe('手机端视图栈', () => {
 
     expect(screen.getByTestId('mobile-list').className).not.toContain('hidden');
     expect(screen.getByTestId('mobile-graph').className).toContain('hidden');
-    expect(screen.getByTestId('mobile-detail').className).toContain('hidden');
+    expect(screen.queryByTestId('mobile-detail')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '返回上一级' }),
     ).not.toBeInTheDocument();
@@ -1210,7 +1279,7 @@ describe('手机端视图栈', () => {
       await screen.findByRole('button', { name: '查看节点 基础节点' }),
     );
     expect(screen.getByTestId('mobile-detail').className).not.toContain('hidden');
-    expect(screen.getByTestId('mobile-graph').className).toContain('hidden');
+    expect(screen.getByTestId('mobile-graph').className).not.toContain('hidden');
 
     await user.click(screen.getByRole('button', { name: '返回上一级' }));
     expect(screen.getByTestId('mobile-graph').className).not.toContain('hidden');

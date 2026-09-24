@@ -41,8 +41,12 @@ export class TreeLibraryApiError extends Error {
   }
 }
 
-export async function fetchPublicTrees(): Promise<PublicTreeCatalog> {
-  const body = await getJson('/api/trees/public');
+export async function fetchPublicTrees(options: { cursor?: string | null; limit?: number } = {}): Promise<PublicTreeCatalog> {
+  const search = new URLSearchParams();
+  if (options.limit !== undefined) search.set('limit', String(options.limit));
+  if (options.cursor) search.set('cursor', options.cursor);
+  const query = search.toString();
+  const body = await getJson(`/api/trees/public${query ? `?${query}` : ''}`);
   if (!isRecord(body) || !Array.isArray(body.trees)) throw invalidResponseError();
   const attributions:Record<string,PublicTreeAttribution>={};
   if(isRecord(body.attributions)) for(const [id,value] of Object.entries(body.attributions)) attributions[id]=parseAttribution(value);
