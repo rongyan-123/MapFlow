@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createConversation, deleteCharacter, fetchCharacters, fetchConversation, fetchConversations, fetchTurns, importCharacter, sendTurnStream } from './tavernClient';
+import { createConversation, deleteCharacter, fetchCharacters, fetchConversation, fetchConversations, fetchTurns, generateStream, importCharacter, mutateGraph, updateGenerationSettings } from './tavernClient';
 import { character, completion, conversation, detail, sseResponse, turn } from './testFixtures';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -48,6 +48,26 @@ describe('Tavern HTTP contract', () => {
     expect(fetchMock.mock.calls[0]).toEqual(['/api/me/tavern/characters/character-1', expect.objectContaining({ method: 'DELETE', headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf' }) })]);
   });
 
+  it('updates the single generation settings contract with CSRF and parses its version', async () => {
+    const state = { generationSettings: { temperature: 0.7, maxOutputTokens: 1024, stopSequences: ['END'] }, generationSettingsVersion: 2 };
+    const fetchMock = reply(state);
+    expect(await updateGenerationSettings('conversation-1', 1, state.generationSettings, 'csrf')).toEqual(state);
+    expect(fetchMock.mock.calls[0]).toEqual([
+      '/api/me/tavern/conversations/conversation-1/settings',
+      expect.objectContaining({ method: 'PATCH', credentials: 'same-origin', headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf' }), body: JSON.stringify({ expectedSettingsVersion: 1, settings: state.generationSettings }) }),
+    ]);
+  });
+
+  it('sends every local graph operation through one revisioned action endpoint', async () => {
+    const fetchMock = reply(detail.graph);
+    const graph = await mutateGraph('conversation-1', 1, { type: 'select_branch', branchId: 'branch-main' }, 'csrf');
+    expect(graph.activeBranchId).toBe('branch-main');
+    expect(fetchMock.mock.calls[0]).toEqual([
+      '/api/me/tavern/conversations/conversation-1/actions',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ expectedRevision: 1, action: { type: 'select_branch', branchId: 'branch-main' } }) }),
+    ]);
+  });
+
   it('preserves error envelope status/code/trace without leaking malformed server responses', async () => {
     const fetchMock = reply({});
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'tavern.credit_unavailable', message: '积分不足', traceId: 'trace-1' } }), { status: 402 }));
@@ -58,6 +78,8 @@ describe('Tavern HTTP contract', () => {
 
   it('rejects malformed history/completion structures before the UI consumes them', async () => {
     reply({ ...detail, turns: [{ ...turn, usage: { inputTokens: -1 } }] });
+    await expect(fetchConversation('conversation-1')).rejects.toMatchObject({ code: 'tavern.invalid_response' });
+    reply({ ...detail, generations: [{ ...detail.generations[0], promptFingerprint: 'not-a-hash' }] });
     await expect(fetchConversation('conversation-1')).rejects.toMatchObject({ code: 'tavern.invalid_response' });
     reply({ characters: [{ ...character, card: { name: 'bad' } }] });
     await expect(fetchCharacters()).rejects.toMatchObject({ code: 'tavern.invalid_response' });
@@ -71,11 +93,11 @@ describe('Tavern HTTP contract', () => {
     ], delimiter, false));
     vi.stubGlobal('fetch', fetchMock);
     const deltas: string[] = [];
-    const completed = await sendTurnStream('conversation-1', '来杯茶', 'stable-id', 'csrf', delta => deltas.push(delta));
+    const completed = await generateStream('conversation-1', 'stable-id', 7, { type: 'reply', message: '来杯茶' }, 'csrf', delta => deltas.push(delta));
     expect(deltas.join('')).toBe('茶 🌙');
     expect(completed.creditBalance).toBe(9.9998);
     expect(fetchMock.mock.calls[0]).toEqual(['/api/me/tavern/conversations/conversation-1/turns', expect.objectContaining({
-      method: 'POST', credentials: 'same-origin', headers: expect.objectContaining({ Accept: 'text/event-stream', 'X-CSRF-Token': 'csrf' }), body: JSON.stringify({ clientTurnId: 'stable-id', message: '来杯茶' }),
+      method: 'POST', credentials: 'same-origin', headers: expect.objectContaining({ Accept: 'text/event-stream', 'X-CSRF-Token': 'csrf' }), body: JSON.stringify({ clientActionId: 'stable-id', expectedRevision: 7, action: { type: 'reply', message: '来杯茶' } }),
     })]);
   });
 
@@ -83,22 +105,22 @@ describe('Tavern HTTP contract', () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(sseResponse([{ event: 'delta', payload: { delta: 'partial' } }]))
       .mockResolvedValueOnce(sseResponse([{ event: 'completed', payload: completion }]));
     vi.stubGlobal('fetch', fetchMock);
-    await expect(sendTurnStream('conversation-1', '来杯茶', 'client-turn-1', 'csrf', () => {})).rejects.toMatchObject({ code: 'tavern.stream_interrupted' });
-    await sendTurnStream('conversation-1', '来杯茶', 'client-turn-1', 'csrf', () => {});
-    expect(fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body).clientTurnId)).toEqual(['client-turn-1', 'client-turn-1']);
+    await expect(generateStream('conversation-1', 'client-turn-1', 0, { type: 'reply', message: '来杯茶' }, 'csrf', () => {})).rejects.toMatchObject({ code: 'tavern.stream_interrupted' });
+    await generateStream('conversation-1', 'client-turn-1', 0, { type: 'reply', message: '来杯茶' }, 'csrf', () => {});
+    expect(fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body).clientActionId)).toEqual(['client-turn-1', 'client-turn-1']);
   });
 
   it('does not count HTTP 200 or a delta as success and surfaces SSE error metadata', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse([{ event: 'error', payload: { code: 'tavern.turn_conflict', message: '会话忙碌', httpStatus: 409, traceId: 'trace-2' } }])));
-    await expect(sendTurnStream('conversation-1', '你好', 'stable', 'csrf', () => {})).rejects.toMatchObject({ status: 409, code: 'tavern.turn_conflict', traceId: 'trace-2' });
+    await expect(generateStream('conversation-1', 'stable', 0, { type: 'reply', message: '你好' }, 'csrf', () => {})).rejects.toMatchObject({ status: 409, code: 'tavern.turn_conflict', traceId: 'trace-2' });
   });
 
   it('rejects oversized UTF-8 messages, control characters, invalid IDs and missing CSRF before fetch', async () => {
     const fetchMock = reply({});
     for (const message of ['', '中'.repeat(2731), 'x'.repeat(8001), 'bad\u0000']) {
-      await expect(sendTurnStream('conversation-1', message, 'stable', 'csrf', () => {})).rejects.toMatchObject({ code: expect.stringMatching(/^tavern\./) });
+      await expect(generateStream('conversation-1', 'stable', 0, { type: 'reply', message }, 'csrf', () => {})).rejects.toMatchObject({ code: expect.stringMatching(/^tavern\./) });
     }
-    await expect(sendTurnStream('conversation-1', 'ok', '', 'csrf', () => {})).rejects.toMatchObject({ code: 'tavern.card_invalid' });
+    await expect(generateStream('conversation-1', '', 0, { type: 'reply', message: 'ok' }, 'csrf', () => {})).rejects.toMatchObject({ code: 'tavern.card_invalid' });
     await expect(deleteCharacter('character-1', '')).rejects.toMatchObject({ code: 'identity.csrf_missing' });
     expect(fetchMock).not.toHaveBeenCalled();
   });

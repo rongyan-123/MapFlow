@@ -10,9 +10,10 @@ import MobileDrawer from '../navigation/MobileDrawer';
 import ThemeSwitcher from '../theme/ThemeSwitcher';
 import CardImportDialog from './CardImportDialog';
 import ConversationPane from './ConversationPane';
+import GenerationSettingsPanel from './GenerationSettingsPanel';
 import NewConversationForm from './NewConversationForm';
 import { deleteCharacter, fetchCharacters, fetchConversation, fetchConversations } from './tavernClient';
-import type { Character, CompletedTurn, Conversation, ConversationDetail } from './types';
+import type { Character, CompletedTurn, Conversation, ConversationDetail, ConversationGraph, GenerationSettingsState } from './types';
 import { CharacterAvatar, CompatibilityReport, ErrorNotice, buttonClass, inputClass, primaryClass } from './TavernUi';
 
 export default function TavernPage({ onNavigateConsole }: { onNavigateConsole: () => void }) {
@@ -59,7 +60,8 @@ function AuthenticatedTavernPage({ session, onNavigateConsole }: { session: Iden
     // Discard reads started before this commit so they cannot replace saved history.
     void queryClient.cancelQueries({ queryKey: detailKey, exact: true });
     queryClient.setQueryData<ConversationDetail>(detailKey, previous => previous ? { ...previous,
-      turns: [...previous.turns.filter(turn => turn.clientTurnId !== completed.turn.clientTurnId), completed.turn] } : previous);
+      turns: [...previous.turns.filter(turn => turn.clientTurnId !== completed.turn.clientTurnId), completed.turn],
+      graph: completed.graph } : previous);
     void queryClient.cancelQueries({ queryKey: creditKey, exact: true });
     queryClient.setQueryData<CreditSummary>(creditKey, previous => previous ? { ...previous, balance: completed.creditBalance } : previous);
     if (!credit.data) void credit.refetch();
@@ -73,6 +75,18 @@ function AuthenticatedTavernPage({ session, onNavigateConsole }: { session: Iden
     void queryClient.cancelQueries({ queryKey: conversationsKey, exact: true });
     queryClient.setQueryData<Conversation[]>(conversationsKey, previous => [created, ...(previous ?? []).filter(item => item.conversationId !== created.conversationId)]);
     selectConversation(created.conversationId);
+  }
+  function onGenerationSettingsUpdated(state: GenerationSettingsState) {
+    void queryClient.cancelQueries({ queryKey: detailKey, exact: true });
+    queryClient.setQueryData<ConversationDetail>(detailKey, previous => previous ? {
+      ...previous, conversation: { ...previous.conversation, ...state },
+    } : previous);
+    queryClient.setQueryData<Conversation[]>(conversationsKey, previous => previous?.map(item =>
+      item.conversationId === conversationId ? { ...item, ...state } : item));
+  }
+  function onGraphChanged(graph: ConversationGraph) {
+    void queryClient.cancelQueries({ queryKey: detailKey, exact: true });
+    queryClient.setQueryData<ConversationDetail>(detailKey, previous => previous ? { ...previous, graph } : previous);
   }
 
   const library = <div className="space-y-4">
@@ -105,8 +119,14 @@ function AuthenticatedTavernPage({ session, onNavigateConsole }: { session: Iden
       <dl className="space-y-3 text-sm"><div><dt className="text-slate-500">用户称呼</dt><dd className="break-words">{conversationQuery.data.conversation.userName}</dd></div>
         <div><dt className="text-slate-500">Persona</dt><dd className="whitespace-pre-wrap break-words">{conversationQuery.data.conversation.persona || '未设置'}</dd></div>
         <div><dt className="text-slate-500">学习词表</dt><dd>{conversationQuery.data.conversation.vocabulary?.length ? <ul className="mt-1 space-y-1">{conversationQuery.data.conversation.vocabulary.map((entry, index) => <li key={index} className="break-words">{entry.term}{entry.meaning ? ` — ${entry.meaning}` : ''}</li>)}</ul> : '未绑定 · 普通角色聊天'}</dd></div>
-      </dl><p className="text-xs leading-6 text-slate-500">角色、称呼、Persona、词表和开场白已保存为会话快照。如需改变设定，请创建新会话。</p>
+      </dl><p className="text-xs leading-6 text-slate-500">角色、称呼、Persona、词表和开场白已保存为会话快照。如需改变这些设定，请创建新会话。</p>
+      <GenerationSettingsPanel conversationId={conversationId} settings={conversationQuery.data.conversation.generationSettings}
+        version={conversationQuery.data.conversation.generationSettingsVersion} csrfToken={session.csrfToken}
+        onUpdated={onGenerationSettingsUpdated} onConflict={async () => { await conversationQuery.refetch(); }} />
     </section>}
+    {canCreate && selectedCharacter.sourceHash && <a className={`${buttonClass} inline-block`} href={`/api/me/tavern/characters/${encodeURIComponent(selectedCharacter.characterId)}/source`} download>
+      下载原始角色卡
+    </a>}
     <CompatibilityReport warnings={selectedCharacter.card.warnings} />
   </div> : <p className="text-sm text-slate-500">选择一个角色后查看详情。</p>;
 
@@ -134,7 +154,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole }: { session: Iden
           <button type="button" className={primaryClass} disabled={!canCreate} onClick={() => setCreateOpen(true)}>新建会话</button>
         </div>
         {conversations.error && <div className="p-4"><ErrorNotice error={conversations.error} onRetry={() => void conversations.refetch()} /></div>}
-        {conversationId ? conversationQuery.data ? <ConversationPane key={`${accountId}.${conversationId}`} detail={conversationQuery.data} accountId={accountId} csrfToken={session.csrfToken} onCompleted={onCompleted} />
+        {conversationId ? conversationQuery.data ? <ConversationPane key={`${accountId}.${conversationId}`} detail={conversationQuery.data} accountId={accountId} csrfToken={session.csrfToken} onCompleted={onCompleted} onGraphChanged={onGraphChanged} />
           : <div className="p-6">{conversationQuery.isPending ? <p role="status" className="text-sm text-slate-400">正在恢复会话与历史…</p> : <ErrorNotice error={conversationQuery.error} onRetry={() => void conversationQuery.refetch()} />}</div>
           : <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto p-8 text-center">
             <CharacterAvatar character={selectedCharacter} large /><h2 className="text-xl font-bold">{selectedCharacter ? `与${selectedCharacter.card.name}相遇` : '你的故事，从这里开始'}</h2>

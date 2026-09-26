@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IdentityProvider } from '../identity/IdentityContext';
 import TavernPage from './TavernPage';
 import { character, completion, conversation, detail, sseResponse, turn } from './testFixtures';
-import type { Character, Conversation, ConversationDetail } from './types';
+import type { Character, Conversation, ConversationDetail, GenerationAction } from './types';
 
 vi.mock('../identity/identityClient', async importOriginal => ({
   ...await importOriginal<typeof import('../identity/identityClient')>(),
@@ -16,7 +16,7 @@ vi.mock('../identity/identityClient', async importOriginal => ({
 let characters: Character[];
 let conversations: Conversation[];
 let savedDetail: ConversationDetail;
-let attempts: { clientTurnId: string; message: string }[];
+  let attempts: { clientActionId: string; expectedRevision: number; action: GenerationAction }[];
 let failFirstTurn: boolean;
 let fetchMock: ReturnType<typeof vi.fn>;
 const json = (body: unknown) => new Response(JSON.stringify(body));
@@ -41,16 +41,91 @@ beforeEach(() => {
       const input = JSON.parse(init.body as string);
       const created = { ...conversation, userName: input.userName, persona: input.persona ?? '', vocabulary: input.vocabulary ?? null,
         openingMessage: input.greetingIndex === 1 ? `夜深了，${input.userName}。` : `你好，${input.userName}！` };
-      conversations = [created]; savedDetail = { character, conversation: created, turns: [] }; return json(created);
+      const opening = { messageId: 'message-opening-created', parentMessageId: null, role: 'assistant' as const,
+        origin: 'opening' as const, characterId: character.characterId, content: created.openingMessage };
+      const graph = { revision: 0, activeBranchId: 'branch-main-created', activePath: [opening.messageId], messages: [opening],
+        branches: [{ branchId: 'branch-main-created', name: 'Main', kind: 'main' as const, leafMessageId: opening.messageId }] };
+      conversations = [created]; savedDetail = { character, conversation: created, turns: [], generations: [], graph }; return json(created);
     }
     if (url === '/api/me/tavern/conversations') return json({ conversations });
+    if (url === '/api/me/tavern/conversations/conversation-1/settings' && init?.method === 'PATCH') {
+      const { expectedSettingsVersion, settings: generationSettings } = JSON.parse(init.body as string);
+      if (expectedSettingsVersion !== savedDetail.conversation.generationSettingsVersion) {
+        return new Response(JSON.stringify({ error: { code: 'tavern.turn_conflict', message: '设置已变化，请刷新后重试。' } }), { status: 409 });
+      }
+      savedDetail = { ...savedDetail, conversation: { ...savedDetail.conversation, generationSettings,
+        generationSettingsVersion: savedDetail.conversation.generationSettingsVersion + 1 } };
+      return json({ generationSettings, generationSettingsVersion: savedDetail.conversation.generationSettingsVersion });
+    }
+    if (url === '/api/me/tavern/conversations/conversation-1/actions' && init?.method === 'POST') {
+      const input = JSON.parse(init.body as string);
+      if (input.expectedRevision !== savedDetail.graph.revision) return json({});
+      const nextRevision = savedDetail.graph.revision + 1;
+      let graph = savedDetail.graph;
+      if (input.action.type === 'edit') {
+        const original = graph.messages.find(message => message.messageId === input.action.messageId)!;
+        const replacement = { ...original, messageId: `edited-${nextRevision}`, origin: 'edit' as const,
+          content: input.action.replacementContent };
+        const position = graph.activePath.indexOf(original.messageId);
+        graph = { ...graph, activePath: [...graph.activePath.slice(0, position), replacement.messageId],
+          messages: [...graph.messages, replacement], branches: graph.branches.map(branch => branch.branchId === graph.activeBranchId
+            ? { ...branch, leafMessageId: replacement.messageId } : branch) };
+      } else if (input.action.type === 'select_alternative') {
+        graph = setActiveLeaf(graph, input.action.assistantMessageId);
+      } else if (input.action.type === 'create_branch' || input.action.type === 'create_checkpoint') {
+        const kind = input.action.type === 'create_checkpoint' ? 'checkpoint' as const : 'branch' as const;
+        const branch = { branchId: `${kind}-${nextRevision}`, name: input.action.name, kind, leafMessageId: input.action.anchorMessageId };
+        graph = { ...graph, branches: [...graph.branches, branch] };
+        if (input.action.type === 'create_branch' && input.action.activate) graph = setActiveLeaf({ ...graph, activeBranchId: branch.branchId }, branch.leafMessageId);
+      } else if (input.action.type === 'select_branch') {
+        const branch = graph.branches.find(item => item.branchId === input.action.branchId)!;
+        graph = setActiveLeaf({ ...graph, activeBranchId: branch.branchId }, branch.leafMessageId);
+      }
+      graph = { ...graph, revision: nextRevision };
+      savedDetail = { ...savedDetail, graph }; return json(graph);
+    }
     if (url === '/api/me/tavern/conversations/conversation-1') return json(savedDetail);
     if (url === '/api/me/tavern/conversations/conversation-1/turns' && init?.method === 'POST') {
-      const input = JSON.parse(init.body as string); attempts.push(input);
+      const request = JSON.parse(init.body as string);
+      const input = { clientActionId: request.clientActionId as string,
+        expectedRevision: request.expectedRevision as number, action: request.action as GenerationAction };
+      attempts.push(input);
       if (failFirstTurn && attempts.length === 1) return sseResponse([{ event: 'delta', payload: { delta: '未完成草稿' } }]);
-      const savedTurn = { ...turn, turnId: `turn-${input.clientTurnId}`, clientTurnId: input.clientTurnId, userMessage: input.message, assistantMessage: '新回复 🌙' };
-      savedDetail = { ...savedDetail, turns: [...savedDetail.turns.filter(item => item.clientTurnId !== input.clientTurnId), savedTurn] };
-      return sseResponse([{ event: 'delta', payload: { delta: '新回复' } }, { event: 'completed', payload: { ...completion, turn: savedTurn } }]);
+      const action = input.action;
+      const target = action.type === 'reply' ? null : savedDetail.graph.messages.find(message => message.messageId === action.assistantMessageId)!;
+      const assistantText = action.type === 'reply' ? '新回复 🌙' : action.type === 'regenerate' ? '重新斟茶。' : '夜色更深。';
+      const userText = action.type === 'reply' ? action.message
+        : action.type === 'regenerate' ? savedDetail.graph.messages.find(message => message.messageId === target?.parentMessageId)?.content ?? ''
+          : '[继续]';
+      const savedTurn = { ...turn, turnId: `turn-${input.clientActionId}`, clientTurnId: input.clientActionId,
+        userMessage: userText, assistantMessage: assistantText };
+      let graph = savedDetail.graph;
+      if (action.type === 'reply') {
+        const previousLeaf = graph.activePath[graph.activePath.length - 1] ?? null;
+        const userMessage = { messageId: `message-user-${input.clientActionId}`, parentMessageId: previousLeaf,
+          role: 'user' as const, origin: 'user' as const, characterId: null, content: action.message };
+        const assistantMessage = { messageId: `message-assistant-${input.clientActionId}`, parentMessageId: userMessage.messageId,
+          role: 'assistant' as const, origin: 'model' as const, characterId: character.characterId, content: assistantText };
+        graph = { ...graph, activePath: [...graph.activePath, userMessage.messageId, assistantMessage.messageId],
+          messages: [...graph.messages, userMessage, assistantMessage], branches: graph.branches.map(branch => branch.branchId === graph.activeBranchId
+            ? { ...branch, leafMessageId: assistantMessage.messageId } : branch) };
+      } else {
+        const assistantMessage = { messageId: `message-assistant-${input.clientActionId}`,
+          parentMessageId: action.type === 'regenerate' ? target!.parentMessageId : target!.messageId,
+          role: 'assistant' as const, origin: action.type === 'continue' ? 'continue' as const : 'model' as const,
+          characterId: character.characterId, content: assistantText };
+        graph = setActiveLeaf({ ...graph, messages: [...graph.messages, assistantMessage] }, assistantMessage.messageId);
+      }
+      graph = { ...graph, revision: graph.revision + 1 };
+      const outputMessageId = graph.activePath[graph.activePath.length - 1];
+      const generation = { generationId: savedTurn.turnId, branchId: graph.activeBranchId, clientActionId: input.clientActionId,
+        intent: action.type, anchorMessageId: action.type === 'reply' ? graph.activePath[graph.activePath.length - 3] ?? null : action.assistantMessageId,
+        inputMessageId: action.type === 'continue' ? null : action.type === 'reply' ? graph.activePath[graph.activePath.length - 2] ?? null : target?.parentMessageId ?? null,
+        outputMessageId, promptFingerprint: 'b'.repeat(64), settingsSnapshot: conversation.generationSettings,
+        modelId: 'deepseek-v4-flash', usage: savedTurn.usage, chargedCreditUnits: savedTurn.chargedCreditUnits, createdAt: savedTurn.createdAt };
+      savedDetail = { ...savedDetail, turns: [...savedDetail.turns.filter(item => item.clientTurnId !== input.clientActionId), savedTurn],
+        generations: [...savedDetail.generations.filter(item => item.clientActionId !== input.clientActionId), generation], graph };
+      return sseResponse([{ event: 'delta', payload: { delta: assistantText } }, { event: 'completed', payload: { ...completion, turn: savedTurn, graph } }]);
     }
     throw new Error(`Unexpected endpoint: ${url}`);
   });
@@ -66,6 +141,15 @@ function renderPage() {
 function restoreConversation() {
   conversations = [conversation];
   window.localStorage.setItem('mapflow.tavern.selection.v1.player-1', conversation.conversationId);
+}
+
+function setActiveLeaf(graph: ConversationDetail['graph'], leafMessageId: string | null): ConversationDetail['graph'] {
+  const byId = new Map(graph.messages.map(message => [message.messageId, message]));
+  const reversed: string[] = [];
+  let current = leafMessageId;
+  while (current) { reversed.push(current); current = byId.get(current)?.parentMessageId ?? null; }
+  return { ...graph, activePath: reversed.reverse(), branches: graph.branches.map(branch => branch.branchId === graph.activeBranchId
+    ? { ...branch, leafMessageId } : branch) };
 }
 
 describe('Tavern page', () => {
@@ -93,6 +177,7 @@ describe('Tavern page', () => {
     await user.selectOptions(screen.getByLabelText('开场白'), '1');
     await user.click(screen.getByRole('button', { name: '开始对话' }));
     expect(await screen.findByText('夜深了，小明。')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '继续' })).toBeDisabled();
     const create = fetchMock.mock.calls.find(([url, init]) => url.endsWith('/conversations') && init?.method === 'POST')?.[1];
     expect(JSON.parse(create?.body as string)).toEqual({ characterId: 'character-1', userName: '小明', greetingIndex: 1 });
     expect(screen.queryByLabelText('用户称呼')).not.toBeInTheDocument();
@@ -146,8 +231,97 @@ describe('Tavern page', () => {
     const summary = await screen.findByRole('complementary', { name: '会话详情' });
     expect(within(summary).getByText('旅行者')).toBeInTheDocument();
     expect(within(summary).getByText(/tea/)).toBeInTheDocument();
-    expect(within(summary).queryByRole('textbox')).toBeNull();
+    expect(within(summary).queryByLabelText('Persona（可选）')).toBeNull();
+    expect(within(summary).queryByLabelText('学习词表（可选）')).toBeNull();
     expect(savedDetail.conversation.vocabulary).toEqual([{ term: 'tea', meaning: '茶' }, { term: 'quiet', meaning: '安静' }]);
+  });
+
+  it('edits real DSH generation parameters inside the existing conversation details panel', async () => {
+    restoreConversation(); const user = userEvent.setup(); renderPage();
+    const summary = await screen.findByRole('complementary', { name: '会话详情' });
+    await within(summary).findByText('旅人');
+    const temperature = within(summary).getByLabelText('温度');
+    await user.type(temperature, '0.7');
+    const maximum = within(summary).getByLabelText('最大输出 Token');
+    await user.clear(maximum); await user.type(maximum, '1024');
+    await user.type(within(summary).getByLabelText('停止词（每行一个）'), 'END');
+    await user.click(within(summary).getByRole('button', { name: '保存生成参数' }));
+    expect(await within(summary).findByText('参数已保存 · 版本 2')).toBeInTheDocument();
+    const update = fetchMock.mock.calls.find(([url, init]) => url.endsWith('/settings') && init?.method === 'PATCH')?.[1];
+    expect(JSON.parse(update?.body as string)).toEqual({ expectedSettingsVersion: 1,
+      settings: { temperature: 0.7, maxOutputTokens: 1024, stopSequences: ['END'] } });
+  });
+
+  it('reloads the latest settings after a stale tab receives a version conflict', async () => {
+    restoreConversation(); const user = userEvent.setup(); renderPage();
+    const summary = await screen.findByRole('complementary', { name: '会话详情' });
+    await within(summary).findByText('旅人');
+    savedDetail = { ...savedDetail, conversation: { ...savedDetail.conversation,
+      generationSettings: { temperature: 1.2, maxOutputTokens: 512, stopSequences: [] }, generationSettingsVersion: 2 } };
+    await user.click(within(summary).getByRole('button', { name: '保存生成参数' }));
+    expect(await within(summary).findByRole('alert')).toHaveTextContent('设置已变化');
+    await waitFor(() => expect(within(summary).getByLabelText('最大输出 Token')).toHaveValue(512));
+  });
+
+  it('offers an account-scoped original card download only when source bytes exist', async () => {
+    characters = [{ ...character, sourceHash: 'a'.repeat(64) }];
+    renderPage();
+    const summary = await screen.findByRole('complementary', { name: '会话详情' });
+    const link = await within(summary).findByRole('link', { name: '下载原始角色卡' });
+    expect(link).toHaveAttribute('href', '/api/me/tavern/characters/character-1/source');
+  });
+
+  it('edits the active message through the revisioned graph without deleting old history', async () => {
+    restoreConversation(); const user = userEvent.setup(); renderPage();
+    await screen.findByText('请用茶。');
+    await user.click(screen.getByRole('button', { name: '编辑当前消息' }));
+    const editor = screen.getByLabelText('编辑消息内容');
+    await user.clear(editor); await user.type(editor, '茶已经凉了。');
+    await user.click(screen.getByRole('button', { name: '保存编辑' }));
+    expect(await screen.findByText('茶已经凉了。')).toBeInTheDocument();
+    expect(screen.queryByText('请用茶。')).not.toBeInTheDocument();
+    expect(savedDetail.graph.messages.some(message => message.content === '请用茶。')).toBe(true);
+    const action = fetchMock.mock.calls.find(([url, init]) => url.endsWith('/actions') && init?.method === 'POST')?.[1];
+    expect(JSON.parse(action?.body as string)).toMatchObject({ expectedRevision: 1,
+      action: { type: 'edit', messageId: 'message-assistant-1', replacementContent: '茶已经凉了。' } });
+  });
+
+  it('uses the same revisioned graph endpoint for swipe, branches and checkpoints', async () => {
+    savedDetail.graph.messages.push({ ...savedDetail.graph.messages[2], messageId: 'message-assistant-2', content: '另一杯茶。' });
+    restoreConversation(); const user = userEvent.setup(); renderPage();
+    await screen.findByText('请用茶。');
+    await user.click(screen.getByRole('button', { name: '下一个回复' }));
+    expect(await screen.findByText('另一杯茶。')).toBeInTheDocument();
+    await user.click(screen.getByText('历史与分支'));
+    await user.type(screen.getByLabelText('分支或检查点名称'), '茶馆岔路');
+    await user.click(screen.getByRole('button', { name: '创建分支' }));
+    expect(await screen.findByRole('option', { name: '茶馆岔路' })).toBeInTheDocument();
+    await user.clear(screen.getByLabelText('分支或检查点名称'));
+    await user.type(screen.getByLabelText('分支或检查点名称'), '喝茶前');
+    await user.click(screen.getByRole('button', { name: '保存检查点' }));
+    expect(await screen.findByText('喝茶前')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '从喝茶前回档' }));
+    expect(await screen.findByRole('option', { name: '喝茶前 · 回档' })).toBeInTheDocument();
+    const actionCalls = fetchMock.mock.calls.filter(([url, init]) => url.endsWith('/actions') && init?.method === 'POST');
+    expect(actionCalls.map(([, init]) => JSON.parse(init?.body as string).action.type))
+      .toEqual(['select_alternative', 'create_branch', 'create_checkpoint', 'create_branch']);
+  });
+
+  it('creates a branch from a selected assistant ancestor instead of forcing the current leaf', async () => {
+    restoreConversation(); const user = userEvent.setup(); renderPage();
+    await screen.findByText('请用茶。');
+    await user.click(screen.getByText('历史与分支'));
+    await user.selectOptions(screen.getByLabelText('分支起点'), 'message-opening');
+    await user.type(screen.getByLabelText('分支或检查点名称'), '从开场分叉');
+    await user.click(screen.getByRole('button', { name: '创建分支' }));
+
+    const actionCalls = fetchMock.mock.calls.filter(([url, init]) => url.endsWith('/actions') && init?.method === 'POST');
+    expect(JSON.parse(actionCalls[actionCalls.length - 1]?.[1]?.body as string)).toMatchObject({
+      expectedRevision: 1,
+      action: { type: 'create_branch', anchorMessageId: 'message-opening', name: '从开场分叉', activate: true },
+    });
+    expect(await screen.findByText('你好，小明！')).toBeInTheDocument();
+    expect(screen.queryByText('请用茶。')).not.toBeInTheDocument();
   });
 
   it('retains a newly created conversation when a previous list read resolves late', async () => {
@@ -176,6 +350,71 @@ describe('Tavern page', () => {
     expect(attempts).toHaveLength(0);
   });
 
+  it('regenerates and continues through the same generation stream', async () => {
+    restoreConversation(); const user = userEvent.setup(); renderPage();
+    const log = await screen.findByRole('log', { name: '对话消息' });
+    await within(log).findByText('请用茶。');
+    await user.click(screen.getByRole('button', { name: '重新生成' }));
+    expect(await screen.findByText('重新斟茶。')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '继续' }));
+    await waitFor(() => expect(attempts).toHaveLength(2));
+    const articles = within(log).getAllByRole('article');
+    expect(articles).toHaveLength(3);
+    expect(articles[2]).toHaveTextContent('重新斟茶。 夜色更深。');
+    expect(attempts.map(attempt => attempt.action.type)).toEqual(['regenerate', 'continue']);
+    expect(attempts.map(attempt => attempt.expectedRevision)).toEqual([1, 2]);
+    expect(screen.getByRole('button', { name: '重新生成' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '编辑当前消息' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '继续' })).toBeEnabled();
+    const generationUrls = fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')
+      .map(([url]) => url).filter(url => url.endsWith('/turns'));
+    expect(generationUrls).toEqual([
+      '/api/me/tavern/conversations/conversation-1/turns',
+      '/api/me/tavern/conversations/conversation-1/turns',
+    ]);
+  });
+
+  it('orders swipe candidates by generation history instead of graph UUID order', async () => {
+    restoreConversation();
+    const original = savedDetail.graph.messages.find(item => item.messageId === 'message-assistant-1')!;
+    const alternative = { ...original, messageId: '00000000-newer-alternative', content: '较新的回复。' };
+    savedDetail = {
+      ...savedDetail,
+      generations: [...savedDetail.generations, {
+        ...savedDetail.generations[0], generationId: 'turn-2', clientActionId: 'regenerate-2',
+        intent: 'regenerate', outputMessageId: alternative.messageId, createdAt: '2026-09-22T00:02:00Z',
+      }],
+      graph: {
+        ...savedDetail.graph,
+        revision: 2,
+        activePath: ['message-opening', 'message-user-1', alternative.messageId],
+        messages: [alternative, ...savedDetail.graph.messages],
+        branches: savedDetail.graph.branches.map(branch => ({ ...branch, leafMessageId: alternative.messageId })),
+      },
+    };
+
+    renderPage();
+
+    expect(await screen.findByText('较新的回复。')).toBeInTheDocument();
+    expect(screen.getByText('2 / 2')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '上一个回复' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '下一个回复' })).toBeDisabled();
+  });
+
+  it('can discard an interrupted regenerate instead of trapping the conversation in retry mode', async () => {
+    restoreConversation(); failFirstTurn = true; const user = userEvent.setup(); renderPage();
+    await screen.findByText('请用茶。');
+    await user.click(screen.getByRole('button', { name: '重新生成' }));
+    expect(await screen.findByRole('button', { name: '重试这条消息' })).toBeInTheDocument();
+    expect(screen.getByLabelText('消息')).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: '取消本次重试' }));
+
+    expect(screen.queryByRole('button', { name: '重试这条消息' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('消息')).toBeEnabled();
+    expect(window.sessionStorage.getItem('mapflow.tavern.pending.v1.player-1.conversation-1')).toBeNull();
+  });
+
   it('keeps a stable clientTurnId across a failed stream and retry, replaces the draft and refreshes balance', async () => {
     restoreConversation(); failFirstTurn = true; const user = userEvent.setup(); const { client } = renderPage();
     await user.type(await screen.findByLabelText('消息'), '新的问题');
@@ -199,7 +438,18 @@ describe('Tavern page', () => {
     first.unmount(); renderPage();
     await user.click(await screen.findByRole('button', { name: '重试这条消息' }));
     expect(await screen.findByText('新回复 🌙')).toBeInTheDocument();
-    expect(attempts[1].clientTurnId).toBe(attempts[0].clientTurnId);
+    expect(attempts[1].clientActionId).toBe(attempts[0].clientActionId);
+  });
+
+  it('uses generation audit records rather than compatibility turns to clear recovered pending actions', async () => {
+    restoreConversation(); savedDetail = { ...savedDetail, turns: [] };
+    window.sessionStorage.setItem('mapflow.tavern.pending.v1.player-1.conversation-1', JSON.stringify({
+      clientActionId: 'client-turn-1', action: { type: 'reply', message: '来杯茶' },
+    }));
+    renderPage();
+    await screen.findByText('请用茶。');
+    expect(screen.queryByRole('button', { name: '重试这条消息' })).not.toBeInTheDocument();
+    expect(window.sessionStorage.getItem('mapflow.tavern.pending.v1.player-1.conversation-1')).toBeNull();
   });
 
   it('keeps a committed reply when an older background history read arrives after completed', async () => {
