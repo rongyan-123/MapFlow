@@ -250,8 +250,12 @@ describe('Tavern page', () => {
     expect(formatHint).toHaveTextContent('不要选 Download for Rin Chat');
     const communityLinks = within(dialog).getAllByRole('link').filter(link => link.closest('section')?.querySelector('h3')?.textContent === '从社区找角色卡');
     expect(communityLinks.map(link => link.textContent?.trim())).toEqual([
+      'B 站 · 酒馆角色卡 ↗', '抖音 · 酒馆角色卡 ↗', 'SillyTavern 吧 ↗',
       'Chub ↗', 'AI Character Cards ↗', 'RisuRealm ↗',
     ]);
+    expect(within(dialog).getByRole('link', { name: /B 站 · 酒馆角色卡/ })).toHaveAttribute('href', 'https://search.bilibili.com/all?keyword=%E9%85%92%E9%A6%86%E8%A7%92%E8%89%B2%E5%8D%A1');
+    expect(within(dialog).getByRole('link', { name: /抖音 · 酒馆角色卡/ })).toHaveAttribute('href', 'https://www.douyin.com/search/%E9%85%92%E9%A6%86%E8%A7%92%E8%89%B2%E5%8D%A1');
+    expect(within(dialog).getByRole('link', { name: /SillyTavern 吧/ })).toHaveAttribute('href', 'https://tieba.baidu.com/f?kw=sillytavern');
     expect(within(dialog).getByRole('link', { name: /Chub/ })).toHaveAttribute('href', 'https://chub.ai/');
     expect(within(dialog).getByRole('link', { name: /AI Character Cards/ })).toHaveAttribute('href', 'https://aicharactercards.com/');
     expect(within(dialog).getByRole('link', { name: /RisuRealm/ })).toHaveAttribute('href', 'https://realm.risuai.net/');
