@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
+import AssistantMarkdown from '../knowledge-chat/AssistantMarkdown';
 import { validateId, validateMessage } from './conversationInput';
 import { generateStream, mutateGraph } from './tavernClient';
 import { TavernApiError, type CompletedTurn, type ConversationDetail, type ConversationGraph, type GenerationAction, type GenerationRecord, type GraphMessage, type GraphMutation, type TavernModelSelection, type TavernUserModelAccess } from './types';
 import { isRecord, utf8Bytes } from './validation';
-import { ErrorNotice, buttonClass, inputClass, primaryClass } from './TavernUi';
+import { CharacterAvatar, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass, type TavernDialogSection } from './TavernUi';
+import type { Character } from './types';
 
 interface PendingGeneration { clientActionId: string; expectedRevision: number; action: GenerationAction;
   modelBinding?: { model: string; baseUrl: string; historyBytes: 8192 | 16384 | 32768 } }
 
-export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, onCompleted, onGraphChanged }: {
+export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, onCompleted, onGraphChanged, configurationOpen, onCloseConfiguration, configuration }: {
   detail: ConversationDetail; accountId: string; csrfToken: string;
   modelSelection: TavernModelSelection;
   onCompleted: (completed: CompletedTurn) => void; onGraphChanged: (graph: ConversationGraph) => void;
+  configurationOpen: boolean; onCloseConfiguration: () => void; configuration: TavernDialogSection[];
 }) {
   const storageKey = `mapflow.tavern.pending.v1.${accountId}.${detail.conversation.conversationId}`;
   const [pendingGeneration, setPendingGeneration] = useState<PendingGeneration | null>(() => {
@@ -44,7 +47,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   }, [busy, detail.generations, pendingGeneration, storageKey]);
 
   async function runGeneration(action: GenerationAction, retry?: PendingGeneration) {
-    if (activeRequest.current || (pendingGeneration && !retry)) return;
+    if (activeRequest.current || graphBusy || editing || (pendingGeneration && !retry)) return;
     let outgoing: PendingGeneration;
     let modelAccess: TavernUserModelAccess | undefined;
     try {
@@ -124,23 +127,35 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   }
 
   return <div className="flex min-h-0 flex-1 flex-col">
-    <div ref={pane} role="log" aria-label="对话消息" aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6" onScroll={() => {
+    <div ref={pane} role="log" aria-label="对话消息" aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-8" onScroll={() => {
       const container = pane.current;
       if (container) followLatest.current = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
     }}>
       {displayMessages.map(activeMessage => <Message key={activeMessage.messageId}
         author={activeMessage.role === 'user' ? detail.conversation.userName : activeMessage.role === 'system' ? '系统' : detail.character.card.name}
+        character={activeMessage.role === 'assistant' ? detail.character : undefined}
         text={activeMessage.content} user={activeMessage.role === 'user'} />)}
+      {activeLeaf && activeLeaf.origin !== 'opening' && <div aria-label="回复操作" className="mx-auto mb-6 flex max-w-3xl flex-wrap items-center gap-1 pl-14 text-xs text-slate-500">
+        <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={!canReviseAssistant || busy || graphBusy || pendingGeneration !== null || editing}
+          onClick={() => { if (canReviseAssistant) { setEditContent(activeLeaf.content); setEditing(true); setError(null); } }}>编辑当前消息</button>
+        <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={!canReviseAssistant || busy || graphBusy || pendingGeneration !== null || editing}
+          onClick={() => { if (canReviseAssistant) void runGeneration({ type: 'regenerate', assistantMessageId: activeLeaf.messageId }); }}>重新生成</button>
+        <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={!canContinueAssistant || busy || graphBusy || pendingGeneration !== null || editing}
+          onClick={() => { if (canContinueAssistant) void runGeneration({ type: 'continue', assistantMessageId: activeLeaf.messageId }); }}>继续</button>
+      </div>}
       {pendingGeneration && <div className="space-y-5">
         {pendingReply && <Message author={detail.conversation.userName} text={pendingReply.message} user />}
-        {draft && <Message author={detail.character.card.name} text={draft} />}
+        {draft && <Message author={detail.character.card.name} character={detail.character} text={draft} />}
         <p role="status" className="text-xs text-cyan-300">{busy ? '正在生成，完成后保存…' : '这条消息尚未确认完成，请重试以核对结果。'}</p>
       </div>}
       {!activeMessages.length && !pendingGeneration && <p className="py-12 text-center text-sm text-slate-400">故事从你的第一句话开始。</p>}
       <div ref={bottom} />
     </div>
-    <div className="shrink-0 space-y-3 border-t border-slate-800 bg-slate-950 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div className="mx-auto w-full max-w-4xl shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-8">
       <ErrorNotice error={error} />
+      {error instanceof TavernApiError && error.code === 'tavern.runtime_unavailable' && <p className="text-xs leading-5 text-slate-400">
+        模型连接暂不可用。请稍后重试，或取消本次重试返回编辑；不会使用模拟回复替代模型。
+      </p>}
       {alternatives.length > 1 && <div className="flex items-center justify-center gap-2 text-xs text-slate-400">
         <button type="button" className={buttonClass} disabled={graphBusy || activeAlternativeIndex <= 0}
           onClick={() => void applyGraphMutation({ type: 'select_alternative', assistantMessageId: alternatives[activeAlternativeIndex - 1].messageId })}>上一个回复</button>
@@ -148,8 +163,9 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         <button type="button" className={buttonClass} disabled={graphBusy || activeAlternativeIndex < 0 || activeAlternativeIndex >= alternatives.length - 1}
           onClick={() => void applyGraphMutation({ type: 'select_alternative', assistantMessageId: alternatives[activeAlternativeIndex + 1].messageId })}>下一个回复</button>
       </div>}
-      <details className="rounded-xl border border-slate-800 p-3">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-300">历史与分支</summary>
+      {configurationOpen && <TavernDialog title="配置" onClose={onCloseConfiguration} sections={[...configuration, {
+        id: 'branches', label: '历史与分支', content: <section>
+        <h3 className="text-sm font-semibold text-slate-300">历史与分支</h3>
         <div className="mt-3 space-y-3">
           <label className="block text-xs text-slate-400">当前分支
             <select aria-label="当前分支" className={`${inputClass} mt-1`} value={detail.graph.activeBranchId} disabled={graphBusy}
@@ -187,7 +203,8 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
             </li>)}</ul>
           </div>}
         </div>
-      </details>
+        </section>,
+      }]} />}
       {editing && activeLeaf && <div className="space-y-2 rounded-2xl border border-slate-700 bg-slate-900 p-3">
         <label htmlFor={`tavern-edit-${activeLeaf.messageId}`} className="text-xs font-semibold text-slate-300">编辑消息内容</label>
         <textarea id={`tavern-edit-${activeLeaf.messageId}`} aria-label="编辑消息内容" className={`${inputClass} max-h-48 resize-y`} rows={3}
@@ -203,36 +220,32 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
           setMessage(pendingReply.message); setPendingGeneration(null); setDraft(''); setError(null); storePending(storageKey, null);
         }}>编辑消息</button>}
         <button type="button" className={buttonClass} onClick={() => {
+          if (pendingReply) setMessage(pendingReply.message);
           setPendingGeneration(null); setDraft(''); setError(null); storePending(storageKey, null);
         }}>取消本次重试</button>
       </div>}
-      <form onSubmit={event => { event.preventDefault(); void runGeneration({ type: 'reply', message }); }} className="space-y-2">
+      <form onSubmit={event => { event.preventDefault(); void runGeneration({ type: 'reply', message }); }} className="rounded-2xl border border-slate-700 bg-slate-900 p-2 shadow-lg transition focus-within:border-cyan-500/70">
         <label htmlFor={`tavern-message-${detail.conversation.conversationId}`} className="sr-only">消息</label>
-        <textarea id={`tavern-message-${detail.conversation.conversationId}`} className={`${inputClass} max-h-48 resize-y`} rows={3} placeholder="写下你的行动或对白…" value={message} disabled={busy || pendingGeneration !== null}
+        <textarea id={`tavern-message-${detail.conversation.conversationId}`} className="max-h-48 min-h-16 w-full resize-y border-0 bg-transparent px-3 py-2 text-sm leading-6 text-slate-100 outline-none placeholder:text-slate-500 disabled:opacity-50" rows={2} placeholder="写下你的行动或对白…" value={message} disabled={busy || graphBusy || pendingGeneration !== null || editing}
           onChange={event => setMessage(event.target.value)} onKeyDown={event => {
-            if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing) { event.preventDefault(); void runGeneration({ type: 'reply', message }); }
+            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
+              event.preventDefault(); if (message.trim() && !inputTooLarge) void runGeneration({ type: 'reply', message });
+            }
           }} />
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <button type="button" className={buttonClass} disabled={!canReviseAssistant || busy || graphBusy || pendingGeneration !== null || editing}
-              onClick={() => { if (canReviseAssistant && activeLeaf) { setEditContent(activeLeaf.content); setEditing(true); setError(null); } }}>编辑当前消息</button>
-            <button type="button" className={buttonClass} disabled={!canReviseAssistant || busy || graphBusy || pendingGeneration !== null || editing}
-              onClick={() => { if (canReviseAssistant && activeLeaf) void runGeneration({ type: 'regenerate', assistantMessageId: activeLeaf.messageId }); }}>重新生成</button>
-            <button type="button" className={buttonClass} disabled={!canContinueAssistant || busy || graphBusy || pendingGeneration !== null || editing}
-              onClick={() => { if (canContinueAssistant && activeLeaf) void runGeneration({ type: 'continue', assistantMessageId: activeLeaf.messageId }); }}>继续</button>
-            <p className={`truncate text-xs ${inputTooLarge ? 'text-rose-300' : 'text-slate-500'}`}>{utf8Bytes(message)} / 8,192 字节 · Ctrl / ⌘ + Enter 发送</p>
-          </div>
-          <button type="submit" className={primaryClass} disabled={busy || graphBusy || pendingGeneration !== null || !message.trim() || inputTooLarge}>{busy ? '生成中…' : '发送'}</button>
+        <div className="flex items-center justify-between gap-2 px-2 pb-1">
+          <p className={`text-[11px] ${inputTooLarge ? 'text-rose-300' : 'text-slate-500'}`}><span className="hidden sm:inline">Enter 发送 · Shift+Enter 换行</span>{inputTooLarge && '消息过长（上限 8,192 字节）'}</p>
+          <button type="submit" className={primaryClass} disabled={busy || graphBusy || editing || pendingGeneration !== null || !message.trim() || inputTooLarge}>{busy ? '生成中…' : '发送'}</button>
         </div>
       </form>
     </div>
   </div>;
 }
 
-function Message({ author, text, user = false }: { author: string; text: string; user?: boolean }) {
-  return <article className={`max-w-[92%] ${user ? 'ml-auto' : 'mr-auto'}`}>
-    <h3 className={`mb-1 text-xs font-semibold text-slate-400 ${user ? 'text-right' : ''}`}>{author}</h3>
-    <p className={`whitespace-pre-wrap break-words rounded-2xl border p-4 text-sm leading-7 text-slate-100 ${user ? 'border-cyan-800 bg-slate-800' : 'border-slate-800 bg-slate-900'}`}>{text}</p>
+function Message({ author, text, user = false, character }: { author: string; text: string; user?: boolean; character?: Character }) {
+  return <article className={`mx-auto mb-6 flex max-w-3xl gap-3 rounded-2xl p-3 sm:gap-4 sm:p-4 ${user ? 'bg-slate-800/40' : ''}`}>
+    <CharacterAvatar character={character} name={author} />
+    <div className="min-w-0 flex-1"><h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-200">{author}<span className="text-[10px] font-normal tracking-wider text-slate-500">{user ? '你' : '角色'}</span></h3>
+    <div className="text-[15px] leading-7 text-slate-200 [overflow-wrap:anywhere] [&_em]:text-slate-400 [&_p+p]:mt-3"><AssistantMarkdown content={text} /></div></div>
   </article>;
 }
 function mergeContinuationMessages(messages: GraphMessage[]): GraphMessage[] {
@@ -287,7 +300,6 @@ function readPending(key: string, currentRevision: number): PendingGeneration | 
     return null;
   } catch { return null; }
 }
-
 function selectedUserAccess(selection: TavernModelSelection): TavernUserModelAccess | undefined {
   if (selection.provider === 'platform') return undefined;
   const apiKey = selection.apiKey.trim();

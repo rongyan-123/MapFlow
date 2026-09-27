@@ -18,13 +18,14 @@ let conversations: Conversation[];
 let savedDetail: ConversationDetail;
   let attempts: { clientActionId: string; expectedRevision: number; action: GenerationAction }[];
 let failFirstTurn: boolean;
+let modelUnavailable: boolean;
 let fetchMock: ReturnType<typeof vi.fn>;
 const json = (body: unknown) => new Response(JSON.stringify(body));
 
 beforeEach(() => {
   window.localStorage.clear(); window.sessionStorage.clear();
   characters = [structuredClone(character)]; conversations = []; savedDetail = structuredClone(detail);
-  attempts = []; failFirstTurn = false;
+  attempts = []; failFirstTurn = false; modelUnavailable = false;
   fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === '/api/credit/me') return json({ balance: 10, signedInToday: true, freeRemaining: 0, pricePerTree: 1 });
     if (url === '/api/model-catalog/byok') return json([{ id: 'gemini-3.8-flash', provider: 'AnyAI',
@@ -51,6 +52,13 @@ beforeEach(() => {
       conversations = [created]; savedDetail = { character, conversation: created, turns: [], generations: [], graph }; return json(created);
     }
     if (url === '/api/me/tavern/conversations') return json({ conversations });
+    if (url === '/api/me/tavern/conversations/conversation-1/profile' && init?.method === 'PATCH') {
+      const { expectedRevision, userName, persona, vocabulary } = JSON.parse(init.body as string);
+      if (expectedRevision !== savedDetail.graph.revision) return new Response(JSON.stringify({ error: { code: 'tavern.turn_conflict', message: '会话已变化' } }), { status: 409 });
+      savedDetail = { ...savedDetail, conversation: { ...savedDetail.conversation, userName, persona, vocabulary: vocabulary ?? null },
+        graph: { ...savedDetail.graph, revision: expectedRevision + 1 } };
+      return json(savedDetail);
+    }
     if (url === '/api/me/tavern/conversations/conversation-1/settings' && init?.method === 'PATCH') {
       const { expectedSettingsVersion, settings: generationSettings } = JSON.parse(init.body as string);
       if (expectedSettingsVersion !== savedDetail.conversation.generationSettingsVersion) {
@@ -93,6 +101,7 @@ beforeEach(() => {
       const input = { clientActionId: request.clientActionId as string,
         expectedRevision: request.expectedRevision as number, action: request.action as GenerationAction };
       attempts.push(input);
+      if (modelUnavailable) return sseResponse([{ event: 'error', payload: { code: 'tavern.runtime_unavailable', message: '酒馆模型暂时不可用，请稍后重试。' } }]);
       if (failFirstTurn && attempts.length === 1) return sseResponse([{ event: 'delta', payload: { delta: '未完成草稿' } }]);
       const action = input.action;
       const target = action.type === 'reply' ? null : savedDetail.graph.messages.find(message => message.messageId === action.assistantMessageId)!;
@@ -156,6 +165,57 @@ function setActiveLeaf(graph: ConversationDetail['graph'], leafMessageId: string
 }
 
 describe('Tavern page', () => {
+  it('opens a character with defaults in one click and does not create again on repeated clicks', async () => {
+    const user = userEvent.setup(); renderPage();
+    await user.dblClick(await screen.findByRole('button', { name: '选择角色 旅人' }));
+    expect(await screen.findByText('你好，小明！')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '选择角色 旅人' }));
+    expect(screen.getByText('你好，小明！')).toBeInTheDocument();
+    const creates = fetchMock.mock.calls.filter(([url, init]) => url.endsWith('/conversations') && init?.method === 'POST');
+    expect(creates).toHaveLength(1);
+    expect(JSON.parse(creates[0][1]!.body as string)).toEqual({ characterId: 'character-1', userName: '小明', greetingIndex: 0 });
+    expect(screen.queryByRole('button', { name: '新建会话' })).not.toBeInTheDocument();
+  });
+
+  it('restores an existing character conversation without clearing history or creating another', async () => {
+    conversations = [conversation];
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '选择角色 旅人' }));
+    expect(await screen.findByText('请用茶。')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '选择角色 旅人' }));
+    expect(screen.getByText('请用茶。')).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
+  it('sends with Enter but preserves Shift+Enter and IME composition', async () => {
+    restoreConversation(); const user = userEvent.setup(); renderPage();
+    const input = await screen.findByLabelText('消息');
+    await user.type(input, '你好');
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
+    expect(attempts).toHaveLength(0);
+    await user.keyboard('{Shift>}{Enter}{/Shift}世界');
+    expect(input).toHaveValue('你好\n世界');
+    await user.keyboard('{Enter}');
+    expect(await screen.findByText('新回复 🌙')).toBeInTheDocument();
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0].action).toEqual({ type: 'reply', message: '你好\n世界' });
+  });
+
+  it('renders roleplay Markdown safely and keeps history controls inside configuration', async () => {
+    restoreConversation();
+    savedDetail.graph.messages[2].content = '*轻轻放下茶杯*\n\n**欢迎**\n下一行\n\n<img src=x onerror=alert(1)>';
+    const user = userEvent.setup(); renderPage();
+    const log = await screen.findByRole('log');
+    await within(log).findByText('轻轻放下茶杯');
+    expect(log.querySelector('em')).toHaveTextContent('轻轻放下茶杯');
+    expect(log.querySelector('strong')).toHaveTextContent('欢迎');
+    expect(log.querySelector('img[src="x"]')).toBeNull();
+    expect(screen.queryByLabelText('当前分支')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    expect(await screen.findByLabelText('当前分支')).toBeInTheDocument();
+  });
+
   it('previews imports locally, renders card markup as text, reports ignored scripts and uploads the original only after confirmation', async () => {
     const user = userEvent.setup(); renderPage();
     await user.click(await screen.findByRole('button', { name: '导入角色卡' }));
@@ -173,16 +233,68 @@ describe('Tavern page', () => {
     expect((upload?.body as FormData).get('source_file')).toBe(file);
   });
 
-  it('creates ordinary conversations with optional persona/vocabulary omitted and an alternate greeting', async () => {
+  it('groups community discovery and the official catalog inside one import entry', async () => {
+    const officialIndex = 'https://raw.githubusercontent.com/SillyTavern/SillyTavern-Content/main/index.json';
+    const originalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => url === officialIndex
+      ? json([{ type: 'character', id: 'default_Example.png', name: 'Example', description: 'A sample role',
+        url: 'https://raw.githubusercontent.com/SillyTavern/SillyTavern-Content/main/assets/character/default_Example.png', highlight: true }])
+      : originalFetch(url, init));
     const user = userEvent.setup(); renderPage();
-    await user.click(await screen.findByRole('button', { name: '新建会话' }));
-    expect(screen.getByLabelText('用户称呼')).toHaveValue('小明');
-    await user.selectOptions(screen.getByLabelText('开场白'), '1');
-    await user.click(screen.getByRole('button', { name: '开始对话' }));
-    expect(await screen.findByText('夜深了，小明。')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '继续' })).toBeDisabled();
+    await user.click(await screen.findByRole('button', { name: '导入角色卡' }));
+    const dialog = await screen.findByRole('dialog', { name: '导入角色卡' });
+    expect(screen.queryByRole('button', { name: '浏览酒馆精选卡' })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: '从社区找角色卡' })).toBeInTheDocument();
+    const formatHint = within(dialog).getByRole('note', { name: '下载格式提醒' });
+    expect(formatHint).toHaveTextContent('Download for SillyTavern');
+    expect(formatHint).toHaveTextContent('不要选 Download for Rin Chat');
+    expect(within(dialog).getByRole('link', { name: /Chub/ })).toHaveAttribute('href', 'https://chub.ai/');
+    expect(within(dialog).getByRole('link', { name: /AI Character Cards/ })).toHaveAttribute('href', 'https://aicharactercards.com/');
+    expect(within(dialog).getByRole('link', { name: /RisuRealm/ })).toHaveAttribute('href', 'https://realm.risuai.net/');
+    await user.click(within(dialog).getByRole('button', { name: '酒馆官方精选' }));
+    expect(await within(dialog).findByText('Example')).toBeInTheDocument();
+    expect(within(dialog).getByText('A sample role')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '下载并预览 Example' })).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
+  it('previews a dropped card through the local import path and uploads only after confirmation', async () => {
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '导入角色卡' }));
+    const dialog = screen.getByRole('dialog', { name: '导入角色卡' });
+    const dropZone = within(dialog).getByLabelText('拖放角色卡');
+    const file = new File([JSON.stringify({ name: '拖入角色', first_mes: '你好' })], 'dropped.json', { type: 'application/json' });
+    fireEvent.dragOver(dropZone, { dataTransfer: { files: [file] } });
+    fireEvent.drop(dropZone, { dataTransfer: { files: [file] } });
+    expect(await within(dialog).findByRole('region', { name: '导入预览' })).toHaveTextContent('拖入角色');
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+    await user.click(within(dialog).getByRole('button', { name: '确认导入' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '导入角色卡' })).not.toBeInTheDocument());
+    const upload = fetchMock.mock.calls.find(([url, init]) => url.endsWith('/characters') && init?.method === 'POST')?.[1];
+    expect((upload?.body as FormData).get('source_file')).toBe(file);
+  });
+
+  it('rejects multiple dropped cards without restoring an earlier pending preview', async () => {
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '导入角色卡' }));
+    const dialog = screen.getByRole('dialog', { name: '导入角色卡' });
+    const dropZone = within(dialog).getByLabelText('拖放角色卡');
+    const first = new File([JSON.stringify({ name: '不应出现' })], 'first.json', { type: 'application/json' });
+    const second = new File(['{}'], 'second.json', { type: 'application/json' });
+    fireEvent.drop(dropZone, { dataTransfer: { files: [first] } });
+    fireEvent.drop(dropZone, { dataTransfer: { files: [first, second] } });
+    expect(await within(dialog).findByText(/一次只能导入一张角色卡/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('不应出现')).not.toBeInTheDocument());
+    expect(within(dialog).queryByRole('region', { name: '导入预览' })).not.toBeInTheDocument();
+  });
+
+  it('creates ordinary conversations without a setup dialog or a mandatory vocabulary', async () => {
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '选择角色 旅人' }));
+    expect(await screen.findByText('你好，小明！')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '继续' })).not.toBeInTheDocument();
     const create = fetchMock.mock.calls.find(([url, init]) => url.endsWith('/conversations') && init?.method === 'POST')?.[1];
-    expect(JSON.parse(create?.body as string)).toEqual({ characterId: 'character-1', userName: '小明', greetingIndex: 1 });
+    expect(JSON.parse(create?.body as string)).toEqual({ characterId: 'character-1', userName: '小明', greetingIndex: 0 });
     expect(screen.queryByLabelText('用户称呼')).not.toBeInTheDocument();
     expect(window.localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe('conversation-1');
     expect(attempts).toHaveLength(0);
@@ -222,26 +334,42 @@ describe('Tavern page', () => {
     await act(async () => { resolveList(json({ characters: [character] })); await refresh; });
     expect(client.getQueryData<Character[]>(['me', 'player-1', 'tavern', 'characters'])).toHaveLength(0);
     expect(screen.getByText('请用茶。')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '新建会话' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: '新建会话' })).not.toBeInTheDocument();
   });
 
-  it('binds learning vocabulary and persona once and exposes immutable conversation details', async () => {
-    const user = userEvent.setup(); renderPage();
-    await user.click(await screen.findByRole('button', { name: '新建会话' }));
+  it('updates optional vocabulary and persona after creation without replacing history', async () => {
+    restoreConversation(); const user = userEvent.setup(); renderPage();
+    await screen.findByText('请用茶。');
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    await user.click(screen.getByRole('button', { name: '会话设定' }));
+    await user.clear(screen.getByLabelText('Persona（可选）'));
     await user.type(screen.getByLabelText('Persona（可选）'), '旅行者');
     fireEvent.change(screen.getByLabelText('学习词表（可选）'), { target: { value: 'tea\t茶\nquiet — 安静' } });
-    await user.click(screen.getByRole('button', { name: '开始对话' }));
-    const summary = await screen.findByRole('complementary', { name: '会话详情' });
-    expect(within(summary).getByText('旅行者')).toBeInTheDocument();
-    expect(within(summary).getByText(/tea/)).toBeInTheDocument();
-    expect(within(summary).queryByLabelText('Persona（可选）')).toBeNull();
-    expect(within(summary).queryByLabelText('学习词表（可选）')).toBeNull();
+    await user.click(screen.getByRole('button', { name: '保存会话设定' }));
+    await screen.findByText('会话设定已保存');
     expect(savedDetail.conversation.vocabulary).toEqual([{ term: 'tea', meaning: '茶' }, { term: 'quiet', meaning: '安静' }]);
+    expect(savedDetail.conversation.persona).toBe('旅行者');
+    expect(savedDetail.graph.messages.some(message => message.content === '请用茶。')).toBe(true);
+  });
+
+  it('offers alternate greetings only before dialogue starts and sends the selected index', async () => {
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '选择角色 旅人' }));
+    await screen.findByText('你好，小明！');
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    await user.click(screen.getByRole('button', { name: '会话设定' }));
+    await user.selectOptions(screen.getByLabelText('开场白'), '1');
+    await user.click(screen.getByRole('button', { name: '保存会话设定' }));
+    await screen.findByText('会话设定已保存');
+    const update = fetchMock.mock.calls.find(([url, init]) => url.endsWith('/profile') && init?.method === 'PATCH')?.[1];
+    expect(JSON.parse(update?.body as string).greetingIndex).toBe(1);
   });
 
   it('edits real DSH generation parameters inside the existing conversation details panel', async () => {
     restoreConversation(); const user = userEvent.setup(); renderPage();
-    const summary = await screen.findByRole('complementary', { name: '会话详情' });
+    await user.click(await screen.findByRole('button', { name: '配置' }));
+    await user.click(screen.getByRole('button', { name: '生成参数' }));
+    const summary = await screen.findByRole('dialog', { name: '配置' });
     await within(summary).findByText('旅人');
     const temperature = within(summary).getByLabelText('温度');
     await user.type(temperature, '0.7');
@@ -255,33 +383,105 @@ describe('Tavern page', () => {
       settings: { temperature: 0.7, maxOutputTokens: 1024, stopSequences: ['END'] } });
   });
 
-  it('lets a Tavern user select AnyAI and sends their key with the next reply', async () => {
+  it('shows one configuration category at a time in a left navigation', async () => {
     restoreConversation(); const user = userEvent.setup(); renderPage();
-    const summary = await screen.findByRole('complementary', { name: '会话详情' });
-    await within(summary).findByText('旅人');
-    await user.selectOptions(within(summary).getByLabelText('模型线路'), 'anyai');
-    await within(summary).findByRole('option', { name: 'gemini-3.8-flash' });
-    await user.type(within(summary).getByLabelText('API Key'), 'test-key');
-    await user.click(within(summary).getByLabelText('深度思考'));
-    await user.selectOptions(within(summary).getByLabelText('发送的历史上下文'), '8192');
+    await user.click(await screen.findByRole('button', { name: '配置' }));
+    const dialog = await screen.findByRole('dialog', { name: '配置' });
+    const navigation = within(dialog).getByRole('navigation', { name: '配置分类' });
+    expect(within(dialog).getByLabelText('选择会话')).toBeVisible();
+    expect(within(dialog).getByLabelText('Persona（可选）')).not.toBeVisible();
+    await user.click(within(navigation).getByRole('button', { name: '模型接入' }));
+    expect(within(dialog).getByLabelText('模型线路')).toBeVisible();
+    expect(within(dialog).getByLabelText('选择会话')).not.toBeVisible();
+    await user.click(within(navigation).getByRole('button', { name: '会话设定' }));
+    expect(within(dialog).getByLabelText('Persona（可选）')).toBeVisible();
+  });
+
+  it('sends the selected user model from the model category without persisting its key', async () => {
+    restoreConversation(); const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '配置' }));
+    const dialog = screen.getByRole('dialog', { name: '配置' });
+    await user.click(within(dialog).getByRole('button', { name: '模型接入' }));
+    await user.selectOptions(within(dialog).getByLabelText('模型线路'), 'anyai');
+    await within(dialog).findByRole('option', { name: 'gemini-3.8-flash' });
+    await user.type(within(dialog).getByLabelText('API Key'), 'test-key');
+    await user.click(within(dialog).getByLabelText('深度思考'));
+    await user.selectOptions(within(dialog).getByLabelText('发送的历史上下文'), '8192');
+    await user.click(within(dialog).getByRole('button', { name: '关闭配置' }));
     await user.type(screen.getByRole('textbox', { name: '消息' }), '你好');
     await user.click(screen.getByRole('button', { name: '发送' }));
-    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url.endsWith('/turns')
-      && JSON.parse(String(init?.body)).modelAccess?.apiKey === 'test-key')).toBe(true));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/turns'))).toBe(true));
+    const sent = fetchMock.mock.calls.find(([url]) => url.endsWith('/turns'))?.[1];
+    expect(JSON.parse(String(sent?.body))).toMatchObject({
+      modelAccess: { apiKey: 'test-key', model: 'gemini-3.8-flash', baseUrl: 'https://anyai.token6688.com/v1',
+        settings: { enable_thinking: true } }, historyBytes: 8192,
+    });
     for (let index = 0; index < window.sessionStorage.length; index += 1) {
       expect(window.sessionStorage.getItem(window.sessionStorage.key(index)!)).not.toContain('test-key');
     }
-    const turn = fetchMock.mock.calls.find(([url]) => url.endsWith('/turns'))?.[1];
-    expect(JSON.parse(String(turn?.body)).modelAccess).toEqual({
-      apiKey: 'test-key', model: 'gemini-3.8-flash', baseUrl: 'https://anyai.token6688.com/v1',
-      settings: { enable_thinking: true },
+  });
+
+  it('retains unsaved profile fields when generation parameters are saved', async () => {
+    restoreConversation(); const user = userEvent.setup(); renderPage();
+    await screen.findByText('请用茶。');
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    await user.click(screen.getByRole('button', { name: '会话设定' }));
+    const persona = screen.getByLabelText('Persona（可选）');
+    await user.clear(persona); await user.type(persona, '尚未保存的身份');
+    const vocabulary = screen.getByLabelText('学习词表（可选）');
+    await user.type(vocabulary, 'harbor');
+    await user.click(screen.getByRole('button', { name: '生成参数' }));
+    await user.click(screen.getByRole('button', { name: '保存生成参数' }));
+    await screen.findByText('参数已保存 · 版本 2');
+    await user.click(screen.getByRole('button', { name: '会话设定' }));
+    expect(persona).toHaveValue('尚未保存的身份');
+    expect(vocabulary).toHaveValue('harbor');
+  });
+
+  it('limits configuration history to the current character across session and character switches', async () => {
+    restoreConversation();
+    const otherCharacter = { ...character, characterId: 'character-2', card: { ...character.card, name: '灯塔守卫' } };
+    const secondSession = { ...conversation, conversationId: 'conversation-2', title: '旅人的第二夜' };
+    const otherSession = { ...conversation, conversationId: 'conversation-3', characterId: 'character-2', title: '灯塔之夜' };
+    characters = [character, otherCharacter];
+    conversations = [conversation, secondSession, otherSession];
+    const originalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/me/tavern/conversations/conversation-2') return json({ ...detail, conversation: secondSession });
+      if (url === '/api/me/tavern/conversations/conversation-3') return json({ ...detail, character: otherCharacter, conversation: otherSession });
+      return originalFetch(url, init);
     });
-    expect(JSON.parse(String(turn?.body)).historyBytes).toBe(8192);
+    const user = userEvent.setup(); renderPage();
+    await screen.findByText('请用茶。');
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    const history = screen.getByLabelText('选择会话');
+    expect(within(history).queryByRole('option', { name: '灯塔之夜 · 小明' })).not.toBeInTheDocument();
+    expect(within(history).getByRole('option', { name: '旅人的茶馆 · 小明' })).toBeInTheDocument();
+    await user.selectOptions(history, 'conversation-2');
+    await waitFor(() => expect(screen.getByLabelText('选择会话')).toHaveValue('conversation-2'));
+    await user.click(screen.getByRole('button', { name: '关闭配置' }));
+    await user.click(screen.getByRole('button', { name: '选择角色 灯塔守卫' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '选择角色 灯塔守卫' })).toHaveAttribute('aria-pressed', 'true'));
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    expect(within(screen.getByLabelText('选择会话')).getAllByRole('option').map(option => option.textContent))
+      .toEqual(['选择历史会话', '灯塔之夜 · 小明']);
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  });
+
+  it('can restore preserved history with an empty character library and no local selection', async () => {
+    characters = []; conversations = [conversation];
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '配置' }));
+    await user.selectOptions(await screen.findByLabelText('选择会话'), 'conversation-1');
+    expect(await screen.findByText('请用茶。')).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   });
 
   it('reloads the latest settings after a stale tab receives a version conflict', async () => {
     restoreConversation(); const user = userEvent.setup(); renderPage();
-    const summary = await screen.findByRole('complementary', { name: '会话详情' });
+    await user.click(await screen.findByRole('button', { name: '配置' }));
+    await user.click(screen.getByRole('button', { name: '生成参数' }));
+    const summary = await screen.findByRole('dialog', { name: '配置' });
     await within(summary).findByText('旅人');
     savedDetail = { ...savedDetail, conversation: { ...savedDetail.conversation,
       generationSettings: { temperature: 1.2, maxOutputTokens: 512, stopSequences: [] }, generationSettingsVersion: 2 } };
@@ -292,8 +492,9 @@ describe('Tavern page', () => {
 
   it('offers an account-scoped original card download only when source bytes exist', async () => {
     characters = [{ ...character, sourceHash: 'a'.repeat(64) }];
-    renderPage();
-    const summary = await screen.findByRole('complementary', { name: '会话详情' });
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '配置' }));
+    const summary = await screen.findByRole('dialog', { name: '配置' });
     const link = await within(summary).findByRole('link', { name: '下载原始角色卡' });
     expect(link).toHaveAttribute('href', '/api/me/tavern/characters/character-1/source');
   });
@@ -319,7 +520,8 @@ describe('Tavern page', () => {
     await screen.findByText('请用茶。');
     await user.click(screen.getByRole('button', { name: '下一个回复' }));
     expect(await screen.findByText('另一杯茶。')).toBeInTheDocument();
-    await user.click(screen.getByText('历史与分支'));
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    await user.click(screen.getByRole('button', { name: '历史与分支' }));
     await user.type(screen.getByLabelText('分支或检查点名称'), '茶馆岔路');
     await user.click(screen.getByRole('button', { name: '创建分支' }));
     expect(await screen.findByRole('option', { name: '茶馆岔路' })).toBeInTheDocument();
@@ -337,7 +539,8 @@ describe('Tavern page', () => {
   it('creates a branch from a selected assistant ancestor instead of forcing the current leaf', async () => {
     restoreConversation(); const user = userEvent.setup(); renderPage();
     await screen.findByText('请用茶。');
-    await user.click(screen.getByText('历史与分支'));
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    await user.click(screen.getByRole('button', { name: '历史与分支' }));
     await user.selectOptions(screen.getByLabelText('分支起点'), 'message-opening');
     await user.type(screen.getByLabelText('分支或检查点名称'), '从开场分叉');
     await user.click(screen.getByRole('button', { name: '创建分支' }));
@@ -353,7 +556,7 @@ describe('Tavern page', () => {
 
   it('retains a newly created conversation when a previous list read resolves late', async () => {
     const user = userEvent.setup(); const { client } = renderPage();
-    await user.click(await screen.findByRole('button', { name: '新建会话' }));
+    await screen.findByRole('button', { name: '选择角色 旅人' });
     let resolveList!: (response: Response) => void;
     fetchMock.mockImplementationOnce((url: string) => {
       expect(url).toBe('/api/me/tavern/conversations');
@@ -361,10 +564,11 @@ describe('Tavern page', () => {
     });
     let refresh!: Promise<void>;
     act(() => { refresh = client.refetchQueries({ queryKey: ['me', 'player-1', 'tavern', 'conversations'] }); });
-    await user.click(screen.getByRole('button', { name: '开始对话' }));
+    await user.click(screen.getByRole('button', { name: '选择角色 旅人' }));
     await screen.findByLabelText('消息');
     await act(async () => { resolveList(json({ conversations: [] })); await refresh; });
     expect(client.getQueryData<Conversation[]>(['me', 'player-1', 'tavern', 'conversations'])).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: '配置' }));
     expect(screen.getByRole('option', { name: '旅人的茶馆 · 小明' })).toBeInTheDocument();
   });
 
@@ -457,6 +661,21 @@ describe('Tavern page', () => {
     expect(client.getQueryData(['me', 'player-1', 'credit'])).toMatchObject({ balance: 9.9998 });
   });
 
+  it('explains a model outage, preserves the retry identity and can return the failed input to editing', async () => {
+    restoreConversation(); modelUnavailable = true; const user = userEvent.setup(); const { client } = renderPage();
+    await user.type(await screen.findByLabelText('消息'), '保留这条消息');
+    await user.keyboard('{Enter}');
+    expect(await screen.findByText(/模型连接暂不可用/)).toBeInTheDocument();
+    expect(savedDetail.turns).toHaveLength(1);
+    expect(client.getQueryData(['me', 'player-1', 'credit'])).toMatchObject({ balance: 10 });
+    await user.click(screen.getByRole('button', { name: '重试这条消息' }));
+    await waitFor(() => expect(attempts).toHaveLength(2));
+    expect(attempts[1].clientActionId).toBe(attempts[0].clientActionId);
+    await user.click(await screen.findByRole('button', { name: '取消本次重试' }));
+    expect(screen.getByLabelText('消息')).toHaveValue('保留这条消息');
+    expect(screen.getByLabelText('消息')).toBeEnabled();
+  });
+
   it('restores an unconfirmed turn after remount and retains its retry identifier', async () => {
     restoreConversation(); failFirstTurn = true; const user = userEvent.setup(); const first = renderPage();
     await user.type(await screen.findByLabelText('消息'), '恢复后重试');
@@ -524,9 +743,9 @@ describe('Tavern page', () => {
     let drawer = screen.getByRole('dialog', { name: '功能菜单' });
     expect(within(drawer).getByRole('button', { name: '选择角色 旅人' })).toBeInTheDocument();
     await user.keyboard('{Escape}');
-    await user.click(screen.getByRole('button', { name: '打开会话详情' }));
-    drawer = screen.getByRole('dialog', { name: '功能菜单' });
-    expect(within(drawer).getByText('旅行者')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    drawer = screen.getByRole('dialog', { name: '配置' });
+    expect(within(drawer).getByLabelText('Persona（可选）')).toHaveValue('旅行者');
     await user.keyboard('{Escape}');
     await user.selectOptions(screen.getByLabelText('选择主题'), 'ivory');
     expect(document.documentElement.dataset.mapflowTheme).toBe('ivory');

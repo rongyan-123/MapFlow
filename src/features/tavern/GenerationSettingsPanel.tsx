@@ -5,12 +5,13 @@ import { updateGenerationSettings } from './tavernClient';
 import { TavernApiError, type GenerationSettings, type GenerationSettingsState, type TavernModelSelection } from './types';
 import { ErrorNotice, inputClass, primaryClass } from './TavernUi';
 
-export default function GenerationSettingsPanel({ conversationId, settings, version, csrfToken, modelSelection, onModelSelectionChange, onUpdated, onConflict }: {
+export default function GenerationSettingsPanel({ conversationId, settings, version, csrfToken, modelSelection, onModelSelectionChange, onUpdated, onConflict, section = 'generation' }: {
   conversationId: string; settings: GenerationSettings; version: number; csrfToken: string;
   modelSelection: TavernModelSelection;
   onModelSelectionChange: (selection: TavernModelSelection) => void;
   onUpdated: (state: GenerationSettingsState) => void;
   onConflict: () => Promise<void>;
+  section?: 'model' | 'generation';
 }) {
   const [temperature, setTemperature] = useState(settings.temperature?.toString() ?? '');
   const [maxOutputTokens, setMaxOutputTokens] = useState(settings.maxOutputTokens.toString());
@@ -53,9 +54,8 @@ export default function GenerationSettingsPanel({ conversationId, settings, vers
     finally { setBusy(false); }
   }
 
-  return <details className="rounded-xl border border-slate-800 p-3">
-    <summary className="cursor-pointer text-sm font-semibold">生成参数</summary>
-    <div className="mt-3 space-y-3">
+  return <div className="space-y-3">
+      {section === 'model' && <>
       <label className="block text-xs text-slate-400">模型线路
         <select className={`${inputClass} mt-1`} value={modelSelection.provider}
           onChange={event => onModelSelectionChange({ provider: event.target.value as TavernModelSelection['provider'],
@@ -115,6 +115,8 @@ export default function GenerationSettingsPanel({ conversationId, settings, vers
         </label>
         {catalog.error && <ErrorNotice error={catalog.error} />}
       </div>}
+      </>}
+      {section === 'generation' && <>
       <p className="text-xs leading-5 text-slate-500">温度、最大输出和停止词会传入当前模型。</p>
       <label className="block text-xs text-slate-400">温度
         <input className={`${inputClass} mt-1`} type="number" min="0" max="2" step="0.05" inputMode="decimal" value={temperature}
@@ -131,8 +133,8 @@ export default function GenerationSettingsPanel({ conversationId, settings, vers
       <ErrorNotice error={error} />
       {savedVersion !== null && <p role="status" className="text-xs text-emerald-300">参数已保存 · 版本 {savedVersion}</p>}
       <button type="button" className={`${primaryClass} w-full`} disabled={busy} onClick={() => void save()}>{busy ? '保存中…' : '保存生成参数'}</button>
-    </div>
-  </details>;
+      </>}
+  </div>;
 }
 
 function settingLabel(name: string): string {

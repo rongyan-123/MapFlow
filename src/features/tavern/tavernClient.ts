@@ -26,6 +26,17 @@ export async function fetchConversations(signal?: AbortSignal): Promise<Conversa
 }
 export async function fetchConversation(id: string, signal?: AbortSignal): Promise<ConversationDetail> {
   const body = await getJson(`${ROOT}/conversations/${pathId(id)}`, signal);
+  return parseConversationDetail(body);
+}
+export async function updateConversationProfile(id: string, expectedRevision: number, input: CreateConversationInput, csrfToken: string): Promise<ConversationDetail> {
+  const { userName, persona, vocabulary, greetingIndex } = prepareConversationInput(input);
+  if (!nonNegativeInteger(expectedRevision)) throw new TavernApiError(409, 'tavern.turn_conflict', '请刷新会话后重试。');
+  return parseConversationDetail(await readJson(await request(`${ROOT}/conversations/${pathId(id)}/profile`, {
+    method: 'PATCH', headers: mutationHeaders(csrfToken, true),
+    body: JSON.stringify({ expectedRevision, userName, persona: persona ?? '', vocabulary: vocabulary ?? [], ...(greetingIndex === undefined ? {} : { greetingIndex }) }),
+  })));
+}
+function parseConversationDetail(body: unknown): ConversationDetail {
   if (!isRecord(body)) throw invalidResponse();
   return { conversation: parseConversation(body.conversation), character: parseCharacter(body.character),
     turns: parseList(body, 'turns', parseTurn), generations: parseList(body, 'generations', parseGeneration), graph: parseGraph(body.graph) };
