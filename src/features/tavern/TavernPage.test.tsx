@@ -248,6 +248,14 @@ describe('Tavern page', () => {
     const formatHint = within(dialog).getByRole('note', { name: '下载格式提醒' });
     expect(formatHint).toHaveTextContent('Download for SillyTavern');
     expect(formatHint).toHaveTextContent('不要选 Download for Rin Chat');
+    const communityLinks = within(dialog).getAllByRole('link').filter(link => link.closest('section')?.querySelector('h3')?.textContent === '从社区找角色卡');
+    expect(communityLinks.map(link => link.textContent?.trim())).toEqual([
+      '角色卡市场 ↗', 'ST Pro 中文卡库 ↗', 'TavernCard 中文站 ↗',
+      'Chub ↗', 'AI Character Cards ↗', 'RisuRealm ↗',
+    ]);
+    expect(communityLinks[0]).toHaveAttribute('href', 'https://cardmarket.lucymm.net/');
+    expect(communityLinks[1]).toHaveAttribute('href', 'https://cards.sillytavern.one/');
+    expect(communityLinks[2]).toHaveAttribute('href', 'https://www.taverncard.com/zh');
     expect(within(dialog).getByRole('link', { name: /Chub/ })).toHaveAttribute('href', 'https://chub.ai/');
     expect(within(dialog).getByRole('link', { name: /AI Character Cards/ })).toHaveAttribute('href', 'https://aicharactercards.com/');
     expect(within(dialog).getByRole('link', { name: /RisuRealm/ })).toHaveAttribute('href', 'https://realm.risuai.net/');
