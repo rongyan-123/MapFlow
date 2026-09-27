@@ -89,14 +89,6 @@ export default function CardImportDialog({ csrfToken, onImported, onClose }: {
     <section className="mb-5 rounded-2xl border border-cyan-500/40 bg-cyan-950/20 p-4">
       <div className="mb-3"><h3 className="text-base font-semibold text-slate-100">从社区找角色卡</h3>
         <p className="mt-1 text-xs leading-5 text-slate-400">去社区下载 SillyTavern 兼容的角色卡，再回到这里拖入或选取文件。社区页面将在新标签页打开。</p></div>
-      <h4 className="mb-2 text-sm font-semibold text-cyan-200">中文角色卡</h4>
-      <div className="grid gap-2 sm:grid-cols-3">
-        <a href="https://cardmarket.lucymm.net/" target="_blank" rel="noopener noreferrer" className={`${buttonClass} text-center`}>角色卡市场 ↗</a>
-        <a href="https://cards.sillytavern.one/" target="_blank" rel="noopener noreferrer" className={`${buttonClass} text-center`}>ST Pro 中文卡库 ↗</a>
-        <a href="https://www.taverncard.com/zh" target="_blank" rel="noopener noreferrer" className={`${buttonClass} text-center`}>TavernCard 中文站 ↗</a>
-      </div>
-      <p className="mt-2 text-xs leading-5 text-slate-400">下载原始 PNG 角色卡；部分站点需要登录，下载和分享请遵守作者说明。</p>
-      <h4 className="mb-2 mt-4 text-sm font-semibold text-slate-300">其他社区</h4>
       <div className="grid gap-2 sm:grid-cols-3">
         <a href="https://chub.ai/" target="_blank" rel="noopener noreferrer" className={`${buttonClass} text-center`}>Chub ↗</a>
         <a href="https://aicharactercards.com/" target="_blank" rel="noopener noreferrer" className={`${buttonClass} text-center`}>AI Character Cards ↗</a>
