@@ -101,6 +101,21 @@ describe('Tavern HTTP contract', () => {
     })]);
   });
 
+  it('sends a user model key and vendor settings only with the selected turn', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(sseResponse([
+      { event: 'completed', payload: { ...completion, turn: { ...turn, clientTurnId: 'byok' } } },
+    ]));
+    vi.stubGlobal('fetch', fetchMock);
+    await generateStream('conversation-1', 'byok', 7, { type: 'reply', message: '来杯茶' },
+      'csrf', () => {}, undefined, { apiKey: 'test-key', model: 'gemini-3.8-flash',
+        baseUrl: 'https://anyai.token6688.com/v1', settings: { enable_thinking: true } }, 8192);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).modelAccess).toEqual({
+      apiKey: 'test-key', model: 'gemini-3.8-flash', baseUrl: 'https://anyai.token6688.com/v1',
+      settings: { enable_thinking: true },
+    });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).historyBytes).toBe(8192);
+  });
+
   it('treats EOF before completed as retryable interruption and reuses the supplied clientTurnId', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(sseResponse([{ event: 'delta', payload: { delta: 'partial' } }]))
       .mockResolvedValueOnce(sseResponse([{ event: 'completed', payload: completion }]));

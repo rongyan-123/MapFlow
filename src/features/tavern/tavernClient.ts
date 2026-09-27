@@ -1,5 +1,5 @@
 import { prepareConversationInput, validateId, validateMessage } from './conversationInput';
-import { TavernApiError, type Character, type CompletedTurn, type Conversation, type ConversationDetail, type ConversationGraph, type CreateConversationInput, type GenerationAction, type GenerationRecord, type GenerationSettings, type GenerationSettingsState, type GraphMutation, type NormalizedCharacterCard, type Turn } from './types';
+import { TavernApiError, type Character, type CompletedTurn, type Conversation, type ConversationDetail, type ConversationGraph, type CreateConversationInput, type GenerationAction, type GenerationRecord, type GenerationSettings, type GenerationSettingsState, type GraphMutation, type NormalizedCharacterCard, type TavernUserModelAccess, type Turn } from './types';
 import { isRecord, NORMALIZED_CARD_BYTES, RAW_FILE_BYTES, tooLarge, utf8Bytes } from './validation';
 
 const ROOT = '/api/me/tavern';
@@ -50,14 +50,16 @@ export async function mutateGraph(id: string, expectedRevision: number, action: 
 }
 
 export async function generateStream(id: string, clientActionId: string, expectedRevision: number, action: GenerationAction, csrfToken: string,
-  onDelta: (delta: string) => void, signal?: AbortSignal): Promise<CompletedTurn> {
+  onDelta: (delta: string) => void, signal?: AbortSignal, modelAccess?: TavernUserModelAccess,
+  historyBytes?: 8192 | 16384 | 32768): Promise<CompletedTurn> {
   validateId(clientActionId);
   if (!nonNegativeInteger(expectedRevision)) throw new TavernApiError(409, 'tavern.turn_conflict', '会话版本已变化，请刷新后重试。');
   if (action.type === 'reply') validateMessage(action.message);
   else validateId(action.assistantMessageId);
   const response = await request(`${ROOT}/conversations/${pathId(id)}/turns`, {
     method: 'POST', headers: { ...mutationHeaders(csrfToken, true), Accept: 'text/event-stream' },
-    body: JSON.stringify({ clientActionId, expectedRevision, action }), signal,
+    body: JSON.stringify({ clientActionId, expectedRevision, action,
+      ...(modelAccess ? { modelAccess, historyBytes } : {}) }), signal,
   });
   if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) throw invalidResponse();
   const reader = response.body.getReader();

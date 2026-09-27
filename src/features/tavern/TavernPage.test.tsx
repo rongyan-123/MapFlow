@@ -27,6 +27,9 @@ beforeEach(() => {
   attempts = []; failFirstTurn = false;
   fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === '/api/credit/me') return json({ balance: 10, signedInToday: true, freeRemaining: 0, pricePerTree: 1 });
+    if (url === '/api/model-catalog/byok') return json([{ id: 'gemini-3.8-flash', provider: 'AnyAI',
+      contextWindow: 1048576, baseUrl: 'https://anyai.token6688.com/v1',
+      settings: [{ name: 'enable_thinking', kind: 'switch', options: [] }] }]);
     if (url === '/api/me/tavern/characters' && init?.method === 'POST') {
       const body = init.body as FormData;
       const imported = { ...character, characterId: 'imported-1', card: JSON.parse(body.get('normalized_card') as string) };
@@ -250,6 +253,30 @@ describe('Tavern page', () => {
     const update = fetchMock.mock.calls.find(([url, init]) => url.endsWith('/settings') && init?.method === 'PATCH')?.[1];
     expect(JSON.parse(update?.body as string)).toEqual({ expectedSettingsVersion: 1,
       settings: { temperature: 0.7, maxOutputTokens: 1024, stopSequences: ['END'] } });
+  });
+
+  it('lets a Tavern user select AnyAI and sends their key with the next reply', async () => {
+    restoreConversation(); const user = userEvent.setup(); renderPage();
+    const summary = await screen.findByRole('complementary', { name: '会话详情' });
+    await within(summary).findByText('旅人');
+    await user.selectOptions(within(summary).getByLabelText('模型线路'), 'anyai');
+    await within(summary).findByRole('option', { name: 'gemini-3.8-flash' });
+    await user.type(within(summary).getByLabelText('API Key'), 'test-key');
+    await user.click(within(summary).getByLabelText('深度思考'));
+    await user.selectOptions(within(summary).getByLabelText('发送的历史上下文'), '8192');
+    await user.type(screen.getByRole('textbox', { name: '消息' }), '你好');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url.endsWith('/turns')
+      && JSON.parse(String(init?.body)).modelAccess?.apiKey === 'test-key')).toBe(true));
+    for (let index = 0; index < window.sessionStorage.length; index += 1) {
+      expect(window.sessionStorage.getItem(window.sessionStorage.key(index)!)).not.toContain('test-key');
+    }
+    const turn = fetchMock.mock.calls.find(([url]) => url.endsWith('/turns'))?.[1];
+    expect(JSON.parse(String(turn?.body)).modelAccess).toEqual({
+      apiKey: 'test-key', model: 'gemini-3.8-flash', baseUrl: 'https://anyai.token6688.com/v1',
+      settings: { enable_thinking: true },
+    });
+    expect(JSON.parse(String(turn?.body)).historyBytes).toBe(8192);
   });
 
   it('reloads the latest settings after a stale tab receives a version conflict', async () => {

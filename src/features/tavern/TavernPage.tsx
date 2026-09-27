@@ -13,7 +13,7 @@ import ConversationPane from './ConversationPane';
 import GenerationSettingsPanel from './GenerationSettingsPanel';
 import NewConversationForm from './NewConversationForm';
 import { deleteCharacter, fetchCharacters, fetchConversation, fetchConversations } from './tavernClient';
-import type { Character, CompletedTurn, Conversation, ConversationDetail, ConversationGraph, GenerationSettingsState } from './types';
+import type { Character, CompletedTurn, Conversation, ConversationDetail, ConversationGraph, GenerationSettingsState, TavernModelSelection } from './types';
 import { CharacterAvatar, CompatibilityReport, ErrorNotice, buttonClass, inputClass, primaryClass } from './TavernUi';
 
 export default function TavernPage({ onNavigateConsole }: { onNavigateConsole: () => void }) {
@@ -36,6 +36,9 @@ function AuthenticatedTavernPage({ session, onNavigateConsole }: { session: Iden
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [drawer, setDrawer] = useState<'library' | 'details' | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [modelSelection, setModelSelection] = useState<TavernModelSelection>({
+    provider: 'platform', apiKey: '', model: '', baseUrl: '', settings: {}, historyBytes: 32768,
+  });
   const charactersKey = ['me', accountId, 'tavern', 'characters'] as const;
   const conversationsKey = ['me', accountId, 'tavern', 'conversations'] as const;
   const detailKey = ['me', accountId, 'tavern', 'conversation', conversationId] as const;
@@ -122,6 +125,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole }: { session: Iden
       </dl><p className="text-xs leading-6 text-slate-500">角色、称呼、Persona、词表和开场白已保存为会话快照。如需改变这些设定，请创建新会话。</p>
       <GenerationSettingsPanel conversationId={conversationId} settings={conversationQuery.data.conversation.generationSettings}
         version={conversationQuery.data.conversation.generationSettingsVersion} csrfToken={session.csrfToken}
+        modelSelection={modelSelection} onModelSelectionChange={setModelSelection}
         onUpdated={onGenerationSettingsUpdated} onConflict={async () => { await conversationQuery.refetch(); }} />
     </section>}
     {canCreate && selectedCharacter.sourceHash && <a className={`${buttonClass} inline-block`} href={`/api/me/tavern/characters/${encodeURIComponent(selectedCharacter.characterId)}/source`} download>
@@ -154,7 +158,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole }: { session: Iden
           <button type="button" className={primaryClass} disabled={!canCreate} onClick={() => setCreateOpen(true)}>新建会话</button>
         </div>
         {conversations.error && <div className="p-4"><ErrorNotice error={conversations.error} onRetry={() => void conversations.refetch()} /></div>}
-        {conversationId ? conversationQuery.data ? <ConversationPane key={`${accountId}.${conversationId}`} detail={conversationQuery.data} accountId={accountId} csrfToken={session.csrfToken} onCompleted={onCompleted} onGraphChanged={onGraphChanged} />
+        {conversationId ? conversationQuery.data ? <ConversationPane key={`${accountId}.${conversationId}`} detail={conversationQuery.data} accountId={accountId} csrfToken={session.csrfToken} modelSelection={modelSelection} onCompleted={onCompleted} onGraphChanged={onGraphChanged} />
           : <div className="p-6">{conversationQuery.isPending ? <p role="status" className="text-sm text-slate-400">正在恢复会话与历史…</p> : <ErrorNotice error={conversationQuery.error} onRetry={() => void conversationQuery.refetch()} />}</div>
           : <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto p-8 text-center">
             <CharacterAvatar character={selectedCharacter} large /><h2 className="text-xl font-bold">{selectedCharacter ? `与${selectedCharacter.card.name}相遇` : '你的故事，从这里开始'}</h2>

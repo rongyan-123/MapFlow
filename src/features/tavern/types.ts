@@ -23,6 +23,16 @@ export interface CreateConversationInput {
 export interface GenerationSettings {
   temperature?: number; maxOutputTokens: number; stopSequences: string[];
 }
+export interface TavernUserModelAccess {
+  apiKey: string; model: string; baseUrl: string;
+  settings: Record<string, string | boolean>;
+}
+export interface TavernModelSelection {
+  provider: 'platform' | 'anyai' | 'custom';
+  apiKey: string; model: string; baseUrl: string;
+  settings: Record<string, string | boolean>;
+  historyBytes: 8192 | 16384 | 32768;
+}
 export interface GenerationSettingsState {
   generationSettings: GenerationSettings; generationSettingsVersion: number;
 }

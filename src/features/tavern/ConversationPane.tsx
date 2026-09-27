@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { validateId, validateMessage } from './conversationInput';
 import { generateStream, mutateGraph } from './tavernClient';
-import { TavernApiError, type CompletedTurn, type ConversationDetail, type ConversationGraph, type GenerationAction, type GenerationRecord, type GraphMessage, type GraphMutation } from './types';
+import { TavernApiError, type CompletedTurn, type ConversationDetail, type ConversationGraph, type GenerationAction, type GenerationRecord, type GraphMessage, type GraphMutation, type TavernModelSelection, type TavernUserModelAccess } from './types';
 import { isRecord, utf8Bytes } from './validation';
 import { ErrorNotice, buttonClass, inputClass, primaryClass } from './TavernUi';
 
-interface PendingGeneration { clientActionId: string; expectedRevision: number; action: GenerationAction }
+interface PendingGeneration { clientActionId: string; expectedRevision: number; action: GenerationAction;
+  modelBinding?: { model: string; baseUrl: string; historyBytes: 8192 | 16384 | 32768 } }
 
-export default function ConversationPane({ detail, accountId, csrfToken, onCompleted, onGraphChanged }: {
+export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, onCompleted, onGraphChanged }: {
   detail: ConversationDetail; accountId: string; csrfToken: string;
+  modelSelection: TavernModelSelection;
   onCompleted: (completed: CompletedTurn) => void; onGraphChanged: (graph: ConversationGraph) => void;
 }) {
   const storageKey = `mapflow.tavern.pending.v1.${accountId}.${detail.conversation.conversationId}`;
@@ -44,9 +46,20 @@ export default function ConversationPane({ detail, accountId, csrfToken, onCompl
   async function runGeneration(action: GenerationAction, retry?: PendingGeneration) {
     if (activeRequest.current || (pendingGeneration && !retry)) return;
     let outgoing: PendingGeneration;
+    let modelAccess: TavernUserModelAccess | undefined;
     try {
       validateGenerationAction(action);
-      outgoing = retry ?? { clientActionId: crypto.randomUUID(), expectedRevision: detail.graph.revision, action };
+      if (retry?.modelBinding) {
+        modelAccess = selectedUserAccess(modelSelection);
+        if (!modelAccess || modelAccess.model !== retry.modelBinding.model
+          || modelAccess.baseUrl !== retry.modelBinding.baseUrl
+          || modelSelection.historyBytes !== retry.modelBinding.historyBytes) {
+          throw new TavernApiError(400, 'tavern.model_access_required', '请重新填写本次使用的 Key 和模型，再重试。');
+        }
+      } else if (!retry) modelAccess = selectedUserAccess(modelSelection);
+      outgoing = retry ?? { clientActionId: crypto.randomUUID(), expectedRevision: detail.graph.revision, action,
+        ...(modelAccess ? { modelBinding: { model: modelAccess.model, baseUrl: modelAccess.baseUrl,
+          historyBytes: modelSelection.historyBytes } } : {}) };
     } catch (failure) { setError(failure); return; }
     const controller = new AbortController();
     activeRequest.current = controller;
@@ -57,7 +70,8 @@ export default function ConversationPane({ detail, accountId, csrfToken, onCompl
     setDraft(''); setBusy(true); setError(null); followLatest.current = true;
     try {
       const completed = await generateStream(detail.conversation.conversationId, outgoing.clientActionId, outgoing.expectedRevision, outgoing.action,
-        csrfToken, delta => { if (!controller.signal.aborted) setDraft(previous => previous + delta); }, controller.signal);
+        csrfToken, delta => { if (!controller.signal.aborted) setDraft(previous => previous + delta); }, controller.signal,
+        modelAccess, modelAccess ? modelSelection.historyBytes : undefined);
       if (controller.signal.aborted) return;
       storePending(storageKey, null);
       setPendingGeneration(null); setDraft(''); onCompleted(completed);
@@ -256,7 +270,14 @@ function readPending(key: string, currentRevision: number): PendingGeneration | 
       validateId(saved.clientActionId); validateGenerationAction(saved.action);
       const expectedRevision = typeof saved.expectedRevision === 'number' && Number.isSafeInteger(saved.expectedRevision) && saved.expectedRevision >= 0
         ? saved.expectedRevision : currentRevision;
-      return { clientActionId: saved.clientActionId, expectedRevision, action: saved.action };
+      const modelBinding = isRecord(saved.modelBinding) && typeof saved.modelBinding.model === 'string'
+        && typeof saved.modelBinding.baseUrl === 'string'
+        && [8192, 16384, 32768].includes(Number(saved.modelBinding.historyBytes))
+        ? { model: saved.modelBinding.model, baseUrl: saved.modelBinding.baseUrl,
+          historyBytes: Number(saved.modelBinding.historyBytes) as 8192 | 16384 | 32768 } : undefined;
+      if (saved.modelBinding !== undefined && !modelBinding) return null;
+      return { clientActionId: saved.clientActionId, expectedRevision, action: saved.action,
+        ...(modelBinding ? { modelBinding } : {}) };
     }
     // Read the previous reply-only shape so an in-flight turn survives this frontend upgrade.
     if (typeof saved.clientTurnId === 'string' && typeof saved.message === 'string') {
@@ -265,6 +286,17 @@ function readPending(key: string, currentRevision: number): PendingGeneration | 
     }
     return null;
   } catch { return null; }
+}
+
+function selectedUserAccess(selection: TavernModelSelection): TavernUserModelAccess | undefined {
+  if (selection.provider === 'platform') return undefined;
+  const apiKey = selection.apiKey.trim();
+  const model = selection.model.trim();
+  const baseUrl = selection.baseUrl.trim();
+  if (!apiKey || !model || !/^https:\/\/[^\s]+\/v1\/?$/u.test(baseUrl)) {
+    throw new TavernApiError(400, 'tavern.model_access_required', '请填写 API Key、上游模型和公开 HTTPS /v1 地址。');
+  }
+  return { apiKey, model, baseUrl, settings: selection.provider === 'anyai' ? selection.settings : {} };
 }
 function isGenerationAction(value: unknown): value is GenerationAction {
   if (!isRecord(value) || typeof value.type !== 'string') return false;

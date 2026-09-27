@@ -13,6 +13,7 @@ import {
   createCreditsTreeGeneration,
   createTreeGeneration,
   readPlatformGenerationEntitlements,
+  readUserModelCatalog,
   readGenerationRun,
   readTreeGeneration,
   releaseFailedPlatformTreeGeneration,
@@ -43,6 +44,35 @@ afterEach(() => {
 });
 
 describe('treeGenerationClient', () => {
+  it('reads the server-owned user model catalog', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([{
+      id: 'gemini-3.8-flash', provider: 'AnyAI', contextWindow: 1048576,
+      baseUrl: 'https://anyai.token6688.com/v1',
+      settings: [{ name: 'thinking_budget', kind: 'select', options: ['low', 'high'] }],
+    }]));
+    vi.stubGlobal('fetch', fetchMock);
+    const models = await readUserModelCatalog();
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/model-catalog/byok');
+    expect(models[0]?.settings[0]?.name).toBe('thinking_budget');
+  });
+
+  it('sends a user-selected gateway URL and model in every generation request', async () => {
+    const upstreamSession = planReadySession();
+    fetchMock.mockResolvedValueOnce(jsonResponse({
+      ...upstreamSession,
+      latest_plan: { ...upstreamSession.latest_plan, model: 'gemini-3.8-flash' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const gatewayAccess: ModelAccess = {
+      apiKey: 'CLIENT-SECRET-SENTINEL', model: 'gemini-3.8-flash',
+      baseUrl: 'https://anyai.token6688.com/v1',
+      settings: { enable_thinking: true, thinking_budget: 'high' },
+    };
+    const session = await createTreeGeneration(input, gatewayAccess, 'csrf-token');
+    expect(session.latestPlan?.model).toBe('gemini-3.8-flash');
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).modelAccess).toEqual(gatewayAccess);
+  });
+
   it('creates with only the fixed form, nested model access, same-origin cookie and CSRF', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(planReadySession()));
     vi.stubGlobal('fetch', fetchMock);
