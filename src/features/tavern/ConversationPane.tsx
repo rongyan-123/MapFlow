@@ -35,7 +35,6 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const [graphBusy, setGraphBusy] = useState(false);
   const [branchName, setBranchName] = useState('');
   const [branchAnchorId, setBranchAnchorId] = useState('');
-  const [confirmation,setConfirmation]=useState<{outgoing:PendingGeneration;quote:CashQuote}|null>(null);
   const activeRequest = useRef<AbortController | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLDivElement>(null);
@@ -86,10 +85,12 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       try {
         const quote=await requestCashQuote(detail.conversation.conversationId,outgoing.expectedRevision,outgoing.action,
           platformModel,modelSelection.historyBytes,csrfToken,controller.signal);
-        if (!controller.signal.aborted) setConfirmation({outgoing,quote});
-      } catch (failure) {if (!controller.signal.aborted) setError(failure);}
-      finally {if (!controller.signal.aborted) {activeRequest.current=null;setBusy(false);}}
-      return;
+        if (controller.signal.aborted) return;
+        outgoing = { ...outgoing, billing: quote };
+      } catch (failure) {
+        if (!controller.signal.aborted) { setError(failure); activeRequest.current = null; setBusy(false); }
+        return;
+      }
     }
     // Persist before sending: a refresh between request and completed must reuse the same ID.
     storePending(storageKey, outgoing);
@@ -193,12 +194,6 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     </div>
     <div className="mx-auto w-full max-w-4xl shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-8">
       <ErrorNotice error={error} />
-      {confirmation&&<TavernDialog title="确认本次费用" onClose={()=>setConfirmation(null)}>
-        <p className="leading-7 text-slate-300">本次最高预留 ¥{formatAmountMicros(confirmation.quote.maximumChargeMicros)}，完成后按实际费用结算并释放未使用额度。失败不扣本站现金额度。</p>
-        <button type="button" className={`${primaryClass} mt-4`} onClick={()=>{
-          const approved={...confirmation.outgoing,billing:confirmation.quote};setConfirmation(null);void runGeneration(approved.action,approved);
-        }}>确认并发送</button>
-      </TavernDialog>}
       {error instanceof TavernApiError && error.code === 'tavern.runtime_unavailable' && <p className="text-xs leading-5 text-slate-400">
         模型连接暂不可用。请稍后重试，或取消本次重试返回编辑；不会使用模拟回复替代模型。
       </p>}
