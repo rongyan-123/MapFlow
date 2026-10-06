@@ -111,6 +111,7 @@ def paid_acceptance(container, database_container, filename, allow_real_call):
     username = 'CashCheck' + secrets.token_hex(4)
     registered, cookie = json_api(container, 'POST', '/api/auth/register', {
         'username': username, 'password': 'Aa9!' + secrets.token_urlsafe(24),
+        'email': username.lower() + '@example.invalid',
         'challengeId': question['challengeId'], 'challengeAnswer': str(answer)})
     csrf = registered['csrfToken']
     catalogue, _ = json_api(container, 'GET', '/api/me/tavern/platform-models', cookie=cookie)
