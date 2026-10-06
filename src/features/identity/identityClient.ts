@@ -107,6 +107,25 @@ export interface ClaimedInvitation {
   invitationCode: string;
 }
 
+export interface RegistrationChallenge {
+  challengeId: string;
+  question: string;
+  expiresInSeconds: number;
+}
+
+export async function fetchRegistrationChallenge(signal?: AbortSignal): Promise<RegistrationChallenge> {
+  const response = await request('/api/auth/registration-challenge', {
+    method: 'POST', credentials: 'same-origin', headers: JSON_HEADERS,
+    body: '{}', signal,
+  });
+  const body = await readJson(response);
+  if (!isRecord(body) || typeof body.challengeId !== 'string' ||
+      typeof body.question !== 'string' || typeof body.expiresInSeconds !== 'number') {
+    throw invalidResponseError();
+  }
+  return { challengeId: body.challengeId, question: body.question, expiresInSeconds: body.expiresInSeconds };
+}
+
 export async function claimInvitation(
   turnstileToken?: string,
 ): Promise<ClaimedInvitation> {

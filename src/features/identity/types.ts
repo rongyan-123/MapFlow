@@ -32,7 +32,9 @@ export interface IdentitySession {
 export interface RegistrationInput {
   username: string;
   password: string;
-  invitationCode: string;
+  invitationCode?: string;
+  challengeId?: string;
+  challengeAnswer?: string;
   email?: string;
   phone?: string;
 }
