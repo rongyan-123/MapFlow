@@ -8,6 +8,7 @@ import { IdentityProvider } from './IdentityContext';
 const api = vi.hoisted(() => ({
   fetchCapabilities: vi.fn(),
   fetchCurrentSession: vi.fn(),
+  fetchRegistrationChallenge: vi.fn(),
   loginIdentity: vi.fn(),
   logoutIdentity: vi.fn(),
   registerIdentity: vi.fn(),
@@ -31,6 +32,7 @@ beforeEach(() => {
   api.loginIdentity.mockReset();
   api.logoutIdentity.mockReset();
   api.registerIdentity.mockReset();
+  api.fetchRegistrationChallenge.mockResolvedValue({ challengeId: 'registration-question', question: '7 + 5 = ?', expiresInSeconds: 300 });
 });
 
 describe('IdentityAccess', () => {
@@ -94,7 +96,7 @@ describe('IdentityAccess', () => {
     await user.type(screen.getByLabelText('用户名'), 'firstuser');
     await user.type(screen.getByLabelText('设置密码'), 'safe-password-2026');
     await user.type(screen.getByLabelText('确认密码'), 'safe-password-2026');
-    await user.type(screen.getByLabelText('邀请码'), 'q1j2x3k4r5p6');
+    await user.type(screen.getByLabelText('计算结果'), '12');
     await user.type(screen.getByLabelText('邮箱（可选）'), 'learner@example.com');
     await user.click(screen.getByRole('button', { name: '创建并激活账号' }));
 
@@ -102,7 +104,8 @@ describe('IdentityAccess', () => {
       expect(api.registerIdentity).toHaveBeenCalledWith({
         username: 'firstuser',
         password: 'safe-password-2026',
-        invitationCode: 'QJXKRP',
+        challengeId: 'registration-question',
+        challengeAnswer: '12',
         email: 'learner@example.com',
       }),
     );

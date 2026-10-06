@@ -3,6 +3,7 @@ import {
   cloneElement,
   useCallback,
   useEffect,
+  useRef,
   useState,
   type FormEvent,
   type ReactElement,
@@ -12,15 +13,13 @@ import {
   passwordRules,
   validateConfirmPasswordField,
   validateEmailField,
-  validateInvitationCodeField,
   validatePasswordField,
   validatePhoneField,
   validateRegistration,
   validateUsernameField,
   type RegistrationFormValues,
 } from './identityValidation';
-import { IdentityApiError, type ClaimedInvitation } from './identityClient';
-import TurnstileVerifier from './TurnstileVerifier';
+import { fetchRegistrationChallenge, type RegistrationChallenge, type ClaimedInvitation } from './identityClient';
 
 interface IdentityDialogProps {
   presentation?: 'dialog' | 'page';
@@ -33,17 +32,10 @@ interface IdentityDialogProps {
   onClaimInvitation: (turnstileToken?: string) => Promise<ClaimedInvitation>;
 }
 
-function readTurnstileSiteKey(): string {
-  return import.meta.env.VITE_TURNSTILE_SITE_KEY ?? '';
-}
-
-type ClaimStatus = 'idle' | 'verifying' | 'claiming' | 'claimed';
-
 const EMPTY_REGISTRATION: RegistrationFormValues = {
   username: '',
   password: '',
   confirmPassword: '',
-  invitationCode: '',
   email: '',
   phone: '',
 };
@@ -52,7 +44,6 @@ type RegistrationField =
   | 'username'
   | 'password'
   | 'confirmPassword'
-  | 'invitationCode'
   | 'email'
   | 'phone';
 
@@ -60,7 +51,6 @@ const EMPTY_TOUCHED: Record<RegistrationField, boolean> = {
   username: false,
   password: false,
   confirmPassword: false,
-  invitationCode: false,
   email: false,
   phone: false,
 };
@@ -73,7 +63,6 @@ export default function IdentityDialog({
   onResetError,
   onLogin,
   onRegister,
-  onClaimInvitation,
 }: IdentityDialogProps) {
   const isPage = presentation === 'page';
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -85,42 +74,34 @@ export default function IdentityDialog({
   const touch = useCallback((field: RegistrationField) => {
     setTouched((current) => (current[field] ? current : { ...current, [field]: true }));
   }, []);
-  const [claimStatus, setClaimStatus] = useState<ClaimStatus>('idle');
-  const [claimError, setClaimError] = useState<string | null>(null);
-  const [claimedCode, setClaimedCode] = useState<string | null>(null);
-
-  const requestClaim = useCallback(
-    async (turnstileToken?: string) => {
-      setClaimError(null);
-      setClaimStatus('claiming');
-      try {
-        const claimed = await onClaimInvitation(turnstileToken);
-        setRegistration((current) => ({
-          ...current,
-          invitationCode: claimed.invitationCode,
-        }));
-        setClaimedCode(claimed.invitationCode);
-        setClaimStatus('claimed');
-      } catch (caught) {
-        setClaimStatus('idle');
-        setClaimError(
-          caught instanceof IdentityApiError
-            ? caught.message
-            : '邀请码领取失败，请稍后再试。',
-        );
+  const [challenge, setChallenge] = useState<RegistrationChallenge | null>(null);
+  const [challengeAnswer, setChallengeAnswer] = useState('');
+  const [challengeLoading, setChallengeLoading] = useState(false);
+  const [challengeError, setChallengeError] = useState<string | null>(null);
+  const challengeController = useRef<AbortController | null>(null);
+  const refreshChallenge = useCallback(async () => {
+    challengeController.current?.abort();
+    const controller = new AbortController();
+    challengeController.current = controller;
+    setChallenge(null);
+    setChallengeAnswer('');
+    setChallengeError(null);
+    setChallengeLoading(true);
+    try {
+      const next = await fetchRegistrationChallenge(controller.signal);
+      if (!controller.signal.aborted) setChallenge(next);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setChallengeError(readableError(error) ?? '验证题加载失败，请重试。');
       }
-    },
-    [onClaimInvitation],
-  );
-
-  const startClaim = useCallback(() => {
-    setClaimError(null);
-    if (readTurnstileSiteKey()) {
-      setClaimStatus('verifying');
-    } else {
-      void requestClaim();
+    } finally {
+      if (!controller.signal.aborted) setChallengeLoading(false);
     }
-  }, [requestClaim]);
+  }, []);
+  useEffect(() => {
+    if (mode === 'register') void refreshChallenge();
+    return () => challengeController.current?.abort();
+  }, [mode, refreshChallenge]);
 
   useEffect(() => {
     if (isPage) return;
@@ -135,9 +116,6 @@ export default function IdentityDialog({
     setMode(nextMode);
     setLocalError(null);
     setTouched(EMPTY_TOUCHED);
-    setClaimStatus('idle');
-    setClaimError(null);
-    setClaimedCode(null);
     onResetError();
   };
 
@@ -162,9 +140,6 @@ export default function IdentityDialog({
   const confirmPasswordError = touched.confirmPassword
     ? validateConfirmPasswordField(registration.password, registration.confirmPassword)
     : null;
-  const invitationCodeError = touched.invitationCode
-    ? validateInvitationCodeField(registration.invitationCode)
-    : null;
   const emailError = touched.email ? validateEmailField(registration.email) : null;
   const phoneError = touched.phone ? validatePhoneField(registration.phone) : null;
 
@@ -176,7 +151,6 @@ export default function IdentityDialog({
       username: true,
       password: true,
       confirmPassword: true,
-      invitationCode: true,
       email: true,
       phone: true,
     });
@@ -186,6 +160,10 @@ export default function IdentityDialog({
       return;
     }
     if (validationError) return;
+    if (!challenge || !/^\d{1,2}$/.test(challengeAnswer.trim())) {
+      setLocalError('请输入计算结果。');
+      return;
+    }
     setLocalError(null);
     const email = registration.email.trim();
     const phone = registration.phone.trim();
@@ -193,12 +171,13 @@ export default function IdentityDialog({
       await onRegister({
         username: registration.username,
         password: registration.password,
-        invitationCode: registration.invitationCode,
+        challengeId: challenge.challengeId,
+        challengeAnswer: challengeAnswer.trim(),
         ...(email ? { email } : {}),
         ...(phone ? { phone } : {}),
       });
     } catch {
-      // React Query owns the safe request error displayed below.
+      void refreshChallenge();
     }
   };
 
@@ -232,7 +211,7 @@ export default function IdentityDialog({
               MapFlow ID
             </p>
             <h2 id="identity-dialog-title" className="mt-1 text-lg font-semibold text-white">
-              {mode === 'login' ? '登录学习账号' : '用邀请码激活账号'}
+              {mode === 'login' ? '登录学习账号' : '创建学习账号'}
             </h2>
           </div>
           {!isPage && (
@@ -338,65 +317,19 @@ export default function IdentityDialog({
                 />
               </Field>
             </div>
-            <Field label="邀请码" id="register-invitation-code" error={invitationCodeError}>
-              <input
-                autoComplete="one-time-code"
-                inputMode="text"
-                minLength={6}
-                pattern="[A-Z]{6}"
-                value={registration.invitationCode}
-                onChange={(event) =>
-                  setRegistration({
-                    ...registration,
-                    invitationCode: event.target.value
-                      .toUpperCase()
-                      .replace(/[^A-Z]/g, '')
-                      .slice(0, 6),
-                  })
-                }
-                onBlur={() => touch('invitationCode')}
-                className="font-mono uppercase tracking-[0.3em]"
-              />
-            </Field>
-            {claimStatus === 'claimed' && claimedCode ? (
-              <div className="rounded-lg border border-emerald-700/60 bg-emerald-950/40 px-3 py-2.5 text-xs leading-5 text-emerald-300">
-                已领取邀请码{' '}
-                <span className="font-mono font-semibold tracking-[0.2em]">{claimedCode}</span>
-                ，已填入上方输入框，请完成注册。
-              </div>
-            ) : (
-              <div className="rounded-lg border border-slate-700/60 bg-slate-950/50 px-3 py-2.5">
-                <p className="text-xs leading-5 text-slate-400">
-                  还没有邀请码？每 24 小时每个网络可领取一个。
-                </p>
-                {claimStatus === 'verifying' && readTurnstileSiteKey() ? (
-                  <div className="mt-2">
-                    <TurnstileVerifier
-                      siteKey={readTurnstileSiteKey()}
-                      onVerified={(token) => void requestClaim(token)}
-                      onError={() => {
-                        setClaimStatus('idle');
-                        setClaimError('人机验证加载失败，请重试。');
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={pending || claimStatus === 'claiming'}
-                    onClick={startClaim}
-                    className="mt-2 rounded-lg border border-cyan-400/40 px-3 py-1.5 text-xs font-medium text-cyan-300 transition hover:bg-cyan-400/10 disabled:cursor-wait disabled:opacity-50"
-                  >
-                    {claimStatus === 'claiming' ? '正在领取…' : '点击领取邀请码'}
-                  </button>
-                )}
-                {claimError && (
-                  <p role="alert" className="mt-2 text-xs text-rose-300">
-                    {claimError}
-                  </p>
-                )}
-              </div>
-            )}
+            <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-3">
+              <p className="text-sm font-medium text-cyan-300" aria-live="polite">
+                {challengeLoading ? '正在加载验证题…' : challenge?.question}
+              </p>
+              <Field label="计算结果" id="register-challenge-answer">
+                <input inputMode="numeric" autoComplete="off" maxLength={2}
+                  value={challengeAnswer} onChange={(event) => setChallengeAnswer(event.target.value)} />
+              </Field>
+              <button type="button" disabled={pending || challengeLoading}
+                onClick={() => void refreshChallenge()}
+                className="mt-2 text-xs text-cyan-300 disabled:opacity-50">换一道题</button>
+              {challengeError && <p role="alert" className="mt-2 text-xs text-rose-300">{challengeError}</p>}
+            </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="邮箱（可选）" id="register-email" error={emailError}>
                 <input
