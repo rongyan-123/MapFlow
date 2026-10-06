@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import CreditPill from '../credit/CreditPill';
 import WalletBalance from '../wallet/WalletBalance';
+import type {Wallet} from '../wallet/walletClient';
 import HeaderMoreMenu, { headerMenuItem } from '../navigation/HeaderMoreMenu';
 import { readCreditSummary, type CreditSummary } from '../credit/creditClient';
 import IdentityAccess from '../identity/IdentityAccess';
@@ -12,6 +13,7 @@ import type { IdentitySession } from '../identity/types';
 import MobileDrawer from '../navigation/MobileDrawer';
 import ThemeSwitcher from '../theme/ThemeSwitcher';
 import CardImportDialog from './CardImportDialog';
+import CreateCharacterDialog from './CreateCharacterDialog';
 import ConversationPane from './ConversationPane';
 import ConversationProfilePanel from './ConversationProfilePanel';
 import GenerationSettingsPanel from './GenerationSettingsPanel';
@@ -35,6 +37,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   });
   const [characterId, setCharacterId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [configurationOpen, setConfigurationOpen] = useState(false);
   const [openingCharacter, setOpeningCharacter] = useState<string | null>(null);
   const [openError, setOpenError] = useState<unknown>(null);
@@ -88,7 +91,14 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     void queryClient.cancelQueries({ queryKey: detailKey, exact: true });
     queryClient.setQueryData<ConversationDetail>(detailKey, previous => previous ? { ...previous,
       turns: [...previous.turns.filter(turn => turn.clientTurnId !== completed.turn.clientTurnId), completed.turn],
+      ...(completed.cashCharge?{cashCharges:[...(previous.cashCharges??[]).filter(charge=>charge.generationId!==completed.cashCharge?.generationId),completed.cashCharge]}:{}),
       graph: completed.graph } : previous);
+    if (completed.walletBalanceMicros!==undefined) {
+      const walletKey=['me',accountId,'wallet'];
+      void queryClient.cancelQueries({queryKey:walletKey,exact:true});
+      queryClient.setQueryData<Wallet>(walletKey,previous=>previous?{...previous,balanceMicros:completed.walletBalanceMicros!}:previous);
+      void queryClient.invalidateQueries({queryKey:walletKey,refetchType:'none'});
+    }
     void queryClient.cancelQueries({ queryKey: creditKey, exact: true });
     queryClient.setQueryData<CreditSummary>(creditKey, previous => previous ? { ...previous, balance: completed.creditBalance } : previous);
     if (!credit.data) void credit.refetch();
@@ -96,7 +106,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   function onImported(imported: Character) {
     void queryClient.cancelQueries({ queryKey: charactersKey, exact: true });
     queryClient.setQueryData<Character[]>(charactersKey, previous => [...(previous ?? []), imported]);
-    setImportOpen(false); setCharacterId(imported.characterId); selectConversation(null);
+    setImportOpen(false); setCreateOpen(false); setCharacterId(imported.characterId); selectConversation(null);
   }
   function onCreated(created: Conversation) {
     void queryClient.cancelQueries({ queryKey: conversationsKey, exact: true });
@@ -126,6 +136,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const library = <div className="space-y-4">
     <div className="flex items-center justify-between"><h2 className="text-base font-semibold">角色库</h2><span className="text-xs text-slate-500">{characters.data?.length ?? 0} 个角色</span></div>
     <button type="button" className={`${primaryClass} w-full`} onClick={() => { setDrawer(null); setImportOpen(true); }}>导入角色卡</button>
+    <button type="button" className={`${buttonClass} w-full`} onClick={() => { setDrawer(null); setCreateOpen(true); }}>创建角色卡</button>
     <ErrorNotice error={characters.error} onRetry={() => void characters.refetch()} />
     {characters.isPending && <p role="status" className="text-sm text-slate-400">正在读取角色库…</p>}
     {characters.data?.length === 0 && <p className="text-sm leading-6 text-slate-400">导入一张 PNG 或 JSON 角色卡，开始你的第一个故事。</p>}
@@ -223,6 +234,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     </MobileDrawer>
     {configurationOpen && !conversationQuery.data && <TavernDialog title="配置" onClose={() => setConfigurationOpen(false)} sections={configurationSections} />}
     {importOpen && <CardImportDialog csrfToken={session.csrfToken} onImported={onImported} onClose={() => setImportOpen(false)} />}
+    {createOpen && <CreateCharacterDialog csrfToken={session.csrfToken} onCreated={onImported} onClose={() => setCreateOpen(false)} />}
     <LogoutConfirmDialog open={logoutOpen} pending={logoutPending} error={logoutError?.message ?? null} onCancel={() => setLogoutOpen(false)} onConfirm={() => void logout().catch(() => undefined)} />
   </div>;
 }

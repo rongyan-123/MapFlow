@@ -20,6 +20,7 @@ let savedDetail: ConversationDetail;
 let failFirstTurn: boolean;
 let modelUnavailable: boolean;
 let platformEnabled: boolean;
+let platformPaid: boolean;
 let fetchMock: ReturnType<typeof vi.fn>;
 const json = (body: unknown) => new Response(JSON.stringify(body));
 
@@ -27,8 +28,10 @@ beforeEach(() => {
   window.localStorage.clear(); window.sessionStorage.clear();
   characters = [structuredClone(character)]; conversations = []; savedDetail = structuredClone(detail);
   attempts = []; failFirstTurn = false; modelUnavailable = false; platformEnabled = true;
+  platformPaid=false;
   fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-    if (url === '/api/me/tavern/platform-models') return json({ enabled: platformEnabled, billingMode: 'trial', models: platformEnabled ? [{ id: 'trial-model', provider: 'AnyAI', contextWindow: 32768 }] : [] });
+    if (url === '/api/me/tavern/platform-models') return json({ enabled: platformEnabled, billingMode: platformPaid?'wallet':'trial', ...(platformPaid?{policyVersion:'cash-v1-actual-x2'}:{}),models: platformEnabled ? [{ id: 'trial-model', provider: 'AnyAI', contextWindow: 32768 }] : [] });
+    if (url.endsWith('/quote') && init?.method==='POST') return json({quoteId:'quote-1',maximumChargeMicros:10_000,policyVersion:'cash-v1-actual-x2',expiresInSeconds:60});
     if (url === '/api/credit/me') return json({ balance: 10, signedInToday: true, freeRemaining: 0, pricePerTree: 1 });
     if (url === '/api/wallet') return json({ balanceMicros: 800_000, currency: 'CNY', supportContact: '', channels: [], topups: [], ledger: [] });
     if (url === '/api/model-catalog/byok') return json([{ id: 'gemini-3.8-flash', provider: 'AnyAI',
@@ -140,7 +143,9 @@ beforeEach(() => {
         modelId: 'deepseek-v4-flash', usage: savedTurn.usage, chargedCreditUnits: savedTurn.chargedCreditUnits, createdAt: savedTurn.createdAt };
       savedDetail = { ...savedDetail, turns: [...savedDetail.turns.filter(item => item.clientTurnId !== input.clientActionId), savedTurn],
         generations: [...savedDetail.generations.filter(item => item.clientActionId !== input.clientActionId), generation], graph };
-      return sseResponse([{ event: 'delta', payload: { delta: assistantText } }, { event: 'completed', payload: { ...completion, turn: savedTurn, graph } }]);
+      const charge={generationId:savedTurn.turnId,outputMessageId,amountMicros:460,balanceAfterMicros:799_540,capped:false,createdAt:savedTurn.createdAt};
+      if (platformPaid) Object.assign(savedDetail,{cashCharges:[charge]});
+      return sseResponse([{ event: 'delta', payload: { delta: assistantText } }, { event: 'completed', payload: { ...completion, turn: savedTurn, graph,...(platformPaid?{cashCharge:charge,walletBalanceMicros:799_540}:{}) } }]);
     }
     throw new Error(`Unexpected endpoint: ${url}`);
   });
@@ -178,6 +183,28 @@ async function configureSelfKey(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('Tavern page', () => {
+  it('quotes a paid platform turn before sending and preserves its measured cash receipt',async()=>{
+    platformPaid=true;restoreConversation();const user=userEvent.setup();renderPage();
+    await user.click(await screen.findByRole('button',{name:'配置'}));
+    await user.click(screen.getByRole('button',{name:'模型接入'}));
+    await user.click(screen.getByRole('button',{name:'使用平台模型（需要充值）'}));
+    await user.click(await screen.findByRole('button',{name:/trial-model/}));
+    expect(screen.getByText(/上游实际扣费.*2/)).toBeVisible();
+    expect(screen.queryByText(/测试期间暂不扣费/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button',{name:'关闭配置'}));
+    await user.type(screen.getByLabelText('消息'),'付费聊一句');
+    await user.click(screen.getByRole('button',{name:'发送'}));
+    const confirmation=await screen.findByRole('dialog',{name:'确认本次费用'});
+    expect(within(confirmation).getByText(/0.01/)).toBeVisible();
+    expect(attempts).toHaveLength(0);
+    await user.click(within(confirmation).getByRole('button',{name:'确认并发送'}));
+    await screen.findByText('新回复 🌙');
+    const request=fetchMock.mock.calls.find(([url])=>url.endsWith('/turns'))!;
+    expect(JSON.parse(String(request[1]?.body))).toMatchObject({billingPolicy:'cash-v1-actual-x2',quoteId:'quote-1'});
+    expect(await screen.findByText(/本次费用 ¥0.00046/)).toBeVisible();
+    expect(screen.getByText(/现金余额 ¥0.79954/)).toBeVisible();
+    expect(screen.getByText(/输入 20.*输出 8/)).toBeVisible();
+  });
   it('keeps the self key when clicking its selected route again', async () => {
     const user = userEvent.setup(); renderPage();
     await user.click(await screen.findByRole('button', { name: '配置' }));
@@ -369,6 +396,57 @@ describe('Tavern page', () => {
     expect(screen.getByRole('button', { name: '选择角色 新角色' })).toBeInTheDocument();
     const upload = fetchMock.mock.calls.find(([url, init]) => url.endsWith('/characters') && init?.method === 'POST')?.[1];
     expect((upload?.body as FormData).get('source_file')).toBe(file);
+  });
+
+  it('creates a private character from a name and prompt without calling a model', async () => {
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '创建角色卡' }));
+    const dialog = await screen.findByRole('dialog', { name: '创建角色卡' });
+    await user.type(within(dialog).getByLabelText('角色名称'), '灯塔守望者');
+    await user.type(within(dialog).getByLabelText('角色设定（提示词）'), '你是海边的灯塔守望者，用中文与旅行者聊天。');
+    await user.type(within(dialog).getByLabelText('开场白（可选）'), '欢迎来到灯塔。');
+    await user.click(within(dialog).getByRole('button', { name: '保存角色卡' }));
+    expect(await screen.findByRole('button', { name: '选择角色 灯塔守望者' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '创建角色卡' })).not.toBeInTheDocument();
+    const writes = fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(writes).toHaveLength(1);
+    expect(writes[0][0]).toBe('/api/me/tavern/characters');
+    const body = writes[0][1]!.body as FormData;
+    expect(JSON.parse(body.get('normalized_card') as string)).toMatchObject({
+      name: '灯塔守望者', description: '你是海边的灯塔守望者，用中文与旅行者聊天。', firstMessage: '欢迎来到灯塔。', sourceFormat: 'json',
+    });
+    expect(body.get('source_file')).toBeInstanceOf(File);
+  });
+
+  it('rejects a blank character prompt without losing the entered name', async () => {
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '创建角色卡' }));
+    const dialog = await screen.findByRole('dialog', { name: '创建角色卡' });
+    await user.type(within(dialog).getByLabelText('角色名称'), '守望者');
+    await user.click(within(dialog).getByRole('button', { name: '保存角色卡' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('角色设定不能为空');
+    expect(within(dialog).getByLabelText('角色名称')).toHaveValue('守望者');
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
+  it('rejects oversized character prompts and preserves the form when saving fails', async () => {
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '创建角色卡' }));
+    const dialog = await screen.findByRole('dialog', { name: '创建角色卡' });
+    fireEvent.change(within(dialog).getByLabelText('角色名称'), { target: { value: '守望者' } });
+    fireEvent.change(within(dialog).getByLabelText('角色设定（提示词）'), { target: { value: '灯'.repeat(6000) } });
+    await user.click(within(dialog).getByRole('button', { name: '保存角色卡' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('角色设定最多 16 KiB');
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+    fireEvent.change(within(dialog).getByLabelText('角色设定（提示词）'), { target: { value: '用中文交谈。' } });
+    const originalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => url === '/api/me/tavern/characters' && init?.method === 'POST'
+      ? Promise.resolve(new Response(JSON.stringify({ error: { code: 'tavern.persistence_failed', message: '保存失败，请重试' } }), { status: 503 }))
+      : originalFetch(url, init));
+    await user.click(within(dialog).getByRole('button', { name: '保存角色卡' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('保存失败');
+    expect(within(dialog).getByLabelText('角色名称')).toHaveValue('守望者');
+    expect(within(dialog).getByLabelText('角色设定（提示词）')).toHaveValue('用中文交谈。');
   });
 
   it('groups community discovery and the official catalog inside one import entry', async () => {

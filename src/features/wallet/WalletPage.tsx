@@ -6,7 +6,7 @@ import { createTopup, declarePaid, declareUnpaid, formatAmountMicros, formatFen,
 const surface = 'min-w-0 rounded-2xl border border-slate-800 bg-slate-900/70 p-5 sm:p-6';
 const button = 'rounded-xl border border-slate-700 px-3.5 py-2.5 text-sm font-medium transition hover:border-cyan-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:opacity-50';
 const statusLabels: Record<Topup['status'], string> = { awaiting_payment: '待付款', awaiting_review: '待核实', closed_unpaid: '未付款关闭', credited: '已入账', rejected: '已拒绝', reversed: '已撤销' };
-const ledgerLabels: Record<LedgerEntry['kind'], string> = { welcome: '一次性赠送', topup: '充值入账', adjustment: '额度调整', reversal: '撤销变动' };
+const ledgerLabels: Record<LedgerEntry['kind'], string> = { welcome: '一次性赠送', topup: '充值入账', adjustment: '额度调整', reversal: '撤销变动',usage:'模型消费' };
 export default function WalletPage({ accountId, csrfToken, onBack, onNavigateModels }: { accountId: string; csrfToken: string; onBack: () => void; onNavigateModels: () => void }) {
   const queryClient = useQueryClient();
   const walletKey = ['me', accountId, 'wallet'] as const;

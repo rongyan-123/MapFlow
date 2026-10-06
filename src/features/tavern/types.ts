@@ -32,6 +32,7 @@ export interface TavernModelSelection {
   apiKey: string; model: string; baseUrl: string;
   settings: Record<string, string | boolean>;
   historyBytes: 8192 | 16384 | 32768;
+  billingPolicy?: string;
 }
 export interface GenerationSettingsState {
   generationSettings: GenerationSettings; generationSettingsVersion: number;
@@ -78,8 +79,11 @@ export type GenerationAction =
 export interface ConversationDetail {
   conversation: Conversation; character: Character; turns: Turn[];
   generations: GenerationRecord[]; graph: ConversationGraph;
+  cashCharges?: CashCharge[];
 }
-export interface CompletedTurn { turn: Turn; graph: ConversationGraph; creditBalance: number; chargedCredits: number; idempotencyHit: boolean }
+export interface CashCharge { generationId:string; outputMessageId:string; amountMicros:number; balanceAfterMicros:number; capped:boolean; createdAt:string }
+export interface CashQuote { quoteId:string; maximumChargeMicros:number; policyVersion:string; expiresInSeconds:number }
+export interface CompletedTurn { turn: Turn; graph: ConversationGraph; creditBalance: number; chargedCredits: number; idempotencyHit: boolean; cashCharge?:CashCharge; walletBalanceMicros?:number }
 export class TavernApiError extends Error {
   constructor(public readonly status: number, public readonly code: string, message: string, public readonly traceId?: string) {
     super(message); this.name = 'TavernApiError';

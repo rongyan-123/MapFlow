@@ -8,6 +8,21 @@ const catalog = { multiplierLabel: '0.2倍率', currency: 'CNY', updatedAt: '202
   { id: 'model-b', provider: 'OpenAI', contextWindow: 128000, settings: [{ name: 'reasoning_effort', kind: 'select', options: ['low', 'high'] }], vendorCodes: ['vendor-b', 'vendor-c'], availability: 'byok', pricing: null },
 ] };
 afterEach(() => vi.unstubAllGlobals());
+it('shows actual per-channel prices and distinguishes live and estimated statistics',async()=>{
+  const live={vendor:'VST',lane:1,enabled:true,inputMicrosPerMillion:1_600_000,outputMicrosPerMillion:3_200_000,successRate24h:99.1,avgResponseSeconds:2.5,statsSource:'live'};
+  const paid={...catalog,multiplierLabel:'上游实扣 × 2',models:[{...catalog.models[0],availability:'wallet',vendorCodes:['VST','EST'],pricing:{channels:[live,{...live,vendor:'EST',lane:2,enabled:false,statsSource:'estimated',successRate24h:93,avgResponseSeconds:6}],maxInputMicrosPerMillion:1_600_000,maxOutputMicrosPerMillion:3_200_000,updatedAt:'2026-10-07T00:00:00Z',basis:'upstream_actual_x2'}}]};
+  vi.stubGlobal('fetch',vi.fn<typeof fetch>().mockImplementation(async path=>new Response(JSON.stringify(String(path).includes('/wallet')?{balanceMicros:100_000,currency:'CNY',supportContact:'',channels:[],topups:[],ledger:[]}:paid))));
+  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
+  render(<QueryClientProvider client={client}><ModelPricingPage accountId="player-a" onNavigateWallet={()=>{}} onBack={()=>{}} onNavigateTavern={()=>{}}/></QueryClientProvider>);
+  await screen.findByRole('button',{name:'选择模型 model-a'});
+  expect(screen.getByText(/99.1%/)).toBeVisible();
+  expect(screen.getByText(/2.5 秒/)).toBeVisible();
+  expect(screen.getByText('真实监控')).toBeVisible();
+  expect(screen.getByText('估算数据')).toBeVisible();
+  expect(screen.getAllByText(/输入 ¥1.6.*输出 ¥3.2/)[0]).toBeVisible();
+  expect(screen.queryByText(/额度调用尚未开放/)).not.toBeInTheDocument();
+  client.clear();
+});
 it('searches and selects a model with context, settings and honest channel monitoring', async () => {
   vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockImplementation(async path => new Response(JSON.stringify(String(path).includes('/wallet') ? { balanceMicros: 3_100_000, currency: 'CNY', supportContact: '', channels: [], topups: [], ledger: [] } : catalog))));
   const navigate = vi.fn();
