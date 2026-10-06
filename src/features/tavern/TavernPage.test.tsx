@@ -182,8 +182,16 @@ async function configureSelfKey(user: ReturnType<typeof userEvent.setup>) {
   await user.keyboard('{Escape}');
 }
 
+async function configurePaidPlatform(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('button', { name: '配置' }));
+  await user.click(screen.getByRole('button', { name: '模型接入' }));
+  await user.click(screen.getByRole('button', { name: '使用平台模型（需要充值）' }));
+  await user.click(await screen.findByRole('button', { name: /trial-model/ }));
+  await user.click(screen.getByRole('button', { name: '关闭配置' }));
+}
+
 describe('Tavern page', () => {
-  it('quotes a paid platform turn before sending and preserves its measured cash receipt',async()=>{
+  it('sends a paid platform turn directly after obtaining its quote and preserves its measured cash receipt',async()=>{
     platformPaid=true;restoreConversation();const user=userEvent.setup();renderPage();
     await user.click(await screen.findByRole('button',{name:'配置'}));
     await user.click(screen.getByRole('button',{name:'模型接入'}));
@@ -194,17 +202,65 @@ describe('Tavern page', () => {
     await user.click(screen.getByRole('button',{name:'关闭配置'}));
     await user.type(screen.getByLabelText('消息'),'付费聊一句');
     await user.click(screen.getByRole('button',{name:'发送'}));
-    const confirmation=await screen.findByRole('dialog',{name:'确认本次费用'});
-    expect(within(confirmation).getByText(/0.01/)).toBeVisible();
-    expect(within(confirmation).queryByText(/上游.*(2|倍)|倍率/)).not.toBeInTheDocument();
-    expect(attempts).toHaveLength(0);
-    await user.click(within(confirmation).getByRole('button',{name:'确认并发送'}));
     await screen.findByText('新回复 🌙');
+    expect(screen.queryByRole('dialog',{name:'确认本次费用'})).not.toBeInTheDocument();
+    const quoteRequest=fetchMock.mock.calls.findIndex(([url])=>url.endsWith('/quote'));
+    expect(quoteRequest).toBeGreaterThanOrEqual(0);
+    expect(quoteRequest).toBeLessThan(fetchMock.mock.calls.findIndex(([url])=>url.endsWith('/turns')));
     const request=fetchMock.mock.calls.find(([url])=>url.endsWith('/turns'))!;
     expect(JSON.parse(String(request[1]?.body))).toMatchObject({billingPolicy:'cash-v1-actual-x2',quoteId:'quote-1'});
     expect(await screen.findByText(/本次费用 ¥0.00046/)).toBeVisible();
     expect(screen.getByText(/现金余额 ¥0.79954/)).toBeVisible();
     expect(screen.getByText(/输入 20.*输出 8/)).toBeVisible();
+  });
+  it('preserves the input and sends nothing when the paid quote fails, then allows direct retry', async () => {
+    platformPaid = true; restoreConversation(); const user = userEvent.setup(); renderPage();
+    await configurePaidPlatform(user);
+    const originalFetch = fetchMock.getMockImplementation()!;
+    let quoteUnavailable = true;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => url.endsWith('/quote') && quoteUnavailable
+      ? Promise.resolve(new Response(JSON.stringify({ error: { code: 'tavern.cash_billing_unavailable', message: '价格暂不可用' } }), { status: 503 }))
+      : originalFetch(url, init));
+    await user.type(screen.getByLabelText('消息'), '保留这句话');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('价格暂不可用');
+    expect(screen.getByLabelText('消息')).toHaveValue('保留这句话');
+    expect(attempts).toHaveLength(0);
+    quoteUnavailable = false;
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await screen.findByText('新回复 🌙');
+    expect(attempts).toHaveLength(1);
+    expect(screen.queryByRole('dialog', { name: '确认本次费用' })).not.toBeInTheDocument();
+  });
+  it('reuses the paid request identity and quote when retrying a disconnected direct send', async () => {
+    platformPaid = true; failFirstTurn = true; restoreConversation(); const user = userEvent.setup(); renderPage();
+    await configurePaidPlatform(user);
+    await user.type(screen.getByLabelText('消息'), '重试原请求');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await user.click(await screen.findByRole('button', { name: '重试这条消息' }));
+    await screen.findByText('新回复 🌙');
+    const requests = fetchMock.mock.calls.filter(([url]) => url.endsWith('/turns')).map(([, init]) => JSON.parse(String(init?.body)));
+    expect(requests).toHaveLength(2);
+    expect(requests[1].clientActionId).toBe(requests[0].clientActionId);
+    expect(requests[1].quoteId).toBe(requests[0].quoteId);
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/quote'))).toHaveLength(1);
+    expect(screen.getAllByText(/本次费用 ¥0.00046/)).toHaveLength(1);
+  });
+  it('keeps repeated clicks from sending two paid turns while a quote is pending', async () => {
+    platformPaid = true; restoreConversation(); const user = userEvent.setup(); renderPage();
+    await configurePaidPlatform(user);
+    const originalFetch = fetchMock.getMockImplementation()!;
+    let resolveQuote!: (quote: Response) => void;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => url.endsWith('/quote')
+      ? new Promise<Response>(resolve => { resolveQuote = resolve; }) : originalFetch(url, init));
+    await user.type(screen.getByLabelText('消息'), '只发送一次');
+    await user.dblClick(screen.getByRole('button', { name: '发送' }));
+    expect(attempts).toHaveLength(0);
+    expect(screen.getByRole('button', { name: '生成中…' })).toBeDisabled();
+    await act(async () => resolveQuote(json({ quoteId: 'quote-1', maximumChargeMicros: 10_000, policyVersion: 'cash-v1-actual-x2', expiresInSeconds: 60 })));
+    await screen.findByText('新回复 🌙');
+    expect(attempts).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/quote'))).toHaveLength(1);
   });
   it('keeps the self key when clicking its selected route again', async () => {
     const user = userEvent.setup(); renderPage();
