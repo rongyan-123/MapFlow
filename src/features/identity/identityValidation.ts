@@ -2,7 +2,7 @@ export interface RegistrationFormValues {
   username: string;
   password: string;
   confirmPassword: string;
-  invitationCode: string;
+  invitationCode?: string;
   email: string;
   phone: string;
 }
@@ -126,7 +126,6 @@ export function validateRegistration(form: RegistrationFormValues): string | nul
     validateUsernameField(form.username) ??
     validatePasswordField(form.password, form.username) ??
     validateConfirmPasswordField(form.password, form.confirmPassword) ??
-    validateInvitationCodeField(form.invitationCode) ??
     // 跨字段规则：邮箱/手机号至少填一种
     (!form.email.trim() && !form.phone.trim() ? '请至少填写邮箱或手机号。' : null) ??
     validateEmailField(form.email) ??

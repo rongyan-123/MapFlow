@@ -5,9 +5,25 @@ export type GenerationFundingMode = 'byok' | 'platform' | 'credits';
 
 export interface ModelAccess {
   apiKey: string;
-  model: DeepSeekModel;
-  thinking: ThinkingMode;
-  reasoningEffort: ReasoningEffort;
+  model: string;
+  thinking?: ThinkingMode;
+  reasoningEffort?: ReasoningEffort;
+  baseUrl?: string;
+  settings?: Record<string, string | boolean>;
+}
+
+export interface UserModelSetting {
+  name: string;
+  kind: 'switch' | 'select';
+  options: string[];
+}
+
+export interface UserModelProfile {
+  id: string;
+  provider: string;
+  contextWindow: number;
+  baseUrl: string;
+  settings: UserModelSetting[];
 }
 
 export interface CreditGenerationSelection {
@@ -56,7 +72,7 @@ export type PlanningChangeKind =
 export interface GenerationPlan {
   version: number;
   changeKind: PlanningChangeKind;
-  model: DeepSeekModel;
+  model: string;
   thinking: ThinkingMode;
   reasoningEffort: ReasoningEffort;
   outcome: PlanningOutcome;

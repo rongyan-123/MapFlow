@@ -1,0 +1,90 @@
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
+
+
+android {
+    namespace = "com.shinian.pay"
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId = "com.shinian.pay"
+        minSdk = 21
+        targetSdk = 34
+        versionCode = 14
+        versionName = "3.0.1"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // ABI 过滤，减少 APK 体积
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+        }
+    }
+
+    // 签名配置
+    signingConfigs {
+        release {
+            storeFile file("${projectDir}/keystore/keystore.jks")
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: project.hasProperty("KEYSTORE_PASSWORD") ? project.property("KEYSTORE_PASSWORD") : ""
+            keyAlias System.getenv("KEY_ALIAS") ?: (project.hasProperty("KEY_ALIAS") ? project.property("KEY_ALIAS") : "")
+            keyPassword System.getenv("KEY_PASSWORD") ?: (project.hasProperty("KEY_PASSWORD") ? project.property("KEY_PASSWORD") : "")
+        }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release  // 使用签名配置
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+
+    // 强制排除旧版本 Kotlin 依赖
+    configurations.configureEach {
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+    }
+
+    // AGP 8 默认不生成 BuildConfig，显式开启（AppConstants.DEBUG 绑定构建类型）
+    buildFeatures {
+        buildConfig true
+    }
+}
+
+dependencies {
+    // zxing 核心库：改用 Maven 依赖，便于 R8 裁剪未使用的条码格式
+    // （原先打包 core_3.0.1.jar，aztec/datamatrix/maxicode/oned 等格式全部保留，无法裁剪）
+    implementation 'com.google.zxing:core:3.5.3'
+    // AndroidX
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    // Material UI
+    implementation 'com.google.android.material:material:1.9.0'
+    // OkHttp
+    implementation 'com.squareup.okhttp3:okhttp:4.9.2'
+    // jvm test
+    testImplementation 'junit:junit:4.13.2'
+    // Kotlin 标准库 + 协程（渐进式 Kotlin 化）
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
+    // androidTest
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    androidTestImplementation 'androidx.test:runner:1.5.2'
+    androidTestImplementation 'androidx.test:rules:1.5.0'
+}

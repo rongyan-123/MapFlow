@@ -1,5 +1,11 @@
 # MapFlow 项目交接文档
 
+> **生产入口更新（2026-10-06）**：当前生产运行在 Linux 笔记本 `rong-ubuntu`，通过 `ssh rong-frp` 连接。运行目录为 `/opt/mapflow-laptop-migration-20261006`，运维记录在该目录的 `OPERATIONS.md`；本地迁移记录见 [Docker 迁移记录](docs/migration/2026-10-06-laptop-docker-migration.md)。公网仍为 https://xxian.fun，通过 88FRP HTTPS 隧道到 `127.0.0.1:18443`。下面涉及阿里云 `47.114.98.109`、旧容器名和 `/opt/mapflow/switch.sh` 的发布描述属于历史方案，不能作为当前部署指令；CI 目标尚未迁移。
+
+当前状态检查：`ssh rong-frp` 后运行 `sudo docker -H unix:///var/run/docker.sock ps`，生产容器为 `mapflow-laptop-app`、`mapflow-laptop-postgres`、`mapflow-laptop-caddy`。不要使用默认 Docker Desktop socket 判断生产容器不存在。
+
+> **收款与排队发布更新（2026-10-06）**：当前生产镜像为 `mapflow-server:payment-display-queue-20261006`，迁移 0030。微信/支付宝共用 20 秒二维码展示队列，超时重新排队，已扫码的原订单保留 5 分钟付款有效期；继续按指定金额匹配、按实收入账。微信码版本 5，支付宝 4；先前实收 0.03 元仍只有一条流水。已保留另一会话的注册后端 `f60293e` 与前端 `a8d393d`。前端目录 `D:\MapFlow-payment-listener`、分支 `codex/payment-listener-20261006`；最新后端目录 `D:\mapflow-server-payment-queue`、分支 `codex/payment-display-queue-20261006`。当前操作与备份见 [队列部署记录](docs/deployment/2026-10-06-payment-display-queue.md)，首次接通监控的历史见 [自动充值部署记录](docs/deployment/2026-10-06-vmq-auto-topup.md)。
+
 > 交接日期：2026-08-21　交接对象：接手此项目的 AI Agent
 > 阅读顺序：本文档（30 秒概览 + 部署流水线必读）→ 全局 `C:\Users\Administrator\.claude\CLAUDE.md`（工作流规则）→ `git log --oneline -20`（两仓库；SDD ledger 已清理，历史以本文档 §7 + git 为准）→ 相关代码
 

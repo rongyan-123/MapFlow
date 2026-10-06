@@ -1,0 +1,19 @@
+
+> mapflow-next-learning-tree@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 909 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                        0.59 kB │ gzip:   0.45 kB
+dist/assets/index-DoIRK9HI.css       105.27 kB │ gzip:  19.01 kB
+dist/assets/SkillTree3D-C1uRsQbx.js  878.04 kB │ gzip: 238.91 kB
+dist/assets/index-qnWku4zn.js        977.75 kB │ gzip: 297.31 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 10.62s

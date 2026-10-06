@@ -1,0 +1,39 @@
+Vmq-App (优化修复版)
+Copyright 2026
+
+本作品是基于以下原作的衍生作品（Derivative Work）：
+
+  Vmq-App - 免 Root 收款监听助手
+  Copyright shinian-a
+  https://github.com/shinian-a/Vmq-App
+  Licensed under the Apache License, Version 2.0
+
+--------------------------------------------------------------------
+
+本衍生作品由第三方在原作基础上修改而来，修改内容包括但不限于：
+网络层重构、权限引导体系、稳定性与资源管理修复、死代码清理、
+安全加固等。详细的修改说明见 CHANGELOG.md。
+
+本衍生作品同样以 Apache License, Version 2.0 授权发布。
+
+依据 Apache License 2.0 第 4 条（Redistribution）之规定：
+  (a) 本作品随附 LICENSE 文件副本；
+  (b) 被修改的文件已通过 CHANGELOG.md 集中标注说明修改内容；
+  (c) 原作的版权、专利、商标与归属声明均予以保留；
+  (d) 本文件用于承载归属声明（Attribution Notices）。
+
+原作作者 shinian-a 未参与本衍生作品的修改，亦不对本衍生作品
+提供任何担保或技术支持。
+
+--------------------------------------------------------------------
+
+本项目还包含以下第三方组件：
+
+  * ZXing (https://github.com/zxing/zxing)
+    Licensed under the Apache License, Version 2.0
+
+  * OkHttp (https://github.com/square/okhttp)
+    Licensed under the Apache License, Version 2.0
+
+  * AndroidX / Material Components
+    Licensed under the Apache License, Version 2.0

@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { readAdminTopups } from '../wallet/walletClient';
+import AdminWalletTab from './AdminWalletTab';
 import AccountsTab from './AccountsTab';
 import AnnouncementsTab from './AnnouncementsTab';
 import AuditLogTab from './AuditLogTab';
@@ -12,6 +15,7 @@ import RequestObservationsTab from './RequestObservationsTab';
 export interface AdminPanelProps {
   onBack: () => void;
   csrfToken: string;
+  accountId?: string;
 }
 
 type AdminTab =
@@ -23,7 +27,8 @@ type AdminTab =
   | 'feedback'
   | 'announcements'
   | 'provider'
-  | 'publications';
+  | 'publications'
+  | 'wallet';
 
 const TABS: { id: AdminTab; label: string }[] = [
   { id: 'overview', label: '概览' },
@@ -35,14 +40,16 @@ const TABS: { id: AdminTab; label: string }[] = [
   { id: 'feedback', label: '反馈' },
   { id: 'announcements', label: '公告' },
   { id: 'provider', label: '模型' },
+  { id: 'wallet', label: '充值' },
 ];
 
-export default function AdminPanel({ onBack, csrfToken }: AdminPanelProps) {
+export default function AdminPanel({ onBack, csrfToken, accountId }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const walletPending = useQuery({ queryKey: ['admin', accountId, 'wallet', 'topups', 'awaiting_review'], queryFn: () => readAdminTopups('awaiting_review'), refetchInterval: 30_000, retry: false });
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-slate-950 text-slate-100">
-      <header className="flex shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-2.5 sm:px-5">
+      <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-2.5 sm:px-5">
         <button
           type="button"
           onClick={onBack}
@@ -59,7 +66,7 @@ export default function AdminPanel({ onBack, csrfToken }: AdminPanelProps) {
         <nav
           role="tablist"
           aria-label="管理面板分区"
-          className="ml-auto flex max-w-full shrink-0 items-center gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/80 p-1 text-xs"
+          className="flex min-w-0 max-w-full basis-full items-center gap-1 overflow-x-auto lg:ml-auto lg:basis-auto rounded-xl border border-slate-800 bg-slate-900/80 p-1 text-xs"
         >
           {TABS.map((tab) => (
             <button
@@ -74,7 +81,7 @@ export default function AdminPanel({ onBack, csrfToken }: AdminPanelProps) {
                   : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
               }`}
             >
-              {tab.label}
+              {tab.label}{tab.id === 'wallet' && walletPending.data ? ` · ${walletPending.data.pendingCount}` : ''}
             </button>
           ))}
         </nav>
@@ -92,6 +99,7 @@ export default function AdminPanel({ onBack, csrfToken }: AdminPanelProps) {
         {activeTab === 'feedback' && <FeedbackTab csrfToken={csrfToken} />}
         {activeTab === 'announcements' && <AnnouncementsTab csrfToken={csrfToken} />}
         {activeTab === 'provider' && <ProviderTab csrfToken={csrfToken} />}
+        {activeTab === 'wallet' && <AdminWalletTab key={accountId} csrfToken={csrfToken} accountId={accountId} />}
       </main>
     </div>
   );

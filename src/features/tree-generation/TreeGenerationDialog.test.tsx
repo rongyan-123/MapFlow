@@ -20,6 +20,7 @@ const generationApi = vi.hoisted(() => ({
   confirmPlatformTreeGeneration: vi.fn(),
   createPlatformTreeGeneration: vi.fn(),
   createTreeGeneration: vi.fn(),
+  readUserModelCatalog: vi.fn(),
   readGenerationRun: vi.fn(),
   readTreeGeneration: vi.fn(),
   releaseFailedPlatformTreeGeneration: vi.fn(),
@@ -46,11 +47,59 @@ const generationInput: GenerationInput = {
 
 beforeEach(() => {
   for (const mock of Object.values(generationApi)) mock.mockReset();
+  window.sessionStorage.clear();
 });
 
 afterEach(() => cleanup());
 
 describe('TreeGenerationDialog', () => {
+  it('restores only nonsecret user model choices for a resumed planning session', async () => {
+    const user = userEvent.setup();
+    window.sessionStorage.setItem('mapflow.generation.byok-choice.session-1', JSON.stringify({
+      provider: 'anyai', modelId: 'gemini-3.8-flash', baseUrl: 'https://anyai.token6688.com/v1',
+      settings: { enable_thinking: true },
+    }));
+    generationApi.readTreeGeneration.mockResolvedValue({ ...planReadySession(),
+      latestPlan: { ...planReadySession().latestPlan!, model: 'gemini-3.8-flash' } });
+    generationApi.readUserModelCatalog.mockResolvedValue([{ id: 'gemini-3.8-flash', provider: 'AnyAI',
+      contextWindow: 1048576, baseUrl: 'https://anyai.token6688.com/v1',
+      settings: [{ name: 'enable_thinking', kind: 'switch', options: [] }] }]);
+    renderDialog({ sessionId: 'session-1' });
+    await screen.findByRole('option', { name: 'gemini-3.8-flash' });
+    expect(screen.getByLabelText('API 线路')).toHaveValue('anyai');
+    expect(screen.getByLabelText('API Key')).toHaveValue('');
+    await user.type(screen.getByLabelText('API Key'), 'test-key');
+    expect(window.sessionStorage.getItem('mapflow.generation.byok-choice.session-1')).not.toContain('test-key');
+  });
+  it('selects an AnyAI preset and sends only that models supported controls with a user key', async () => {
+    const user = userEvent.setup();
+    generationApi.readUserModelCatalog.mockResolvedValue([{
+      id: 'gemini-3.8-flash', provider: 'AnyAI', contextWindow: 1048576,
+      baseUrl: 'https://anyai.token6688.com/v1',
+      settings: [
+        { name: 'enable_thinking', kind: 'switch', options: [] },
+        { name: 'thinking_budget', kind: 'select', options: ['none', 'low', 'high'] },
+      ],
+    }]);
+    generationApi.createTreeGeneration.mockResolvedValue(planReadySession());
+    renderDialog();
+    await user.selectOptions(screen.getByLabelText('API 线路'), 'anyai');
+    expect(await screen.findByRole('option', { name: 'gemini-3.8-flash' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('思考强度')).not.toBeInTheDocument();
+    await fillGenerationForm(user);
+    await user.type(screen.getByLabelText('API Key'), 'sk-anyai-user');
+    await user.click(screen.getByLabelText('深度思考'));
+    await user.selectOptions(screen.getByLabelText('思考预算'), 'high');
+    await user.click(screen.getByRole('button', { name: '生成规划' }));
+    await waitFor(() => expect(generationApi.createTreeGeneration).toHaveBeenCalledWith(
+      generationInput,
+      { apiKey: 'sk-anyai-user', model: 'gemini-3.8-flash',
+        baseUrl: 'https://anyai.token6688.com/v1',
+        settings: { enable_thinking: true, thinking_budget: 'high' } },
+      'csrf-secret',
+    ));
+  });
+
   it('collects only the four fixed learning fields and keeps the API key in component memory', async () => {
     const user = userEvent.setup();
     generationApi.createTreeGeneration.mockResolvedValue(planReadySession());
@@ -689,6 +738,11 @@ function renderDialog({
   generationCapabilities?: IdentityCapabilities['generation'];
   entitlements?: ReturnType<typeof entitlementSummary> | null;
 } = {}) {
+  if (sessionId && !window.sessionStorage.getItem(`mapflow.generation.byok-choice.${sessionId}`)) {
+    window.sessionStorage.setItem(`mapflow.generation.byok-choice.${sessionId}`, JSON.stringify({
+      provider: 'deepseek', modelId: 'deepseek-v4-flash', baseUrl: '', settings: {},
+    }));
+  }
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });

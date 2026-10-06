@@ -32,6 +32,7 @@ import {
   createPlatformTreeGeneration,
   createTreeGeneration,
   readGenerationRun,
+  readUserModelCatalog,
   readTreeGeneration,
   releaseFailedPlatformTreeGeneration,
   replanPlatformTreeGeneration,
@@ -46,6 +47,7 @@ import type {
   GenerationRun,
   GenerationSession,
   ModelAccess,
+  UserModelProfile,
   PlatformGenerationEntitlementSummary,
   ReasoningEffort,
   ThinkingMode,
@@ -72,6 +74,11 @@ interface TreeGenerationDialogProps {
 }
 
 type RevisionKind = 'replan' | 'adjust';
+type ByokProvider = 'deepseek' | 'anyai' | 'custom';
+interface SavedByokChoice {
+  provider: ByokProvider; modelId: string; baseUrl: string;
+  settings: Record<string, string | boolean>;
+}
 
 const EMPTY_INPUT: GenerationInput = {
   topic: '',
@@ -97,6 +104,11 @@ export default function TreeGenerationDialog({
   const [fundingMode, setFundingMode] = useState<GenerationFundingMode>('byok');
   const [input, setInput] = useState<GenerationInput>(EMPTY_INPUT);
   const [apiKey, setApiKey] = useState('');
+  const [byokProvider, setByokProvider] = useState<ByokProvider>('deepseek');
+  const [gatewayModelId, setGatewayModelId] = useState('');
+  const [customBaseUrl, setCustomBaseUrl] = useState('');
+  const [gatewaySettings, setGatewaySettings] = useState<Record<string, string | boolean>>({});
+  const [choiceReady, setChoiceReady] = useState(sessionId === null);
   const [model, setModel] = useState<DeepSeekModel>(
     capabilities.models[0] ?? 'deepseek-v4-flash',
   );
@@ -129,6 +141,19 @@ export default function TreeGenerationDialog({
     setDiagnostic(null);
     completedEntryRef.current = null;
     refreshedTerminalPlatformSessionRef.current = null;
+    if (sessionId) {
+      const choice = readSavedByokChoice(sessionId);
+      setChoiceReady(choice !== null);
+      setByokProvider(choice?.provider ?? 'deepseek');
+      setGatewayModelId(choice?.modelId ?? '');
+      setCustomBaseUrl(choice?.baseUrl ?? '');
+      setGatewaySettings(choice?.settings ?? {});
+      if (choice?.provider === 'deepseek'
+        && (choice.modelId === 'deepseek-v4-flash' || choice.modelId === 'deepseek-v4-pro')) {
+        setModel(choice.modelId);
+      }
+      setApiKey('');
+    }
   }, [sessionId]);
 
   const sessionQuery = useQuery({
@@ -140,9 +165,30 @@ export default function TreeGenerationDialog({
     refetchInterval: (query) =>
       query.state.data?.state === 'planning' ? 2_000 : false,
   });
+  const userModelsQuery = useQuery({
+    queryKey: ['byok-model-catalog'],
+    queryFn: readUserModelCatalog,
+    enabled: byokProvider === 'anyai',
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+  const userModels = userModelsQuery.data ?? [];
+  const selectedGatewayModel = userModels.find((item) => item.id === gatewayModelId)
+    ?? userModels[0];
   const session = sessionQuery.data ?? null;
   const activeFundingMode = session?.fundingMode ??
     (currentSessionId === null ? fundingMode : null);
+
+  useEffect(() => {
+    if (currentSessionId && choiceReady && session?.fundingMode === 'byok') {
+      saveByokChoice(currentSessionId, { provider: byokProvider,
+        modelId: byokProvider === 'deepseek' ? model
+          : byokProvider === 'anyai' ? selectedGatewayModel?.id ?? gatewayModelId : gatewayModelId,
+        baseUrl: byokProvider === 'anyai' ? selectedGatewayModel?.baseUrl ?? '' : customBaseUrl,
+        settings: byokProvider === 'anyai' ? gatewaySettings : {} });
+    }
+  }, [currentSessionId, choiceReady, session?.fundingMode, byokProvider, model,
+    gatewayModelId, customBaseUrl, selectedGatewayModel?.baseUrl, gatewaySettings]);
 
   useEffect(() => {
     const persistedLimit = session?.creditQuestionLimit;
@@ -184,6 +230,10 @@ export default function TreeGenerationDialog({
       createTreeGeneration(normalizeInput(input), modelAccess(), csrfToken),
     onSuccess: (created) => {
       setLocalError(null);
+      saveByokChoice(created.generationSessionId, { provider: byokProvider,
+        modelId: byokProvider === 'deepseek' ? model : selectedGatewayModel?.id ?? gatewayModelId,
+        baseUrl: byokProvider === 'anyai' ? selectedGatewayModel?.baseUrl ?? '' : customBaseUrl,
+        settings: byokProvider === 'anyai' ? gatewaySettings : {} });
       rememberSession(created);
     },
   });
@@ -489,8 +539,30 @@ export default function TreeGenerationDialog({
   ]);
 
   function modelAccess(): ModelAccess {
+    if (currentSessionId && !choiceReady) throw new Error('请重新选择本次规划使用的 API 线路。');
     const apiKeyError = validateGenerationApiKey(apiKey);
     if (apiKeyError) throw new Error(apiKeyError);
+    if (byokProvider === 'anyai') {
+      if (!selectedGatewayModel) throw new Error('模型目录尚未加载，请稍后重试。');
+      if (session?.latestPlan && session.latestPlan.model !== selectedGatewayModel.id) {
+        throw new Error('所选模型与本次规划使用的模型不同，请选择原模型。');
+      }
+      return { apiKey: apiKey.trim(), model: selectedGatewayModel.id,
+        baseUrl: selectedGatewayModel.baseUrl, settings: gatewaySettings };
+    }
+    if (byokProvider === 'custom') {
+      if (!gatewayModelId.trim() || !customBaseUrl.trim()) {
+        throw new Error('请填写自定义模型 ID 和 API URL。');
+      }
+      if (session?.latestPlan && session.latestPlan.model !== gatewayModelId.trim()) {
+        throw new Error('所选模型与本次规划使用的模型不同，请选择原模型。');
+      }
+      return { apiKey: apiKey.trim(), model: gatewayModelId.trim(),
+        baseUrl: customBaseUrl.trim(), settings: {} };
+    }
+    if (session?.latestPlan && session.latestPlan.model !== model) {
+      throw new Error('所选模型与本次规划使用的模型不同，请选择原模型。');
+    }
     return { apiKey: apiKey.trim(), model, thinking, reasoningEffort };
   }
 
@@ -531,7 +603,7 @@ export default function TreeGenerationDialog({
     if (session?.fundingMode === 'byok') {
       const apiKeyError = validateGenerationApiKey(apiKey);
       if (apiKeyError) {
-        setLocalError(`请重新输入 DeepSeek API Key：${apiKeyError}`);
+        setLocalError(`请重新输入 API Key：${apiKeyError}`);
         return;
       }
     }
@@ -556,7 +628,7 @@ export default function TreeGenerationDialog({
     if (session?.fundingMode === 'byok') {
       const apiKeyError = validateGenerationApiKey(apiKey);
       if (apiKeyError) {
-        setLocalError(`请重新输入 DeepSeek API Key：${apiKeyError}`);
+        setLocalError(`请重新输入 API Key：${apiKeyError}`);
         return;
       }
     }
@@ -568,7 +640,7 @@ export default function TreeGenerationDialog({
     if (session?.fundingMode === 'byok') {
       const apiKeyError = validateGenerationApiKey(apiKey);
       if (apiKeyError) {
-        setLocalError(`确认前请重新输入 DeepSeek API Key：${apiKeyError}`);
+        setLocalError(`确认前请重新输入 API Key：${apiKeyError}`);
         return;
       }
     }
@@ -639,7 +711,29 @@ export default function TreeGenerationDialog({
 
           {(activeFundingMode === 'byok' || activeFundingMode === 'credits') && (
             <div className={currentSessionId ? '' : 'mt-4'}>
-              <ModelConfiguration
+              {activeFundingMode === 'byok' && <label className="mb-3 block text-xs text-slate-300">API 线路
+                <select className={`${inputClassName} mt-1`} value={choiceReady ? byokProvider : ''}
+                  onChange={(event) => {
+                    setByokProvider(event.target.value as ByokProvider);
+                    setGatewayModelId(''); setGatewaySettings({}); setApiKey(''); setChoiceReady(true);
+                  }}>
+                  {!choiceReady && <option value="">请选择线路</option>}
+                  <option value="deepseek">DeepSeek 官方</option>
+                  <option value="anyai">爱你 AI</option>
+                  <option value="custom">自定义 OpenAI 兼容</option>
+                </select>
+              </label>}
+              {activeFundingMode === 'byok' && byokProvider !== 'deepseek' ?
+                <GatewayModelConfiguration
+                  provider={byokProvider} apiKey={apiKey} onApiKeyChange={setApiKey}
+                  models={userModels} loading={userModelsQuery.isLoading}
+                  modelId={gatewayModelId} onModelChange={(value) => {
+                    setGatewayModelId(value); setGatewaySettings({});
+                  }}
+                  selectedModel={selectedGatewayModel}
+                  customBaseUrl={customBaseUrl} onCustomBaseUrlChange={setCustomBaseUrl}
+                  settings={gatewaySettings} onSettingsChange={setGatewaySettings}
+                /> : <ModelConfiguration
                 apiKey={apiKey}
                 capabilities={capabilities}
                 model={model}
@@ -652,7 +746,7 @@ export default function TreeGenerationDialog({
                 includeApiKey={activeFundingMode === 'byok'}
                 creditQuestionLimit={creditQuestionLimit}
                 onCreditQuestionLimitChange={setCreditQuestionLimit}
-              />
+              />}
             </div>
           )}
 
@@ -836,6 +930,70 @@ function ModelConfiguration({
       </p>
     </section>
   );
+}
+
+function GatewayModelConfiguration({ provider, apiKey, onApiKeyChange, models, loading,
+  modelId, onModelChange, selectedModel, customBaseUrl, onCustomBaseUrlChange,
+  settings, onSettingsChange,
+}: {
+  provider: Exclude<ByokProvider, 'deepseek'>;
+  apiKey: string; onApiKeyChange: (value: string) => void;
+  models: UserModelProfile[]; loading: boolean;
+  modelId: string; onModelChange: (value: string) => void;
+  selectedModel?: UserModelProfile;
+  customBaseUrl: string; onCustomBaseUrlChange: (value: string) => void;
+  settings: Record<string, string | boolean>;
+  onSettingsChange: (value: Record<string, string | boolean>) => void;
+}) {
+  const labels: Record<string, string> = {
+    thinking: '思考模式', reasoning_effort: '思考强度',
+    enable_thinking: '深度思考', thinking_budget: '思考预算', web_search: '联网搜索',
+  };
+  return <section className="rounded-xl border border-slate-800 bg-slate-950/55 p-4">
+    <h3 className="text-sm font-semibold text-slate-100">自填 Key 模型配置</h3>
+    <p className="mt-1 text-xs text-slate-500">使用你自己的上游额度；MapFlow 不扣积分。Key 只在当前页面内存保存。</p>
+    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      <Field label="API Key"><input type="password" name="mapflow-user-api-key"
+        autoComplete="new-password" autoCapitalize="none" autoCorrect="off"
+        spellCheck={false} data-1p-ignore="true" data-lpignore="true"
+        maxLength={512} value={apiKey} onChange={(event) => onApiKeyChange(event.target.value)}
+        className={inputClassName} /></Field>
+      <Field label="API URL"><input type="url" value={provider === 'anyai'
+        ? selectedModel?.baseUrl ?? 'https://anyai.token6688.com/v1' : customBaseUrl}
+        readOnly={provider === 'anyai'} onChange={(event) => onCustomBaseUrlChange(event.target.value)}
+        placeholder="https://gateway.example.com/v1" className={inputClassName} /></Field>
+      <Field label="上游模型">{provider === 'anyai' ? <select
+        value={selectedModel?.id ?? ''} disabled={loading || models.length === 0}
+        onChange={(event) => onModelChange(event.target.value)} className={inputClassName}>
+        {models.map((profile) => <option key={profile.id} value={profile.id}>{profile.id}</option>)}
+      </select> : <input type="text" value={modelId}
+        onChange={(event) => onModelChange(event.target.value)}
+        placeholder="模型 ID" maxLength={256} className={inputClassName} />}</Field>
+    </div>
+    {provider === 'anyai' && selectedModel && <>
+      <p className="mt-3 text-xs text-slate-500">模型上下文上限：{selectedModel.contextWindow.toLocaleString()} Token</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {selectedModel.settings.map((setting) => <Field key={setting.name}
+          label={labels[setting.name] ?? setting.name}>
+          {setting.kind === 'switch' ? <input type="checkbox"
+            checked={settings[setting.name] === true}
+            onChange={(event) => onSettingsChange({ ...settings, [setting.name]: event.target.checked })}
+          /> : <select value={typeof settings[setting.name] === 'string'
+            ? String(settings[setting.name]) : ''}
+            onChange={(event) => {
+              const next = { ...settings };
+              if (event.target.value) next[setting.name] = event.target.value;
+              else delete next[setting.name];
+              onSettingsChange(next);
+            }} className={inputClassName}>
+            <option value="">模型默认</option>
+            {setting.options.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>}
+        </Field>)}
+      </div>
+    </>}
+    {provider === 'custom' && <p className="mt-3 text-xs text-slate-500">自定义线路只发送标准文本参数；URL 必须是公网 HTTPS 的 /v1 地址。</p>}
+  </section>;
 }
 
 function InitialGenerationForm({
@@ -1421,6 +1579,34 @@ function generationRunErrorMessage(errorCode: string | null): string {
 
 function generationSessionQueryKey(sessionId: string | null) {
   return ['me', 'tree-generation', 'session', sessionId] as const;
+}
+
+function byokChoiceKey(sessionId: string): string {
+  return `mapflow.generation.byok-choice.${encodeURIComponent(sessionId)}`;
+}
+
+function readSavedByokChoice(sessionId: string): SavedByokChoice | null {
+  try {
+    const value: unknown = JSON.parse(window.sessionStorage.getItem(byokChoiceKey(sessionId)) ?? 'null');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const choice = value as Record<string, unknown>;
+    if (!['deepseek', 'anyai', 'custom'].includes(String(choice.provider))
+      || typeof choice.modelId !== 'string' || typeof choice.baseUrl !== 'string'
+      || !choice.settings || typeof choice.settings !== 'object' || Array.isArray(choice.settings)) return null;
+    const settings = choice.settings as Record<string, unknown>;
+    if (Object.values(settings).some(entry => typeof entry !== 'string' && typeof entry !== 'boolean')) return null;
+    return { provider: choice.provider as ByokProvider, modelId: choice.modelId,
+      baseUrl: choice.baseUrl, settings: settings as Record<string, string | boolean> };
+  } catch { return null; }
+}
+
+function saveByokChoice(sessionId: string, choice: SavedByokChoice): void {
+  try {
+    window.sessionStorage.setItem(byokChoiceKey(sessionId), JSON.stringify({
+      provider: choice.provider, modelId: choice.modelId, baseUrl: choice.baseUrl,
+      settings: choice.settings,
+    }));
+  } catch { /* A storage-denied browser can ask for the route again. */ }
 }
 
 function generationRunQueryKey(sessionId: string | null, runId: string | null) {

@@ -7,6 +7,7 @@ import { IdentityProvider, useIdentity } from './IdentityContext';
 const api = vi.hoisted(() => ({
   fetchCapabilities: vi.fn(),
   fetchCurrentSession: vi.fn(),
+  fetchRegistrationChallenge: vi.fn(),
   loginIdentity: vi.fn(),
   logoutIdentity: vi.fn(),
   registerIdentity: vi.fn(),
@@ -30,6 +31,7 @@ beforeEach(() => {
   api.loginIdentity.mockReset();
   api.logoutIdentity.mockReset();
   api.registerIdentity.mockReset();
+  api.fetchRegistrationChallenge.mockResolvedValue({ challengeId: 'registration-question', question: '7 + 5 = ?', expiresInSeconds: 300 });
 });
 
 function mockIdentityEndpoints() {
@@ -57,7 +59,7 @@ it('lets any child open the real dialog, observe registration, and log out', asy
       reasoningEfforts: ['high', 'max'],
     },
   });
-  api.fetchCurrentSession.mockResolvedValue(null);
+  api.fetchCurrentSession.mockResolvedValueOnce(null).mockResolvedValue(authenticated);
   api.registerIdentity.mockResolvedValue(authenticated);
   api.logoutIdentity.mockResolvedValue(undefined);
 
@@ -74,7 +76,7 @@ it('lets any child open the real dialog, observe registration, and log out', asy
   await user.type(screen.getByLabelText('用户名'), 'firstuser');
   await user.type(screen.getByLabelText('设置密码'), 'safe-password-2026');
   await user.type(screen.getByLabelText('确认密码'), 'safe-password-2026');
-  await user.type(screen.getByLabelText('邀请码'), 'q1j2x3k4r5p6');
+  await user.type(screen.getByLabelText('计算结果'), '12');
   await user.type(
     screen.getByLabelText('邮箱（可选）'),
     'learner@example.com',
@@ -103,7 +105,7 @@ it.each([
     'identity.password_rejected',
     '密码不符合要求：8-128 位，不能是常见密码，也不能包含用户名。',
   ],
-  [400, 'identity.invitation_rejected', '邀请码无效或已被使用，请检查后重试。'],
+  [400, 'identity.registration_challenge_rejected', '验证题错误、已过期或已使用，请换一道题重试。'],
   [400, 'identity.contact_rejected', '请至少填写一种有效的邮箱或手机号。'],
 ])(
   'surfaces the rejection message %s in the open dialog without logging in',
@@ -132,7 +134,7 @@ async function fillValidRegistration(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('用户名'), 'firstuser');
   await user.type(screen.getByLabelText('设置密码'), 'safe-password-2026');
   await user.type(screen.getByLabelText('确认密码'), 'safe-password-2026');
-  await user.type(screen.getByLabelText('邀请码'), 'QJXKRP');
+  await user.type(screen.getByLabelText('计算结果'), '12');
   await user.type(screen.getByLabelText('邮箱（可选）'), 'learner@example.com');
   await user.click(screen.getByRole('button', { name: '创建并激活账号' }));
 }
@@ -154,6 +156,8 @@ function IdentityProbe() {
           : 'generation-disabled'}
       </span>
       <span>{session?.account.username ?? 'anonymous'}</span>
+      <span>{session?.account.isAdmin ? 'admin-access' : 'ordinary-access'}</span>
+      <span>{session?.csrfToken ?? 'no-csrf'}</span>
       <button type="button" onClick={openIdentityDialog}>
         open identity dialog
       </button>
@@ -176,3 +180,35 @@ function renderIdentityProbe() {
     </QueryClientProvider>,
   );
 }
+
+
+it('refreshes the canonical session after login so administrator access and the current CSRF token appear without reloading', async () => {
+  const user = userEvent.setup();
+  mockIdentityEndpoints();
+  api.fetchCurrentSession.mockResolvedValueOnce(null).mockResolvedValue({ ...authenticated, account: { ...authenticated.account, isAdmin: true }, csrfToken: 'confirmed-csrf' });
+  api.loginIdentity.mockResolvedValue(authenticated);
+  renderIdentityProbe();
+  await screen.findByText('anonymous');
+  await user.click(screen.getByRole('button', { name: 'open identity dialog' }));
+  await user.type(screen.getByLabelText('用户名'), 'firstuser');
+  await user.type(screen.getByLabelText('密码'), 'safe-password-2026');
+  await user.click(screen.getAllByRole('button', { name: '登录' })[1]);
+  expect(await screen.findByText('admin-access')).toBeInTheDocument();
+  expect(screen.getByText('confirmed-csrf')).toBeInTheDocument();
+  expect(api.fetchCurrentSession).toHaveBeenCalledTimes(2);
+});
+
+it('keeps a rejected login anonymous and does not refresh permissions after authentication fails', async () => {
+  const user = userEvent.setup();
+  mockIdentityEndpoints();
+  api.loginIdentity.mockRejectedValue(new Error('账号或密码不正确。'));
+  renderIdentityProbe();
+  await screen.findByText('anonymous');
+  await user.click(screen.getByRole('button', { name: 'open identity dialog' }));
+  await user.type(screen.getByLabelText('用户名'), 'firstuser');
+  await user.type(screen.getByLabelText('密码'), 'safe-password-2026');
+  await user.click(screen.getAllByRole('button', { name: '登录' })[1]);
+  expect(await screen.findByText('账号或密码不正确。')).toBeInTheDocument();
+  expect(screen.getByText('anonymous')).toBeInTheDocument();
+  expect(api.fetchCurrentSession).toHaveBeenCalledTimes(1);
+});

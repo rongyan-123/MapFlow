@@ -107,6 +107,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
         authenticated,
       );
       setDialogOpen(false);
+      await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
     },
   });
   const logoutMutation = useMutation({

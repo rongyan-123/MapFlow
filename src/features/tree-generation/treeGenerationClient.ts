@@ -10,6 +10,7 @@ import type {
   GenerationUsage,
   CreditGenerationSelection,
   ModelAccess,
+  UserModelProfile,
   PlatformGenerationEntitlementSummary,
   PlatformGenerationLimits,
   PlanningChangeKind,
@@ -20,6 +21,27 @@ const JSON_GET: RequestInit = {
   credentials: 'same-origin',
   headers: { Accept: 'application/json' },
 };
+
+export async function readUserModelCatalog(): Promise<UserModelProfile[]> {
+  const response = await request('/api/model-catalog/byok', JSON_GET);
+  const document: unknown = await readJson(response);
+  if (!Array.isArray(document)) throw invalidResponseError();
+  return document.map((item): UserModelProfile => {
+    if (!isRecord(item) || !isModelId(item.id) || !isNonEmptyString(item.provider)
+      || !isNonNegativeInteger(item.contextWindow) || item.contextWindow === 0
+      || !isNonEmptyString(item.baseUrl) || !Array.isArray(item.settings)) {
+      throw invalidResponseError();
+    }
+    const settings = item.settings.map((setting) => {
+      if (!isRecord(setting) || !isNonEmptyString(setting.name)
+        || (setting.kind !== 'switch' && setting.kind !== 'select')
+        || !isStringArray(setting.options)) throw invalidResponseError();
+      return { name: setting.name, kind: setting.kind as 'switch' | 'select', options: setting.options };
+    });
+    return { id: item.id, provider: item.provider, contextWindow: item.contextWindow,
+      baseUrl: item.baseUrl, settings };
+  });
+}
 
 export class TreeGenerationApiError extends Error {
   readonly status: number;
@@ -556,7 +578,7 @@ function parseGenerationPlan(value: unknown): GenerationPlan {
   const model = value.model === undefined ? 'deepseek-v4-flash' : value.model;
   const thinking = value.thinking === undefined ? 'disabled' : value.thinking;
   const reasoningEffort = value.reasoning_effort === undefined ? 'low' : value.reasoning_effort;
-  if (!isDeepSeekModel(model) || !isThinkingMode(thinking) || !isReasoningEffort(reasoningEffort)) {
+  if (!isModelId(model) || !isThinkingMode(thinking) || !isReasoningEffort(reasoningEffort)) {
     throw invalidResponseError();
   }
   return {
@@ -723,6 +745,11 @@ function isGenerationFundingMode(value: unknown): value is GenerationFundingMode
 
 function isDeepSeekModel(value: unknown): value is 'deepseek-v4-flash' | 'deepseek-v4-pro' {
   return value === 'deepseek-v4-flash' || value === 'deepseek-v4-pro';
+}
+
+function isModelId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 256
+    && !/[\u0000-\u001f\u007f]/u.test(value);
 }
 
 function isThinkingMode(value: unknown): value is 'enabled' | 'disabled' {

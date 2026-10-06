@@ -31,6 +31,8 @@ const adminApi = vi.hoisted(() => ({
 }));
 
 vi.mock('./adminClient', () => adminApi);
+const walletApi = vi.hoisted(() => ({ readAdminTopups: vi.fn(), readAdminChannels: vi.fn() }));
+vi.mock('../wallet/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('../wallet/walletClient')>(), ...walletApi }));
 
 function dashboard(): AdminDashboard {
   return {
@@ -146,6 +148,8 @@ function announcements(): AdminAnnouncement[] {
 }
 
 beforeEach(() => {
+  walletApi.readAdminTopups.mockReset().mockResolvedValue({ topups: [], pendingCount: 3 });
+  walletApi.readAdminChannels.mockReset().mockResolvedValue([]);
   for (const mock of Object.values(adminApi)) mock.mockReset();
   adminApi.fetchAdminDashboard.mockResolvedValue(dashboard());
   adminApi.fetchAdminAccounts.mockResolvedValue(accounts());
@@ -237,6 +241,11 @@ function renderAdminPanel() {
 }
 
 describe('AdminPanel', () => {
+  it('refreshes a pending-only badge on opening the panel', async () => {
+    renderAdminPanel();
+    expect(await screen.findByRole('tab', { name: '充值 · 3' })).toBeInTheDocument();
+    expect(walletApi.readAdminTopups).toHaveBeenCalledWith('awaiting_review');
+  });
   it('renders the provider tab, opens the overview by default, and goes back', async () => {
     const user = userEvent.setup();
     const { props } = renderAdminPanel();
