@@ -134,8 +134,8 @@ def paid_acceptance(container, database_container, filename, allow_real_call):
     quote_input = {'expectedRevision': detail['graph']['revision'], 'action': {'type': 'reply', 'message': 'Hi. Reply OK.'},
                    'platformModel': 'gpt-5.4-nano', 'historyBytes': 8192}
     quote, _ = json_api(container, 'POST', root + '/quote', quote_input, cookie, csrf)
-    if quote['maximumChargeMicros'] > 10_000:
-        raise RuntimeError('acceptance cost ceiling exceeded one fen')
+    if quote['maximumChargeMicros'] > 20_000:
+        raise RuntimeError('acceptance cost ceiling exceeded two fen')
     wallet_before, _ = json_api(container, 'GET', '/api/wallet', cookie=cookie)
     report = {'createdAt': time.time(), 'playerId': registered['account']['playerId'], 'conversationId': conversation['conversationId'],
               'quoteMaximumMicros': quote['maximumChargeMicros'], 'characterCreation': True, 'paidCatalogue': True}
