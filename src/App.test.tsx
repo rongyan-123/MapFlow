@@ -34,6 +34,9 @@ const generationApi = vi.hoisted(() => ({
 
 const legacyApi = vi.hoisted(() => ({ fetchLearningTree: vi.fn() }));
 
+const walletApi = vi.hoisted(() => ({ readWallet: vi.fn(), readModelPricing: vi.fn(), readAdminTopups: vi.fn() }));
+vi.mock('./features/wallet/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('./features/wallet/walletClient')>(), ...walletApi }));
+
 const tavernApi = vi.hoisted(() => ({ fetchCharacters: vi.fn(), fetchConversations: vi.fn() }));
 vi.mock('./features/tavern/tavernClient', () => tavernApi);
 
@@ -286,6 +289,9 @@ beforeEach(() => {
     platformModeAvailable: true,
   });
   legacyApi.fetchLearningTree.mockResolvedValue(legacySnapshot);
+  walletApi.readWallet.mockResolvedValue({ balanceMicros: 3_100_000, currency: 'CNY', supportContact: '', channels: [], topups: [], ledger: [] });
+  walletApi.readModelPricing.mockResolvedValue({ multiplierLabel: '0.2倍率', currency: 'CNY', updatedAt: '2026-10-01', models: [] });
+  walletApi.readAdminTopups.mockResolvedValue({ topups: [], pendingCount: 0 });
   window.localStorage.clear();
   tavernApi.fetchCharacters.mockReset().mockResolvedValue([]);
   tavernApi.fetchConversations.mockReset().mockResolvedValue([]);
@@ -297,10 +303,45 @@ afterEach(() => {
   cleanup();
 });
 
+describe('Cash quota and compact navigation', () => {
+  it('keeps cash quota available and opens secondary navigation from More without losing tools', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(adminAccount);
+    renderApp('/console');
+    const quota = await screen.findByRole('button', { name: '现金额度 3.1，前往充值' });
+    expect(screen.queryByRole('button', { name: '管理面板' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '更多' }));
+    const menu = screen.getByRole('navigation', { name: '更多功能' });
+    expect(within(menu).getByRole('button', { name: '管理面板' })).toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: '如何在自己的 Agent 里连接 MapFlow' })).toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: '查看引导' })).toBeInTheDocument();
+    expect(within(menu).getByLabelText('选择主题')).toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: '退出登录' })).toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: '意见反馈' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('button', { name: '更多' })).toHaveFocus();
+    expect(screen.queryByRole('navigation', { name: '更多功能' })).not.toBeInTheDocument();
+    await user.click(quota);
+    expect(await screen.findByRole('heading', { name: '我的额度' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/wallet');
+    await user.click(screen.getByRole('button', { name: '模型价格' }));
+    expect(await screen.findByRole('heading', { name: '模型价格' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/models');
+    expect(screen.getByRole('button', { name: '现金额度 3.1，前往充值' })).toBeInTheDocument();
+  });
+});
+
 describe('Tavern navigation', () => {
+  it('keeps a direct wallet visit behind the existing login gate', async () => {
+    identityApi.fetchCurrentSession.mockResolvedValue(null);
+    renderApp('/wallet');
+    expect(await screen.findByTestId('identity-gate')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '我的额度' })).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe('/wallet');
+  });
   it('gates direct /tavern visits behind the existing login and preserves the destination after login', async () => {
     identityApi.fetchCurrentSession.mockResolvedValue(null);
-    identityApi.loginIdentity.mockResolvedValue(authenticated);
+    identityApi.loginIdentity.mockImplementation(async () => { identityApi.fetchCurrentSession.mockResolvedValue(authenticated); return authenticated; });
     const user = userEvent.setup(); renderApp('/tavern');
     const gate = await screen.findByTestId('identity-gate');
     expect(tavernApi.fetchCharacters).not.toHaveBeenCalled();
@@ -417,6 +458,7 @@ describe('MapFlow tree library', () => {
     await user.click(screen.getByRole('button', { name: '关闭引导' }));
     expect(screen.queryByText(publicPoolCopy)).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole('button', { name: '更多' }));
     await user.click(screen.getByRole('button', { name: '查看引导' }));
     expect(await screen.findByText(guideCopy)).toBeInTheDocument();
   });
@@ -580,6 +622,7 @@ describe('MapFlow tree library', () => {
       ),
     ).toBeInTheDocument();
 
+    await user.click(screen.getByRole('button', { name: '更多' }));
     await user.click(screen.getByRole('button', { name: '查看引导' }));
 
     const guide = screen.getByTestId('public-map-guide');
@@ -666,6 +709,7 @@ describe('MapFlow tree library', () => {
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     renderApp('/console');
 
+    await user.click(await screen.findByRole('button', { name: '更多' }));
     const guideButton = await screen.findByRole('button', {
       name: '如何在自己的 Agent 里连接 MapFlow',
     });
@@ -679,7 +723,7 @@ describe('MapFlow tree library', () => {
   it('未登录从根路径登录后直接进入控制台', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(null);
-    identityApi.loginIdentity.mockResolvedValue(authenticated);
+    identityApi.loginIdentity.mockImplementation(async () => { identityApi.fetchCurrentSession.mockResolvedValue(authenticated); return authenticated; });
     renderApp('/');
 
     const gate = await screen.findByTestId('identity-gate');
@@ -831,7 +875,7 @@ describe('MapFlow tree library', () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     identityApi.logoutIdentity.mockResolvedValue(undefined);
-    identityApi.loginIdentity.mockResolvedValue(secondAccount);
+    identityApi.loginIdentity.mockImplementation(async () => { identityApi.fetchCurrentSession.mockResolvedValue(secondAccount); return secondAccount; });
     treeApi.fetchPersonalLibrary
       .mockResolvedValueOnce({ entries: [personalEntry] })
       .mockResolvedValueOnce({ entries: [] });
@@ -842,11 +886,13 @@ describe('MapFlow tree library', () => {
     await user.click(screen.getByRole('button', { name: '我的学习' }));
     expect(await screen.findByText('0/2 已完成')).toBeInTheDocument();
 
+    await user.click(screen.getByRole('button', { name: '更多' }));
     await user.click(screen.getByRole('button', { name: '退出登录' }));
     expect(screen.getByRole('dialog', { name: '确认退出登录' })).toBeInTheDocument();
     expect(identityApi.logoutIdentity).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: '取消退出' }));
     expect(screen.queryByRole('dialog', { name: '确认退出登录' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '更多' }));
     await user.click(screen.getByRole('button', { name: '退出登录' }));
     await user.click(screen.getByRole('button', { name: '确认退出' }));
     const gate = await screen.findByTestId('identity-gate');
@@ -1113,6 +1159,7 @@ describe('管理面板入口', () => {
     identityApi.fetchCurrentSession.mockResolvedValue(adminAccount);
     renderApp();
 
+    await user.click(await screen.findByRole('button', { name: '更多' }));
     await user.click(await screen.findByRole('button', { name: '管理面板' }));
     expect(
       await screen.findByRole('heading', { name: '管理面板' }),
@@ -1154,6 +1201,7 @@ describe('管理面板入口', () => {
     identityApi.fetchCurrentSession.mockResolvedValue(adminAccount);
     const { queryClient } = renderApp();
 
+    await user.click(await screen.findByRole('button', { name: '更多' }));
     await user.click(await screen.findByRole('button', { name: '管理面板' }));
     expect(
       await screen.findByRole('heading', { name: '管理面板' }),
@@ -1742,7 +1790,7 @@ describe('登录门禁', () => {
   it('登录成功后才进入主应用并开始请求数据', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(null);
-    identityApi.loginIdentity.mockResolvedValue(authenticated);
+    identityApi.loginIdentity.mockImplementation(async () => { identityApi.fetchCurrentSession.mockResolvedValue(authenticated); return authenticated; });
     renderApp('/console');
 
     const gate = await screen.findByTestId('identity-gate');
@@ -1807,6 +1855,7 @@ describe('登录门禁', () => {
     );
     await user.click(screen.getByRole('button', { name: '我的学习' }));
     await screen.findByText('0/2 已完成');
+    await user.click(screen.getByRole('button', { name: '更多' }));
     await user.click(screen.getByRole('button', { name: '退出登录' }));
     await user.click(screen.getByRole('button', { name: '确认退出' }));
 

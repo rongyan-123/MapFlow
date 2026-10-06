@@ -1,6 +1,9 @@
+import ModelAccessPanel from './ModelAccessPanel';
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import CreditPill from '../credit/CreditPill';
+import WalletBalance from '../wallet/WalletBalance';
+import HeaderMoreMenu, { headerMenuItem } from '../navigation/HeaderMoreMenu';
 import { readCreditSummary, type CreditSummary } from '../credit/creditClient';
 import IdentityAccess from '../identity/IdentityAccess';
 import { useIdentity } from '../identity/IdentityContext';
@@ -16,13 +19,13 @@ import { createConversation, deleteCharacter, fetchCharacters, fetchConversation
 import type { Character, CompletedTurn, Conversation, ConversationDetail, ConversationGraph, GenerationSettingsState, TavernModelSelection } from './types';
 import { CharacterAvatar, CompatibilityReport, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass } from './TavernUi';
 
-export default function TavernPage({ onNavigateConsole }: { onNavigateConsole: () => void }) {
+export default function TavernPage({ onNavigateConsole, onNavigateWallet, onNavigateModels }: { onNavigateConsole: () => void; onNavigateWallet?: () => void; onNavigateModels?: () => void }) {
   const { session } = useIdentity();
   if (!session) return null;
-  return <AuthenticatedTavernPage key={session.account.playerId} session={session} onNavigateConsole={onNavigateConsole} />;
+  return <AuthenticatedTavernPage key={session.account.playerId} session={session} onNavigateConsole={onNavigateConsole} onNavigateWallet={onNavigateWallet} onNavigateModels={onNavigateModels} />;
 }
 
-function AuthenticatedTavernPage({ session, onNavigateConsole }: { session: IdentitySession; onNavigateConsole: () => void }) {
+function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet, onNavigateModels }: { session: IdentitySession; onNavigateConsole: () => void; onNavigateWallet?: () => void; onNavigateModels?: () => void }) {
   const queryClient = useQueryClient();
   const { logout, logoutPending, logoutError } = useIdentity();
   const accountId = session.account.playerId;
@@ -40,7 +43,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole }: { session: Iden
   const [drawer, setDrawer] = useState<'library' | 'details' | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [modelSelection, setModelSelection] = useState<TavernModelSelection>({
-    provider: 'platform', apiKey: '', model: '', baseUrl: '', settings: {}, historyBytes: 32768,
+    provider: 'custom', apiKey: '', model: '', baseUrl: '', settings: {}, historyBytes: 32768,
   });
   const charactersKey = ['me', accountId, 'tavern', 'characters'] as const;
   const conversationsKey = ['me', accountId, 'tavern', 'conversations'] as const;
@@ -169,25 +172,30 @@ function AuthenticatedTavernPage({ session, onNavigateConsole }: { session: Iden
   </div>;
   const configurationSections = [
     { id: 'overview', label: '角色与会话', content: summary },
+    { id: 'model', label: '模型接入', content: <ModelAccessPanel modelSelection={modelSelection} onModelSelectionChange={setModelSelection} accountId={accountId} onNavigateWallet={onNavigateWallet} /> },
     ...(conversationQuery.data && conversationId ? [
       { id: 'profile', label: '会话设定', content: <ConversationProfilePanel detail={conversationQuery.data} csrfToken={session.csrfToken}
         onUpdated={onProfileUpdated} onConflict={async () => { await conversationQuery.refetch(); }} /> },
-      { id: 'model', label: '模型接入', content: <GenerationSettingsPanel section="model" conversationId={conversationId}
+      { id: 'generation', label: '生成参数', content: <GenerationSettingsPanel conversationId={conversationId}
         settings={conversationQuery.data.conversation.generationSettings} version={conversationQuery.data.conversation.generationSettingsVersion}
-        csrfToken={session.csrfToken} modelSelection={modelSelection} onModelSelectionChange={setModelSelection}
-        onUpdated={onGenerationSettingsUpdated} onConflict={async () => { await conversationQuery.refetch(); }} /> },
-      { id: 'generation', label: '生成参数', content: <GenerationSettingsPanel section="generation" conversationId={conversationId}
-        settings={conversationQuery.data.conversation.generationSettings} version={conversationQuery.data.conversation.generationSettingsVersion}
-        csrfToken={session.csrfToken} modelSelection={modelSelection} onModelSelectionChange={setModelSelection}
+        csrfToken={session.csrfToken}
         onUpdated={onGenerationSettingsUpdated} onConflict={async () => { await conversationQuery.refetch(); }} /> },
     ] : []),
   ];
 
   return <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-slate-950 text-slate-100">
-    <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-3 sm:px-5">
-      <div className="flex min-w-0 items-center gap-3"><button type="button" className={buttonClass} aria-label="返回学习控制台" onClick={onNavigateConsole}>← <span className="hidden sm:inline">学习控制台</span></button>
+    <header className="relative z-30 flex shrink-0 items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-3 sm:px-5">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3"><button type="button" className={buttonClass} aria-label="返回学习控制台" onClick={onNavigateConsole}>← <span className="hidden sm:inline">学习控制台</span></button>
         <div><h1 className="text-lg font-bold">酒馆</h1><p className="hidden text-xs text-slate-500 sm:block">一个角色，一段属于你的故事</p></div></div>
-      <div className="flex items-center gap-2"><ThemeSwitcher /><CreditPill credit={credit.data ?? null} onSignedIn={() => void credit.refetch()} /><div className="hidden lg:block"><IdentityAccess onRequestLogout={() => setLogoutOpen(true)} /></div></div>
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+        {onNavigateWallet && <WalletBalance accountId={accountId} onClick={onNavigateWallet} />}
+        <HeaderMoreMenu>
+          {onNavigateModels && <button type="button" className={headerMenuItem} onClick={onNavigateModels}>模型价格</button>}
+          <button type="button" className={headerMenuItem} onClick={onNavigateConsole}>学习控制台</button>
+          <div data-keep-menu-open className="space-y-3 border-t border-slate-800 px-2 py-3"><ThemeSwitcher /><div><p className="mb-2 text-xs text-slate-500">学习积分</p><CreditPill credit={credit.data ?? null} onSignedIn={() => void credit.refetch()} /></div></div>
+          <IdentityAccess onRequestLogout={() => setLogoutOpen(true)} />
+        </HeaderMoreMenu>
+      </div>
     </header>
     <main className="flex min-h-0 flex-1">
       <aside aria-label="角色库" className="hidden w-60 shrink-0 overflow-y-auto border-r border-slate-800 p-4 lg:block">{library}</aside>

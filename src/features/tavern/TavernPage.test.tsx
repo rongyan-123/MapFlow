@@ -19,15 +19,18 @@ let savedDetail: ConversationDetail;
   let attempts: { clientActionId: string; expectedRevision: number; action: GenerationAction }[];
 let failFirstTurn: boolean;
 let modelUnavailable: boolean;
+let platformEnabled: boolean;
 let fetchMock: ReturnType<typeof vi.fn>;
 const json = (body: unknown) => new Response(JSON.stringify(body));
 
 beforeEach(() => {
   window.localStorage.clear(); window.sessionStorage.clear();
   characters = [structuredClone(character)]; conversations = []; savedDetail = structuredClone(detail);
-  attempts = []; failFirstTurn = false; modelUnavailable = false;
+  attempts = []; failFirstTurn = false; modelUnavailable = false; platformEnabled = true;
   fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === '/api/me/tavern/platform-models') return json({ enabled: platformEnabled, billingMode: 'trial', models: platformEnabled ? [{ id: 'trial-model', provider: 'AnyAI', contextWindow: 32768 }] : [] });
     if (url === '/api/credit/me') return json({ balance: 10, signedInToday: true, freeRemaining: 0, pricePerTree: 1 });
+    if (url === '/api/wallet') return json({ balanceMicros: 800_000, currency: 'CNY', supportContact: '', channels: [], topups: [], ledger: [] });
     if (url === '/api/model-catalog/byok') return json([{ id: 'gemini-3.8-flash', provider: 'AnyAI',
       contextWindow: 1048576, baseUrl: 'https://anyai.token6688.com/v1',
       settings: [{ name: 'enable_thinking', kind: 'switch', options: [] }] }]);
@@ -164,7 +167,142 @@ function setActiveLeaf(graph: ConversationDetail['graph'], leafMessageId: string
     ? { ...branch, leafMessageId } : branch) };
 }
 
+async function configureSelfKey(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('button', { name: '配置' }));
+  const dialog = screen.getByRole('dialog', { name: '配置' });
+  await user.click(within(dialog).getByRole('button', { name: '模型接入' }));
+  await user.type(within(dialog).getByLabelText('API Key'), 'test-only-key');
+  await user.type(within(dialog).getByLabelText('API URL'), 'https://gateway.example.com/v1');
+  await user.type(within(dialog).getByLabelText('上游模型'), 'test-model');
+  await user.keyboard('{Escape}');
+}
+
 describe('Tavern page', () => {
+  it('keeps the self key when clicking its selected route again', async () => {
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '配置' }));
+    await user.click(screen.getByRole('button', { name: '模型接入' }));
+    const dialog = screen.getByRole('dialog', { name: '配置' });
+    const route = within(dialog).getByRole('button', { name: '自填 API Key' });
+    await user.type(within(dialog).getByLabelText('API Key'), 'test-only-key');
+    await user.click(route);
+    expect(within(dialog).getByLabelText('API Key')).toHaveValue('test-only-key');
+    expect(route).toHaveAttribute('aria-pressed', 'true');
+    expect(within(dialog).queryByRole('combobox')).not.toBeInTheDocument();
+  });
+
+  it('does not send or reserve a payment when platform quota chatting is unavailable', async () => {
+    platformEnabled = false; restoreConversation(); const user = userEvent.setup(); renderPage();
+    await screen.findByText('请用茶。');
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    const dialog = screen.getByRole('dialog', { name: '配置' });
+    await user.click(within(dialog).getByRole('button', { name: '模型接入' }));
+    await user.click(within(dialog).getByRole('button', { name: '使用平台模型（需要充值）' }));
+    await user.click(within(dialog).getByRole('button', { name: '关闭配置' }));
+    await user.type(screen.getByRole('textbox', { name: '消息' }), '别扣款');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('请选择可用的平台模型');
+    expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('别扣款');
+    expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/turns'))).toBe(false);
+    expect(fetchMock.mock.calls.some(([url, init]) => url.startsWith('/api/wallet') && init?.method === 'POST')).toBe(false);
+  });
+
+  it('sends a server listed platform model without a key and binds retries to that selection', async () => {
+    restoreConversation(); failFirstTurn = true; const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '配置' }));
+    await user.click(screen.getByRole('button', { name: '模型接入' }));
+    await user.click(screen.getByRole('button', { name: '使用平台模型（需要充值）' }));
+    await user.click(await screen.findByRole('button', { name: /trial-model/ }));
+    expect(screen.getByText(/测试期间暂不扣费/)).toBeVisible();
+    expect(screen.queryByLabelText('API Key')).not.toBeInTheDocument();
+    expect(screen.queryByText('Qwen3-8B')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '最近 32 KiB' }));
+    await user.click(screen.getByRole('button', { name: '关闭配置' }));
+    await user.type(screen.getByLabelText('消息'), '平台试聊');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await screen.findByRole('button', { name: '重试这条消息' });
+    const first = fetchMock.mock.calls.find(([url]) => url.endsWith('/turns'))!;
+    expect(JSON.parse(String(first[1]?.body))).toMatchObject({ platformModel: 'trial-model', historyBytes: 32768 });
+    expect(JSON.parse(String(first[1]?.body))).not.toHaveProperty('modelAccess');
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    await user.click(screen.getByRole('button', { name: '模型接入' }));
+    await user.click(screen.getByRole('button', { name: '最近 8 KiB' }));
+    await user.click(screen.getByRole('button', { name: '关闭配置' }));
+    await user.click(screen.getByRole('button', { name: '重试这条消息' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('本次使用的平台模型和历史上下文');
+    expect(attempts).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    await user.click(screen.getByRole('button', { name: '模型接入' }));
+    await user.click(screen.getByRole('button', { name: '最近 32 KiB' }));
+    await user.click(screen.getByRole('button', { name: '关闭配置' }));
+    await user.click(screen.getByRole('button', { name: '重试这条消息' }));
+    await screen.findByText('新回复 🌙');
+    expect(attempts[1].clientActionId).toBe(attempts[0].clientActionId);
+  });
+
+  it('offers custom model configuration before any conversation exists', async () => {
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '配置' }));
+    const dialog = screen.getByRole('dialog', { name: '配置' });
+    await user.click(within(dialog).getByRole('button', { name: '模型接入' }));
+    expect(within(dialog).getByRole('button', { name: '自填 API Key' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(dialog).getByLabelText('API Key')).toBeVisible();
+    expect(within(dialog).getByLabelText('API URL')).toBeEnabled();
+    expect(within(dialog).getByLabelText('上游模型')).toBeEnabled();
+  });
+
+  it('validates each custom field, sends the selected endpoint and forgets the key after remount', async () => {
+    restoreConversation(); const user = userEvent.setup(); const first = renderPage();
+    await screen.findByText('请用茶。');
+    async function configure(url?: string, model?: string) {
+      await user.click(screen.getByRole('button', { name: '配置' }));
+      const dialog = screen.getByRole('dialog', { name: '配置' });
+      await user.click(within(dialog).getByRole('button', { name: '模型接入' }));
+      const key = within(dialog).getByLabelText('API Key');
+      await user.clear(key); await user.type(key, 'custom-secret');
+      if (url !== undefined) { const input = within(dialog).getByLabelText('API URL'); await user.clear(input); await user.type(input, url); }
+      if (model !== undefined) await user.type(within(dialog).getByLabelText('上游模型'), model);
+      await user.keyboard('{Escape}');
+    }
+    await configure();
+    await user.type(screen.getByLabelText('消息'), '测试自定义模型');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('尚未填写 API URL');
+    await configure('http://gateway.example.com/v1');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('API URL 必须是公开 HTTPS');
+    await configure('https://gateway.example.com/v1');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('尚未填写上游模型');
+    expect(attempts).toHaveLength(0);
+    await configure(undefined, 'my-model');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await screen.findByText('新回复 🌙');
+    const sent = fetchMock.mock.calls.find(([url]) => url.endsWith('/turns'))?.[1];
+    expect(JSON.parse(String(sent?.body))).toMatchObject({ modelAccess: {
+      apiKey: 'custom-secret', baseUrl: 'https://gateway.example.com/v1', model: 'my-model', settings: {},
+    } });
+    for (const storage of [window.localStorage, window.sessionStorage]) {
+      for (let index = 0; index < storage.length; index += 1) expect(storage.getItem(storage.key(index)!)).not.toContain('custom-secret');
+    }
+    first.unmount(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '配置' }));
+    const dialog = screen.getByRole('dialog', { name: '配置' });
+    await user.click(within(dialog).getByRole('button', { name: '模型接入' }));
+    expect(within(dialog).getByLabelText('API Key')).toHaveValue('');
+  });
+
+  it('reads history without a key and preserves the draft with a specific missing configuration error', async () => {
+    restoreConversation(); const user = userEvent.setup(); renderPage();
+    expect(await screen.findByText('请用茶。')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('消息'), '还没配置');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('尚未填写 API Key');
+    expect(screen.getByLabelText('消息')).toHaveValue('还没配置');
+    expect(attempts).toHaveLength(0);
+    expect(window.sessionStorage.getItem('mapflow.tavern.pending.v1.player-1.conversation-1')).toBeNull();
+  });
+
   it('opens a character with defaults in one click and does not create again on repeated clicks', async () => {
     const user = userEvent.setup(); renderPage();
     await user.dblClick(await screen.findByRole('button', { name: '选择角色 旅人' }));
@@ -188,7 +326,7 @@ describe('Tavern page', () => {
   });
 
   it('sends with Enter but preserves Shift+Enter and IME composition', async () => {
-    restoreConversation(); const user = userEvent.setup(); renderPage();
+    restoreConversation(); const user = userEvent.setup(); renderPage(); await configureSelfKey(user);
     const input = await screen.findByLabelText('消息');
     await user.type(input, '你好');
     fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
@@ -399,22 +537,21 @@ describe('Tavern page', () => {
     expect(within(dialog).getByLabelText('选择会话')).toBeVisible();
     expect(within(dialog).getByLabelText('Persona（可选）')).not.toBeVisible();
     await user.click(within(navigation).getByRole('button', { name: '模型接入' }));
-    expect(within(dialog).getByLabelText('模型线路')).toBeVisible();
+    expect(within(dialog).getByRole('group', { name: '模型线路' })).toBeVisible();
     expect(within(dialog).getByLabelText('选择会话')).not.toBeVisible();
     await user.click(within(navigation).getByRole('button', { name: '会话设定' }));
     expect(within(dialog).getByLabelText('Persona（可选）')).toBeVisible();
   });
 
-  it('sends the selected user model from the model category without persisting its key', async () => {
+  it('sends the chosen self key model without persisting its key', async () => {
     restoreConversation(); const user = userEvent.setup(); renderPage();
     await user.click(await screen.findByRole('button', { name: '配置' }));
     const dialog = screen.getByRole('dialog', { name: '配置' });
     await user.click(within(dialog).getByRole('button', { name: '模型接入' }));
-    await user.selectOptions(within(dialog).getByLabelText('模型线路'), 'anyai');
-    await within(dialog).findByRole('option', { name: 'gemini-3.8-flash' });
     await user.type(within(dialog).getByLabelText('API Key'), 'test-key');
-    await user.click(within(dialog).getByLabelText('深度思考'));
-    await user.selectOptions(within(dialog).getByLabelText('发送的历史上下文'), '8192');
+    await user.type(within(dialog).getByLabelText('API URL'), 'https://anyai.token6688.com/v1');
+    await user.type(within(dialog).getByLabelText('上游模型'), 'gemini-3.8-flash');
+    await user.click(within(dialog).getByRole('button', { name: '最近 8 KiB' }));
     await user.click(within(dialog).getByRole('button', { name: '关闭配置' }));
     await user.type(screen.getByRole('textbox', { name: '消息' }), '你好');
     await user.click(screen.getByRole('button', { name: '发送' }));
@@ -422,7 +559,7 @@ describe('Tavern page', () => {
     const sent = fetchMock.mock.calls.find(([url]) => url.endsWith('/turns'))?.[1];
     expect(JSON.parse(String(sent?.body))).toMatchObject({
       modelAccess: { apiKey: 'test-key', model: 'gemini-3.8-flash', baseUrl: 'https://anyai.token6688.com/v1',
-        settings: { enable_thinking: true } }, historyBytes: 8192,
+        settings: {} }, historyBytes: 8192,
     });
     for (let index = 0; index < window.sessionStorage.length; index += 1) {
       expect(window.sessionStorage.getItem(window.sessionStorage.key(index)!)).not.toContain('test-key');
@@ -590,7 +727,7 @@ describe('Tavern page', () => {
   });
 
   it('regenerates and continues through the same generation stream', async () => {
-    restoreConversation(); const user = userEvent.setup(); renderPage();
+    restoreConversation(); const user = userEvent.setup(); renderPage(); await configureSelfKey(user);
     const log = await screen.findByRole('log', { name: '对话消息' });
     await within(log).findByText('请用茶。');
     await user.click(screen.getByRole('button', { name: '重新生成' }));
@@ -641,7 +778,7 @@ describe('Tavern page', () => {
   });
 
   it('can discard an interrupted regenerate instead of trapping the conversation in retry mode', async () => {
-    restoreConversation(); failFirstTurn = true; const user = userEvent.setup(); renderPage();
+    restoreConversation(); failFirstTurn = true; const user = userEvent.setup(); renderPage(); await configureSelfKey(user);
     await screen.findByText('请用茶。');
     await user.click(screen.getByRole('button', { name: '重新生成' }));
     expect(await screen.findByRole('button', { name: '重试这条消息' })).toBeInTheDocument();
@@ -655,7 +792,7 @@ describe('Tavern page', () => {
   });
 
   it('keeps a stable clientTurnId across a failed stream and retry, replaces the draft and refreshes balance', async () => {
-    restoreConversation(); failFirstTurn = true; const user = userEvent.setup(); const { client } = renderPage();
+    restoreConversation(); failFirstTurn = true; const user = userEvent.setup(); const { client } = renderPage(); await configureSelfKey(user);
     await user.type(await screen.findByLabelText('消息'), '新的问题');
     await user.click(screen.getByRole('button', { name: '发送' }));
     expect(await screen.findByRole('button', { name: '重试这条消息' })).toBeInTheDocument();
@@ -670,7 +807,7 @@ describe('Tavern page', () => {
   });
 
   it('explains a model outage, preserves the retry identity and can return the failed input to editing', async () => {
-    restoreConversation(); modelUnavailable = true; const user = userEvent.setup(); const { client } = renderPage();
+    restoreConversation(); modelUnavailable = true; const user = userEvent.setup(); const { client } = renderPage(); await configureSelfKey(user);
     await user.type(await screen.findByLabelText('消息'), '保留这条消息');
     await user.keyboard('{Enter}');
     expect(await screen.findByText(/模型连接暂不可用/)).toBeInTheDocument();
@@ -685,11 +822,12 @@ describe('Tavern page', () => {
   });
 
   it('restores an unconfirmed turn after remount and retains its retry identifier', async () => {
-    restoreConversation(); failFirstTurn = true; const user = userEvent.setup(); const first = renderPage();
+    restoreConversation(); failFirstTurn = true; const user = userEvent.setup(); const first = renderPage(); await configureSelfKey(user);
     await user.type(await screen.findByLabelText('消息'), '恢复后重试');
     await user.click(screen.getByRole('button', { name: '发送' }));
     await screen.findByRole('button', { name: '重试这条消息' });
     first.unmount(); renderPage();
+    await configureSelfKey(user);
     await user.click(await screen.findByRole('button', { name: '重试这条消息' }));
     expect(await screen.findByText('新回复 🌙')).toBeInTheDocument();
     expect(attempts[1].clientActionId).toBe(attempts[0].clientActionId);
@@ -707,7 +845,7 @@ describe('Tavern page', () => {
   });
 
   it('keeps a committed reply when an older background history read arrives after completed', async () => {
-    restoreConversation(); const user = userEvent.setup(); const { client } = renderPage();
+    restoreConversation(); const user = userEvent.setup(); const { client } = renderPage(); await configureSelfKey(user);
     await screen.findByLabelText('消息');
     let resolveHistory!: (response: Response) => void;
     const oldHistory = structuredClone(savedDetail);
@@ -727,7 +865,7 @@ describe('Tavern page', () => {
   });
 
   it('keeps the committed balance when an older credit refresh finishes after completed', async () => {
-    restoreConversation(); const user = userEvent.setup(); const { client } = renderPage();
+    restoreConversation(); const user = userEvent.setup(); const { client } = renderPage(); await configureSelfKey(user);
     await screen.findByLabelText('消息');
     await waitFor(() => expect(client.getQueryData(['me', 'player-1', 'credit'])).toMatchObject({ balance: 10 }));
     let resolveCredit!: (response: Response) => void;
@@ -766,4 +904,23 @@ describe('Tavern page', () => {
     await screen.findByRole('alert');
     expect(window.localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe('conversation-1');
   });
+});
+
+it('keeps live cash quota in the tavern header and makes model, theme and logout controls accessible through More', async () => {
+  const original = fetchMock.getMockImplementation();
+  fetchMock.mockImplementation((url: string, init?: RequestInit) => url === '/api/wallet'
+    ? Promise.resolve(json({ balanceMicros: 800_000, currency: 'CNY', supportContact: '', channels: [], topups: [], ledger: [] }))
+    : original?.(url, init));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const navigate = vi.fn();
+  render(<QueryClientProvider client={client}><IdentityProvider><TavernPage onNavigateConsole={() => {}} onNavigateWallet={navigate} onNavigateModels={() => {}} /></IdentityProvider></QueryClientProvider>);
+  fireEvent.click(await screen.findByRole('button', { name: '现金额度 0.8，前往充值' }));
+  expect(navigate).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: '更多' }));
+  const menu = screen.getByRole('navigation', { name: '更多功能' });
+  expect(within(menu).getByRole('button', { name: '模型价格' })).toBeInTheDocument();
+  expect(within(menu).getByLabelText('选择主题')).toBeInTheDocument();
+  expect(within(menu).getByRole('button', { name: '退出登录' })).toBeInTheDocument();
+  expect(within(menu).getByText('学习积分')).toBeInTheDocument();
+  client.clear();
 });

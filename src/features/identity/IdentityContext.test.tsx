@@ -57,7 +57,7 @@ it('lets any child open the real dialog, observe registration, and log out', asy
       reasoningEfforts: ['high', 'max'],
     },
   });
-  api.fetchCurrentSession.mockResolvedValue(null);
+  api.fetchCurrentSession.mockResolvedValueOnce(null).mockResolvedValue(authenticated);
   api.registerIdentity.mockResolvedValue(authenticated);
   api.logoutIdentity.mockResolvedValue(undefined);
 
@@ -154,6 +154,8 @@ function IdentityProbe() {
           : 'generation-disabled'}
       </span>
       <span>{session?.account.username ?? 'anonymous'}</span>
+      <span>{session?.account.isAdmin ? 'admin-access' : 'ordinary-access'}</span>
+      <span>{session?.csrfToken ?? 'no-csrf'}</span>
       <button type="button" onClick={openIdentityDialog}>
         open identity dialog
       </button>
@@ -176,3 +178,35 @@ function renderIdentityProbe() {
     </QueryClientProvider>,
   );
 }
+
+
+it('refreshes the canonical session after login so administrator access and the current CSRF token appear without reloading', async () => {
+  const user = userEvent.setup();
+  mockIdentityEndpoints();
+  api.fetchCurrentSession.mockResolvedValueOnce(null).mockResolvedValue({ ...authenticated, account: { ...authenticated.account, isAdmin: true }, csrfToken: 'confirmed-csrf' });
+  api.loginIdentity.mockResolvedValue(authenticated);
+  renderIdentityProbe();
+  await screen.findByText('anonymous');
+  await user.click(screen.getByRole('button', { name: 'open identity dialog' }));
+  await user.type(screen.getByLabelText('用户名'), 'firstuser');
+  await user.type(screen.getByLabelText('密码'), 'safe-password-2026');
+  await user.click(screen.getAllByRole('button', { name: '登录' })[1]);
+  expect(await screen.findByText('admin-access')).toBeInTheDocument();
+  expect(screen.getByText('confirmed-csrf')).toBeInTheDocument();
+  expect(api.fetchCurrentSession).toHaveBeenCalledTimes(2);
+});
+
+it('keeps a rejected login anonymous and does not refresh permissions after authentication fails', async () => {
+  const user = userEvent.setup();
+  mockIdentityEndpoints();
+  api.loginIdentity.mockRejectedValue(new Error('账号或密码不正确。'));
+  renderIdentityProbe();
+  await screen.findByText('anonymous');
+  await user.click(screen.getByRole('button', { name: 'open identity dialog' }));
+  await user.type(screen.getByLabelText('用户名'), 'firstuser');
+  await user.type(screen.getByLabelText('密码'), 'safe-password-2026');
+  await user.click(screen.getAllByRole('button', { name: '登录' })[1]);
+  expect(await screen.findByText('账号或密码不正确。')).toBeInTheDocument();
+  expect(screen.getByText('anonymous')).toBeInTheDocument();
+  expect(api.fetchCurrentSession).toHaveBeenCalledTimes(1);
+});

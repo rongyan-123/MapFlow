@@ -81,7 +81,7 @@ describe('IdentityAccess', () => {
       identity: { registrationEnabled: true },
     });
     api.fetchCurrentSession.mockResolvedValue(null);
-    api.registerIdentity.mockResolvedValue(authenticated);
+    api.registerIdentity.mockImplementation(async () => { api.fetchCurrentSession.mockResolvedValue(authenticated); return authenticated; });
     api.logoutIdentity.mockResolvedValue(undefined);
 
     renderIdentityAccess();

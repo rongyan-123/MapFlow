@@ -3,6 +3,15 @@ import { TavernApiError, type Character, type CompletedTurn, type Conversation, 
 import { isRecord, NORMALIZED_CARD_BYTES, RAW_FILE_BYTES, tooLarge, utf8Bytes } from './validation';
 
 const ROOT = '/api/me/tavern';
+export async function fetchPlatformModels(signal?: AbortSignal): Promise<{ enabled: boolean; billingMode: 'trial'; models: { id: string; provider: string; contextWindow: number }[] }> {
+  const body = await getJson(`${ROOT}/platform-models`, signal);
+  if (!isRecord(body) || typeof body.enabled !== 'boolean' || body.billingMode !== 'trial' || !Array.isArray(body.models)) throw invalidResponse();
+  const models = body.models.map(model => {
+    if (!isRecord(model) || typeof model.id !== 'string' || !model.id.trim() || typeof model.provider !== 'string' || !positiveInteger(model.contextWindow)) throw invalidResponse();
+    return { id: model.id, provider: model.provider, contextWindow: model.contextWindow };
+  });
+  return { enabled: body.enabled, billingMode: 'trial', models };
+}
 export async function importCharacter(card: NormalizedCharacterCard, sourceFile: File | undefined, csrfToken: string): Promise<Character> {
   const serialized = JSON.stringify(card);
   if (utf8Bytes(serialized) > NORMALIZED_CARD_BYTES || (sourceFile && sourceFile.size > RAW_FILE_BYTES)) tooLarge('角色卡文件过大。');
@@ -62,7 +71,8 @@ export async function mutateGraph(id: string, expectedRevision: number, action: 
 
 export async function generateStream(id: string, clientActionId: string, expectedRevision: number, action: GenerationAction, csrfToken: string,
   onDelta: (delta: string) => void, signal?: AbortSignal, modelAccess?: TavernUserModelAccess,
-  historyBytes?: 8192 | 16384 | 32768): Promise<CompletedTurn> {
+  historyBytes?: 8192 | 16384 | 32768, platformModel?: string): Promise<CompletedTurn> {
+  if (modelAccess && platformModel) throw new TavernApiError(400, 'tavern.model_access_invalid', '请选择一种模型线路。');
   validateId(clientActionId);
   if (!nonNegativeInteger(expectedRevision)) throw new TavernApiError(409, 'tavern.turn_conflict', '会话版本已变化，请刷新后重试。');
   if (action.type === 'reply') validateMessage(action.message);
@@ -70,7 +80,7 @@ export async function generateStream(id: string, clientActionId: string, expecte
   const response = await request(`${ROOT}/conversations/${pathId(id)}/turns`, {
     method: 'POST', headers: { ...mutationHeaders(csrfToken, true), Accept: 'text/event-stream' },
     body: JSON.stringify({ clientActionId, expectedRevision, action,
-      ...(modelAccess ? { modelAccess, historyBytes } : {}) }), signal,
+      ...(modelAccess ? { modelAccess, historyBytes } : platformModel ? { platformModel, historyBytes } : {}) }), signal,
   });
   if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) throw invalidResponse();
   const reader = response.body.getReader();

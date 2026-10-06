@@ -8,6 +8,7 @@ import { CharacterAvatar, ErrorNotice, TavernDialog, buttonClass, inputClass, pr
 import type { Character } from './types';
 
 interface PendingGeneration { clientActionId: string; expectedRevision: number; action: GenerationAction;
+  platformBinding?: { model: string; historyBytes: 8192 | 16384 | 32768 };
   modelBinding?: { model: string; baseUrl: string; historyBytes: 8192 | 16384 | 32768 } }
 
 export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, onCompleted, onGraphChanged, configurationOpen, onCloseConfiguration, configuration }: {
@@ -49,10 +50,19 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   async function runGeneration(action: GenerationAction, retry?: PendingGeneration) {
     if (activeRequest.current || graphBusy || editing || (pendingGeneration && !retry)) return;
     let outgoing: PendingGeneration;
+    let platformModel: string | undefined;
     let modelAccess: TavernUserModelAccess | undefined;
     try {
       validateGenerationAction(action);
-      if (retry?.modelBinding) {
+      if (retry?.platformBinding || (!retry && modelSelection.provider === 'platform')) {
+        if (modelSelection.provider !== 'platform' || !modelSelection.model.trim()) {
+          throw new TavernApiError(400, 'tavern.platform_model_required', '请选择可用的平台模型；如果列表为空，请联系管理员配置 AnyAI。');
+        }
+        platformModel = modelSelection.model;
+        if (retry?.platformBinding && (platformModel !== retry.platformBinding.model || modelSelection.historyBytes !== retry.platformBinding.historyBytes)) {
+          throw new TavernApiError(400, 'tavern.platform_model_required', '请恢复本次使用的平台模型和历史上下文，再重试。');
+        }
+      } else if (retry?.modelBinding) {
         modelAccess = selectedUserAccess(modelSelection);
         if (!modelAccess || modelAccess.model !== retry.modelBinding.model
           || modelAccess.baseUrl !== retry.modelBinding.baseUrl
@@ -61,6 +71,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         }
       } else if (!retry) modelAccess = selectedUserAccess(modelSelection);
       outgoing = retry ?? { clientActionId: crypto.randomUUID(), expectedRevision: detail.graph.revision, action,
+        ...(platformModel ? { platformBinding: { model: platformModel, historyBytes: modelSelection.historyBytes } } : {}),
         ...(modelAccess ? { modelBinding: { model: modelAccess.model, baseUrl: modelAccess.baseUrl,
           historyBytes: modelSelection.historyBytes } } : {}) };
     } catch (failure) { setError(failure); return; }
@@ -74,7 +85,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     try {
       const completed = await generateStream(detail.conversation.conversationId, outgoing.clientActionId, outgoing.expectedRevision, outgoing.action,
         csrfToken, delta => { if (!controller.signal.aborted) setDraft(previous => previous + delta); }, controller.signal,
-        modelAccess, modelAccess ? modelSelection.historyBytes : undefined);
+        modelAccess, modelAccess || platformModel ? modelSelection.historyBytes : undefined, platformModel);
       if (controller.signal.aborted) return;
       storePending(storageKey, null);
       setPendingGeneration(null); setDraft(''); onCompleted(completed);
@@ -288,9 +299,12 @@ function readPending(key: string, currentRevision: number): PendingGeneration | 
         && [8192, 16384, 32768].includes(Number(saved.modelBinding.historyBytes))
         ? { model: saved.modelBinding.model, baseUrl: saved.modelBinding.baseUrl,
           historyBytes: Number(saved.modelBinding.historyBytes) as 8192 | 16384 | 32768 } : undefined;
-      if (saved.modelBinding !== undefined && !modelBinding) return null;
+      const platformBinding = isRecord(saved.platformBinding) && typeof saved.platformBinding.model === 'string'
+        && saved.platformBinding.model.trim() && [8192, 16384, 32768].includes(Number(saved.platformBinding.historyBytes))
+        ? { model: saved.platformBinding.model, historyBytes: Number(saved.platformBinding.historyBytes) as 8192 | 16384 | 32768 } : undefined;
+      if ((saved.modelBinding !== undefined && !modelBinding) || (saved.platformBinding !== undefined && !platformBinding) || (modelBinding && platformBinding)) return null;
       return { clientActionId: saved.clientActionId, expectedRevision, action: saved.action,
-        ...(modelBinding ? { modelBinding } : {}) };
+        ...(modelBinding ? { modelBinding } : {}), ...(platformBinding ? { platformBinding } : {}) };
     }
     // Read the previous reply-only shape so an in-flight turn survives this frontend upgrade.
     if (typeof saved.clientTurnId === 'string' && typeof saved.message === 'string') {
@@ -301,14 +315,25 @@ function readPending(key: string, currentRevision: number): PendingGeneration | 
   } catch { return null; }
 }
 function selectedUserAccess(selection: TavernModelSelection): TavernUserModelAccess | undefined {
-  if (selection.provider === 'platform') return undefined;
+  if (selection.provider === 'platform') {
+    throw new TavernApiError(400, 'tavern.model_access_required', '请切换回本次使用的自填 API Key 线路，再重试。');
+  }
   const apiKey = selection.apiKey.trim();
   const model = selection.model.trim();
   const baseUrl = selection.baseUrl.trim();
-  if (!apiKey || !model || !/^https:\/\/[^\s]+\/v1\/?$/u.test(baseUrl)) {
-    throw new TavernApiError(400, 'tavern.model_access_required', '请填写 API Key、上游模型和公开 HTTPS /v1 地址。');
+  if (!apiKey) {
+    throw new TavernApiError(400, 'tavern.model_access_required', '尚未填写 API Key，请打开“配置 → 模型接入”填写后再发送。历史会话仍可查看。');
   }
-  return { apiKey, model, baseUrl, settings: selection.provider === 'anyai' ? selection.settings : {} };
+  if (!baseUrl) {
+    throw new TavernApiError(400, 'tavern.model_access_required', '尚未填写 API URL，请在“配置 → 模型接入”填写中转站地址。');
+  }
+  if (!/^https:\/\/[^\s]+\/v1\/?$/u.test(baseUrl)) {
+    throw new TavernApiError(400, 'tavern.model_access_required', 'API URL 必须是公开 HTTPS 地址，并以 /v1 结尾。');
+  }
+  if (!model) {
+    throw new TavernApiError(400, 'tavern.model_access_required', '尚未填写上游模型，请在“配置 → 模型接入”填写模型 ID。');
+  }
+  return { apiKey, model, baseUrl, settings: {} };
 }
 function isGenerationAction(value: unknown): value is GenerationAction {
   if (!isRecord(value) || typeof value.type !== 'string') return false;

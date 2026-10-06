@@ -1,0 +1,147 @@
+
+> mapflow-next-learning-tree@0.1.0 test
+> vitest run
+
+
+ RUN  v2.1.9 <workspace>/worktrees/MapFlow-publish/mapflow-frontend-model-adapter-20260927
+
+ ✓ src/features/tree-generation/treeGenerationClient.test.ts (12 tests) 50ms
+ ✓ src/features/admin/adminClient.test.ts (24 tests) 69ms
+ ✓ src/features/wallet/WalletPage.test.tsx (14 tests) 1732ms
+   ✓ contains keyboard focus through both payment views and returns it to the trigger after declaring unpaid 313ms
+ ✓ src/features/admin/AdminWalletTab.test.tsx (6 tests) 1237ms
+   ✓ approves the named amount with the admin password and no receipt, blocks duplicate submission, and clears the password 322ms
+   ✓ browses ledger search and pages, cancels without writing, and reverses with a reason and password 343ms
+ ✓ src/features/admin/AdminPanel.test.tsx (14 tests) 2302ms
+ ✓ src/features/knowledge-chat/knowledgeChatClient.test.ts (8 tests) 73ms
+ ✓ src/features/tavern/cardImport.test.ts (26 tests) 121ms
+ ✓ src/features/admin/RequestObservationsTab.test.tsx (8 tests) 3308ms
+   ✓ draws every fixed lifecycle node and exposes friendly plus raw diagnostics 668ms
+   ✓ shows captured operations beside the friendly explanation and raw diagnostic 340ms
+   ✓ applies advanced request-id and knowledge_chat route-family filters as one query 954ms
+   ✓ applies advanced request-id and tavern route-family filters as one query 627ms
+ ✓ src/features/knowledge-chat/KnowledgeChatPanel.test.tsx (11 tests) 1562ms
+ ✓ src/features/tavern/tavernClient.test.ts (15 tests) 128ms
+ ✓ src/features/identity/identityClient.test.ts (13 tests) 40ms
+ ✓ src/features/tree-library/treeLibraryClient.test.ts (11 tests) 59ms
+ ✓ src/features/identity/identityValidation.test.ts (45 tests) 27ms
+ ✓ src/features/announcements/AnnouncementProvider.test.tsx (5 tests) 480ms
+   ✓ AnnouncementProvider > 逐条「知道了」标记已读，全部读完自动关闭 333ms
+ ✓ src/features/skill-tree/SkillTreeCanvas.test.tsx (2 tests) 204ms
+ ✓ src/features/identity/IdentityDialog.test.tsx (9 tests) 2313ms
+   ✓ IdentityDialog invitation claim > claims directly and fills the invitation field when turnstile is not configured 321ms
+   ✓ IdentityDialog invitation claim > warns about a mismatched password confirmation once it loses focus 397ms
+   ✓ IdentityDialog invitation claim > reports the cross-field contact rule when every field is otherwise valid 482ms
+ ✓ src/features/tree-library/treeExport.test.ts (3 tests) 32ms
+ ✓ src/features/tree-generation/TreeGenerationDialog.test.tsx (26 tests) 10642ms
+   ✓ TreeGenerationDialog > restores only nonsecret user model choices for a resumed planning session 424ms
+   ✓ TreeGenerationDialog > selects an AnyAI preset and sends only that models supported controls with a user key 1031ms
+   ✓ TreeGenerationDialog > collects only the four fixed learning fields and keeps the API key in component memory 1025ms
+   ✓ TreeGenerationDialog > rejects an empty API key locally with a specific explanation 601ms
+   ✓ TreeGenerationDialog > sends a copied API key after trimming surrounding whitespace 691ms
+   ✓ TreeGenerationDialog > identifies the exact oversized learning field before sending a request 567ms
+   ✓ TreeGenerationDialog > identifies an oversized API key before it reaches the request 581ms
+   ✓ TreeGenerationDialog > keeps replan and detail adjustment as distinct versioned actions 553ms
+   ✓ TreeGenerationDialog > does not apply platform revision ceilings to a sixth BYOK adjustment 541ms
+   ✓ TreeGenerationDialog > uses platform mode without rendering model controls and requires exact second confirmation 643ms
+   ✓ TreeGenerationDialog > shows platform planning progress, operation counters and free formal retry 2049ms
+   ✓ TreeGenerationDialog > shows and copies a closed diagnostic for a failed platform adjustment 372ms
+ ✓ src/features/identity/IdentityAccess.test.tsx (4 tests) 1464ms
+   ✓ IdentityAccess > registers through the modal, shows the server player ID, and logs out with CSRF 1120ms
+ ✓ src/features/wallet/walletClient.test.ts (3 tests) 48ms
+ ✓ src/features/skill-tree/NodeDetailPanel.test.tsx (4 tests) 584ms
+ ✓ src/features/identity/IdentityContext.test.tsx (8 tests) 6180ms
+   ✓ lets any child open the real dialog, observe registration, and log out 1357ms
+   ✓ surfaces the rejection message 400 in the open dialog without logging in 935ms
+   ✓ surfaces the rejection message 409 in the open dialog without logging in 727ms
+   ✓ surfaces the rejection message 400 in the open dialog without logging in 835ms
+   ✓ surfaces the rejection message 400 in the open dialog without logging in 878ms
+   ✓ surfaces the rejection message 400 in the open dialog without logging in 858ms
+   ✓ refreshes the canonical session after login so administrator access and the current CSRF token appear without reloading 308ms
+ ✓ src/features/tree-generation/generationDiagnostics.test.ts (6 tests) 12ms
+ ✓ src/features/skill-tree/blockConnections.test.ts (8 tests) 27ms
+ ✓ src/features/skill-tree/SkillNode.test.tsx (6 tests) 228ms
+ ✓ src/features/wallet/ModelPricingPage.test.tsx (1 test) 475ms
+   ✓ searches and selects a model with context, settings and honest channel monitoring 473ms
+ ✓ src/features/tree-library/TreeExportMenu.test.tsx (3 tests) 443ms
+   ✓ TreeExportMenu > opens export choices in a viewport dialog instead of an inline menu 335ms
+ ✓ src/features/skill-tree/layoutBlocks.test.ts (4 tests) 34ms
+ ✓ src/features/landing/LandingPage.test.tsx (2 tests) 2840ms
+   ✓ LandingPage > 用直接的学习痛点说明 MapFlow，并提供可操作的 3D 技能树入口 2014ms
+   ✓ LandingPage > 从首页打开 Agent 接入教程并展示真实的 npx 配置方式 824ms
+ ↓ src/features/tavern/realCard.acceptance.test.ts (1 test | 1 skipped)
+ ✓ src/features/wallet/WalletBalance.test.tsx (2 tests) 309ms
+ ✓ src/features/tree-generation/GenerationFundingSelector.test.tsx (4 tests) 293ms
+ ✓ src/features/tavern/officialCards.test.ts (2 tests) 116ms
+ ✓ src/features/tree-generation/PlatformGenerationConfirmation.test.tsx (3 tests) 516ms
+   ✓ PlatformGenerationConfirmation > shows the exact start warning and keeps cancellation side-effect free 363ms
+ ✓ src/features/tree-generation/generationValidation.test.ts (4 tests) 12ms
+ ✓ src/features/landing/landingMotion.test.ts (6 tests) 8ms
+ ✓ src/features/credit/creditClient.test.ts (3 tests) 40ms
+ ✓ src/features/tavern/conversationInput.test.ts (3 tests) 15ms
+ ✓ src/features/credit/CreditPill.test.tsx (1 test) 196ms
+ ✓ src/features/announcements/announcementsClient.test.ts (2 tests) 16ms
+ ✓ src/features/skill-tree/layoutTree.test.ts (1 test) 21ms
+ ✓ src/features/navigation/MobileDrawer.test.tsx (3 tests) 303ms
+ ✓ src/features/mcp/McpGuideDialog.test.tsx (2 tests) 437ms
+   ✓ McpGuideDialog 文档导航 > 按一级主题分组展示二级栏目，并切换右侧内容 378ms
+ ✓ src/features/feedback/feedbackClient.test.ts (2 tests) 26ms
+ ✓ src/features/landing/skillTree3dPresentation.test.ts (3 tests) 9ms
+ ✓ src/features/skill-tree/ProgressOverview.test.tsx (1 test) 65ms
+ ✓ src/features/onboarding/PublicMapGuide.test.tsx (2 tests) 6ms
+ ✓ src/features/skill-tree/viewport.test.ts (2 tests) 8ms
+ ✓ src/App.test.tsx (68 tests) 21520ms
+   ✓ Cash quota and compact navigation > keeps cash quota available and opens secondary navigation from More without losing tools 685ms
+   ✓ Tavern navigation > gates direct /tavern visits behind the existing login and preserves the destination after login 375ms
+   ✓ MapFlow tree library > 公共树默认使用关系布局，不向游客展示块布局切换 1444ms
+   ✓ MapFlow tree library > 首次进入公共树时展示通用引导，查看引导按钮可以重播 371ms
+   ✓ MapFlow tree library > 加入公共技能树后自动进入我的学习引导 702ms
+   ✓ MapFlow tree library > 个人地图引导可以进入生成流程并在生成器中显示说明 443ms
+   ✓ MapFlow tree library > 生成器引导的开始体验按钮只关闭引导并保留生成器 347ms
+   ✓ MapFlow tree library > 公共树加载失败时查看引导仍能打开独立浮层 1404ms
+   ✓ MapFlow tree library > 点击公共树节点不会重新挂载画布 304ms
+   ✓ MapFlow tree library > 公共树目录失败时保留控制台，并允许继续使用个人学习 1167ms
+   ✓ MapFlow tree library > 未登录从根路径登录后直接进入控制台 363ms
+   ✓ MapFlow tree library > adds a tree for a pioneer and keeps completion binary and account scoped 549ms
+   ✓ MapFlow tree library > saves a partial node percentage through the personal tree flow 558ms
+   ✓ MapFlow tree library > does not expose the previous account personal library after logout and login 1130ms
+   ✓ MapFlow tree library > opens generation only from an authenticated personal library and selects its result 400ms
+   ✓ MapFlow tree library > keeps the generation button visible and disabled when capabilities fail 1034ms
+   ✓ MapFlow tree library > keeps an unfinished generation session available after minimizing 315ms
+   ✓ 管理面板入口 > only shows the admin entry to admins and opens the panel with a working back button 434ms
+   ✓ 手机端视图栈 > 重新加载控制台后仍保留公共树和当前节点 401ms
+   ✓ 手机端视图栈 > 重新加载控制台后仍保留个人树和当前节点 345ms
+   ✓ 手机端视图栈 > 点节点进入详情页，返回按钮先回图页再回列表 427ms
+   ✓ 手机端视图栈 > 默认展开的左右栏可以独立收起并恢复 539ms
+   ✓ 手机端视图栈 > keeps an export action on every personal tree card, without duplicate desktop header controls 487ms
+   ✓ 手机端视图栈 > can rename a personal tree and delete it after explicit confirmation 733ms
+   ✓ 手机端视图栈 > 登录后的个人树打开聊天并可返回详情，选中节点保持不变 619ms
+   ✓ 手机端视图栈 > 桌面端聊天面板默认较宽，并可通过分隔条拖拽到边界 567ms
+   ✓ 手机端视图栈 > 关闭再打开同一棵树时保留聊天气泡，但切换树会隔离会话 688ms
+ ✓ src/features/tavern/TavernPage.test.tsx (44 tests) 23537ms
+   ✓ Tavern page > keeps the self key when clicking its selected route again 691ms
+   ✓ Tavern page > does not send or reserve a payment when platform quota chatting is unavailable 722ms
+   ✓ Tavern page > sends a server listed platform model without a key and binds retries to that selection 1868ms
+   ✓ Tavern page > validates each custom field, sends the selected endpoint and forgets the key after remount 2928ms
+   ✓ Tavern page > sends with Enter but preserves Shift+Enter and IME composition 1086ms
+   ✓ Tavern page > updates optional vocabulary and persona after creation without replacing history 502ms
+   ✓ Tavern page > offers alternate greetings only before dialogue starts and sends the selected index 404ms
+   ✓ Tavern page > edits real DSH generation parameters inside the existing conversation details panel 563ms
+   ✓ Tavern page > sends the chosen self key model without persisting its key 1247ms
+   ✓ Tavern page > retains unsaved profile fields when generation parameters are saved 623ms
+   ✓ Tavern page > limits configuration history to the current character across session and character switches 461ms
+   ✓ Tavern page > reloads the latest settings after a stale tab receives a version conflict 325ms
+   ✓ Tavern page > uses the same revisioned graph endpoint for swipe, branches and checkpoints 1121ms
+   ✓ Tavern page > creates a branch from a selected assistant ancestor instead of forcing the current leaf 565ms
+   ✓ Tavern page > regenerates and continues through the same generation stream 1269ms
+   ✓ Tavern page > can discard an interrupted regenerate instead of trapping the conversation in retry mode 1191ms
+   ✓ Tavern page > keeps a stable clientTurnId across a failed stream and retry, replaces the draft and refreshes balance 1413ms
+   ✓ Tavern page > explains a model outage, preserves the retry identity and can return the failed input to editing 1121ms
+   ✓ Tavern page > restores an unconfirmed turn after remount and retains its retry identifier 1089ms
+   ✓ Tavern page > keeps a committed reply when an older background history read arrives after completed 498ms
+   ✓ Tavern page > keeps the committed balance when an older credit refresh finishes after completed 438ms
+
+ Test Files  49 passed | 1 skipped (50)
+      Tests  459 passed | 1 skipped (460)
+   Start at  17:41:07
+   Duration  26.52s (transform 4.52s, setup 9.92s, collect 10.56s, tests 84.16s, environment 39.22s, prepare 6.69s)

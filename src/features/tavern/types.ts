@@ -28,7 +28,7 @@ export interface TavernUserModelAccess {
   settings: Record<string, string | boolean>;
 }
 export interface TavernModelSelection {
-  provider: 'platform' | 'anyai' | 'custom';
+  provider: 'platform' | 'custom';
   apiKey: string; model: string; baseUrl: string;
   settings: Record<string, string | boolean>;
   historyBytes: 8192 | 16384 | 32768;

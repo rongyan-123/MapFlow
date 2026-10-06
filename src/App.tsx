@@ -16,11 +16,12 @@ import ResizableChatPane, {
 import IdentityAccess from './features/identity/IdentityAccess';
 import { useIdentity } from './features/identity/IdentityContext';
 import LogoutConfirmDialog from './features/identity/LogoutConfirmDialog';
-import AnnouncementsButton from './features/announcements/AnnouncementsButton';
 import AnnouncementsDialog from './features/announcements/AnnouncementsDialog';
 import FeedbackDialog from './features/feedback/FeedbackDialog';
 import LandingPage from './features/landing/LandingPage';
 import MobileDrawer from './features/navigation/MobileDrawer';
+import HeaderMoreMenu, { headerMenuItem } from './features/navigation/HeaderMoreMenu';
+import WalletBalance from './features/wallet/WalletBalance';
 import PublicMapGuide, {
   PUBLIC_GUIDE_STORAGE_KEY,
   type PublicGuideStep,
@@ -53,6 +54,8 @@ import TreeLibraryActionDialog, {
 } from './features/tree-library/TreeLibraryActionDialog';
 import IdentityGate from './features/identity/IdentityGate';
 import TavernPage from './features/tavern/TavernPage';
+import WalletPage from './features/wallet/WalletPage';
+import ModelPricingPage from './features/wallet/ModelPricingPage';
 import { DEMO_TREES } from './lib/demoTrees';
 import type {
   LearningTreeSnapshot,
@@ -94,6 +97,8 @@ export default function App() {
   const queryClient = useQueryClient();
   const { session, sessionPending } = useIdentity();
   const [currentPath, setCurrentPath] = useState(() => readCurrentPath());
+  const walletOrigin = useRef('/console');
+  const modelsOrigin = useRef('/console');
   const previousSessionPlayerIdRef = useRef<string | null>(null);
   const marketingRequested =
     currentPath === '/' &&
@@ -144,7 +149,7 @@ export default function App() {
   if (sessionPending) return <EntryLoading />;
   if (!session) {
     return <IdentityGate onAuthenticated={() => {
-      if (currentPath !== '/tavern') navigateToConsole(true);
+      if (!['/tavern', '/wallet', '/models'].includes(currentPath)) navigateToConsole(true);
     }} />;
   }
 
@@ -152,8 +157,27 @@ export default function App() {
     window.history.pushState({}, '', '/tavern');
     setCurrentPath('/tavern');
   };
+  const navigateToWallet = () => {
+    if (currentPath !== '/models') walletOrigin.current = currentPath;
+    window.history.pushState({}, '', '/wallet');
+    setCurrentPath('/wallet');
+  };
+  const navigateToModels = () => {
+    modelsOrigin.current = currentPath;
+    window.history.pushState({}, '', '/models');
+    setCurrentPath('/models');
+  };
+  if (currentPath === '/wallet') {
+    return <WalletPage key={session.account.playerId} accountId={session.account.playerId} csrfToken={session.csrfToken}
+      onBack={() => walletOrigin.current === '/tavern' ? navigateToTavern() : navigateToConsole()}
+      onNavigateModels={navigateToModels} />;
+  }
+  if (currentPath === '/models') {
+    return <ModelPricingPage accountId={session.account.playerId} onNavigateWallet={navigateToWallet} onBack={() => modelsOrigin.current === '/wallet' ? navigateToWallet() : modelsOrigin.current === '/tavern' ? navigateToTavern() : navigateToConsole()}
+      onNavigateTavern={navigateToTavern} />;
+  }
   if (currentPath === '/tavern') {
-    return <TavernPage onNavigateConsole={() => navigateToConsole()} />;
+    return <TavernPage onNavigateConsole={() => navigateToConsole()} onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />;
   }
 
   const rootRoute = currentPath === '/' && !generationRouteRequested;
@@ -167,13 +191,13 @@ export default function App() {
         />
       );
     }
-    return <ConsoleApp onNavigateTavern={navigateToTavern} />;
+    return <ConsoleApp onNavigateTavern={navigateToTavern} onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />;
   }
 
-  return <ConsoleApp onNavigateTavern={navigateToTavern} />;
+  return <ConsoleApp onNavigateTavern={navigateToTavern} onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />;
 }
 
-function ConsoleApp({ onNavigateTavern }: { onNavigateTavern: () => void }) {
+function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { onNavigateTavern: () => void; onNavigateWallet: () => void; onNavigateModels: () => void }) {
   const queryClient = useQueryClient();
   const {
     identityEnabled,
@@ -875,13 +899,14 @@ function ConsoleApp({ onNavigateTavern }: { onNavigateTavern: () => void }) {
   // 放在公共树库加载分支之前，避免树库重试失败时把管理员踢出面板。
   if (view === 'admin' && session) {
     return (
-      <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
+      <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-slate-950 text-slate-100">
         <AdminPanel
           onBack={() => {
             setView('personal');
             setMobileView('list');
           }}
           csrfToken={session.csrfToken}
+          accountId={session.account.playerId}
         />
       </div>
     );
@@ -928,9 +953,9 @@ function ConsoleApp({ onNavigateTavern }: { onNavigateTavern: () => void }) {
       (view === 'personal' && isPersonalGuideStep));
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
-      <header className="flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-2 sm:px-5 max-lg:pt-[max(0.5rem,env(safe-area-inset-top))]">
-        <div className="flex min-w-0 items-center gap-2">
+    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-slate-950 text-slate-100">
+      <header className="relative z-30 flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-800 bg-slate-950/95 px-3 py-2 sm:gap-3 sm:px-5 max-lg:pt-[max(0.5rem,env(safe-area-inset-top))]">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {mobileView === 'list' && (
             <button
               type="button"
@@ -980,13 +1005,8 @@ function ConsoleApp({ onNavigateTavern }: { onNavigateTavern: () => void }) {
             我的学习
           </ViewButton>
           <ViewButton active={false} onClick={onNavigateTavern}>酒馆</ViewButton>
-          {session?.account.isAdmin && (
-            <ViewButton active={view === 'admin'} onClick={() => setView('admin')}>
-              管理面板
-            </ViewButton>
-          )}
         </nav>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {(identityEnabled || session) && (
             <button
               type="button"
@@ -1011,65 +1031,29 @@ function ConsoleApp({ onNavigateTavern }: { onNavigateTavern: () => void }) {
               }
               className="group rounded-xl border border-cyan-200/90 bg-cyan-300 px-3 py-1.5 text-xs font-bold text-slate-950 shadow-[0_0_18px_rgba(103,232,249,0.32)] transition hover:-translate-y-0.5 hover:bg-cyan-200 hover:shadow-[0_0_24px_rgba(103,232,249,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
             >
-              <span aria-hidden="true" className="mr-1 transition-transform group-hover:rotate-12">
+              <span aria-hidden="true" className="transition-transform group-hover:rotate-12 sm:mr-1">
                 ✦
               </span>
               <span className="hidden sm:inline">
                 {session ? '开始生成' : '登录后可使用'}
               </span>
-              <span className="sm:hidden">{session ? '生成' : '登录'}</span>
             </button>
           )}
-          <a
-            href="/?marketing=1"
-            aria-label="查看产品首页"
-            className="hidden rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-cyan-600 hover:text-cyan-100 xl:inline-flex"
-          >
-            产品首页
-          </a>
-          <button
-            type="button"
-            aria-label="如何在自己的 Agent 里连接 MapFlow"
-            onClick={() => openMcpGuide()}
-            className="hidden rounded-xl border border-violet-400/35 bg-violet-400/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:border-violet-300/70 hover:bg-violet-400/15 hover:text-white xl:inline-flex"
-          >
-            Agent 接入
-          </button>
-          <button
-            type="button"
-            aria-label="查看引导"
-            onClick={replayPublicGuide}
-            className="hidden rounded-xl border border-fuchsia-300/60 bg-fuchsia-400/10 px-3 py-1.5 text-xs font-semibold text-fuchsia-200 transition hover:-translate-y-0.5 hover:border-fuchsia-200 hover:bg-fuchsia-400/20 hover:text-white md:inline-flex"
-          >
-            查看引导
-          </button>
-          <ThemeSwitcher />
-          <div className="hidden lg:block">
-            <AnnouncementsButton />
-          </div>
-          <div className="hidden lg:block">
-            <button
-              type="button"
-              aria-label="意见反馈"
-              onClick={() => setFeedbackOpen(true)}
-              className="rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-cyan-600 hover:text-white"
-            >
-              意见反馈
-            </button>
-          </div>
-          {session &&
-            generationCapabilities?.platformFundedEnabled === true && (
-              <CreditPill
-                credit={creditQuery.data ?? null}
-                onSignedIn={() => {
-                  void creditQuery.refetch();
-                  void platformEntitlements.refetch();
-                }}
-              />
-            )}
-          <div className="hidden lg:block">
+          {session && <WalletBalance accountId={session.account.playerId} onClick={onNavigateWallet} />}
+          <HeaderMoreMenu>
+            <button type="button" className={headerMenuItem} onClick={onNavigateModels}>模型价格</button>
+            {session?.account.isAdmin && <button type="button" className={headerMenuItem} onClick={() => setView('admin')}>管理面板</button>}
+            <a href="/?marketing=1" aria-label="查看产品首页" className={headerMenuItem}>产品首页</a>
+            <button type="button" aria-label="如何在自己的 Agent 里连接 MapFlow" onClick={() => openMcpGuide()} className={headerMenuItem}>Agent 接入教程</button>
+            <button type="button" aria-label="查看引导" onClick={replayPublicGuide} className={headerMenuItem}>查看引导</button>
+            <button type="button" onClick={() => setAnnouncementsOpen(true)} className={headerMenuItem}>公告</button>
+            <button type="button" aria-label="意见反馈" onClick={() => setFeedbackOpen(true)} className={headerMenuItem}>意见反馈</button>
+            <div data-keep-menu-open className="space-y-3 border-t border-slate-800 px-2 py-3">
+              <ThemeSwitcher />
+              {session && generationCapabilities?.platformFundedEnabled === true && <div><p className="mb-2 text-xs text-slate-500">学习积分</p><CreditPill credit={creditQuery.data ?? null} onSignedIn={() => { void creditQuery.refetch(); void platformEntitlements.refetch(); }} /></div>}
+            </div>
             <IdentityAccess onRequestLogout={requestLogout} />
-          </div>
+          </HeaderMoreMenu>
         </div>
       </header>
 
@@ -1578,6 +1562,8 @@ function ConsoleApp({ onNavigateTavern }: { onNavigateTavern: () => void }) {
             </DrawerItem>
           )}
           <DrawerItem onClick={onNavigateTavern}>酒馆</DrawerItem>
+          <DrawerItem onClick={onNavigateWallet}>额度</DrawerItem>
+          <DrawerItem onClick={onNavigateModels}>模型价格</DrawerItem>
         </nav>
 
         {session && (
