@@ -1,3 +1,5 @@
+> **Main 融合与发布（2026-10-06）**：日常前端以 `D:\MapFlow-main-integration-20261006` 的 `main` 为准，后端以 `D:\mapflow-server-main-integration-20261006` 的 `main` 为准。已融合公共树库搜索、筛选、分页、笔记与发布，以及 Vmq 自动充值、20 秒展示队列、酒馆和注册。笔记本生产状态以 `/opt/mapflow-laptop-migration-20261006/OPERATIONS.md` 首段为准；固定提交和验收证据见 `releases/20261006-main-integration/provenance.json`。不要再从未收齐功能的独立分支直接覆盖生产。详见 [main 整合记录](docs/deployment/2026-10-06-main-integration.md)。下文包含历史版本。
+
 # MapFlow 项目交接文档
 
 > **生产入口更新（2026-10-06）**：当前生产运行在 Linux 笔记本 `rong-ubuntu`，通过 `ssh rong-frp` 连接。运行目录为 `/opt/mapflow-laptop-migration-20261006`，运维记录在该目录的 `OPERATIONS.md`；本地迁移记录见 [Docker 迁移记录](docs/migration/2026-10-06-laptop-docker-migration.md)。公网仍为 https://xxian.fun，通过 88FRP HTTPS 隧道到 `127.0.0.1:18443`。下面涉及阿里云 `47.114.98.109`、旧容器名和 `/opt/mapflow/switch.sh` 的发布描述属于历史方案，不能作为当前部署指令；CI 目标尚未迁移。
