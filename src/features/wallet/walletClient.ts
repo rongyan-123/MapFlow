@@ -27,7 +27,7 @@ export interface LedgerEntry {
   username: string;
   playerId: string;
   actorUsername: string | null;
-  kind: 'welcome' | 'topup' | 'adjustment' | 'reversal';
+  kind: 'welcome' | 'topup' | 'adjustment' | 'reversal' | 'usage';
   note: string;
   amountMicros: number;
   balanceAfterMicros: number;
@@ -39,7 +39,9 @@ export interface LedgerEntry {
 export interface WalletAccount { accountId: string; username: string; playerId: string; status: string; balanceMicros: number }
 export interface WalletAdjustment { requestId: string; amountFen: number; note: string; password: string }
 export interface Wallet { balanceMicros: number; currency: 'CNY'; supportContact: string; channels: Channel[]; topups: Topup[]; ledger: LedgerEntry[] }
-export interface PricingModel { id: string; provider: string; contextWindow: number; settings: UserModelSetting[]; vendorCodes: string[]; availability: 'byok'; pricing: null }
+export interface PricingChannel { vendor:string; lane:number; enabled:boolean; inputMicrosPerMillion:number; outputMicrosPerMillion:number; statsSource:'live'|'estimated'|'unknown'; successRate24h:number|null; avgResponseSeconds:number|null }
+export interface ModelPriceSnapshot {channels:PricingChannel[];maxInputMicrosPerMillion:number;maxOutputMicrosPerMillion:number;updatedAt:string;basis:'upstream_actual_x2'}
+export interface PricingModel { id: string; provider: string; contextWindow: number; settings: UserModelSetting[]; vendorCodes: string[]; availability: 'byok'|'wallet'; pricing: ModelPriceSnapshot|null }
 export interface ModelPricing { multiplierLabel: string; currency: 'CNY'; updatedAt: string; models: PricingModel[] }
 
 export function formatAmountMicros(micros: number): string { return (micros / 1_000_000).toFixed(6).replace(/0+$/u, '').replace(/\.$/u, ''); }
@@ -84,7 +86,7 @@ function isLedger(value: unknown): value is LedgerEntry {
   return !!item && typeof item.entryId === 'string' && typeof item.accountId === 'string'
     && typeof item.username === 'string' && typeof item.playerId === 'string'
     && (item.actorUsername === null || typeof item.actorUsername === 'string')
-    && ['welcome', 'topup', 'adjustment', 'reversal'].includes(String(item.kind))
+    && ['welcome', 'topup', 'adjustment', 'reversal','usage'].includes(String(item.kind))
     && typeof item.note === 'string' && Number.isSafeInteger(item.amountMicros)
     && Number.isSafeInteger(item.balanceAfterMicros)
     && (item.topupId === null || typeof item.topupId === 'string')
@@ -124,4 +126,32 @@ export async function reverseWalletEntry(entryId: string, input: { note: string;
 }
 export async function readAdminChannels(): Promise<Channel[]> { const value = asRecord(await request('/api/admin/wallet/payment-channels')); if (!value || !Array.isArray(value.channels) || !value.channels.every(isChannel)) return invalid(); return value.channels; }
 export async function uploadChannel(channel: PaymentChannel, file: File, csrfToken: string): Promise<Channel> { const form = new FormData(); form.set('file', file); const value = await request(`/api/admin/wallet/payment-channels/${channel}`, { method: 'POST', credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json', 'X-CSRF-Token': csrfToken }, body: form }); return isChannel(value) ? value : invalid(); }
-export async function readModelPricing(): Promise<ModelPricing> { const value = asRecord(await request('/api/model-catalog/pricing')); if (!value || typeof value.multiplierLabel !== 'string' || value.currency !== 'CNY' || typeof value.updatedAt !== 'string' || !Array.isArray(value.models) || !value.models.every(model => { const item = asRecord(model); return item && typeof item.id === 'string' && typeof item.provider === 'string' && Number.isSafeInteger(item.contextWindow) && Array.isArray(item.vendorCodes) && item.vendorCodes.every((code: unknown) => typeof code === 'string') && item.availability === 'byok' && item.pricing === null && Array.isArray(item.settings) && item.settings.every((setting: unknown) => { const option = asRecord(setting); return option && typeof option.name === 'string' && (option.kind === 'switch' || option.kind === 'select') && Array.isArray(option.options) && option.options.every((name: unknown) => typeof name === 'string'); }); })) return invalid(); return value as unknown as ModelPricing; }
+function validMicros(value:unknown):boolean {return typeof value==='number' && Number.isSafeInteger(value) && value>=0;}
+function isModelPrice(value:unknown):boolean {
+  if (value===null) return true;
+  const price=asRecord(value);
+  return !!price && price.basis==='upstream_actual_x2' && typeof price.updatedAt==='string' && Number.isFinite(Date.parse(price.updatedAt))
+    && validMicros(price.maxInputMicrosPerMillion) && validMicros(price.maxOutputMicrosPerMillion)
+    && Array.isArray(price.channels) && price.channels.every(channel=> {
+      const item=asRecord(channel);
+      return !!item && typeof item.vendor==='string' && Number.isSafeInteger(item.lane) && typeof item.enabled==='boolean'
+        && validMicros(item.inputMicrosPerMillion) && validMicros(item.outputMicrosPerMillion) && ['live','estimated','unknown'].includes(String(item.statsSource))
+        && (item.successRate24h===null || typeof item.successRate24h==='number' && Number.isFinite(item.successRate24h) && item.successRate24h>=0 && item.successRate24h<=100)
+        && (item.avgResponseSeconds===null || typeof item.avgResponseSeconds==='number' && Number.isFinite(item.avgResponseSeconds) && item.avgResponseSeconds>=0);
+    });
+}
+export async function readModelPricing(): Promise<ModelPricing> {
+  const value=asRecord(await request('/api/model-catalog/pricing'));
+  if (!value || typeof value.multiplierLabel!=='string' || value.currency!=='CNY' || typeof value.updatedAt!=='string'
+    || !Array.isArray(value.models) || !value.models.every(model=>{
+      const item=asRecord(model);
+      return item && typeof item.id==='string' && typeof item.provider==='string' && Number.isSafeInteger(item.contextWindow)
+        && Array.isArray(item.vendorCodes) && item.vendorCodes.every((code:unknown)=>typeof code==='string')
+        && ['byok','wallet'].includes(String(item.availability)) && isModelPrice(item.pricing)
+        && Array.isArray(item.settings) && item.settings.every((setting:unknown)=> {
+          const option=asRecord(setting);return option && typeof option.name==='string' && ['switch','select'].includes(String(option.kind))
+            && Array.isArray(option.options) && option.options.every((name:unknown)=>typeof name==='string');
+        });
+    })) return invalid();
+  return value as unknown as ModelPricing;
+}

@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import AssistantMarkdown from '../knowledge-chat/AssistantMarkdown';
 import { validateId, validateMessage } from './conversationInput';
-import { generateStream, mutateGraph } from './tavernClient';
+import { generateStream, mutateGraph, requestCashQuote } from './tavernClient';
+import {formatAmountMicros} from '../wallet/walletClient';
+import type {CashQuote} from './types';
 import { TavernApiError, type CompletedTurn, type ConversationDetail, type ConversationGraph, type GenerationAction, type GenerationRecord, type GraphMessage, type GraphMutation, type TavernModelSelection, type TavernUserModelAccess } from './types';
 import { isRecord, utf8Bytes } from './validation';
 import { CharacterAvatar, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass, type TavernDialogSection } from './TavernUi';
 import type { Character } from './types';
 
 interface PendingGeneration { clientActionId: string; expectedRevision: number; action: GenerationAction;
+  billing?:CashQuote;
   platformBinding?: { model: string; historyBytes: 8192 | 16384 | 32768 };
   modelBinding?: { model: string; baseUrl: string; historyBytes: 8192 | 16384 | 32768 } }
 
@@ -32,6 +35,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const [graphBusy, setGraphBusy] = useState(false);
   const [branchName, setBranchName] = useState('');
   const [branchAnchorId, setBranchAnchorId] = useState('');
+  const [confirmation,setConfirmation]=useState<{outgoing:PendingGeneration;quote:CashQuote}|null>(null);
   const activeRequest = useRef<AbortController | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLDivElement>(null);
@@ -77,6 +81,16 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     } catch (failure) { setError(failure); return; }
     const controller = new AbortController();
     activeRequest.current = controller;
+    if (platformModel && modelSelection.billingPolicy && !outgoing.billing) {
+      setBusy(true);setError(null);
+      try {
+        const quote=await requestCashQuote(detail.conversation.conversationId,outgoing.expectedRevision,outgoing.action,
+          platformModel,modelSelection.historyBytes,csrfToken,controller.signal);
+        if (!controller.signal.aborted) setConfirmation({outgoing,quote});
+      } catch (failure) {if (!controller.signal.aborted) setError(failure);}
+      finally {if (!controller.signal.aborted) {activeRequest.current=null;setBusy(false);}}
+      return;
+    }
     // Persist before sending: a refresh between request and completed must reuse the same ID.
     storePending(storageKey, outgoing);
     setPendingGeneration(outgoing);
@@ -85,11 +99,16 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     try {
       const completed = await generateStream(detail.conversation.conversationId, outgoing.clientActionId, outgoing.expectedRevision, outgoing.action,
         csrfToken, delta => { if (!controller.signal.aborted) setDraft(previous => previous + delta); }, controller.signal,
-        modelAccess, modelAccess || platformModel ? modelSelection.historyBytes : undefined, platformModel);
+        modelAccess, modelAccess || platformModel ? modelSelection.historyBytes : undefined, platformModel,outgoing.billing);
       if (controller.signal.aborted) return;
       storePending(storageKey, null);
       setPendingGeneration(null); setDraft(''); onCompleted(completed);
-    } catch (failure) { if (!controller.signal.aborted) setError(failure); }
+    } catch (failure) { if (!controller.signal.aborted) {
+      if (failure instanceof TavernApiError && failure.code==='tavern.cash_quote_expired') {
+        const renewed={...outgoing,billing:undefined};setPendingGeneration(renewed);storePending(storageKey,renewed);
+      }
+      setError(failure);
+    } }
     finally { if (!controller.signal.aborted) { activeRequest.current = null; setBusy(false); } }
   }
   const inputTooLarge = Array.from(message).length > 8000 || utf8Bytes(message) > 8192;
@@ -142,10 +161,20 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       const container = pane.current;
       if (container) followLatest.current = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
     }}>
-      {displayMessages.map(activeMessage => <Message key={activeMessage.messageId}
+      {displayMessages.map(activeMessage => <div key={activeMessage.messageId}><Message
         author={activeMessage.role === 'user' ? detail.conversation.userName : activeMessage.role === 'system' ? '系统' : detail.character.card.name}
         character={activeMessage.role === 'assistant' ? detail.character : undefined}
-        text={activeMessage.content} user={activeMessage.role === 'user'} />)}
+        text={activeMessage.content} user={activeMessage.role === 'user'} />
+        {(detail.cashCharges??[]).filter(charge=>charge.outputMessageId===activeMessage.messageId
+          || activeMessages.some(message=>message.messageId===charge.outputMessageId && message.origin==='continue' &&
+            continuationRoot(message,messagesById)===activeMessage.messageId)).map(charge=> {
+            const usage=detail.turns.find(turn=>turn.turnId===charge.generationId)?.usage;
+            return <p key={charge.generationId} className="mx-auto -mt-4 mb-6 max-w-3xl pl-14 text-xs text-slate-400">
+              {usage&&<>输入 {usage.inputTokens} · 输出 {usage.outputTokens} Token · </>}
+              本次费用 ¥{formatAmountMicros(charge.amountMicros)} · 现金余额 ¥{formatAmountMicros(charge.balanceAfterMicros)}
+              {charge.capped&&' · 已按预留上限结算'}
+            </p>;
+          })}</div>)}
       {activeLeaf && activeLeaf.origin !== 'opening' && <div aria-label="回复操作" className="mx-auto mb-6 flex max-w-3xl flex-wrap items-center gap-1 pl-14 text-xs text-slate-500">
         <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={!canReviseAssistant || busy || graphBusy || pendingGeneration !== null || editing}
           onClick={() => { if (canReviseAssistant) { setEditContent(activeLeaf.content); setEditing(true); setError(null); } }}>编辑当前消息</button>
@@ -164,6 +193,12 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     </div>
     <div className="mx-auto w-full max-w-4xl shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-8">
       <ErrorNotice error={error} />
+      {confirmation&&<TavernDialog title="确认本次费用" onClose={()=>setConfirmation(null)}>
+        <p className="leading-7 text-slate-300">按上游实际扣费 × 2 结算。最高预留 ¥{formatAmountMicros(confirmation.quote.maximumChargeMicros)}，完成后释放未使用额度。失败不扣本站现金额度。</p>
+        <button type="button" className={`${primaryClass} mt-4`} onClick={()=>{
+          const approved={...confirmation.outgoing,billing:confirmation.quote};setConfirmation(null);void runGeneration(approved.action,approved);
+        }}>确认并发送</button>
+      </TavernDialog>}
       {error instanceof TavernApiError && error.code === 'tavern.runtime_unavailable' && <p className="text-xs leading-5 text-slate-400">
         模型连接暂不可用。请稍后重试，或取消本次重试返回编辑；不会使用模拟回复替代模型。
       </p>}
@@ -304,6 +339,9 @@ function readPending(key: string, currentRevision: number): PendingGeneration | 
         ? { model: saved.platformBinding.model, historyBytes: Number(saved.platformBinding.historyBytes) as 8192 | 16384 | 32768 } : undefined;
       if ((saved.modelBinding !== undefined && !modelBinding) || (saved.platformBinding !== undefined && !platformBinding) || (modelBinding && platformBinding)) return null;
       return { clientActionId: saved.clientActionId, expectedRevision, action: saved.action,
+        ...(isRecord(saved.billing) && typeof saved.billing.quoteId==='string' && saved.billing.policyVersion==='cash-v1-actual-x2'
+          && typeof saved.billing.maximumChargeMicros==='number' && Number.isSafeInteger(saved.billing.maximumChargeMicros) && saved.billing.maximumChargeMicros>=0
+          ?{billing:saved.billing as unknown as CashQuote}:{}),
         ...(modelBinding ? { modelBinding } : {}), ...(platformBinding ? { platformBinding } : {}) };
     }
     // Read the previous reply-only shape so an in-flight turn survives this frontend upgrade.
@@ -313,6 +351,13 @@ function readPending(key: string, currentRevision: number): PendingGeneration | 
     }
     return null;
   } catch { return null; }
+}
+function continuationRoot(message:GraphMessage,messages:Map<string,GraphMessage>):string {
+  let root=message;
+  for (let count=0;count<messages.size && root.origin==='continue' && root.parentMessageId;count++) {
+    const parent=messages.get(root.parentMessageId);if (!parent) break;root=parent;
+  }
+  return root.messageId;
 }
 function selectedUserAccess(selection: TavernModelSelection): TavernUserModelAccess | undefined {
   if (selection.provider === 'platform') {

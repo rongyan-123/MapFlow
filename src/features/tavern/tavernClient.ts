@@ -1,16 +1,30 @@
 import { prepareConversationInput, validateId, validateMessage } from './conversationInput';
 import { TavernApiError, type Character, type CompletedTurn, type Conversation, type ConversationDetail, type ConversationGraph, type CreateConversationInput, type GenerationAction, type GenerationRecord, type GenerationSettings, type GenerationSettingsState, type GraphMutation, type NormalizedCharacterCard, type TavernUserModelAccess, type Turn } from './types';
 import { isRecord, NORMALIZED_CARD_BYTES, RAW_FILE_BYTES, tooLarge, utf8Bytes } from './validation';
+import type {CashCharge,CashQuote} from './types';
 
 const ROOT = '/api/me/tavern';
-export async function fetchPlatformModels(signal?: AbortSignal): Promise<{ enabled: boolean; billingMode: 'trial'; models: { id: string; provider: string; contextWindow: number }[] }> {
+export async function fetchPlatformModels(signal?: AbortSignal): Promise<{ enabled: boolean; billingMode: 'trial'|'wallet'; policyVersion?:string; models: { id: string; provider: string; contextWindow: number }[] }> {
   const body = await getJson(`${ROOT}/platform-models`, signal);
-  if (!isRecord(body) || typeof body.enabled !== 'boolean' || body.billingMode !== 'trial' || !Array.isArray(body.models)) throw invalidResponse();
+  if (!isRecord(body) || typeof body.enabled !== 'boolean' || !['trial','wallet'].includes(String(body.billingMode)) || !Array.isArray(body.models)
+    || (body.billingMode==='wallet' && body.policyVersion!=='cash-v1-actual-x2')) throw invalidResponse();
   const models = body.models.map(model => {
     if (!isRecord(model) || typeof model.id !== 'string' || !model.id.trim() || typeof model.provider !== 'string' || !positiveInteger(model.contextWindow)) throw invalidResponse();
     return { id: model.id, provider: model.provider, contextWindow: model.contextWindow };
   });
-  return { enabled: body.enabled, billingMode: 'trial', models };
+  return { enabled: body.enabled, billingMode: body.billingMode as 'trial'|'wallet', ...(body.billingMode==='wallet'?{policyVersion:'cash-v1-actual-x2'}:{}),models };
+}
+export async function requestCashQuote(id:string,expectedRevision:number,action:GenerationAction,platformModel:string,historyBytes:number,csrfToken:string,signal?:AbortSignal):Promise<CashQuote> {
+  const quote=await readJson(await request(`${ROOT}/conversations/${pathId(id)}/quote`,{method:'POST',headers:mutationHeaders(csrfToken,true),body:JSON.stringify({expectedRevision,action,platformModel,historyBytes}),signal}));
+  if (!isRecord(quote) || typeof quote.quoteId!=='string' || !quote.quoteId || !nonNegativeInteger(quote.maximumChargeMicros)
+      || quote.policyVersion!=='cash-v1-actual-x2' || !positiveInteger(quote.expiresInSeconds) || quote.expiresInSeconds>60) throw invalidResponse();
+  return quote as unknown as CashQuote;
+}
+function parseCashCharge(value:unknown):CashCharge {
+  if (!isRecord(value) || typeof value.generationId!=='string' || typeof value.outputMessageId!=='string'
+      || !nonNegativeInteger(value.amountMicros) || !nonNegativeInteger(value.balanceAfterMicros)
+      || typeof value.capped!=='boolean' || typeof value.createdAt!=='string' || !Number.isFinite(Date.parse(value.createdAt))) throw invalidResponse();
+  return value as unknown as CashCharge;
 }
 export async function importCharacter(card: NormalizedCharacterCard, sourceFile: File | undefined, csrfToken: string): Promise<Character> {
   const serialized = JSON.stringify(card);
@@ -48,7 +62,8 @@ export async function updateConversationProfile(id: string, expectedRevision: nu
 function parseConversationDetail(body: unknown): ConversationDetail {
   if (!isRecord(body)) throw invalidResponse();
   return { conversation: parseConversation(body.conversation), character: parseCharacter(body.character),
-    turns: parseList(body, 'turns', parseTurn), generations: parseList(body, 'generations', parseGeneration), graph: parseGraph(body.graph) };
+    turns: parseList(body, 'turns', parseTurn), generations: parseList(body, 'generations', parseGeneration), graph: parseGraph(body.graph),
+    ...(body.cashCharges===undefined?{}:{cashCharges:parseList(body,'cashCharges',parseCashCharge)}) };
 }
 export async function fetchTurns(id: string, signal?: AbortSignal): Promise<Turn[]> {
   return parseList(await getJson(`${ROOT}/conversations/${pathId(id)}/turns`, signal), 'turns', parseTurn);
@@ -71,7 +86,7 @@ export async function mutateGraph(id: string, expectedRevision: number, action: 
 
 export async function generateStream(id: string, clientActionId: string, expectedRevision: number, action: GenerationAction, csrfToken: string,
   onDelta: (delta: string) => void, signal?: AbortSignal, modelAccess?: TavernUserModelAccess,
-  historyBytes?: 8192 | 16384 | 32768, platformModel?: string): Promise<CompletedTurn> {
+  historyBytes?: 8192 | 16384 | 32768, platformModel?: string,billing?:{quoteId:string;policyVersion:string}): Promise<CompletedTurn> {
   if (modelAccess && platformModel) throw new TavernApiError(400, 'tavern.model_access_invalid', '请选择一种模型线路。');
   validateId(clientActionId);
   if (!nonNegativeInteger(expectedRevision)) throw new TavernApiError(409, 'tavern.turn_conflict', '会话版本已变化，请刷新后重试。');
@@ -80,7 +95,7 @@ export async function generateStream(id: string, clientActionId: string, expecte
   const response = await request(`${ROOT}/conversations/${pathId(id)}/turns`, {
     method: 'POST', headers: { ...mutationHeaders(csrfToken, true), Accept: 'text/event-stream' },
     body: JSON.stringify({ clientActionId, expectedRevision, action,
-      ...(modelAccess ? { modelAccess, historyBytes } : platformModel ? { platformModel, historyBytes } : {}) }), signal,
+      ...(modelAccess ? { modelAccess, historyBytes } : platformModel ? { platformModel, historyBytes,...(billing?{billingPolicy:billing.policyVersion,quoteId:billing.quoteId}:{}) } : {}) }), signal,
   });
   if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) throw invalidResponse();
   const reader = response.body.getReader();
@@ -104,9 +119,12 @@ export async function generateStream(id: string, clientActionId: string, expecte
     }
     if (!isRecord(payload) || !nonNegative(payload.creditBalance) || !nonNegative(payload.chargedCredits) || typeof payload.idempotencyHit !== 'boolean') throw invalidResponse();
     const turn = parseTurn(payload.turn);
+    const cashCharge=payload.cashCharge===undefined?undefined:parseCashCharge(payload.cashCharge);
+    if (cashCharge && (cashCharge.generationId!==turn.turnId || !nonNegativeInteger(payload.walletBalanceMicros))) throw invalidResponse();
     if (turn.clientTurnId !== clientActionId || (action.type === 'reply' && turn.userMessage !== action.message)) throw invalidResponse();
     return { turn, graph: parseGraph(payload.graph), creditBalance: payload.creditBalance,
-      chargedCredits: payload.chargedCredits, idempotencyHit: payload.idempotencyHit };
+      chargedCredits: payload.chargedCredits, idempotencyHit: payload.idempotencyHit,
+      ...(cashCharge?{cashCharge,walletBalanceMicros:payload.walletBalanceMicros as number}:{}) };
   };
   try {
     while (true) {
