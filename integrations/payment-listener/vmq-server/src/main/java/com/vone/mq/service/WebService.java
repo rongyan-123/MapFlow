@@ -36,14 +36,33 @@ public class WebService {
     @Autowired
     private PayQrcodeDao payQrcodeDao;
 
-    public CommonRes createOrder(String payId, String param, Integer type, String price, String notifyUrl, String returnUrl, String sign){
+    public synchronized CommonRes createOrder(String payId, String param, Integer type, String price, String notifyUrl, String returnUrl, String sign){
         String key = settingDao.findById("key").get().getVvalue();
         String jsSign =  md5(payId+param+type+price+key);
         if (!sign.equals(jsSign)){
             return ResUtil.error("签名校验不通过");
         }
 
-        Double priceD = Double.valueOf(price);
+        Double priceD;
+        try {
+            BigDecimal decimal = new BigDecimal(price);
+            if (decimal.signum() <= 0 || decimal.stripTrailingZeros().scale() > 2 || decimal.compareTo(new BigDecimal("10000")) > 0) {
+                return ResUtil.error("订单金额无效");
+            }
+            priceD = decimal.doubleValue();
+        } catch (RuntimeException invalid) { return ResUtil.error("订单金额无效"); }
+        PayOrder existing = payOrderDao.findByPayId(payId);
+        if (existing != null) {
+            if (existing.getType() != type || Double.compare(existing.getPrice(), priceD) != 0 ||
+                    !java.util.Objects.equals(existing.getParam(), param) ||
+                    !java.util.Objects.equals(existing.getNotifyUrl(), notifyUrl) ||
+                    !java.util.Objects.equals(existing.getReturnUrl(), returnUrl)) {
+                return ResUtil.error("商户订单参数不一致");
+            }
+            return getOrder(existing.getOrderId());
+        }
+        String payUrl = settingDao.findById(type == 1 ? "wxpay" : "zfbpay").get().getVvalue();
+        if (payUrl == null || payUrl.isEmpty()) { return ResUtil.error("请您先进入后台配置程序"); }
 
 
         Date currentTime = new Date();
@@ -57,9 +76,13 @@ public class WebService {
         double reallyPrice = priceD;
 
         int row = 0;
-        while (row == 0){
+        int attempts = 0;
+        while (row == 0 && attempts++ <= 100){
+            // Quarantine recently closed/paid amounts; late duplicates cannot pay a new order.
+            long now = System.currentTimeMillis();
+            boolean quarantined = !payOrderDao.findAllByReallyPriceAndTypeAndCloseDateBetween(reallyPrice, type, now - 300_000, now).isEmpty();
             try {
-                row = tmpPriceDao.checkPrice(type+"-"+reallyPrice);
+                row = quarantined ? 0 : tmpPriceDao.checkPrice(type+"-"+reallyPrice);
             }catch (Exception e){
                 row = 0;
             }
@@ -75,21 +98,12 @@ public class WebService {
             }else{
                 break;
             }
-            if (reallyPrice<=0){
+            if (reallyPrice<=0 || reallyPrice>10000){
                 return ResUtil.error("所有金额均被占用");
             }
         }
 
-        String payUrl = "";
-        if (type == 1){
-            payUrl = settingDao.findById("wxpay").get().getVvalue();
-        }else if (type == 2){
-            payUrl = settingDao.findById("zfbpay").get().getVvalue();
-        }
-
-        if (payUrl==""){
-            return ResUtil.error("请您先进入后台配置程序");
-        }
+        if (row == 0) { return ResUtil.error("可用付款金额暂时不足，请稍后重试"); }
 
         int isAuto = 1;
 
@@ -99,12 +113,6 @@ public class WebService {
             isAuto = 0;
         }
 
-
-        PayOrder tmp = payOrderDao.findByPayId(payId);
-        if (tmp!=null){
-            tmpPriceDao.deleteById(type+"-"+reallyPrice);
-            return ResUtil.error("商户订单号已存在！");
-        }
 
         PayOrder payOrder = new PayOrder();
         payOrder.setPayId(payId);
@@ -131,7 +139,7 @@ public class WebService {
 
         return ResUtil.success(createOrderRes);
     }
-    public CommonRes closeOrder(String orderId,String sign){
+    public synchronized CommonRes closeOrder(String orderId,String sign){
 
         String key = settingDao.findById("key").get().getVvalue();
         String jsSign =  md5(orderId+key);
@@ -223,7 +231,8 @@ public class WebService {
         }
 
         List<PayOrder> candidates = new ArrayList<>(payOrderDao.findAllByReallyPriceAndStateAndType(amount,0,type));
-        candidates.removeIf(order -> order.getCreateDate() > eventTime);
+        long timeoutMillis = Long.parseLong(settingDao.findById("close").get().getVvalue()) * 60_000;
+        candidates.removeIf(order -> order.getCreateDate() > eventTime || eventTime > order.getCreateDate() + timeoutMillis);
         List<PayOrder> recentPayments = payOrderDao.findAllByReallyPriceAndTypeAndPayDateBetween(
                 amount, type, eventTime - 300_000, eventTime);
         boolean recentlyMatched = recentPayments.stream().anyMatch(order -> order.getState() == 1 || order.getState() == 2);
@@ -254,9 +263,19 @@ public class WebService {
         payOrder.setCloseDate(new Date().getTime());
         payOrderDao.save(payOrder);
 
-        //执行通知
+        return notifyPayment(payOrder);
+    }
+
+    public synchronized void retryPendingNotifications() {
+        for (PayOrder order : payOrderDao.findFirst5ByStateOrderByIdAsc(2)) {
+            notifyPayment(order);
+        }
+    }
+
+    private CommonRes notifyPayment(PayOrder payOrder) {
+        String key = settingDao.findById("key").get().getVvalue();
         String p = "payId="+payOrder.getPayId()+"&param="+payOrder.getParam()+"&type="+payOrder.getType()+"&price="+payOrder.getPrice()+"&reallyPrice="+payOrder.getReallyPrice();
-        sign = md5(payOrder.getPayId()+payOrder.getParam()+payOrder.getType()+payOrder.getPrice()+payOrder.getReallyPrice()+key);
+        String sign = md5(payOrder.getPayId()+payOrder.getParam()+payOrder.getType()+payOrder.getPrice()+payOrder.getReallyPrice()+key);
         p = p+"&sign="+sign;
         String url = payOrder.getNotifyUrl();
         if (url==null || url.equals("")){
@@ -270,6 +289,7 @@ public class WebService {
         String res = HttpRequest.sendGet(url,p);
 
         if (res!=null && res.equals("success")){
+            if (payOrder.getState() == 2) { payOrderDao.setState(1,payOrder.getId()); }
             return ResUtil.success();
         }else {
             //通知失败，设置状态为2
@@ -288,6 +308,7 @@ public class WebService {
         CreateOrderRes createOrderRes = new CreateOrderRes(
                 payOrder.getPayId(),payOrder.getOrderId(),payOrder.getType(),payOrder.getPrice(),payOrder.getReallyPrice()
                 ,payOrder.getPayUrl(),payOrder.getIsAuto(),payOrder.getState(),Integer.valueOf(timeOut),payOrder.getCreateDate());
+        createOrderRes.setPayDate(payOrder.getPayDate());
 
         return ResUtil.success(createOrderRes);
     }

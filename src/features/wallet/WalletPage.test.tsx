@@ -4,14 +4,59 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import WalletPage from './WalletPage';
 
-const api = vi.hoisted(() => ({ readWallet: vi.fn(), createTopup: vi.fn(), declarePaid: vi.fn(), declareUnpaid: vi.fn() }));
+const api = vi.hoisted(() => ({ readWallet: vi.fn(), createTopup: vi.fn(), declarePaid: vi.fn(), declareUnpaid: vi.fn(), updatePaymentDisplay: vi.fn() }));
 vi.mock('./walletClient', async importOriginal => ({ ...await importOriginal<typeof import('./walletClient')>(), ...api }));
 const topup = { topupId: 'order-1', accountId: 'a', amountFen: 100, channel: 'wechat', status: 'awaiting_payment', qrCodeId: 'qr-1', qrImageUrl: '/api/wallet/qrcodes/qr-1', createdAt: '2026-09-30T00:00:00Z', updatedAt: '2026-09-30T00:00:00Z', reviewNote: null };
 const wallet = { balanceMicros: 100000, currency: 'CNY', supportContact: 'v：19375007608', channels: [{ channel: 'wechat', label: '微信', qrCodeId: 'qr-1', imageUrl: '/api/wallet/qrcodes/qr-1' }], topups: [], ledger: [{ entryId: 'welcome-1', kind: 'welcome', amountMicros: 100000, balanceAfterMicros: 100000, topupId: null, createdAt: '2026-09-30T00:00:00Z' }] };
 let client: QueryClient;
+beforeEach(() => api.updatePaymentDisplay.mockImplementation(async (_id, input) => ({ windowId: 'window-1', status: input.action === 'leave' ? 'cancelled' : 'active', serverNow: new Date().toISOString(), expiresAt: new Date(Date.now() + 20000).toISOString(), position: 0, imageUrl: '/api/wallet/topups/order-1/display/window-1/qr' })));
 beforeEach(() => { client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); api.readWallet.mockResolvedValue(wallet); api.createTopup.mockResolvedValue(topup); api.declarePaid.mockResolvedValue({ ...topup, status: 'awaiting_review' }); api.declareUnpaid.mockResolvedValue({ ...topup, status: 'closed_unpaid' }); });
 afterEach(() => { client.clear(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.useRealTimers(); });
 function mount(accountId = 'a') { return render(<QueryClientProvider client={client}><WalletPage accountId={accountId} csrfToken="csrf" onBack={() => {}} onNavigateModels={() => {}} /></QueryClientProvider>); }
+
+it('shows an honest queue without a payment QR until the server grants the window', async () => {
+  api.updatePaymentDisplay.mockResolvedValue({ windowId: 'waiting-1', status: 'waiting', serverNow: new Date().toISOString(), expiresAt: null, position: 1, imageUrl: null });
+  mount(); await screen.findByText('0.1 额度');
+  fireEvent.change(screen.getByLabelText('充值金额（元）'), { target: { value: '1' } });
+  fireEvent.click(screen.getByRole('button', { name: '创建充值申请' }));
+  expect(await screen.findByText('当前有人正在充值，请稍候')).toBeInTheDocument();
+  expect(screen.queryByRole('img', { name: '微信收款码' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: '查看收款码原图' })).not.toBeInTheDocument();
+});
+
+it('waits for the previous display release before reopening its QR', async () => {
+  let finishLeave!: () => void;
+  api.updatePaymentDisplay.mockImplementation(async (_id,input) => {
+    if (input.action === 'leave') await new Promise<void>(resolve => { finishLeave=resolve; });
+    return { windowId:'window-1',status:'active',serverNow:new Date().toISOString(),expiresAt:new Date(Date.now()+20000).toISOString(),position:0,imageUrl:'/api/wallet/topups/order-1/display/window-1/qr' };
+  });
+  mount(); await screen.findByText('0.1 额度');
+  fireEvent.change(screen.getByLabelText('充值金额（元）'),{target:{value:'1'}});
+  fireEvent.click(screen.getByRole('button',{name:'创建充值申请'}));
+  await screen.findByRole('img',{name:'微信收款码'});
+  fireEvent.click(screen.getByRole('button',{name:'关闭'}));
+  fireEvent.click(screen.getByRole('button',{name:'返回收款码'}));
+  await act(async () => { await Promise.resolve(); });
+  expect(api.updatePaymentDisplay.mock.calls.filter(call=>call[1].action==='join')).toHaveLength(1);
+  await act(async () => { finishLeave(); });
+  await screen.findByRole('img',{name:'微信收款码'});
+  expect(api.updatePaymentDisplay.mock.calls.filter(call=>call[1].action==='join')).toHaveLength(2);
+});
+
+it('shows the reserved payment amount and closes the dialog once polling confirms credit', async () => {
+  api.createTopup.mockResolvedValueOnce({ ...topup, paymentAmountFen: 101, paymentExpiresAt: '2099-10-06T12:00:00Z' });
+  mount();
+  await screen.findByText('0.1 额度');
+  fireEvent.change(screen.getByLabelText('充值金额（元）'), { target: { value: '1' } });
+  fireEvent.click(screen.getByRole('button', { name: '创建充值申请' }));
+  const dialog = await screen.findByRole('dialog', { name: '充值付款' });
+  expect(within(dialog).getByText('请支付 ¥1.01')).toBeInTheDocument();
+  expect(within(dialog).getByText(/实付金额将全部计入额度/)).toBeInTheDocument();
+  await act(async () => { client.setQueryData(['me', 'a', 'wallet'], { ...wallet, balanceMicros: 1_110_000, topups: [{ ...topup, paymentAmountFen: 101, status: 'credited' }] }); });
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.getByText('充值已到账')).toBeInTheDocument();
+  expect(api.declarePaid).not.toHaveBeenCalled();
+});
 
 it('shows the wallet balance and welcome ledger without mixing account query caches', async () => {
   const view = mount();
@@ -212,7 +257,7 @@ it('contains keyboard focus through both payment views and returns it to the tri
   await user.tab({ shift: true });
   expect(within(dialog).getByRole('button', { name: '关闭' })).toHaveFocus();
   await user.tab();
-  expect(within(dialog).getByRole('link', { name: '查看收款码原图' })).toHaveFocus();
+  expect(within(dialog).getByRole('button', { name: '关闭' })).toHaveFocus();
   await user.tab({ shift: true });
   expect(within(dialog).getByRole('button', { name: '关闭' })).toHaveFocus();
   screen.getByLabelText('充值金额（元）').focus();

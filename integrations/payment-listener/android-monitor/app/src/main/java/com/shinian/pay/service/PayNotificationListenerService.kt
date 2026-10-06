@@ -162,6 +162,7 @@ class PayNotificationListenerService : NotificationListenerService() {
 
         val title = extras.getString(NotificationCompat.EXTRA_TITLE, "") ?: ""
         val content = extras.getString(NotificationCompat.EXTRA_TEXT, "") ?: ""
+        val eventTime = PaymentPushRequest.notificationTimestamp(sbn.postTime, System.currentTimeMillis()) ?: return
         Log.d(TAG, "包名: $pkg")
 
         // ===== 收款去重 =====
@@ -178,8 +179,8 @@ class PayNotificationListenerService : NotificationListenerService() {
 
         // 根据包名分发处理逻辑
         when (pkg) {
-            PACKAGE_WECHAT, PACKAGE_WECHAT_WORK -> handleWechatNotification(title, content)
-            PACKAGE_ALIPAY -> handleAlipayNotification(title, content)
+            PACKAGE_WECHAT, PACKAGE_WECHAT_WORK -> handleWechatNotification(title, content, eventTime)
+            PACKAGE_ALIPAY -> handleAlipayNotification(title, content, eventTime)
             PACKAGE_SELF -> handleSelfTestNotification(content)
         }
     }
@@ -187,7 +188,7 @@ class PayNotificationListenerService : NotificationListenerService() {
     /**
      * 处理支付宝收款通知
      */
-    private fun handleAlipayNotification(title: String, content: String) {
+    private fun handleAlipayNotification(title: String, content: String, eventTime: Long) {
         if (TextUtils.isEmpty(title) && TextUtils.isEmpty(content)) {
             return
         }
@@ -229,7 +230,7 @@ class PayNotificationListenerService : NotificationListenerService() {
                 val amount = money!!.toDouble()
                 Toast.makeText(this, "匹配成功：${platform}到账${money}元", Toast.LENGTH_LONG).show()
                 Log.d(TAG, "onAccessibilityEvent: 匹配成功：${platform}到账 ${money}元")
-                appPush(platformType, amount)
+                appPush(platformType, amount, eventTime)
             } catch (e: NumberFormatException) {
                 Log.e(TAG, "解析${platform}金额失败：$money", e)
                 showMoneyParseErrorToast(platform)
@@ -289,7 +290,7 @@ class PayNotificationListenerService : NotificationListenerService() {
      * @param type 支付类型：1-微信，2-支付宝
      * @param price 收款金额
      */
-    fun appPush(type: Int, price: Double) {
+    fun appPush(type: Int, price: Double, eventTime: Long = System.currentTimeMillis()) {
         val read = getSharedPreferences("shinian", MODE_PRIVATE)
         host = read.getString("host", "") ?: ""
         key = read.getString("key", "") ?: ""
@@ -306,7 +307,7 @@ class PayNotificationListenerService : NotificationListenerService() {
         val usingBackup = activeHost != host
 
         // 构建请求 URL
-        val t = System.currentTimeMillis().toString()
+        val t = eventTime.toString()
         Log.d(TAG, "appPush: channel=" + if (usingBackup) "备用" else "主")
 
         // 使用统一网络客户端（https/http 交替重试 + 跟随308重定向 + DoH加密DNS）
@@ -451,7 +452,7 @@ class PayNotificationListenerService : NotificationListenerService() {
     /**
      * 处理微信收款通知
      */
-    private fun handleWechatNotification(title: String, content: String) {
+    private fun handleWechatNotification(title: String, content: String, eventTime: Long) {
         // null
         if (TextUtils.isEmpty(title) && TextUtils.isEmpty(content)) return
 
@@ -480,7 +481,7 @@ class PayNotificationListenerService : NotificationListenerService() {
                 val amount = money!!.toDouble()
                 Toast.makeText(this, "匹配成功：微信到账${money}元", Toast.LENGTH_LONG).show()
                 Log.d(TAG, "onAccessibilityEvent: 匹配成功：微信到账 ${money}元")
-                appPush(1, amount)
+                appPush(1, amount, eventTime)
             } catch (e: NumberFormatException) {
                 Log.e(TAG, "解析微信金额失败：$money", e)
                 showMoneyParseErrorToast("微信")

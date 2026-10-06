@@ -1,6 +1,6 @@
 # MapFlow 收款监听工作区
 
-此目录汇总 Linux 本地安卓与 V免签监听的可继续开发材料。分支 `codex/payment-listener-20261006` 从 MapFlow 钱包分支 `codex/tavern-wallet-payments-20260930` 建立。钱包申请与人工核实仍在 MapFlow 前后端；自动到账回调尚未接入，不能将监听自测当作真实付款成功。
+此目录汇总安卓与 V免签监听材料。分支 `codex/payment-listener-20261006` 从 MapFlow 钱包分支建立。2026-10-06 已在 Windows MuMu 跑通微信、支付宝真实收款通知，网站与 Vmq 运行在 Linux 笔记本，自动充值回调已发布；真实网站订单的自动到账仍等待用户付款验收。当前状态以 [自动充值部署记录](../../docs/deployment/2026-10-06-vmq-auto-topup.md) 为准；下文的 Linux 虚拟机探索属于历史记录。
 
 ## 目录与来源
 

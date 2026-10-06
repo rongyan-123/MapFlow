@@ -1,8 +1,24 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { adjustWallet, approveTopup, createTopup, parseAmountFen, readAdminWalletAccounts, readAdminWalletLedger, readWallet, reverseWalletEntry, uploadChannel } from './walletClient';
+import { adjustWallet, approveTopup, createTopup, parseAmountFen, readAdminWalletAccounts, readAdminWalletLedger, readWallet, reverseWalletEntry, uploadChannel, updatePaymentDisplay } from './walletClient';
 
 const topup = { topupId: 'order-1', accountId: 'a', amountFen: 100, channel: 'wechat', status: 'awaiting_payment', qrCodeId: 'qr-1', qrImageUrl: '/api/wallet/qrcodes/qr-1', createdAt: '2026-09-30T00:00:00Z', updatedAt: '2026-09-30T00:00:00Z', reviewNote: null };
 afterEach(() => vi.unstubAllGlobals());
+it('authenticates queue changes and refuses an invalid or foreign QR grant', async () => {
+  const grant = { windowId: 'window', status: 'active', serverNow: '2026-10-06T00:00:00Z', expiresAt: '2026-10-06T00:00:20Z', position: 0, imageUrl: '/api/wallet/topups/order/display/window/qr' };
+  const fetchMock=vi.fn().mockResolvedValue(new Response(JSON.stringify(grant)));
+  vi.stubGlobal('fetch',fetchMock);
+  expect(await updatePaymentDisplay('order',{ action:'join' },'csrf')).toEqual(grant);
+  expect(fetchMock).toHaveBeenCalledWith('/api/wallet/topups/order/display',expect.objectContaining({method:'POST',credentials:'same-origin',cache:'no-store',headers:expect.objectContaining({'X-CSRF-Token':'csrf'})}));
+  expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+  for (const patch of [{ imageUrl:'https://other.test/qr' },{ status:'waiting' },{ expiresAt:'bad' },{ expiresAt:'2026-10-06T00:00:21Z' },{ position:-1 },{ serverNow:'bad' }]) {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({...grant,...patch})));
+    await expect(updatePaymentDisplay('order',{action:'poll',windowId:'window'},'csrf')).rejects.toMatchObject({code:'wallet.invalid_response'});
+  }
+});
+it('rejects malformed reserved payment amounts rather than showing a misleading QR', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...topup, paymentAmountFen: -1, paymentExpiresAt: 'bad-date' }))));
+  await expect(createTopup({ requestId: 'request-1', amountFen: 100, channel: 'wechat' }, 'csrf')).rejects.toMatchObject({ code: 'wallet.invalid_response' });
+});
 it('uses integer fen, same-origin cookies and CSRF for creation and approval', async () => {
   const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify(topup))));
   vi.stubGlobal('fetch', fetchMock);

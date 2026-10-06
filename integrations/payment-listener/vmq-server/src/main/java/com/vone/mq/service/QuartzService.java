@@ -20,24 +20,34 @@ public class QuartzService {
     private PayOrderDao payOrderDao;
     @Autowired
     private TmpPriceDao tmpPriceDao;
+    @Autowired
+    private WebService webService;
+
+    @Scheduled(fixedDelay = 30000)
+    public void retryPaymentNotifications() {
+        webService.retryPendingNotifications();
+    }
 
 
     @Scheduled(fixedRate = 30000)
     public void timerToZZP(){
 
         try {
-            System.out.println("开始清理过期订单...");
-            String timeout = settingDao.findById("close").get().getVvalue();
-            String closeTime = String.valueOf(new Date().getTime());
-            timeout = String.valueOf(new Date().getTime() - Integer.valueOf(timeout)*60*1000);
+            // Keep reservation cleanup atomic with order allocation and matching.
+            synchronized (webService) {
+                System.out.println("开始清理过期订单...");
+                String timeout = settingDao.findById("close").get().getVvalue();
+                String closeTime = String.valueOf(new Date().getTime());
+                timeout = String.valueOf(new Date().getTime() - Integer.valueOf(timeout)*60*1000);
 
-            int row = payOrderDao.setTimeout(timeout,closeTime);
+                int row = payOrderDao.setTimeout(timeout,closeTime);
 
-            List<PayOrder> payOrders = payOrderDao.findAllByCloseDate(Long.valueOf(closeTime));
-            for (PayOrder payOrder: payOrders) {
-                tmpPriceDao.delprice(payOrder.getType()+"-"+payOrder.getReallyPrice());
+                List<PayOrder> payOrders = payOrderDao.findAllByCloseDate(Long.valueOf(closeTime));
+                for (PayOrder payOrder: payOrders) {
+                    tmpPriceDao.delprice(payOrder.getType()+"-"+payOrder.getReallyPrice());
+                }
+                System.out.println(row+"成功清理" + row + "个订单");
             }
-            System.out.println(row+"成功清理" + row + "个订单");
         }catch (Exception e){
             e.printStackTrace();
         }

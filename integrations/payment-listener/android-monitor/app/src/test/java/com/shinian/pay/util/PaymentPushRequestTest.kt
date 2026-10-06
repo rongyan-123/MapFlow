@@ -1,10 +1,18 @@
 package com.shinian.pay.util
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.util.Locale
 
 class PaymentPushRequestTest {
+    @Test
+    fun notificationTimestampUsesPostingTimeAndRefusesStaleOrMissingEvents() {
+        assertEquals(123_000L, PaymentPushRequest.notificationTimestamp(123_000L, 124_000L))
+        assertNull(PaymentPushRequest.notificationTimestamp(0L, 124_000L))
+        assertNull(PaymentPushRequest.notificationTimestamp(1_000L, 124_000L))
+        assertNull(PaymentPushRequest.notificationTimestamp(130_000L, 124_000L))
+    }
     @Test
     fun retryKeepsOriginalEventTimeAndSignsForTheSelectedChannel() {
         assertEquals(

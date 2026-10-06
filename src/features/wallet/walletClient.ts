@@ -2,9 +2,25 @@ import { IdentityApiError } from '../identity/identityClient';
 import type { UserModelSetting } from '../tree-generation/types';
 
 export type PaymentChannel = 'wechat' | 'alipay';
+export interface PaymentDisplay { windowId: string | null; status: 'waiting' | 'active' | 'expired' | 'cancelled' | 'finished'; serverNow: string; expiresAt: string | null; position: number; imageUrl: string | null }
+export async function updatePaymentDisplay(id: string, input: { action: 'join' | 'poll' | 'leave'; windowId?: string }, csrfToken: string): Promise<PaymentDisplay> {
+  const reply = asRecord(await request(`/api/wallet/topups/${encodeURIComponent(id)}/display`, { ...post(csrfToken, input), signal: AbortSignal.timeout(5000), keepalive: input.action === 'leave' }));
+  if (!reply || !['waiting', 'active', 'expired', 'cancelled', 'finished'].includes(String(reply.status))
+    || !(reply.windowId === null || typeof reply.windowId === 'string')
+    || typeof reply.serverNow !== 'string' || !Number.isFinite(Date.parse(reply.serverNow))
+    || !Number.isSafeInteger(reply.position) || Number(reply.position) < 0
+    || !(reply.expiresAt === null || typeof reply.expiresAt === 'string' && Number.isFinite(Date.parse(reply.expiresAt)))
+    || !(reply.imageUrl === null || typeof reply.imageUrl === 'string')) return invalid();
+  if (reply.status === 'active' && (typeof reply.windowId !== 'string' || typeof reply.expiresAt !== 'string'
+    || reply.imageUrl !== `/api/wallet/topups/${encodeURIComponent(id)}/display/${encodeURIComponent(reply.windowId)}/qr`
+    || Date.parse(reply.expiresAt) <= Date.parse(reply.serverNow)
+    || Date.parse(reply.expiresAt) - Date.parse(reply.serverNow) > 20000)) return invalid();
+  if (reply.status !== 'active' && reply.imageUrl !== null) return invalid();
+  return reply as unknown as PaymentDisplay;
+}
 export type TopupStatus = 'awaiting_payment' | 'awaiting_review' | 'closed_unpaid' | 'credited' | 'rejected' | 'reversed';
 export interface Channel { channel: PaymentChannel; label: string; qrCodeId: string; imageUrl: string }
-export interface Topup { topupId: string; accountId: string; amountFen: number; channel: PaymentChannel; status: TopupStatus; qrCodeId: string; qrImageUrl: string; createdAt: string; updatedAt: string; reviewNote: string | null; username?: string; playerId?: string }
+export interface Topup { topupId: string; accountId: string; amountFen: number; paymentAmountFen?: number | null; paymentExpiresAt?: string | null; channel: PaymentChannel; status: TopupStatus; qrCodeId: string; qrImageUrl: string; createdAt: string; updatedAt: string; reviewNote: string | null; username?: string; playerId?: string }
 export interface LedgerEntry {
   entryId: string;
   accountId: string;
@@ -50,7 +66,19 @@ async function request(path: string, init: RequestInit = get): Promise<unknown> 
 function asRecord(value: unknown): Record<string, unknown> | null { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null; }
 function invalid(): never { throw new IdentityApiError(502, 'wallet.invalid_response', '额度服务返回了无法识别的结果。'); }
 function isChannel(value: unknown): value is Channel { const item = asRecord(value); return !!item && (item.channel === 'wechat' || item.channel === 'alipay') && typeof item.label === 'string' && typeof item.qrCodeId === 'string' && typeof item.imageUrl === 'string'; }
-function isTopup(value: unknown): value is Topup { const item = asRecord(value); return !!item && typeof item.topupId === 'string' && typeof item.accountId === 'string' && Number.isSafeInteger(item.amountFen) && (item.channel === 'wechat' || item.channel === 'alipay') && ['awaiting_payment', 'awaiting_review', 'closed_unpaid', 'credited', 'rejected', 'reversed'].includes(String(item.status)) && typeof item.qrCodeId === 'string' && typeof item.qrImageUrl === 'string' && typeof item.createdAt === 'string' && typeof item.updatedAt === 'string' && (item.reviewNote === null || typeof item.reviewNote === 'string'); }
+function isTopup(value: unknown): value is Topup {
+  const item = asRecord(value);
+  if (!item) return false;
+  const hasReservation = item.paymentAmountFen !== undefined && item.paymentAmountFen !== null;
+  if (hasReservation && (!Number.isSafeInteger(item.paymentAmountFen) || Number(item.paymentAmountFen) < 1 || Number(item.paymentAmountFen) > 1_000_000
+    || typeof item.paymentExpiresAt !== 'string' || !Number.isFinite(Date.parse(item.paymentExpiresAt)))) return false;
+  if (!hasReservation && item.paymentExpiresAt !== undefined && item.paymentExpiresAt !== null) return false;
+  return typeof item.topupId === 'string' && typeof item.accountId === 'string' && Number.isSafeInteger(item.amountFen)
+    && (item.channel === 'wechat' || item.channel === 'alipay')
+    && ['awaiting_payment', 'awaiting_review', 'closed_unpaid', 'credited', 'rejected', 'reversed'].includes(String(item.status))
+    && typeof item.qrCodeId === 'string' && typeof item.qrImageUrl === 'string' && typeof item.createdAt === 'string'
+    && typeof item.updatedAt === 'string' && (item.reviewNote === null || typeof item.reviewNote === 'string');
+}
 function isLedger(value: unknown): value is LedgerEntry {
   const item = asRecord(value);
   return !!item && typeof item.entryId === 'string' && typeof item.accountId === 'string'

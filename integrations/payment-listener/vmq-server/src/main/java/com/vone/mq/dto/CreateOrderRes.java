@@ -11,6 +11,10 @@ public class CreateOrderRes {
     private int state;
     private int timeOut;
     private long date;
+    private long payDate;
+
+    public long getPayDate() { return payDate; }
+    public void setPayDate(long payDate) { this.payDate = payDate; }
 
     public CreateOrderRes(String payId, String orderId, int payType, double price, double reallyPrice, String payUrl, int isAuto, int state, int timeOut, long date) {
         this.payId = payId;

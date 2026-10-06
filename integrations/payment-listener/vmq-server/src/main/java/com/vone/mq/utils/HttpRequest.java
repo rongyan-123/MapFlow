@@ -27,6 +27,8 @@ public class HttpRequest {
             URL realUrl = new URL(urlNameString);
             // 打开和URL之间的连接
             URLConnection connection = realUrl.openConnection();
+            connection.setConnectTimeout(2000);
+            connection.setReadTimeout(3000);
             // 设置通用的请求属性
             connection.setRequestProperty("accept", "*/*");
             connection.setRequestProperty("connection", "Keep-Alive");

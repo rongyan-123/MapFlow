@@ -91,8 +91,9 @@ class NetworkClient private constructor() {
             cb: Callback
         ) {
             if (attemptIndex >= MAX_RETRY) {
-                // 保留迁移前语义：全部重试失败时以 null call 回调（消费方仅读取 e.getMessage()）
-                cb.onFailure(uncheckedNull(), IOException("网络连续 $MAX_RETRY 次请求失败(已尝试http/https交替重试)"))
+                // OkHttp callbacks require a non-null Call, including terminal failures.
+                val failedRequest = Request.Builder().url(buildUrl(host, path, httpsFirst)).build()
+                cb.onFailure(client().newCall(failedRequest), IOException("网络连续 $MAX_RETRY 次请求失败(已尝试http/https交替重试)"))
                 return
             }
 
@@ -165,19 +166,6 @@ class NetworkClient private constructor() {
             }
             return builder.encodedPath(p).query(q).build()
         }
-        /**
-         * 故意返回 null 的 Call 引用。
-         *
-         * 迁移前的 Java 实现会在全部重试失败时调用 `cb.onFailure(null, e)`。
-         * 消费方（心跳 / 收款回调 / 补单）只读取 `e.getMessage()`，从不访问 call。
-         * Kotlin 的空安全不允许直接传 null，这里用 `@Suppress` 保留原语义，
-         * 避免 Java 调用点在 Kotlin 化后触发 NPE 行为差异。
-         */
-        @Suppress("UNCHECKED_CAST")
-        private fun <T> uncheckedCast(value: Any?): T = value as T
-
-        private fun uncheckedNull(): okhttp3.Call = uncheckedCast(null)
-
         /**
          * 判断 host 是否为 IP 直连（支持 "IP" 和 "IP:端口" 两种格式）
          */

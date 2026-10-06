@@ -11,6 +11,14 @@ const entry: LedgerEntry = { entryId: 'entry-1', accountId: 'account-a', usernam
 const qr = { channel: 'wechat', label: '微信', qrCodeId: 'qr-1', imageUrl: '/api/wallet/qrcodes/qr-1' };
 const http = vi.fn<typeof fetch>();
 const respond = (payload: unknown, status = 200) => new Response(JSON.stringify(payload), { status });
+
+it('uses the actual reserved payment amount for manual review and confirmation', async () => {
+  pendingOrders = [{ ...order, paymentAmountFen: 301, paymentExpiresAt: '2099-10-06T12:00:00Z' }];
+  render(<QueryClientProvider client={client}><AdminWalletTab csrfToken="csrf" /></QueryClientProvider>);
+  const approve = await screen.findByRole('button', { name: '入账 3.01 额度' });
+  fireEvent.click(approve);
+  expect(await screen.findByRole('button', { name: '确认入账 3.01 额度' })).toBeInTheDocument();
+});
 let client: QueryClient;
 let approval: () => Promise<Response>;
 let upload: () => Promise<Response>;

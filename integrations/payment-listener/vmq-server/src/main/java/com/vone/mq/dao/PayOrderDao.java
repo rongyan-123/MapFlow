@@ -14,6 +14,7 @@ public interface PayOrderDao  extends JpaRepository<PayOrder,Long>, JpaSpecifica
 
     PayOrder findByPayId(String payId);
     PayOrder findByOrderId(String orderId);
+    List<PayOrder> findFirst5ByStateOrderByIdAsc(int state);
 
 
     @Transactional
@@ -33,6 +34,7 @@ public interface PayOrderDao  extends JpaRepository<PayOrder,Long>, JpaSpecifica
 
     List<PayOrder> findAllByReallyPriceAndStateAndType(double reallyPrice,int state,int type);
     List<PayOrder> findAllByReallyPriceAndTypeAndPayDateBetween(double reallyPrice,int type,long from,long to);
+    List<PayOrder> findAllByReallyPriceAndTypeAndCloseDateBetween(double reallyPrice,int type,long from,long to);
 
     PayOrder findByPayDate(Long payDate);
 
