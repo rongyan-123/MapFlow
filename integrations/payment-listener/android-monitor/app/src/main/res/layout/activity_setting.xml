@@ -1,0 +1,360 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  软件设置页（重构版）。
+  兼容性约定：所有 android:id 与 android:onClick 保持与 SettingActivity 的绑定不变。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/vmq_background"
+    android:orientation="vertical">
+
+    <!-- ========== 顶栏 ========== -->
+    <androidx.appcompat.widget.Toolbar
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/toolbar_height"
+        android:background="@drawable/bg_toolbar"
+        android:elevation="4dp">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <ImageButton
+                android:id="@+id/btn_back"
+                android:layout_width="@dimen/touch_target"
+                android:layout_height="@dimen/touch_target"
+                android:layout_centerVertical="true"
+                android:layout_marginStart="@dimen/space_xs"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="返回"
+                android:padding="@dimen/space_md"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_arrow_back" />
+
+            <TextView
+                style="@style/Toolbar.Title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerInParent="true"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/SettingActivity" />
+        </RelativeLayout>
+    </androidx.appcompat.widget.Toolbar>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="@dimen/page_margin_horizontal"
+            android:paddingEnd="@dimen/page_margin_horizontal"
+            android:paddingTop="@dimen/space_lg"
+            android:paddingBottom="@dimen/space_xl">
+
+            <!-- ==================== 版本 ==================== -->
+            <TextView
+                style="@style/Text.SectionLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_xs"
+                android:layout_marginBottom="@dimen/space_sm"
+                android:text="版本" />
+
+            <LinearLayout
+                style="@style/Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="0dp">
+
+                <LinearLayout
+                    android:id="@+id/appupdate"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/list_item_height"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:onClick="ver_sion"
+                    android:orientation="vertical"
+                    android:paddingStart="@dimen/space_lg"
+                    android:paddingEnd="@dimen/space_lg">
+
+                    <TextView
+                        style="@style/SettingRow.Title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="检测更新" />
+
+                    <TextView
+                        android:id="@+id/version"
+                        style="@style/SettingRow.Summary"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="当前软件版本" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ==================== 反馈 ==================== -->
+            <TextView
+                style="@style/Text.SectionLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_xs"
+                android:layout_marginTop="@dimen/space_lg"
+                android:layout_marginBottom="@dimen/space_sm"
+                android:text="反馈" />
+
+            <LinearLayout
+                style="@style/Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="0dp">
+
+                <LinearLayout
+                    android:id="@+id/bugfeed"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/list_item_height"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:onClick="email_fk"
+                    android:orientation="vertical"
+                    android:paddingStart="@dimen/space_lg"
+                    android:paddingEnd="@dimen/space_lg">
+
+                    <TextView
+                        style="@style/SettingRow.Title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="意见反馈" />
+
+                    <TextView
+                        style="@style/SettingRow.Summary"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="意见反馈或Bug提交" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ==================== 帮助 ==================== -->
+            <TextView
+                style="@style/Text.SectionLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_xs"
+                android:layout_marginTop="@dimen/space_lg"
+                android:layout_marginBottom="@dimen/space_sm"
+                android:text="帮助" />
+
+            <LinearLayout
+                style="@style/Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="0dp">
+
+                <LinearLayout
+                    android:id="@+id/softhelp"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/list_item_height"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:onClick="help_api"
+                    android:orientation="vertical"
+                    android:paddingStart="@dimen/space_lg"
+                    android:paddingEnd="@dimen/space_lg">
+
+                    <TextView
+                        style="@style/SettingRow.Title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="配置文档" />
+
+                    <TextView
+                        style="@style/SettingRow.Summary"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="软件基本使用教程" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ==================== 服务 ==================== -->
+            <TextView
+                style="@style/Text.SectionLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_xs"
+                android:layout_marginTop="@dimen/space_lg"
+                android:layout_marginBottom="@dimen/space_sm"
+                android:text="服务"
+                android:textColor="@color/vmq_error" />
+
+            <LinearLayout
+                style="@style/Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="0dp">
+
+                <LinearLayout
+                    android:id="@+id/setservice1"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/list_item_height"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:onClick="dc_qx"
+                    android:orientation="vertical"
+                    android:paddingStart="@dimen/space_lg"
+                    android:paddingEnd="@dimen/space_lg">
+
+                    <TextView
+                        style="@style/SettingRow.Title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="开启电池白名单" />
+
+                    <TextView
+                        style="@style/SettingRow.Summary"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="检测应用是否加入白名单优化" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="@dimen/space_lg"
+                    android:background="@color/vmq_divider" />
+
+                <LinearLayout
+                    android:id="@+id/setservice"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/list_item_height"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:onClick="service_start"
+                    android:orientation="vertical"
+                    android:paddingStart="@dimen/space_lg"
+                    android:paddingEnd="@dimen/space_lg">
+
+                    <TextView
+                        style="@style/SettingRow.Title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="后台/息屏保活" />
+
+                    <TextView
+                        style="@style/SettingRow.Summary"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="提高应用的存活率避免被杀" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="@dimen/space_lg"
+                    android:background="@color/vmq_divider" />
+
+                <LinearLayout
+                    android:id="@+id/state_pm"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/list_item_height"
+                    android:background="?attr/selectableItemBackground"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="@dimen/space_lg"
+                    android:paddingEnd="@dimen/space_lg">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:gravity="center_vertical"
+                        android:orientation="vertical">
+
+                        <TextView
+                            style="@style/SettingRow.Title"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="开启/关闭屏幕常亮模式" />
+
+                        <TextView
+                            android:id="@+id/txt_always_on_state"
+                            style="@style/SettingRow.Summary"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="已关闭" />
+                    </LinearLayout>
+
+                    <Switch
+                        android:id="@+id/state_switch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:onClick="state_swit" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ==================== 其他 ==================== -->
+            <TextView
+                style="@style/Text.SectionLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/space_xs"
+                android:layout_marginTop="@dimen/space_lg"
+                android:layout_marginBottom="@dimen/space_sm"
+                android:text="其他" />
+
+            <LinearLayout
+                style="@style/Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="0dp">
+
+                <LinearLayout
+                    android:id="@+id/softabout"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/list_item_height"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:onClick="vmq_Pro_gy"
+                    android:orientation="vertical"
+                    android:paddingStart="@dimen/space_lg"
+                    android:paddingEnd="@dimen/space_lg">
+
+                    <TextView
+                        style="@style/SettingRow.Title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="关于" />
+
+                    <TextView
+                        style="@style/SettingRow.Summary"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="开发人员及相关信息" />
+                </LinearLayout>
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

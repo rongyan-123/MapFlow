@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 顶栏渐变：主色 → 深阶，增加层次 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="0"
+        android:startColor="@color/colorPrimary"
+        android:endColor="@color/colorPrimaryDark"
+        android:type="linear" />
+</shape>

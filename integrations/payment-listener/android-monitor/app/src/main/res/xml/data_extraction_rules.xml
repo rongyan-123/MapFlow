@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ 备份/迁移规则。
+  allowBackup 已置为 false，这里再做一层兜底：明确排除含敏感配置的存储。
+  注意：`shinian` SharedPreferences 保存了服务器 host 与通讯密钥，绝不能进入备份。
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="shinian.xml" />
+        <exclude domain="sharedpref" path="items.xml" />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="shinian.xml" />
+        <exclude domain="sharedpref" path="items.xml" />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

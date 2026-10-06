@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 次按钮：白底 + 品牌蓝描边 -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#201A73E8">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/vmq_surface" />
+            <corners android:radius="@dimen/radius_md" />
+            <stroke android:width="1.5dp" android:color="@color/colorPrimary" />
+        </shape>
+    </item>
+</ripple>

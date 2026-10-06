@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 状态徽标：中性（浅灰底） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#146B7280" />
+    <corners android:radius="@dimen/radius_pill" />
+</shape>

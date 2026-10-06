@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ==================== 品牌色 ==================== -->
+    <!-- 主色：沉稳蓝，传达可信赖的支付工具属性 -->
+    <color name="colorPrimary">#FF1A73E8</color>
+    <!-- 主色深阶：状态栏 / Toolbar -->
+    <color name="colorPrimaryDark">#FF1557B0</color>
+    <!-- 强调色：青绿，用于成功/活跃状态 -->
+    <color name="colorAccent">#FF00BFA5</color>
+    <color name="colorSecondary">#FF00BFA5</color>
+
+    <!-- ==================== 语义色 ==================== -->
+    <color name="vmq_success">#FF10B981</color>
+    <color name="vmq_warning">#FFF59E0B</color>
+    <color name="vmq_error">#FFEF4444</color>
+    <color name="vmq_info">#FF3B82F6</color>
+
+    <!-- ==================== 中性色 ==================== -->
+    <color name="vmq_background">#FFF5F7FA</color>
+    <color name="vmq_surface">#FFFFFFFF</color>
+    <color name="vmq_surface_variant">#FFF1F3F5</color>
+    <color name="vmq_on_surface">#FF1F2937</color>
+    <color name="vmq_on_surface_secondary">#FF6B7280</color>
+    <color name="vmq_on_surface_tertiary">#FF9CA3AF</color>
+    <color name="vmq_divider">#FFE5E7EB</color>
+    <color name="vmq_outline">#FFD1D5DB</color>
+
+    <!-- 日志终端配色 -->
+    <color name="vmq_log_background">#FF0F172A</color>
+    <color name="vmq_log_text">#FF4ADE80</color>
+    <color name="vmq_log_text_dim">#FF64748B</color>
+
+    <!-- 按钮文字 -->
+    <color name="vmq_on_primary">#FFFFFFFF</color>
+
+    <!-- ==================== 扫码器配色（保持原值，zxing 依赖） ==================== -->
+    <color name="note_text_color">#aaaaaa</color>
+    <color name="viewfinder_mask">#60000000</color>
+    <color name="result_view">#B0000000</color>
+    <color name="viewfinder_frame">#90FFFFFF</color>
+    <color name="result_point_color">#C0FFFF00</color>
+    <color name="laser_color">#6F87F3</color>
+    <color name="corner_color">#6F87F3</color>
+</resources>

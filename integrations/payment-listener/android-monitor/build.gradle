@@ -1,0 +1,7 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+plugins {
+    id 'com.android.application' version '8.12.0' apply false
+    id 'com.android.library' version '8.12.0' apply false
+    // Kotlin 工具链（渐进式 Kotlin 化：Java 与 Kotlin 可长期共存）
+    id 'org.jetbrains.kotlin.android' version '2.3.10' apply false
+}

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ==================== 间距（8dp 栅格） ==================== -->
+    <dimen name="space_xxs">2dp</dimen>
+    <dimen name="space_xs">4dp</dimen>
+    <dimen name="space_sm">8dp</dimen>
+    <dimen name="space_md">12dp</dimen>
+    <dimen name="space_lg">16dp</dimen>
+    <dimen name="space_xl">20dp</dimen>
+    <dimen name="space_xxl">24dp</dimen>
+    <dimen name="space_xxxl">32dp</dimen>
+
+    <!-- 页面统一水平内边距 -->
+    <dimen name="page_margin_horizontal">16dp</dimen>
+
+    <!-- ==================== 圆角 ==================== -->
+    <dimen name="radius_sm">6dp</dimen>
+    <dimen name="radius_md">10dp</dimen>
+    <dimen name="radius_lg">14dp</dimen>
+    <dimen name="radius_pill">999dp</dimen>
+
+    <!-- ==================== 组件尺寸 ==================== -->
+    <dimen name="toolbar_height">56dp</dimen>
+    <dimen name="button_height">48dp</dimen>
+    <dimen name="list_item_height">64dp</dimen>
+    <dimen name="icon_size_sm">18dp</dimen>
+    <dimen name="icon_size_md">24dp</dimen>
+    <dimen name="icon_size_lg">32dp</dimen>
+    <dimen name="touch_target">48dp</dimen>
+
+    <!-- ==================== 字号 ==================== -->
+    <dimen name="text_display">28sp</dimen>
+    <dimen name="text_title">20sp</dimen>
+    <dimen name="text_subtitle">16sp</dimen>
+    <dimen name="text_body">14sp</dimen>
+    <dimen name="text_caption">12sp</dimen>
+    <dimen name="text_log">11sp</dimen>
+
+    <!-- ==================== 卡片阴影 ==================== -->
+    <dimen name="card_elevation">2dp</dimen>
+    <dimen name="card_elevation_raised">4dp</dimen>
+
+    <!-- 兼容旧引用 -->
+    <dimen name="activity_horizontal_margin">16dp</dimen>
+    <dimen name="activity_vertical_margin">16dp</dimen>
+</resources>
