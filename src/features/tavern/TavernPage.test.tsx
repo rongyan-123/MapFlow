@@ -388,12 +388,17 @@ describe('Tavern page', () => {
     expect(formatHint).toHaveTextContent('不要选 Download for Rin Chat');
     const communityLinks = within(dialog).getAllByRole('link').filter(link => link.closest('section')?.querySelector('h3')?.textContent === '从社区找角色卡');
     expect(communityLinks.map(link => link.textContent?.trim())).toEqual([
-      'B 站 · 酒馆角色卡 ↗', '抖音 · 酒馆角色卡 ↗', 'SillyTavern 吧 ↗',
+      '类脑 · 中文酒馆社区 ↗', '废墟之下的藏书室 ↗',
       'Chub ↗', 'AI Character Cards ↗', 'RisuRealm ↗',
     ]);
-    expect(within(dialog).getByRole('link', { name: /B 站 · 酒馆角色卡/ })).toHaveAttribute('href', 'https://search.bilibili.com/all?keyword=%E9%85%92%E9%A6%86%E8%A7%92%E8%89%B2%E5%8D%A1');
-    expect(within(dialog).getByRole('link', { name: /抖音 · 酒馆角色卡/ })).toHaveAttribute('href', 'https://www.douyin.com/search/%E9%85%92%E9%A6%86%E8%A7%92%E8%89%B2%E5%8D%A1');
-    expect(within(dialog).getByRole('link', { name: /SillyTavern 吧/ })).toHaveAttribute('href', 'https://tieba.baidu.com/f?kw=sillytavern');
+    expect(within(dialog).getByRole('link', { name: /类脑/ })).toHaveAttribute('href', 'https://discord.gg/odysseia');
+    expect(within(dialog).getByRole('link', { name: /废墟之下的藏书室/ })).toHaveAttribute('href', 'https://discord.gg/UZ8JcvFFks');
+    expect(within(dialog).getByText('中文角色卡社区')).toBeInTheDocument();
+    expect(within(dialog).getByText(/需要 Discord 账号/)).toBeInTheDocument();
+    for (const link of communityLinks) {
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
     expect(within(dialog).getByRole('link', { name: /Chub/ })).toHaveAttribute('href', 'https://chub.ai/');
     expect(within(dialog).getByRole('link', { name: /AI Character Cards/ })).toHaveAttribute('href', 'https://aicharactercards.com/');
     expect(within(dialog).getByRole('link', { name: /RisuRealm/ })).toHaveAttribute('href', 'https://realm.risuai.net/');

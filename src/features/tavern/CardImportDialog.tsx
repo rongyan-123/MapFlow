@@ -89,13 +89,12 @@ export default function CardImportDialog({ csrfToken, onImported, onClose }: {
     <section className="mb-5 rounded-2xl border border-cyan-500/40 bg-cyan-950/20 p-4">
       <div className="mb-3"><h3 className="text-base font-semibold text-slate-100">从社区找角色卡</h3>
         <p className="mt-1 text-xs leading-5 text-slate-400">从来源网站找到作者发布的原始 PNG / JSON，再回到这里导入。链接将在新标签页打开。</p></div>
-      <p className="mb-2 text-xs font-semibold text-cyan-200">国内内容社区</p>
-      <div className="grid gap-2 sm:grid-cols-3">
-        <a href="https://search.bilibili.com/all?keyword=%E9%85%92%E9%A6%86%E8%A7%92%E8%89%B2%E5%8D%A1" target="_blank" rel="noopener noreferrer" className={`${buttonClass} text-center`}>B 站 · 酒馆角色卡 ↗</a>
-        <a href="https://www.douyin.com/search/%E9%85%92%E9%A6%86%E8%A7%92%E8%89%B2%E5%8D%A1" target="_blank" rel="noopener noreferrer" className={`${buttonClass} text-center`}>抖音 · 酒馆角色卡 ↗</a>
-        <a href="https://tieba.baidu.com/f?kw=sillytavern" target="_blank" rel="noopener noreferrer" className={`${buttonClass} text-center`}>SillyTavern 吧 ↗</a>
+      <p className="mb-2 text-xs font-semibold text-cyan-200">中文角色卡社区</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <a href="https://discord.gg/odysseia" target="_blank" rel="noopener noreferrer" className={`${buttonClass} text-center`}>类脑 · 中文酒馆社区 ↗</a>
+        <a href="https://discord.gg/UZ8JcvFFks" target="_blank" rel="noopener noreferrer" className={`${buttonClass} text-center`}>废墟之下的藏书室 ↗</a>
       </div>
-      <p className="mt-2 text-xs leading-5 text-slate-400">这些是创作者发布内容的社区；下载入口可能在帖子或视频说明中。</p>
+      <p className="mt-2 text-xs leading-5 text-slate-400">需要 Discord 账号，并按社区规则完成入群验证。在作者的角色卡资源帖中下载原始 PNG / JSON，别保存封面或截图。</p>
       <p className="mb-2 mt-4 text-xs font-semibold text-slate-300">海外角色卡库</p>
       <div className="grid gap-2 sm:grid-cols-3">
         <a href="https://chub.ai/" target="_blank" rel="noopener noreferrer" className={`${buttonClass} text-center`}>Chub ↗</a>
