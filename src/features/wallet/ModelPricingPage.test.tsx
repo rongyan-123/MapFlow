@@ -21,6 +21,7 @@ it('shows actual per-channel prices and distinguishes live and estimated statist
   expect(screen.getByText('估算数据')).toBeVisible();
   expect(screen.getAllByText(/输入 ¥1.6.*输出 ¥3.2/)[0]).toBeVisible();
   expect(screen.queryByText(/额度调用尚未开放/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/上游.*(2|倍)|倍率/)).not.toBeInTheDocument();
   client.clear();
 });
 it('searches and selects a model with context, settings and honest channel monitoring', async () => {
@@ -48,7 +49,7 @@ it('searches and selects a model with context, settings and honest channel monit
   fireEvent.change(screen.getByLabelText('搜索模型'), { target: { value: 'missing-model' } });
   expect(screen.getByText('没有找到匹配的模型')).toBeInTheDocument();
   expect(within(details).queryByRole('heading', { name: 'model-b' })).not.toBeInTheDocument();
-  expect(within(screen.getByRole('contentinfo')).getByText('0.2倍率')).toBeInTheDocument();
+  expect(screen.queryByText(/倍率/)).not.toBeInTheDocument();
   fireEvent.click(await screen.findByRole('button', { name: '现金额度 3.1，前往充值' }));
   expect(navigate).toHaveBeenCalledTimes(1);
   client.clear();

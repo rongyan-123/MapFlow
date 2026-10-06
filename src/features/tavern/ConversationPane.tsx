@@ -194,7 +194,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     <div className="mx-auto w-full max-w-4xl shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-8">
       <ErrorNotice error={error} />
       {confirmation&&<TavernDialog title="确认本次费用" onClose={()=>setConfirmation(null)}>
-        <p className="leading-7 text-slate-300">按上游实际扣费 × 2 结算。最高预留 ¥{formatAmountMicros(confirmation.quote.maximumChargeMicros)}，完成后释放未使用额度。失败不扣本站现金额度。</p>
+        <p className="leading-7 text-slate-300">本次最高预留 ¥{formatAmountMicros(confirmation.quote.maximumChargeMicros)}，完成后按实际费用结算并释放未使用额度。失败不扣本站现金额度。</p>
         <button type="button" className={`${primaryClass} mt-4`} onClick={()=>{
           const approved={...confirmation.outgoing,billing:confirmation.quote};setConfirmation(null);void runGeneration(approved.action,approved);
         }}>确认并发送</button>

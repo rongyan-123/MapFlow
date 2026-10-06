@@ -189,13 +189,14 @@ describe('Tavern page', () => {
     await user.click(screen.getByRole('button',{name:'模型接入'}));
     await user.click(screen.getByRole('button',{name:'使用平台模型（需要充值）'}));
     await user.click(await screen.findByRole('button',{name:/trial-model/}));
-    expect(screen.getByText(/上游实际扣费.*2/)).toBeVisible();
+    expect(screen.queryByText(/上游.*(2|倍)|倍率/)).not.toBeInTheDocument();
     expect(screen.queryByText(/测试期间暂不扣费/)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button',{name:'关闭配置'}));
     await user.type(screen.getByLabelText('消息'),'付费聊一句');
     await user.click(screen.getByRole('button',{name:'发送'}));
     const confirmation=await screen.findByRole('dialog',{name:'确认本次费用'});
     expect(within(confirmation).getByText(/0.01/)).toBeVisible();
+    expect(within(confirmation).queryByText(/上游.*(2|倍)|倍率/)).not.toBeInTheDocument();
     expect(attempts).toHaveLength(0);
     await user.click(within(confirmation).getByRole('button',{name:'确认并发送'}));
     await screen.findByText('新回复 🌙');
