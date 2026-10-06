@@ -14,6 +14,18 @@ beforeEach(() => { client = new QueryClient({ defaultOptions: { queries: { retry
 afterEach(() => { client.clear(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.useRealTimers(); });
 function mount(accountId = 'a') { return render(<QueryClientProvider client={client}><WalletPage accountId={accountId} csrfToken="csrf" onBack={() => {}} onNavigateModels={() => {}} /></QueryClientProvider>); }
 
+it('shows model consumption amounts without internal settlement notes', async () => {
+  api.readWallet.mockResolvedValueOnce({ ...wallet, balanceMicros: 99884, ledger: [{
+    entryId: 'usage-1', kind: 'usage', amountMicros: -116, balanceAfterMicros: 99884,
+    note: '酒馆模型消费：上游实际费用 × 2', createdAt: '2026-10-07T00:00:00Z',
+  }] });
+  mount();
+  expect(await screen.findByText('模型消费')).toBeInTheDocument();
+  expect(screen.getByText('-0.000116 额度')).toBeInTheDocument();
+  expect(screen.getByText('余额 0.099884 额度')).toBeInTheDocument();
+  expect(screen.queryByText(/上游.*(2|倍)|倍率/)).not.toBeInTheDocument();
+});
+
 it('shows an honest queue without a payment QR until the server grants the window', async () => {
   api.updatePaymentDisplay.mockResolvedValue({ windowId: 'waiting-1', status: 'waiting', serverNow: new Date().toISOString(), expiresAt: null, position: 1, imageUrl: null });
   mount(); await screen.findByText('0.1 额度');

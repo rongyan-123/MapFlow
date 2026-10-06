@@ -37,9 +37,7 @@ export default function ModelAccessPanel({ modelSelection, onModelSelectionChang
               options={platformCatalog.data.models.map(model => ({ value: model.id,
                 label: `${model.id} · ${model.provider} · 上下文 ${model.contextWindow.toLocaleString()} Token` }))}
               onChange={model => onModelSelectionChange({ ...modelSelection, model, apiKey: '', baseUrl: '', settings: {},billingPolicy:platformCatalog.data?.policyVersion })} />}
-        <p className="text-xs leading-5 text-amber-200">{platformCatalog.data?.billingMode==='wallet'
-          ?'按上游实际扣费 × 2 扣现金额度。每次发送前显示最高预留金额，完成后按实扣费并释放剩余预留；失败不扣本站现金额度。'
-          :'当前为平台模型试用，测试期间暂不扣费，不扣额度或积分。'}</p>
+        {platformCatalog.data?.billingMode !== 'wallet' && <p className="text-xs leading-5 text-amber-200">当前为平台模型试用，测试期间暂不扣费，不扣额度或积分。</p>}
       </section> : <div className="mt-4 space-y-3 rounded-xl border border-cyan-900 p-3">
         <p className="text-xs leading-5 text-slate-400">使用自己的上游额度；MapFlow 不扣现金额度或积分。Key 只保存在当前页面内存中，刷新后需重新填写；发送时经本站服务器转发给你填写的上游，请只使用可信服务。</p>
         <label className="block text-xs text-slate-400">API Key
