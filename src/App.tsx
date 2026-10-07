@@ -1416,13 +1416,10 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
             hidden={!chatOpen || learningMapOpen}
             className={`${chatOpen && !learningMapOpen ? 'flex lg:flex' : 'hidden lg:hidden'} min-h-0 w-full flex-1 flex-col overflow-hidden`}
           >
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-800 px-3 py-2">
-              <span className="truncate text-xs text-slate-400">{selectedNodeId ? snapshot.nodes.find(node => node.id === selectedNodeId)?.title : activeTitle}</span>
-              <button type="button" onClick={() => { setLearningMapOpen(true); setMobileView('graph'); }}
-                className="shrink-0 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-cyan-200">查看地图</button>
-            </div>
             <TavernPage
-              treeContext={{ title: activeTitle, libraryEntryId: selectedLibraryEntryId }}
+              treeContext={{ title: activeTitle, libraryEntryId: selectedLibraryEntryId,
+                nodeTitle: selectedNodeId ? snapshot.nodes.find(node => node.id === selectedNodeId)?.title : activeTitle }}
+              onShowMap={() => { setLearningMapOpen(true); setMobileView('graph'); }}
               onNavigateConsole={closeKnowledgeChat}
               onNavigateWallet={onNavigateWallet}
               onNavigateModels={onNavigateModels}

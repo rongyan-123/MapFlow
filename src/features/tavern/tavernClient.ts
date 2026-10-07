@@ -4,6 +4,20 @@ import { isRecord, NORMALIZED_CARD_BYTES, RAW_FILE_BYTES, tooLarge, utf8Bytes } 
 import type {CashCharge,CashQuote} from './types';
 
 const ROOT = '/api/me/tavern';
+export async function fetchTeachingCanvas(id: string, signal?: AbortSignal) {
+  return parseTeachingCanvas(await getJson(`${ROOT}/conversations/${pathId(id)}/canvas`, signal));
+}
+export async function saveTeachingCanvas(id: string, state: import('./types').TeachingCanvasState, csrfToken: string, elements?: Record<string, unknown>[]) {
+  return parseTeachingCanvas(await readJson(await request(`${ROOT}/conversations/${pathId(id)}/canvas`, {
+    method: 'PATCH', headers: mutationHeaders(csrfToken, true),
+    body: JSON.stringify({ expectedRevision: state.revision, enabled: state.enabled, ...(elements ? { elements } : {}) }),
+  })));
+}
+export function parseTeachingCanvas(value: unknown): import('./types').TeachingCanvasState {
+  if (!isRecord(value) || !nonNegativeInteger(value.revision) || typeof value.enabled !== 'boolean'
+    || !Array.isArray(value.elements) || value.elements.length > 500 || !value.elements.every(isRecord)) throw invalidResponse();
+  return value as unknown as import('./types').TeachingCanvasState;
+}
 export async function testModelConnection(apiKey: string, baseUrl: string, csrfToken: string, signal?: AbortSignal): Promise<{ ok: boolean; models: string[]; message: string }> {
   const result = await readJson(await request(`${ROOT}/model-access/test`, {
     method: 'POST', headers: mutationHeaders(csrfToken, true), credentials: 'same-origin',
@@ -100,6 +114,7 @@ export async function updateConversationProfile(id: string, expectedRevision: nu
 function parseConversationDetail(body: unknown): ConversationDetail {
   if (!isRecord(body)) throw invalidResponse();
   return { conversation: parseConversation(body.conversation), character: parseCharacter(body.character),
+    ...(body.canvas === undefined ? {} : { canvas: parseTeachingCanvas(body.canvas) }),
     turns: parseList(body, 'turns', parseTurn), generations: parseList(body, 'generations', parseGeneration), graph: parseGraph(body.graph),
     ...(body.cashCharges===undefined?{}:{cashCharges:parseList(body,'cashCharges',parseCashCharge)}) };
 }
@@ -125,7 +140,8 @@ export async function mutateGraph(id: string, expectedRevision: number, action: 
 export async function generateStream(id: string, clientActionId: string, expectedRevision: number, action: GenerationAction, csrfToken: string,
   onDelta: (delta: string) => void, signal?: AbortSignal, modelAccess?: TavernUserModelAccess,
   historyBytes?: 8192 | 16384 | 32768, platformModel?: string,billing?:{quoteId?:string;policyVersion:string},
-  onApproval?: (approval: { approvalRequestId: string; action: string; target: string; destructive: boolean }) => Promise<void>): Promise<CompletedTurn> {
+  onApproval?: (approval: { approvalRequestId: string; action: string; target: string; destructive: boolean }) => Promise<void>,
+  onProcess?: (event: import('./types').TavernLiveProcessEvent) => void): Promise<CompletedTurn> {
   if (modelAccess && platformModel) throw new TavernApiError(400, 'tavern.model_access_invalid', '请选择一种模型线路。');
   validateId(clientActionId);
   if (!nonNegativeInteger(expectedRevision)) throw new TavernApiError(409, 'tavern.turn_conflict', '会话版本已变化，请刷新后重试。');
@@ -138,6 +154,8 @@ export async function generateStream(id: string, clientActionId: string, expecte
   });
   if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) throw invalidResponse();
   const reader = response.body.getReader();
+  const abort = () => { void reader.cancel(); };
+  signal?.addEventListener('abort', abort, { once: true });
   const decoder = new TextDecoder();
   let buffer = '';
   const consume = async (frame: string): Promise<CompletedTurn | undefined> => {
@@ -147,10 +165,16 @@ export async function generateStream(id: string, clientActionId: string, expecte
       if (line.startsWith('event:')) event = line.slice(6).replace(/^ /u, '');
       if (line.startsWith('data:')) lines.push(line.slice(5).replace(/^ /u, ''));
     }
-    if (!lines.length || !['delta', 'completed', 'error', 'approval_required'].includes(event)) return;
+    if (!lines.length || !['delta', 'completed', 'error', 'approval_required', 'started', 'process'].includes(event)) return;
     let payload: unknown;
     try { payload = JSON.parse(lines.join('\n')) as unknown; } catch { throw invalidResponse(); }
     if (event === 'error') throw parseErrorBody(payload, 502);
+    if (event === 'started') { onProcess?.({ type: 'status', state: 'generating' }); return; }
+    if (event === 'process') {
+      if (isRecord(payload) && payload.type === 'canvas') onProcess?.({ type: 'canvas', canvas: parseTeachingCanvas(payload.canvas) });
+      else onProcess?.(parseProcessEvent(payload));
+      return;
+    }
     if (event === 'approval_required') {
       if (!isRecord(payload) || !isRecord(payload.approval)) throw invalidResponse();
       const approval=payload.approval;
@@ -170,6 +194,9 @@ export async function generateStream(id: string, clientActionId: string, expecte
     if (cashCharge && (cashCharge.generationId!==turn.turnId || !Number.isSafeInteger(payload.walletBalanceMicros))) throw invalidResponse();
     if (turn.clientTurnId !== clientActionId || (action.type === 'reply' && turn.userMessage !== action.message)) throw invalidResponse();
     return { turn, graph: parseGraph(payload.graph), creditBalance: payload.creditBalance,
+      ...(payload.generation === undefined ? {} : { generation: parseGeneration(payload.generation) }),
+      ...(payload.process === undefined ? {} : { process: parseProcess(payload.process) }),
+      ...(payload.canvas === undefined ? {} : { canvas: parseTeachingCanvas(payload.canvas) }),
       chargedCredits: payload.chargedCredits, idempotencyHit: payload.idempotencyHit,
       ...(cashCharge?{cashCharge,walletBalanceMicros:payload.walletBalanceMicros as number}:{}) };
   };
@@ -194,7 +221,7 @@ export async function generateStream(id: string, clientActionId: string, expecte
   } catch (error) {
     if (error instanceof TavernApiError || signal?.aborted) throw error;
     throw interrupted();
-  } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
+  } finally { signal?.removeEventListener('abort', abort); await reader.cancel().catch(() => undefined); reader.releaseLock(); }
 }
 
 function mutationHeaders(csrfToken: string, json = false): Record<string, string> {
@@ -276,7 +303,17 @@ function parseGeneration(value: unknown): GenerationRecord {
     !['reply', 'regenerate', 'continue', 'migration'].includes(String(value.intent)) || !nullableString(value.anchorMessageId) || !nullableString(value.inputMessageId) ||
     !/^[0-9a-f]{64}$/u.test(value.promptFingerprint as string) || !isGenerationSettings(value.settingsSnapshot) || !nonNegativeInteger(value.chargedCreditUnits) ||
     !isRecord(value.usage) || !['inputTokens', 'outputTokens', 'cacheHitInputTokens', 'cacheMissInputTokens'].every(key => nonNegativeInteger((value.usage as Record<string, unknown>)[key]))) throw invalidResponse();
-  return value as unknown as GenerationRecord;
+  return { ...value, ...(value.process === undefined ? {} : { process: parseProcess(value.process) }) } as unknown as GenerationRecord;
+}
+function parseProcessEvent(value: unknown): import('./types').GenerationProcessEvent {
+  if (!isRecord(value)) throw invalidResponse();
+  if (value.type === 'reasoning' && typeof value.text === 'string' && utf8Bytes(value.text) <= 1_048_576) return { type: 'reasoning', text: value.text };
+  if (value.type === 'tool' && typeof value.name === 'string' && value.name.length <= 100 && ['started', 'completed', 'failed'].includes(String(value.state))) return value as unknown as import('./types').GenerationProcessEvent;
+  throw invalidResponse();
+}
+function parseProcess(value: unknown): import('./types').GenerationProcessEvent[] {
+  if (!Array.isArray(value) || value.length > 128) throw invalidResponse();
+  return value.map(parseProcessEvent);
 }
 function parseGraph(value: unknown): ConversationGraph {
   if (!isRecord(value) || !nonNegativeInteger(value.revision) || typeof value.activeBranchId !== 'string' ||

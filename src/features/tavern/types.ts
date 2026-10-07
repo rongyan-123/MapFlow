@@ -49,6 +49,7 @@ export interface Turn {
   chargedCreditUnits: number; createdAt: string;
 }
 export interface GenerationRecord {
+  process?: GenerationProcessEvent[];
   generationId: string; branchId: string; clientActionId: string;
   intent: 'reply' | 'regenerate' | 'continue' | 'migration';
   anchorMessageId: string | null; inputMessageId: string | null; outputMessageId: string;
@@ -78,15 +79,19 @@ export type GenerationAction =
   | { type: 'regenerate'; assistantMessageId: string }
   | { type: 'continue'; assistantMessageId: string };
 export interface ConversationDetail {
+  canvas?: TeachingCanvasState;
   conversation: Conversation; character: Character; turns: Turn[];
   generations: GenerationRecord[]; graph: ConversationGraph;
   cashCharges?: CashCharge[];
 }
 export interface CashCharge { generationId:string; outputMessageId:string; amountMicros:number; balanceAfterMicros:number; capped:boolean; createdAt:string }
 export interface CashQuote { quoteId:string; maximumChargeMicros:number; policyVersion:string; expiresInSeconds:number }
-export interface CompletedTurn { turn: Turn; graph: ConversationGraph; creditBalance: number; chargedCredits: number; idempotencyHit: boolean; cashCharge?:CashCharge; walletBalanceMicros?:number }
+export interface CompletedTurn { turn: Turn; graph: ConversationGraph; creditBalance: number; chargedCredits: number; idempotencyHit: boolean; cashCharge?:CashCharge; walletBalanceMicros?:number; process?: GenerationProcessEvent[]; canvas?:TeachingCanvasState; generation?: GenerationRecord }
+export type GenerationProcessEvent = { type: 'reasoning'; text: string } | { type: 'tool'; name: string; state: 'started' | 'completed' | 'failed' };
+export type TavernLiveProcessEvent = GenerationProcessEvent | { type: 'canvas'; canvas: TeachingCanvasState } | { type: 'status'; state: 'generating' };
 export class TavernApiError extends Error {
   constructor(public readonly status: number, public readonly code: string, message: string, public readonly traceId?: string) {
     super(message); this.name = 'TavernApiError';
   }
 }
+export interface TeachingCanvasState { revision: number; enabled: boolean; elements: Record<string, unknown>[] }

@@ -26,7 +26,7 @@ import { CharacterAvatar, CompatibilityReport, ErrorNotice, TavernDialog, button
 
 interface TavernPageProps {
   onNavigateConsole: () => void; onNavigateWallet?: () => void; onNavigateModels?: () => void;
-  treeContext?: { libraryEntryId: string; title: string }; onClose?: () => void; onTreeChanged?: () => void;
+  treeContext?: { libraryEntryId: string; title: string; nodeTitle?: string }; onClose?: () => void; onTreeChanged?: () => void; onShowMap?: () => void;
 }
 export default function TavernPage(props: TavernPageProps) {
   const { session } = useIdentity();
@@ -34,7 +34,7 @@ export default function TavernPage(props: TavernPageProps) {
   return <AuthenticatedTavernPage key={`${session.account.playerId}.${props.treeContext?.libraryEntryId ?? 'independent'}`} session={session} {...props} />;
 }
 
-function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet, onNavigateModels, treeContext, onClose, onTreeChanged }: TavernPageProps & { session: IdentitySession }) {
+function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet, onNavigateModels, treeContext, onClose, onTreeChanged, onShowMap }: TavernPageProps & { session: IdentitySession }) {
   const queryClient = useQueryClient();
   const { logout, logoutPending, logoutError } = useIdentity();
   const accountId = session.account.playerId;
@@ -129,6 +129,8 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     void queryClient.cancelQueries({ queryKey: detailKey, exact: true });
     queryClient.setQueryData<ConversationDetail>(detailKey, previous => previous ? { ...previous,
       turns: [...previous.turns.filter(turn => turn.clientTurnId !== completed.turn.clientTurnId), completed.turn],
+      ...(completed.canvas ? { canvas: completed.canvas } : {}),
+      ...(completed.generation ? { generations: [...previous.generations.filter(generation => generation.clientActionId !== completed.generation?.clientActionId), completed.generation] } : {}),
       ...(completed.cashCharge?{cashCharges:[...(previous.cashCharges??[]).filter(charge=>charge.generationId!==completed.cashCharge?.generationId),completed.cashCharge]}:{}),
       graph: completed.graph } : previous);
     if (completed.walletBalanceMicros!==undefined) {
@@ -177,6 +179,11 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     void queryClient.cancelQueries({ queryKey: conversationsKey, exact: true });
     queryClient.setQueryData(detailKey, updated);
     queryClient.setQueryData<Conversation[]>(conversationsKey, previous => previous?.map(item => item.conversationId === updated.conversation.conversationId ? updated.conversation : item));
+  }
+  function onRecovered(saved: ConversationDetail) {
+    onProfileUpdated(saved); onTreeChanged?.();
+    void queryClient.invalidateQueries({ queryKey: ['me', accountId, 'wallet'] });
+    void credit.refetch();
   }
   function onCharacterSaved(result: { character: Character; conversation: ConversationDetail | null }) {
     void queryClient.cancelQueries({ queryKey: charactersKey, exact: true });
@@ -265,20 +272,22 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     <main className="flex min-h-0 flex-1">
       {!treeContext && <aside aria-label="角色库" className="hidden w-60 shrink-0 overflow-y-auto border-r border-slate-800 p-4 lg:block">{library}</aside>}
       <section aria-label="角色对话" className="flex min-w-0 flex-1 flex-col">
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-800 px-5 py-3">
+        <div className="flex shrink-0 items-center gap-2 border-b border-slate-800 px-3 py-2 sm:px-5">
           {treeContext && onClose && <button type="button" className={buttonClass} aria-label="返回节点详情" onClick={onClose}>←</button>}
           <button type="button" className={`${buttonClass} ${treeContext ? '' : 'lg:hidden'}`} aria-label="打开角色列表" onClick={() => setDrawer('library')}>☰</button>
-          <div className="flex min-w-0 items-center gap-3"><CharacterAvatar character={selectedCharacter} /><div className="min-w-0"><h2 className="truncate text-sm font-semibold">{selectedCharacter?.card.name ?? '欢迎来到酒馆'}</h2><p className="mt-0.5 text-xs text-slate-500">{conversationId ? '故事正在继续' : '选择角色，开启故事'}</p></div></div>
-          <button type="button" className={buttonClass} onClick={() => { setConfigurationSection('overview'); setConfigurationOpen(true); }}>配置</button>
+          <div className="flex min-w-0 flex-1 items-center gap-2"><CharacterAvatar character={selectedCharacter} /><div className="min-w-0"><h2 className="truncate text-sm font-semibold">{selectedCharacter?.card.name ?? '欢迎来到酒馆'}</h2><p className="mt-0.5 truncate text-xs text-slate-500">{treeContext ? treeContext.nodeTitle ?? treeContext.title : conversationId ? '故事正在继续' : '选择角色，开启故事'}</p></div></div>
+          {onShowMap && <button type="button" className={`${buttonClass} shrink-0`} onClick={onShowMap}>查看地图</button>}
+          <button type="button" className={`${buttonClass} shrink-0`} onClick={() => { setConfigurationSection('overview'); setConfigurationOpen(true); }}>配置</button>
         </div>
-        {treeContext && conversationQuery.data?.conversation.libraryEntryId === treeContext.libraryEntryId && <p className="shrink-0 px-4 py-2 text-xs text-cyan-200">已关联：{treeContext.title}</p>}
+        {treeContext && conversationQuery.data?.conversation.libraryEntryId === treeContext.libraryEntryId && <span className="sr-only">已关联：{treeContext.title}</span>}
         {treeStory.error && <ErrorNotice error={treeStory.error} onRetry={() => void treeStory.refetch()} />}
         {openError != null && <div className="p-4"><ErrorNotice error={openError} /></div>}
         {conversations.error && <div className="p-4"><ErrorNotice error={conversations.error} onRetry={() => void conversations.refetch()} /></div>}
-        {conversationId ? conversationQuery.data ? <ConversationPane key={`${accountId}.${conversationId}`} detail={conversationQuery.data} accountId={accountId} csrfToken={session.csrfToken} onCompleted={onCompleted} onGraphChanged={onGraphChanged}
+        {conversationId ? conversationQuery.data ? <ConversationPane key={`${accountId}.${conversationId}`} detail={conversationQuery.data} accountId={accountId} csrfToken={session.csrfToken} onCompleted={onCompleted} onRecovered={onRecovered} onGraphChanged={onGraphChanged}
           modelSelection={modelSelection}
           configurationOpen={configurationOpen} configurationSection={configurationSection}
           onOpenModelConfiguration={() => { setConfigurationSection('model'); setConfigurationOpen(true); }}
+          onOpenParameters={() => { setConfigurationSection('generation'); setConfigurationOpen(true); }}
           onNavigateWallet={onNavigateWallet} onCloseConfiguration={() => setConfigurationOpen(false)} configuration={configurationSections} />
           : <div className="p-6">{conversationQuery.isPending ? <p role="status" className="text-sm text-slate-400">正在恢复会话与历史…</p> : <ErrorNotice error={conversationQuery.error} onRetry={() => void conversationQuery.refetch()} />}</div>
           : <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto p-8 text-center">

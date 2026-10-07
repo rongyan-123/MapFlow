@@ -21,7 +21,7 @@
 | tldraw Agent starter kit | 最接近左画布右聊天的完整 Agent 示例，支持创建/修改图形和渐进输出；SDK 正式商用需要有效许可证，不能按模板仓库 MIT 信息推断 SDK 免费商用 | [模板](https://github.com/tldraw/agent-template)、[能力文档](https://tldraw.dev/starter-kits/agent)、[SDK 许可](https://tldraw.dev/community/license) |
 | LeaferJS | MIT 图形引擎与中文文档，可作为复杂自定义教学图形的后续候选；相较完整白板，应用层工具和教学交互需要更多自建 | [主仓库](https://github.com/leaferjs/leafer-ui) |
 
-推荐是项目适配判断，尚未执行三者的本项目性能对比，也未安装新依赖。作图采用文字、形状、箭头等结构化图元，不调用图像生成服务；模型规划和绘图指令仍消耗聊天模型 Token。
+推荐是项目适配判断，未执行三者的本项目性能对比。实施选用 Excalidraw 0.18.1 并懒加载。作图采用文字、形状、箭头等结构化图元，不调用图像生成服务；模型规划和绘图指令仍消耗聊天模型 Token。
 
 ## 建议的实施顺序
 

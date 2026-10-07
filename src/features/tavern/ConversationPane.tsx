@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { useTeachingCanvas } from './useTeachingCanvas';
+import GenerationProcess from './GenerationProcess';
+import type { GenerationProcessEvent } from './types';
+const TeachingCanvasPanel = lazy(() => import('./TeachingCanvasPanel'));
 import AssistantMarkdown from '../knowledge-chat/AssistantMarkdown';
 import { validateId, validateMessage } from './conversationInput';
-import { generateStream, mutateGraph, resolveTavernToolApproval } from './tavernClient';
+import { fetchConversation, generateStream, mutateGraph, resolveTavernToolApproval } from './tavernClient';
 import {formatAmountMicros} from '../wallet/walletClient';
 import type {CashQuote} from './types';
 import { TavernApiError, type CompletedTurn, type ConversationDetail, type ConversationGraph, type GenerationAction, type GenerationRecord, type GraphMessage, type GraphMutation, type TavernModelSelection, type TavernUserModelAccess } from './types';
@@ -14,12 +18,14 @@ interface PendingGeneration { clientActionId: string; expectedRevision: number; 
   platformBinding?: { model: string; historyBytes: 8192 | 16384 | 32768 };
   modelBinding?: { model: string; baseUrl: string; historyBytes: 8192 | 16384 | 32768 } }
 
-export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, onCompleted, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onNavigateWallet, onCloseConfiguration, configuration }: {
+export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, onCompleted, onRecovered, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onOpenParameters, onNavigateWallet, onCloseConfiguration, configuration }: {
   detail: ConversationDetail; accountId: string; csrfToken: string;
   modelSelection: TavernModelSelection;
   onCompleted: (completed: CompletedTurn) => void; onGraphChanged: (graph: ConversationGraph) => void;
+  onRecovered: (saved: ConversationDetail) => void;
   configurationOpen: boolean; onCloseConfiguration: () => void; configuration: TavernDialogSection[];
   configurationSection?: string; onOpenModelConfiguration: () => void; onNavigateWallet?: () => void;
+  onOpenParameters?: () => void;
 }) {
   const storageKey = `mapflow.tavern.pending.v1.${accountId}.${detail.conversation.conversationId}`;
   const [pendingGeneration, setPendingGeneration] = useState<PendingGeneration | null>(() => {
@@ -29,6 +35,10 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   });
   const [message, setMessage] = useState('');
   const [draft, setDraft] = useState('');
+  const [process, setProcess] = useState<GenerationProcessEvent[]>([]);
+  const [stopped, setStopped] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+  const canvas = useTeachingCanvas(detail.conversation.conversationId, csrfToken, detail.graph.revision, detail.canvas);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [editing, setEditing] = useState(false);
@@ -37,19 +47,39 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const [branchName, setBranchName] = useState('');
   const [branchAnchorId, setBranchAnchorId] = useState('');
   const activeRequest = useRef<AbortController | null>(null);
+  const publishPreview = useRef<(() => void) | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
   useEffect(() => () => { activeRequest.current?.abort(); }, []);
   useEffect(() => {
     if (followLatest.current) bottom.current?.scrollIntoView?.({ block: 'nearest' });
-  }, [draft, detail.graph.revision, pendingGeneration]);
+  }, [draft, process, detail.graph.revision, pendingGeneration]);
   useEffect(() => { setEditing(false); setEditContent(''); }, [detail.graph.revision]);
   useEffect(() => {
     if (!busy && pendingGeneration && detail.generations.some(generation => generation.clientActionId === pendingGeneration.clientActionId)) {
       setPendingGeneration(null); setDraft(''); setError(null); storePending(storageKey, null);
     }
   }, [busy, detail.generations, pendingGeneration, storageKey]);
+
+  async function recoverSavedResult() {
+    if (!pendingGeneration || recovering) return;
+    setRecovering(true);
+    try {
+      const saved = await fetchConversation(detail.conversation.conversationId);
+      if (saved.generations.some(generation => generation.clientActionId === pendingGeneration.clientActionId)) {
+        storePending(storageKey, null); setPendingGeneration(null); setDraft(''); setProcess([]); setError(null);
+        canvas.setPreview(null); onRecovered(saved);
+      }
+    } catch (failure) { setError(failure); }
+    finally { setRecovering(false); }
+  }
+
+  function stopGeneration() {
+    publishPreview.current?.();
+    activeRequest.current?.abort(); setBusy(false); setStopped(true); canvas.setPreview(null);
+    void recoverSavedResult();
+  }
 
   async function runGeneration(action: GenerationAction, retry?: PendingGeneration) {
     if (activeRequest.current || graphBusy || editing || (pendingGeneration && !retry)) return;
@@ -81,31 +111,56 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     } catch (failure) { setError(failure); return; }
     const controller = new AbortController();
     activeRequest.current = controller;
+    let streamedText = '';
+    const streamedProcess: GenerationProcessEvent[] = [];
+    let paint: ReturnType<typeof setTimeout> | null = null;
+    const publish = () => {
+      if (controller.signal.aborted) return;
+      setDraft(streamedText); setProcess([...streamedProcess]);
+    };
+    const schedulePaint = () => {
+      if (paint !== null) return;
+      paint = setTimeout(() => { paint = null; publish(); }, 16);
+    };
+    const cancelPaint = () => { if (paint !== null) clearTimeout(paint); paint = null; };
+    publishPreview.current = publish;
     // Persist before sending: a refresh between request and completed must reuse the same ID.
     storePending(storageKey, outgoing);
     setPendingGeneration(outgoing);
     if (outgoing.action.type === 'reply') setMessage('');
-    setDraft(''); setBusy(true); setError(null); followLatest.current = true;
+    setDraft(''); setProcess([]); setStopped(false); setBusy(true); setError(null); followLatest.current = true;
     try {
+      await canvas.flush();
       const completed = await generateStream(detail.conversation.conversationId, outgoing.clientActionId, outgoing.expectedRevision, outgoing.action,
-        csrfToken, delta => { if (!controller.signal.aborted) setDraft(previous => previous + delta); }, controller.signal,
+        csrfToken, delta => { if (!controller.signal.aborted) { streamedText += delta; schedulePaint(); } }, controller.signal,
         modelAccess, modelAccess || platformModel ? modelSelection.historyBytes : undefined, platformModel,
         platformModel && modelSelection.billingPolicy ? { policyVersion: modelSelection.billingPolicy } : undefined,
         async approval => {
           const prompt=approval.destructive ? `请单独确认：${approval.action}（${approval.target}）。确认后才会执行。` : `确认${approval.action}（${approval.target}）？`;
           const allowed=!controller.signal.aborted && window.confirm(prompt);
           await resolveTavernToolApproval(detail.conversation.conversationId,approval.approvalRequestId,allowed,allowed && approval.destructive,csrfToken);
+        }, event => {
+          if (controller.signal.aborted) return;
+          if (event.type === 'canvas') canvas.setPreview(event.canvas);
+          else if (event.type !== 'status') {
+            const previous = streamedProcess[streamedProcess.length - 1];
+            if (event.type === 'reasoning' && previous?.type === 'reasoning') previous.text = (previous.text + event.text).slice(0, 1024 * 1024);
+            else if (streamedProcess.length < 128) streamedProcess.push(event);
+            schedulePaint();
+          }
         });
       if (controller.signal.aborted) return;
+      cancelPaint();
       storePending(storageKey, null);
-      setPendingGeneration(null); setDraft(''); onCompleted(completed);
+      setPendingGeneration(null); setDraft(''); setProcess([]); canvas.setPreview(null); onCompleted(completed);
     } catch (failure) { if (!controller.signal.aborted) {
+      publish();
       if (failure instanceof TavernApiError && failure.code==='tavern.cash_quote_expired') {
         const renewed={...outgoing,billing:undefined};setPendingGeneration(renewed);storePending(storageKey,renewed);
       }
-      setError(failure);
+      setError(failure); canvas.setPreview(null);
     } }
-    finally { if (!controller.signal.aborted) { activeRequest.current = null; setBusy(false); } }
+    finally { cancelPaint(); if (activeRequest.current === controller) { activeRequest.current = null; publishPreview.current = null; setBusy(false); } }
   }
   const inputTooLarge = Array.from(message).length > 8000 || utf8Bytes(message) > 8192;
   const mayEdit = error instanceof TavernApiError && error.status === 400;
@@ -152,12 +207,23 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     } catch (failure) { setError(failure); }
   }
 
-  return <div className="flex min-h-0 flex-1 flex-col">
+  return <div className="flex min-h-0 min-w-0 flex-1 flex-col md:flex-row">
+    <nav aria-label="学习工作区" className="flex shrink-0 items-center gap-2 border-b border-slate-800 px-4 py-2 text-xs md:hidden">
+      <button type="button" aria-pressed={!canvas.open} className={`rounded-full px-4 py-1.5 ${!canvas.open ? 'bg-cyan-300 text-slate-950' : 'bg-slate-800 text-slate-300'}`} onClick={() => canvas.setOpen(false)}>聊天</button>
+      <button type="button" aria-pressed={canvas.open} disabled={canvas.saving} className={`rounded-full px-4 py-1.5 ${canvas.open ? 'bg-cyan-300 text-slate-950' : 'bg-slate-800 text-slate-300'}`} onClick={() => void canvas.show()}>画布</button>
+    </nav>
+    {canvas.open && canvas.document && <Suspense fallback={<section aria-label="教学画布" className="flex-1 p-6" role="status">正在打开教学画布…</section>}>
+      <TeachingCanvasPanel document={canvas.document} busy={busy} saving={canvas.saving} wide={canvas.wide}
+        onSave={canvas.save} onChange={canvas.queue} onClose={() => canvas.setOpen(false)} onWidth={() => canvas.setWide(previous => !previous)} />
+    </Suspense>}
+    <div className={`${canvas.open ? 'hidden md:flex' : 'flex'} min-h-0 min-w-0 flex-1 flex-col`}>
     <div ref={pane} role="log" aria-label="对话消息" aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-8" onScroll={() => {
       const container = pane.current;
       if (container) followLatest.current = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
     }}>
-      {displayMessages.map(activeMessage => <div key={activeMessage.messageId}><Message
+      {displayMessages.map(activeMessage => <div key={activeMessage.messageId}>
+        <GenerationProcess events={detail.generations.filter(generation => generation.outputMessageId === activeMessage.messageId).flatMap(generation => generation.process ?? [])} />
+        <Message
         author={activeMessage.role === 'user' ? detail.conversation.userName : activeMessage.role === 'system' ? '系统' : detail.character.card.name}
         character={activeMessage.role === 'assistant' ? detail.character : undefined}
         text={activeMessage.content} user={activeMessage.role === 'user'} />
@@ -181,14 +247,16 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       </div>}
       {pendingGeneration && <div className="space-y-5">
         {pendingReply && <Message author={detail.conversation.userName} text={pendingReply.message} user />}
+        <GenerationProcess events={process} live={busy} />
         {draft && <Message author={detail.character.card.name} character={detail.character} text={draft} />}
-        <p role="status" className="text-xs text-cyan-300">{busy ? '正在生成，完成后保存…' : '这条消息尚未确认完成，请重试以核对结果。'}</p>
+        <p role="status" className="mx-auto max-w-3xl text-xs text-slate-400">{stopped ? '已停止生成。可核对结果或取消本次重试。' : busy ? '正在生成，完成后保存…' : '这条消息尚未确认完成，请重试以核对结果。'}</p>
       </div>}
       {!activeMessages.length && !pendingGeneration && <p className="py-12 text-center text-sm text-slate-400">故事从你的第一句话开始。</p>}
       <div ref={bottom} />
     </div>
     <div className="mx-auto w-full max-w-4xl shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-8">
       <ErrorNotice error={error} />
+      <ErrorNotice error={canvas.error} />
       {error instanceof TavernApiError && ['tavern.model_access_required', 'tavern.model_access_invalid',
         'tavern.platform_model_required', 'tavern.runtime_unavailable', 'generation.model_access_invalid',
         'tavern.user_model_authentication', 'tavern.user_model_balance', 'tavern.user_model_timeout',
@@ -259,7 +327,8 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         </div>
       </div>}
       {pendingGeneration && !busy && <div className="flex flex-wrap gap-2">
-        <button type="button" className={primaryClass} onClick={() => void runGeneration(pendingGeneration.action, pendingGeneration)}>重试这条消息</button>
+        <button type="button" className={buttonClass} disabled={recovering} onClick={() => void recoverSavedResult()}>{recovering ? '正在核对结果…' : '核对已保存结果'}</button>
+        <button type="button" className={primaryClass} disabled={recovering} onClick={() => void runGeneration(pendingGeneration.action, pendingGeneration)}>重试这条消息</button>
         {mayEdit && pendingReply && <button type="button" className={buttonClass} onClick={() => {
           setMessage(pendingReply.message); setPendingGeneration(null); setDraft(''); setError(null); storePending(storageKey, null);
         }}>编辑消息</button>}
@@ -268,27 +337,37 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
           setPendingGeneration(null); setDraft(''); setError(null); storePending(storageKey, null);
         }}>取消本次重试</button>
       </div>}
-      <form onSubmit={event => { event.preventDefault(); void runGeneration({ type: 'reply', message }); }} className="rounded-2xl border border-slate-700 bg-slate-900 p-2 shadow-lg transition focus-within:border-cyan-500/70">
+      <form onSubmit={event => { event.preventDefault(); void runGeneration({ type: 'reply', message }); }} className="rounded-3xl border border-slate-700 bg-slate-900 p-3 shadow-lg transition focus-within:border-cyan-500/70">
+        <div className="mb-2 flex flex-wrap items-center gap-2 px-2 text-[11px] text-slate-400">
+          <button type="button" className="rounded-full bg-slate-800 px-3 py-1.5 text-slate-200 hover:text-cyan-200" onClick={onOpenModelConfiguration}>{modelSelection.model || '选择模型'} · {modelSelection.provider === 'platform' ? '平台额度' : '自填 Key'}</button>
+          <span>历史 {modelSelection.historyBytes / 1024} KB · 最大输出 {detail.conversation.generationSettings.maxOutputTokens} Token</span>
+        </div>
         <label htmlFor={`tavern-message-${detail.conversation.conversationId}`} className="sr-only">消息</label>
-        <textarea id={`tavern-message-${detail.conversation.conversationId}`} className="max-h-48 min-h-16 w-full resize-y border-0 bg-transparent px-3 py-2 text-sm leading-6 text-slate-100 outline-none placeholder:text-slate-500 disabled:opacity-50" rows={2} placeholder="写下你的行动或对白…" value={message} disabled={busy || graphBusy || pendingGeneration !== null || editing}
+        <textarea id={`tavern-message-${detail.conversation.conversationId}`} className="max-h-48 min-h-20 w-full resize-y border-0 bg-transparent px-3 py-2 text-[15px] leading-6 text-slate-100 outline-none placeholder:text-slate-500 disabled:opacity-50" rows={2} placeholder="输入你的问题，或让 AI 画图讲解…" value={message} disabled={busy || graphBusy || pendingGeneration !== null || editing}
           onChange={event => setMessage(event.target.value)} onKeyDown={event => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
               event.preventDefault(); if (message.trim() && !inputTooLarge) void runGeneration({ type: 'reply', message });
             }
           }} />
         <div className="flex items-center justify-between gap-2 px-2 pb-1">
-          <p className={`text-[11px] ${inputTooLarge ? 'text-rose-300' : 'text-slate-500'}`}><span className="hidden sm:inline">Enter 发送 · Shift+Enter 换行</span>{inputTooLarge && '消息过长（上限 8,192 字节）'}</p>
-          <button type="submit" className={primaryClass} disabled={busy || graphBusy || editing || pendingGeneration !== null || !message.trim() || inputTooLarge}>{busy ? '生成中…' : '发送'}</button>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <button type="button" className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-300 hover:border-cyan-400 disabled:opacity-50" disabled={canvas.saving || busy} onClick={() => canvas.open ? canvas.setOpen(false) : void canvas.show()}>{canvas.open ? '收起画布' : canvas.document ? '展开画布' : '绘图讲解'}</button>
+            <button type="button" className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-300 hover:border-cyan-400" onClick={onOpenParameters ?? onOpenModelConfiguration}>参数</button>
+            <span className={`hidden text-[11px] sm:inline ${inputTooLarge ? 'text-rose-300' : 'text-slate-500'}`}>{inputTooLarge ? '消息过长（上限 8,192 字节）' : 'Enter 发送 · Shift+Enter 换行'}</span>
+          </div>
+          {busy ? <button key="stop" type="button" className={primaryClass} onClick={stopGeneration}>停止生成</button>
+            : <button key="send" type="submit" className={primaryClass} disabled={graphBusy || editing || pendingGeneration !== null || !message.trim() || inputTooLarge}>发送</button>}
         </div>
       </form>
+    </div>
     </div>
   </div>;
 }
 
 function Message({ author, text, user = false, character }: { author: string; text: string; user?: boolean; character?: Character }) {
-  return <article className={`mx-auto mb-6 flex max-w-3xl gap-3 rounded-2xl p-3 sm:gap-4 sm:p-4 ${user ? 'bg-slate-800/40' : ''}`}>
-    <CharacterAvatar character={character} name={author} />
-    <div className="min-w-0 flex-1"><h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-200">{author}<span className="text-[10px] font-normal tracking-wider text-slate-500">{user ? '你' : '角色'}</span></h3>
+  return <article className={`mx-auto mb-7 flex max-w-3xl gap-3 ${user ? 'justify-end py-2' : 'py-3 sm:gap-4'}`}>
+    {!user && <CharacterAvatar character={character} name={author} />}
+    <div className={`min-w-0 ${user ? 'max-w-[85%] rounded-3xl rounded-tr-md bg-slate-800 px-5 py-3' : 'flex-1'}`}><h3 className={`${user ? 'sr-only' : 'mb-2'} flex items-center gap-2 text-xs font-medium text-slate-400`}>{author}</h3>
     <div className="text-[15px] leading-7 text-slate-200 [overflow-wrap:anywhere] [&_em]:text-slate-400 [&_p+p]:mt-3"><AssistantMarkdown content={text} /></div></div>
   </article>;
 }

@@ -6,6 +6,12 @@ import { IdentityProvider } from '../identity/IdentityContext';
 import TavernPage from './TavernPage';
 import { character, completion, conversation, detail, sseResponse, turn } from './testFixtures';
 import type { Character, Conversation, ConversationDetail, GenerationAction } from './types';
+vi.mock('@excalidraw/excalidraw', () => ({
+  Excalidraw: ({ onChange, initialData }: { onChange: (elements: Record<string, unknown>[]) => void; initialData: { elements: Record<string, unknown>[] } }) => <div aria-label="白板编辑器">{initialData.elements.filter(element => !element.isDeleted).map(element => <span key={element.id as string}>{element.id as string}</span>)}<button type="button" onClick={() => onChange([{ id: 'manual-box', type: 'rectangle', x: 10, y: 20, width: 200, height: 80 }])}>白板：绘制矩形</button></div>,
+  // Skeleton construction creates fresh elements; it must not be used to restore a saved editor scene.
+  convertToExcalidrawElements: (elements: Record<string, unknown>[]) => elements.map(element => ({ ...element, isDeleted: false })),
+  restoreElements: (elements: unknown) => elements,
+}));
 
 vi.mock('../identity/identityClient', async importOriginal => ({
   ...await importOriginal<typeof import('../identity/identityClient')>(),
@@ -204,6 +210,186 @@ async function configurePaidPlatform(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('Tavern page', () => {
+  it('keeps undone editor shapes deleted when reopening the saved story', async () => {
+    restoreConversation();
+    const box = { type: 'rectangle', x: 0, y: 0, width: 200, height: 80, version: 2, versionNonce: 14, seed: 30 };
+    savedDetail = { ...savedDetail, canvas: { revision: 3, enabled: true, elements: [{ ...box, id: 'kept-box', isDeleted: false }, { ...box, id: 'undone-box', isDeleted: true }] } };
+    const normalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => url.endsWith('/canvas') ? json(savedDetail.canvas) : normalFetch(url, init));
+    renderPage();
+    await screen.findByText('kept-box');
+    expect(screen.queryByText('undone-box')).not.toBeInTheDocument();
+  });
+  it('does not overwrite a newly saved canvas with an older pending read', async () => {
+    restoreConversation();
+    let canvas = { revision: 1, enabled: true, elements: [] as Record<string, unknown>[] };
+    savedDetail = { ...savedDetail, canvas };
+    let releaseRead: (response: Response) => void = () => {};
+    const delayedRead = new Promise<Response>(resolve => { releaseRead = resolve; });
+    const normalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/canvas')) {
+        if (init?.method !== 'PATCH') return delayedRead;
+        const update = JSON.parse(init.body as string);
+        if (update.expectedRevision !== canvas.revision) return new Response(JSON.stringify({ error: { code: 'tavern.turn_conflict', message: '画布已变化' } }), { status: 409 });
+        canvas = { revision: canvas.revision + 1, enabled: update.enabled, elements: update.elements ?? canvas.elements };
+        return json(canvas);
+      }
+      return normalFetch(url, init);
+    });
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '白板：绘制矩形' }));
+    await waitFor(() => expect(canvas.revision).toBe(2), { timeout: 2000 });
+    await act(async () => releaseRead(json({ revision: 1, enabled: true, elements: [] })));
+    await user.click(screen.getByRole('checkbox', { name: '允许 AI 绘图' }));
+    await waitFor(() => expect(canvas.enabled).toBe(false));
+    expect(canvas.elements[0].id).toBe('manual-box');
+  });
+  it('keeps drawing permission disabled when the user reopens the canvas', async () => {
+    restoreConversation();
+    let canvas = { revision: 1, enabled: true, elements: [] };
+    savedDetail = { ...savedDetail, canvas };
+    const normalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/canvas')) {
+        if (init?.method === 'PATCH') { const update = JSON.parse(init.body as string); canvas = { ...canvas, revision: canvas.revision + 1, enabled: update.enabled }; }
+        return json(canvas);
+      }
+      return normalFetch(url, init);
+    });
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('checkbox', { name: '允许 AI 绘图' }));
+    await waitFor(() => expect(canvas.enabled).toBe(false));
+    await user.click(within(screen.getByRole('region', { name: '教学画布' })).getByRole('button', { name: '收起画布' }));
+    await user.click(screen.getByRole('button', { name: '展开画布' }));
+    expect(await screen.findByRole('checkbox', { name: '允许 AI 绘图' })).not.toBeChecked();
+  });
+  it('recovers an already committed reply when stop races with the completion receipt', async () => {
+    restoreConversation();
+    const normalFetch = fetchMock.getMockImplementation()!;
+    let committed = false;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const response = await normalFetch(url, init);
+      if (!url.endsWith('/turns') || init?.method !== 'POST') return response;
+      committed = true;
+      return new Response(new ReadableStream({ start(controller) {
+        controller.enqueue(new TextEncoder().encode('event: started\ndata: {}\n\n'));
+      } }), { headers: { 'Content-Type': 'text/event-stream' } });
+    });
+    const user = userEvent.setup(); renderPage(); await configureSelfKey(user);
+    await user.type(screen.getByLabelText('消息'), '请讲解');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await waitFor(() => expect(committed).toBe(true));
+    await user.click(await screen.findByRole('button', { name: '停止生成' }));
+    expect(await screen.findByText('新回复 🌙')).toBeVisible();
+    expect(screen.queryByRole('button', { name: '重试这条消息' })).not.toBeInTheDocument();
+    expect(attempts).toHaveLength(1);
+  });
+  it('saves a manual diagram before asking AI to edit that canvas', async () => {
+    restoreConversation();
+    let canvas = { revision: 1, enabled: true, elements: [] as Record<string, unknown>[] };
+    savedDetail = { ...savedDetail, canvas };
+    const normalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/canvas')) {
+        if (init?.method === 'PATCH') { const update = JSON.parse(init.body as string); canvas = { revision: canvas.revision + 1, enabled: update.enabled, elements: update.elements ?? canvas.elements }; }
+        return json(canvas);
+      }
+      if (url.endsWith('/turns') && init?.method === 'POST' && !canvas.elements.length) throw new Error('AI was started before the manual diagram was saved');
+      return normalFetch(url, init);
+    });
+    const user = userEvent.setup(); renderPage(); await configureSelfKey(user);
+    await user.click(await screen.findByRole('button', { name: '白板：绘制矩形' }));
+    await user.type(screen.getByLabelText('消息'), '解释这张图');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    expect(await screen.findByText('新回复 🌙')).toBeVisible();
+    expect(canvas.elements[0].id).toBe('manual-box');
+  });
+  it('keeps the completed reasoning receipt visible alongside the saved reply', async () => {
+    restoreConversation();
+    const normalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const response = await normalFetch(url, init);
+      if (!url.endsWith('/turns') || init?.method !== 'POST') return response;
+      const events: string = await response.text();
+      const completedFrame = events.split('\n\n').find(frame => frame.startsWith('event: completed'))!;
+      const completed = JSON.parse(completedFrame.split('data: ')[1]);
+      const process = [{ type: 'reasoning', text: '画图前先确认三个组件。' }];
+      const generation = { ...savedDetail.generations[savedDetail.generations.length - 1], process };
+      return sseResponse([{ event: 'completed', payload: { ...completed, process, generation } }]);
+    });
+    const user = userEvent.setup(); renderPage(); await configureSelfKey(user);
+    await user.type(screen.getByLabelText('消息'), '请画图');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await screen.findByText('新回复 🌙');
+    await user.click(await screen.findByText('思考过程'));
+    expect(screen.getByText('画图前先确认三个组件。')).toBeVisible();
+  });
+  it('restores the saved teaching canvas and reasoning when reopening a story', async () => {
+    restoreConversation();
+    savedDetail = { ...savedDetail, canvas: { revision: 2, enabled: true, elements: [
+      { id: 'browser', type: 'rectangle', x: 0, y: 0, width: 220, height: 90, label: { text: '浏览器' } },
+    ] }, generations: savedDetail.generations.map(generation => ({ ...generation, process: [{ type: 'reasoning', text: '这张图从浏览器开始。' }] })) };
+    const normalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => url.endsWith('/canvas') ? json(savedDetail.canvas) : normalFetch(url, init));
+    const user = userEvent.setup(); renderPage();
+    expect(await screen.findByRole('region', { name: '教学画布' })).toBeVisible();
+    expect(screen.getByRole('checkbox', { name: '允许 AI 绘图' })).toBeChecked();
+    await user.click(screen.getByText('思考过程'));
+    expect(screen.getByText('这张图从浏览器开始。')).toBeVisible();
+  });
+  it('shows streamed public reasoning and text before completion and offers stop', async () => {
+    restoreConversation();
+    const normalFetch = fetchMock.getMockImplementation()!;
+    let controller: ReadableStreamDefaultController<Uint8Array>;
+    const send = (event: string, payload: unknown) => controller.enqueue(new TextEncoder().encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/turns') && init?.method === 'POST') {
+        return new Response(new ReadableStream<Uint8Array>({ start(stream) {
+          controller = stream;
+          send('started', {});
+          send('process', { type: 'reasoning', text: '先分析浏览器与服务端的关系。' });
+          send('process', { type: 'tool', name: 'apply_canvas_patch', state: 'started' });
+          send('delta', { delta: '浏览器向 API 发送请求。' });
+        } }), { headers: { 'Content-Type': 'text/event-stream' } });
+      }
+      return normalFetch(url, init);
+    });
+    const user = userEvent.setup(); renderPage();
+    await configureSelfKey(user);
+    await user.type(await screen.findByLabelText('消息'), '解释浏览器');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    expect(await screen.findByText('浏览器向 API 发送请求。')).toBeVisible();
+    await user.click(await screen.findByText('思考过程'));
+    expect(screen.getByText('先分析浏览器与服务端的关系。')).toBeVisible();
+    expect(screen.getByText('正在绘图')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: '停止生成' }));
+    expect(await screen.findByText(/已停止生成/)).toBeVisible();
+  });
+  it('opens a teaching canvas with drawing permission and can collapse it without losing the conversation', async () => {
+    restoreConversation();
+    const normalFetch = fetchMock.getMockImplementation()!;
+    let canvas = { revision: 0, enabled: false, elements: [] };
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/canvas')) {
+        if (init?.method === 'PATCH') {
+          const update = JSON.parse(init.body as string);
+          canvas = { revision: canvas.revision + 1, enabled: update.enabled, elements: update.elements ?? canvas.elements };
+        }
+        return json(canvas);
+      }
+      return normalFetch(url, init);
+    });
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '绘图讲解' }));
+    expect(await screen.findByRole('region', { name: '教学画布' })).toBeVisible();
+    expect(canvas.enabled).toBe(true);
+    await user.click(within(screen.getByRole('region', { name: '教学画布' })).getByRole('button', { name: '收起画布' }));
+    expect(screen.queryByRole('region', { name: '教学画布' })).not.toBeInTheDocument();
+    expect(screen.getByRole('log', { name: '对话消息' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: '展开画布' }));
+    expect(await screen.findByRole('region', { name: '教学画布' })).toBeVisible();
+  });
   it('switches the tutor inside a connected story while retaining its existing messages', async () => {
     const tutor={...character,characterId:'tutor-2',card:{...character.card,name:'耐心导师'}};
     characters=[character,tutor];
@@ -472,7 +658,8 @@ describe('Tavern page', () => {
     await user.type(screen.getByLabelText('消息'), '只发送一次');
     await user.dblClick(screen.getByRole('button', { name: '发送' }));
     expect(attempts).toHaveLength(0);
-    expect(screen.getByRole('button', { name: '生成中…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '停止生成' })).toBeEnabled();
+    expect(screen.getByLabelText('消息')).toBeDisabled();
     await act(async () => resolveTurn());
     await screen.findByText('新回复 🌙');
     expect(attempts).toHaveLength(1);

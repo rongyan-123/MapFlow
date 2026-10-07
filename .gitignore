@@ -1,6 +1,7 @@
 # 依赖
 node_modules
 dist
+/public/excalidraw/
 *.tsbuildinfo
 
 # 日志
