@@ -6,7 +6,7 @@
 - 固定后端代码：`15ec71864c98d937d17001febfc457d3ab3e8db0`。
 - 当前镜像：`mapflow-server:model-catalog-20261008`，容器 `mapflow-laptop-app`。
 - 私有发布资料：`/opt/mapflow-laptop-migration-20261006/releases/20261008-model-catalog/`，入口见该笔记本的 `OPERATIONS.md`。
-- GitHub SSH、HTTPS 推送被远端 HTTP 500 拒绝；已保留提交，尚待同步。部署来自归档并校验过的本地 main，未使用开发分支直接发布。
+- GitHub SSH、HTTPS 推送曾被远端 HTTP 500 拒绝；最终重试成功，前后端 main 已同步到远端。部署来自归档并校验过的 main，未使用开发分支直接发布。
 
 ## 已确认的规则
 
