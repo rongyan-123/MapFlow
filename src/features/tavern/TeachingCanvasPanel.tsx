@@ -6,8 +6,6 @@ import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import '@excalidraw/excalidraw/index.css';
 import type { TeachingCanvasState } from './types';
 
-(window as Window & { EXCALIDRAW_ASSET_PATH?: string }).EXCALIDRAW_ASSET_PATH = '/excalidraw/';
-
 function materialize(elements: Record<string, unknown>[]) {
   const saved = new Map(elements.filter(element => typeof element.version === 'number' && typeof element.seed === 'number').map(element => [element.id, element]));
   if (saved.size === elements.length) return restoreElements(elements as unknown as ExcalidrawElement[], null, { repairBindings: true });

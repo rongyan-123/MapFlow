@@ -7,6 +7,9 @@ import App from './App';
 import { IdentityProvider } from './features/identity/IdentityContext';
 import { AnnouncementProvider } from './features/announcements/AnnouncementProvider';
 
+// Excalidraw preloads fonts when its lazy module is evaluated in production.
+(window as Window & { EXCALIDRAW_ASSET_PATH?: string }).EXCALIDRAW_ASSET_PATH = '/excalidraw/';
+
 const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

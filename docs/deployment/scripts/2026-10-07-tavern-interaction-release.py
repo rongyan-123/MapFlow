@@ -8,13 +8,13 @@ spec = importlib.util.spec_from_file_location('community_release', root / 'relea
 frontend = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(frontend)
 base, queue = frontend.base, frontend.queue
-base.release = root / 'releases/20261007-tavern-interaction'
-base.image = 'mapflow-server:tavern-interaction-20261007'
-base.stage_db = 'mapflow-tavern-interaction-check-postgres'
-base.stage_app = 'mapflow-tavern-interaction-check-app'
-queue.previous_name = 'mapflow-laptop-app-before-tavern-interaction-20261007'
-frontend.expected_previous = 'mapflow-server:granular-context-20261007'
-frontend.bundle = Path('/tmp/mapflow-tavern-interaction-bundle')
+base.release = root / 'releases/20261007-tavern-interaction-ui'
+base.image = 'mapflow-server:tavern-interaction-ui-20261007'
+base.stage_db = 'mapflow-tavern-interaction-ui-check-postgres'
+base.stage_app = 'mapflow-tavern-interaction-ui-check-app'
+queue.previous_name = 'mapflow-laptop-app-before-tavern-interaction-ui-20261007'
+frontend.expected_previous = 'mapflow-server:tavern-interaction-20261007'
+frontend.bundle = Path('/tmp/mapflow-tavern-interaction-ui-bundle')
 
 def api(container, method, path, body=None, cookie=None, csrf=None):
     address = base.inspect(container)['NetworkSettings']['Networks'][base.network]['IPAddress']
@@ -146,7 +146,7 @@ def finish():
     operations = root / 'OPERATIONS.md'
     _, existing = operations.read_text().split('\n\n', 1)
     operations.write_text('> **酒馆交互更新（2026-10-07）**：当前镜像 `' + base.image + '`；前端 main `' + manifest['frontend']['commit'] +
-        '`；后端和 DSH worker 沿用已验证的颗粒化工具版本。资料与回滚：`releases/20261007-tavern-interaction/`。\n\n' + existing)
+        '`；后端和 DSH worker 沿用已验证的颗粒化工具版本。资料与回滚：`releases/20261007-tavern-interaction-ui/`。\n\n' + existing)
     print('Tavern interaction published; source, runtime, backend/worker and prior payment verified.', flush=True)
 
 if __name__ == '__main__':
