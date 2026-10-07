@@ -77,7 +77,7 @@ it('shows the already calculated site price range using only available channels'
           { vendor: 'C', lane: 3, enabled: false, inputMicrosPerMillion: 100000, outputMicrosPerMillion: 9000000, statsSource: 'unknown', successRate24h: null, avgResponseSeconds: null }] },
     }] } : { balanceMicros: 800000, currency: 'CNY', supportContact: '', channels: [], topups: [], ledger: [] }
   )));
-  expect(await screen.findByText('输入（缓存未命中） ¥0.4–0.8 · 输入（缓存命中） 未提供 · 输出 ¥1.2–1.6 / 百万 Token')).toBeVisible();
+  expect(await screen.findByText('输入参考价（未区分缓存） ¥0.4–0.8 · 输入（缓存命中） 上游未提供 · 输出 ¥1.2–1.6 / 百万 Token')).toBeVisible();
   expect(screen.queryByText(/上游.*×/u)).not.toBeInTheDocument();
 });
 it('only applies a validated draft after saving and clears the key when changing provider presets', () => {

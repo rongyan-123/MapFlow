@@ -8,13 +8,13 @@ const catalog = { multiplierLabel: '0.2倍率', currency: 'CNY', updatedAt: '202
   { id: 'model-b', provider: 'OpenAI', contextWindow: 128000, settings: [{ name: 'reasoning_effort', kind: 'select', options: ['low', 'high'] }], vendorCodes: ['vendor-b', 'vendor-c'], availability: 'byok', pricing: null },
 ] };
 afterEach(() => vi.unstubAllGlobals());
-it('shows an explicit cache-hit price separately from uncached input and output prices', async () => {
+it('does not call an undifferentiated input quote a cache-miss price', async () => {
   const channel = { vendor:'VST',lane:1,enabled:true,inputMicrosPerMillion:1_600_000,cacheHitInputMicrosPerMillion:160_000,outputMicrosPerMillion:3_200_000,successRate24h:null,avgResponseSeconds:null,statsSource:'unknown' };
   const paid = { ...catalog, models:[{ ...catalog.models[0], availability:'wallet', pricing:{channels:[channel],maxInputMicrosPerMillion:1_600_000,maxOutputMicrosPerMillion:3_200_000,updatedAt:'2026-10-07T00:00:00Z',basis:'upstream_actual_x2'} }] };
   vi.stubGlobal('fetch',vi.fn<typeof fetch>().mockImplementation(async path => new Response(JSON.stringify(String(path).includes('/wallet')?{balanceMicros:100_000,currency:'CNY',supportContact:'',channels:[],topups:[],ledger:[]}:paid))));
   const client = new QueryClient({defaultOptions:{queries:{retry:false}}});
   render(<QueryClientProvider client={client}><ModelPricingPage accountId="player-a" onNavigateWallet={()=>{}} onBack={()=>{}} onNavigateTavern={()=>{}} /></QueryClientProvider>);
-  expect((await screen.findAllByText('输入（缓存未命中） ¥1.6 · 输入（缓存命中） ¥0.16 · 输出 ¥3.2 / 百万 Token'))[0]).toBeVisible();
+  expect((await screen.findAllByText('输入参考价（未区分缓存） ¥1.6 · 输入（缓存命中） ¥0.16 · 输出 ¥3.2 / 百万 Token'))[0]).toBeVisible();
   client.clear();
 });
 it('shows actual per-channel prices and distinguishes live and estimated statistics',async()=>{
@@ -28,11 +28,20 @@ it('shows actual per-channel prices and distinguishes live and estimated statist
   expect(screen.getByText(/2.5 秒/)).toBeVisible();
   expect(screen.getByText('真实监控')).toBeVisible();
   expect(screen.getByText('估算数据')).toBeVisible();
-  expect(screen.getAllByText(/输入（缓存未命中）.*¥1.6/)[0]).toBeVisible();
-  expect(screen.getAllByText(/输入（缓存命中）.*未提供/)[0]).toBeVisible();
+  expect(screen.getAllByText(/输入参考价（未区分缓存）.*¥1.6/)[0]).toBeVisible();
+  expect(screen.getAllByText(/输入（缓存命中）.*上游未提供/)[0]).toBeVisible();
   expect(screen.getAllByText(/输出.*¥3.2/)[0]).toBeVisible();
   expect(screen.queryByText(/额度调用尚未开放/)).not.toBeInTheDocument();
-  expect(screen.queryByText(/上游.*(2|倍)|倍率/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/上游(?:实扣|实际费用|实际扣费)?\s*[×x]\s*2|倍率/)).not.toBeInTheDocument();
+  client.clear();
+});
+it('shows the known cache quote while identifying channels whose cache quote is missing', async () => {
+  const channel = { vendor:'VST',lane:1,enabled:true,inputMicrosPerMillion:1_600_000,cacheHitInputMicrosPerMillion:160_000,outputMicrosPerMillion:3_200_000,successRate24h:null,avgResponseSeconds:null,statsSource:'unknown' };
+  const paid = { ...catalog, models:[{ ...catalog.models[0], availability:'wallet', pricing:{channels:[channel,{...channel,vendor:'OTHER',lane:2,cacheHitInputMicrosPerMillion:null}],maxInputMicrosPerMillion:1_600_000,maxOutputMicrosPerMillion:3_200_000,updatedAt:'2026-10-07T00:00:00Z',basis:'upstream_actual_x2'} }] };
+  vi.stubGlobal('fetch',vi.fn<typeof fetch>().mockImplementation(async path => new Response(JSON.stringify(String(path).includes('/wallet')?{balanceMicros:100_000,currency:'CNY',supportContact:'',channels:[],topups:[],ledger:[]}:paid))));
+  const client = new QueryClient({defaultOptions:{queries:{retry:false}}});
+  render(<QueryClientProvider client={client}><ModelPricingPage accountId="player-a" onNavigateWallet={()=>{}} onBack={()=>{}} onNavigateTavern={()=>{}} /></QueryClientProvider>);
+  expect((await screen.findAllByText('输入参考价（未区分缓存） ¥1.6 · 输入（缓存命中） ¥0.16（部分渠道未提供） · 输出 ¥3.2 / 百万 Token'))[0]).toBeVisible();
   client.clear();
 });
 it('searches and selects a model with context, settings and honest channel monitoring', async () => {

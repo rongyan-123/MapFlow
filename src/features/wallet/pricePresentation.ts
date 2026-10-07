@@ -7,7 +7,9 @@ export function modelPriceLabel(channels: readonly PricingChannel[]): string {
     return lowest === highest ? formatAmountMicros(lowest) : `${formatAmountMicros(lowest)}–${formatAmountMicros(highest)}`;
   };
   const cachePrices = channels.map(channel => channel.cacheHitInputMicrosPerMillion);
-  const cached = cachePrices.every((price): price is number => typeof price === 'number')
-    ? `¥${range(cachePrices)}` : '未提供';
-  return `输入（缓存未命中） ¥${range(channels.map(channel => channel.inputMicrosPerMillion))} · 输入（缓存命中） ${cached} · 输出 ¥${range(channels.map(channel => channel.outputMicrosPerMillion))} / 百万 Token`;
+  const knownCachePrices = cachePrices.filter((price): price is number => typeof price === 'number');
+  const cached = knownCachePrices.length
+    ? `¥${range(knownCachePrices)}${knownCachePrices.length < channels.length ? '（部分渠道未提供）' : ''}`
+    : '上游未提供';
+  return `输入参考价（未区分缓存） ¥${range(channels.map(channel => channel.inputMicrosPerMillion))} · 输入（缓存命中） ${cached} · 输出 ¥${range(channels.map(channel => channel.outputMicrosPerMillion))} / 百万 Token`;
 }

@@ -1,5 +1,9 @@
 import type { GenerationProcessEvent } from './types';
-const names: Record<string, string> = { read_canvas: '读取画布', apply_canvas_patch: '绘图', read_skill_tree: '读取技能树', web_search: '搜索资料', personal_tree_mutation: '修改技能树' };
+const names: Record<string, string> = {
+  read_canvas: '读取画布', apply_canvas_patch: '绘图', read_skill_tree: '读取树概览',
+  read_tree_overview: '读取树概览', find_tree_nodes: '查找节点', read_tree_node: '读取节点资料',
+  read_node_relations: '读取节点关系', web_search: '搜索资料', personal_tree_mutation: '修改技能树',
+};
 export default function GenerationProcess({ events, live = false }: { events: GenerationProcessEvent[]; live?: boolean }) {
   const reasoning = events.flatMap(event => event.type === 'reasoning' ? [event.text] : []).join('');
   const tools = events.filter((event): event is Extract<GenerationProcessEvent, { type: 'tool' }> => event.type === 'tool');
