@@ -69,16 +69,16 @@ function TeachingCanvasPanel({ document, busy, saving, wide, onSave, onChange, o
       <button type="button" className="rounded-lg px-2 py-1 hover:bg-slate-800" onClick={onClose}>收起画布</button>
     </div>
     <div className="min-h-0 flex-1" onPointerDownCapture={() => { userEditing.current = !busy; }} onKeyDownCapture={() => { userEditing.current = !busy; }}>
-      <Excalidraw excalidrawAPI={instance => {
-        api.current = instance;
-        if (!fittedInitialScene.current) {
-          fittedInitialScene.current = true;
-          requestAnimationFrame(() => { if (api.current === instance) instance.scrollToContent(instance.getSceneElements(), { fitToContent: true, animate: false }); });
-        }
-      }} langCode="zh-CN" theme={theme} viewModeEnabled={busy}
+      <Excalidraw excalidrawAPI={instance => { api.current = instance; }} langCode="zh-CN" theme={theme} viewModeEnabled={busy}
         initialData={{ elements: initial.current, scrollToContent: true, appState: { viewBackgroundColor: '#ffffff' } }}
         UIOptions={{ tools: { image: false }, canvasActions: { loadScene: false, saveToActiveFile: false, export: false, toggleTheme: false } }}
-        onChange={elements => {
+        onChange={(elements, appState) => {
+          // The API arrives before initialData. Fit only after the scene and viewport are ready.
+          if (!fittedInitialScene.current && api.current && appState?.isLoading === false && appState.width > 0 && appState.height > 0) {
+            fittedInitialScene.current = true;
+            const instance = api.current;
+            if (elements.length) requestAnimationFrame(() => { if (api.current === instance) instance.scrollToContent(elements, { fitToContent: true, animate: false }); });
+          }
           const serialized = sceneFingerprint(elements);
           if (serialized === lastScene.current || busy) return;
           lastScene.current = serialized;
