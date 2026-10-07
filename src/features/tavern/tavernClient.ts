@@ -32,7 +32,7 @@ export async function requestCashQuote(id:string,expectedRevision:number,action:
 }
 function parseCashCharge(value:unknown):CashCharge {
   if (!isRecord(value) || typeof value.generationId!=='string' || typeof value.outputMessageId!=='string'
-      || !nonNegativeInteger(value.amountMicros) || !nonNegativeInteger(value.balanceAfterMicros)
+      || !nonNegativeInteger(value.amountMicros) || !Number.isSafeInteger(value.balanceAfterMicros)
       || typeof value.capped!=='boolean' || typeof value.createdAt!=='string' || !Number.isFinite(Date.parse(value.createdAt))) throw invalidResponse();
   return value as unknown as CashCharge;
 }
@@ -124,7 +124,7 @@ export async function mutateGraph(id: string, expectedRevision: number, action: 
 
 export async function generateStream(id: string, clientActionId: string, expectedRevision: number, action: GenerationAction, csrfToken: string,
   onDelta: (delta: string) => void, signal?: AbortSignal, modelAccess?: TavernUserModelAccess,
-  historyBytes?: 8192 | 16384 | 32768, platformModel?: string,billing?:{quoteId:string;policyVersion:string},
+  historyBytes?: 8192 | 16384 | 32768, platformModel?: string,billing?:{quoteId?:string;policyVersion:string},
   onApproval?: (approval: { approvalRequestId: string; action: string; target: string; destructive: boolean }) => Promise<void>): Promise<CompletedTurn> {
   if (modelAccess && platformModel) throw new TavernApiError(400, 'tavern.model_access_invalid', '请选择一种模型线路。');
   validateId(clientActionId);
@@ -167,7 +167,7 @@ export async function generateStream(id: string, clientActionId: string, expecte
     if (!isRecord(payload) || !nonNegative(payload.creditBalance) || !nonNegative(payload.chargedCredits) || typeof payload.idempotencyHit !== 'boolean') throw invalidResponse();
     const turn = parseTurn(payload.turn);
     const cashCharge=payload.cashCharge===undefined?undefined:parseCashCharge(payload.cashCharge);
-    if (cashCharge && (cashCharge.generationId!==turn.turnId || !nonNegativeInteger(payload.walletBalanceMicros))) throw invalidResponse();
+    if (cashCharge && (cashCharge.generationId!==turn.turnId || !Number.isSafeInteger(payload.walletBalanceMicros))) throw invalidResponse();
     if (turn.clientTurnId !== clientActionId || (action.type === 'reply' && turn.userMessage !== action.message)) throw invalidResponse();
     return { turn, graph: parseGraph(payload.graph), creditBalance: payload.creditBalance,
       chargedCredits: payload.chargedCredits, idempotencyHit: payload.idempotencyHit,

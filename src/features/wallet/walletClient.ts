@@ -38,8 +38,26 @@ export interface LedgerEntry {
 }
 export interface WalletAccount { accountId: string; username: string; playerId: string; status: string; balanceMicros: number }
 export interface WalletAdjustment { requestId: string; amountFen: number; note: string; password: string }
-export interface Wallet { balanceMicros: number; currency: 'CNY'; supportContact: string; channels: Channel[]; topups: Topup[]; ledger: LedgerEntry[] }
-export interface PricingChannel { vendor:string; lane:number; enabled:boolean; inputMicrosPerMillion:number; outputMicrosPerMillion:number; statsSource:'live'|'estimated'|'unknown'; successRate24h:number|null; avgResponseSeconds:number|null }
+export interface Wallet { balanceMicros: number; currency: 'CNY'; supportContact: string; qqGroup?: string; channels: Channel[]; topups: Topup[]; ledger: LedgerEntry[] }
+export interface UpstreamBalance { status: 'available' | 'exhausted' | 'unavailable' | 'disabled'; availableBalanceUsd: string | null; checkedAt: string }
+export async function readUpstreamBalance(): Promise<UpstreamBalance> {
+  const balance = asRecord(await request('/api/admin/model-balance', { ...get, signal: AbortSignal.timeout(10_000) }));
+  if (!balance || !['available', 'exhausted', 'unavailable', 'disabled'].includes(String(balance.status))
+    || !(balance.availableBalanceUsd === null || typeof balance.availableBalanceUsd === 'string' && /^-?\d+(?:\.\d+)?$/u.test(balance.availableBalanceUsd))
+    || typeof balance.checkedAt !== 'string' || !Number.isFinite(Date.parse(balance.checkedAt))) return invalid();
+  return balance as unknown as UpstreamBalance;
+}
+export async function readCommunitySettings(): Promise<{ qqGroup: string }> {
+  const settings = asRecord(await request('/api/admin/wallet/settings'));
+  if (!settings || typeof settings.qqGroup !== 'string') return invalid();
+  return { qqGroup: settings.qqGroup };
+}
+export async function saveCommunitySettings(qqGroup: string, csrfToken: string): Promise<{ qqGroup: string }> {
+  const settings = asRecord(await request('/api/admin/wallet/settings', post(csrfToken, { qqGroup })));
+  if (!settings || typeof settings.qqGroup !== 'string') return invalid();
+  return { qqGroup: settings.qqGroup };
+}
+export interface PricingChannel { vendor:string; lane:number; enabled:boolean; inputMicrosPerMillion:number; cacheHitInputMicrosPerMillion?:number|null; outputMicrosPerMillion:number; statsSource:'live'|'estimated'|'unknown'; successRate24h:number|null; avgResponseSeconds:number|null }
 export interface ModelPriceSnapshot {channels:PricingChannel[];maxInputMicrosPerMillion:number;maxOutputMicrosPerMillion:number;updatedAt:string;basis:'upstream_actual_x2'}
 export interface PricingModel { id: string; provider: string; contextWindow: number; settings: UserModelSetting[]; vendorCodes: string[]; availability: 'byok'|'wallet'; pricing: ModelPriceSnapshot|null }
 export interface ModelPricing { multiplierLabel: string; currency: 'CNY'; updatedAt: string; models: PricingModel[] }
@@ -136,6 +154,7 @@ function isModelPrice(value:unknown):boolean {
       const item=asRecord(channel);
       return !!item && typeof item.vendor==='string' && Number.isSafeInteger(item.lane) && typeof item.enabled==='boolean'
         && validMicros(item.inputMicrosPerMillion) && validMicros(item.outputMicrosPerMillion) && ['live','estimated','unknown'].includes(String(item.statsSource))
+        && (item.cacheHitInputMicrosPerMillion === undefined || item.cacheHitInputMicrosPerMillion === null || validMicros(item.cacheHitInputMicrosPerMillion))
         && (item.successRate24h===null || typeof item.successRate24h==='number' && Number.isFinite(item.successRate24h) && item.successRate24h>=0 && item.successRate24h<=100)
         && (item.avgResponseSeconds===null || typeof item.avgResponseSeconds==='number' && Number.isFinite(item.avgResponseSeconds) && item.avgResponseSeconds>=0);
     });

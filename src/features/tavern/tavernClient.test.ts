@@ -10,6 +10,17 @@ function reply(body: unknown) {
 }
 
 describe('Tavern HTTP contract', () => {
+  it('accepts the measured cash receipt and persisted negative balance after a successful turn', async () => {
+    const cashCharge = {generationId:turn.turnId,outputMessageId:'message-assistant-1',amountMicros:460,
+      balanceAfterMicros:-459,capped:false,createdAt:turn.createdAt};
+    const receipt = {...completion,cashCharge,walletBalanceMicros:-459};
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue(sseResponse([{event:'completed',payload:receipt}])));
+    const saved=await generateStream('conversation-1','client-turn-1',0,{type:'reply',message:'来杯茶'},'csrf',()=>{});
+    expect(saved.walletBalanceMicros).toBe(-459);
+    expect(saved.cashCharge?.amountMicros).toBe(460);
+    reply({...detail,cashCharges:[cashCharge]});
+    expect((await fetchConversation('conversation-1')).cashCharges?.[0].balanceAfterMicros).toBe(-459);
+  });
   it('rejects malformed tree permissions returned with a conversation', async () => {
     reply({ ...detail, conversation: { ...conversation, libraryEntryId: 42, treeToolsEnabled: 'true' } });
     await expect(fetchConversation('conversation-1')).rejects.toThrow();

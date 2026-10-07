@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import AssistantMarkdown from '../knowledge-chat/AssistantMarkdown';
 import { validateId, validateMessage } from './conversationInput';
-import { generateStream, mutateGraph, requestCashQuote, resolveTavernToolApproval } from './tavernClient';
+import { generateStream, mutateGraph, resolveTavernToolApproval } from './tavernClient';
 import {formatAmountMicros} from '../wallet/walletClient';
 import type {CashQuote} from './types';
 import { TavernApiError, type CompletedTurn, type ConversationDetail, type ConversationGraph, type GenerationAction, type GenerationRecord, type GraphMessage, type GraphMutation, type TavernModelSelection, type TavernUserModelAccess } from './types';
@@ -81,18 +81,6 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     } catch (failure) { setError(failure); return; }
     const controller = new AbortController();
     activeRequest.current = controller;
-    if (platformModel && modelSelection.billingPolicy && !outgoing.billing) {
-      setBusy(true);setError(null);
-      try {
-        const quote=await requestCashQuote(detail.conversation.conversationId,outgoing.expectedRevision,outgoing.action,
-          platformModel,modelSelection.historyBytes,csrfToken,controller.signal);
-        if (controller.signal.aborted) return;
-        outgoing = { ...outgoing, billing: quote };
-      } catch (failure) {
-        if (!controller.signal.aborted) { setError(failure); activeRequest.current = null; setBusy(false); }
-        return;
-      }
-    }
     // Persist before sending: a refresh between request and completed must reuse the same ID.
     storePending(storageKey, outgoing);
     setPendingGeneration(outgoing);
@@ -101,7 +89,8 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     try {
       const completed = await generateStream(detail.conversation.conversationId, outgoing.clientActionId, outgoing.expectedRevision, outgoing.action,
         csrfToken, delta => { if (!controller.signal.aborted) setDraft(previous => previous + delta); }, controller.signal,
-        modelAccess, modelAccess || platformModel ? modelSelection.historyBytes : undefined, platformModel,outgoing.billing,
+        modelAccess, modelAccess || platformModel ? modelSelection.historyBytes : undefined, platformModel,
+        platformModel && modelSelection.billingPolicy ? { policyVersion: modelSelection.billingPolicy } : undefined,
         async approval => {
           const prompt=approval.destructive ? `请单独确认：${approval.action}（${approval.target}）。确认后才会执行。` : `确认${approval.action}（${approval.target}）？`;
           const allowed=!controller.signal.aborted && window.confirm(prompt);

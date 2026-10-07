@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { modelPresets } from './modelPresets';
 import { formatAmountMicros, readWallet, readModelPricing, type ModelPriceSnapshot } from '../wallet/walletClient';
+import { modelPriceLabel } from '../wallet/pricePresentation';
 import type { TavernModelSelection } from './types';
 import { fetchPlatformModels, testModelConnection } from './tavernClient';
 import { inputClass } from './TavernUi';
@@ -155,10 +156,5 @@ function ModelChoices({ label, value, options, onChange }: {
 
 function priceLabel(pricing: ModelPriceSnapshot | null | undefined) {
   const channels = pricing?.channels.filter(channel => channel.enabled) ?? [];
-  if (!channels.length) return '价格暂时无法获取';
-  const range = (amounts: number[]) => {
-    const low = Math.min(...amounts); const high = Math.max(...amounts);
-    return low === high ? formatAmountMicros(low) : `${formatAmountMicros(low)}–${formatAmountMicros(high)}`;
-  };
-  return `输入 ¥${range(channels.map(channel => channel.inputMicrosPerMillion))} · 输出 ¥${range(channels.map(channel => channel.outputMicrosPerMillion))} / 百万 Token`;
+  return modelPriceLabel(channels);
 }

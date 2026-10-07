@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { readAdminTopups } from '../wallet/walletClient';
 import AdminWalletTab from './AdminWalletTab';
+import UpstreamBalanceBanner from './UpstreamBalanceBanner';
 import AccountsTab from './AccountsTab';
 import AnnouncementsTab from './AnnouncementsTab';
 import AuditLogTab from './AuditLogTab';
@@ -87,6 +88,7 @@ export default function AdminPanel({ onBack, csrfToken, accountId }: AdminPanelP
         </nav>
       </header>
 
+      <UpstreamBalanceBanner key={accountId} accountId={accountId} />
       <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
         {activeTab === 'overview' && <OverviewTab csrfToken={csrfToken} />}
         {activeTab === 'accounts' && <AccountsTab csrfToken={csrfToken} />}

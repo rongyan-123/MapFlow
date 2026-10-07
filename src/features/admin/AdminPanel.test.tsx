@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IdentityApiError } from '../identity/identityClient';
@@ -31,7 +31,7 @@ const adminApi = vi.hoisted(() => ({
 }));
 
 vi.mock('./adminClient', () => adminApi);
-const walletApi = vi.hoisted(() => ({ readAdminTopups: vi.fn(), readAdminChannels: vi.fn() }));
+const walletApi = vi.hoisted(() => ({ readAdminTopups: vi.fn(), readAdminChannels: vi.fn(), readUpstreamBalance: vi.fn() }));
 vi.mock('../wallet/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('../wallet/walletClient')>(), ...walletApi }));
 
 function dashboard(): AdminDashboard {
@@ -148,6 +148,7 @@ function announcements(): AdminAnnouncement[] {
 }
 
 beforeEach(() => {
+  walletApi.readUpstreamBalance.mockReset().mockResolvedValue({ status: 'disabled', availableBalanceUsd: null, checkedAt: '2026-10-07T00:00:00Z' });
   walletApi.readAdminTopups.mockReset().mockResolvedValue({ topups: [], pendingCount: 3 });
   walletApi.readAdminChannels.mockReset().mockResolvedValue([]);
   for (const mock of Object.values(adminApi)) mock.mockReset();
@@ -241,6 +242,23 @@ function renderAdminPanel() {
 }
 
 describe('AdminPanel', () => {
+  it('warns administrators when upstream balance is exhausted and rechecks every 90 seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      walletApi.readUpstreamBalance.mockResolvedValue({ status: 'exhausted', availableBalanceUsd: '0.000000', checkedAt: '2026-10-07T00:00:00Z' });
+      let panel!: ReturnType<typeof renderAdminPanel>;
+      await act(async () => { panel = renderAdminPanel(); });
+      expect(walletApi.readUpstreamBalance).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('alert')).toHaveTextContent('上游账号余额已耗尽');
+      walletApi.readUpstreamBalance.mockResolvedValue({ status: 'available', availableBalanceUsd: '1.395349', checkedAt: '2026-10-07T00:02:00Z' });
+      await act(async () => { await vi.advanceTimersByTimeAsync(90_000); });
+      expect(walletApi.readUpstreamBalance).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText(/上游账号余额已耗尽/)).not.toBeInTheDocument();
+      panel.unmount();
+      await act(async () => { await vi.advanceTimersByTimeAsync(90_000); });
+      expect(walletApi.readUpstreamBalance).toHaveBeenCalledTimes(2);
+    } finally { vi.useRealTimers(); }
+  });
   it('refreshes a pending-only badge on opening the panel', async () => {
     renderAdminPanel();
     expect(await screen.findByRole('tab', { name: '充值 · 3' })).toBeInTheDocument();

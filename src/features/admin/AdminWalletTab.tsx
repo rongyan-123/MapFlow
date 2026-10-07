@@ -3,9 +3,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { approveTopup, formatAmountMicros, formatFen, readAdminChannels, readAdminTopups, rejectTopup, uploadChannel, type PaymentChannel, type Topup } from '../wallet/walletClient';
 import WalletAdjustmentPanel from './WalletAdjustmentPanel';
 import WalletLedgerPanel from './WalletLedgerPanel';
+import RechargeSettings from './RechargeSettings';
 import WalletActionDialog, { walletButton, walletPrimaryButton } from './WalletActionDialog';
 
-type WalletTab = 'pending' | 'ledger' | 'adjust' | 'channels';
+type WalletTab = 'pending' | 'ledger' | 'adjust' | 'channels' | 'settings';
 type Review = { action: 'approve' | 'reject'; order: Topup };
 
 export default function AdminWalletTab({ csrfToken, accountId }: { csrfToken: string; accountId?: string }) {
@@ -48,7 +49,7 @@ export default function AdminWalletTab({ csrfToken, accountId }: { csrfToken: st
   return <div className="mx-auto max-w-6xl space-y-5">
     <div><h2 className="text-xl font-semibold tracking-tight">额度管理</h2><p className="mt-1 text-sm text-slate-400">核实充值、管理用户额度，查看每一笔变动。</p></div>
     <div role="tablist" aria-label="额度管理分区" className="flex flex-wrap gap-1 rounded-2xl border border-slate-800 bg-slate-900/70 p-1.5">
-      {([{ id: 'pending', label: '待核实' }, { id: 'ledger', label: '已处理记录' }, { id: 'adjust', label: '调整用户额度' }, { id: 'channels', label: '收款码' }] as const).map(item => <button type="button" key={item.id} role="tab" aria-selected={tab === item.id} className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${tab === item.id ? 'bg-slate-800 text-cyan-200' : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'}`} onClick={() => { setTab(item.id); setError(null); setNotice(null); }}>{item.label}{item.id === 'pending' && orders.data && <span className="ml-2 rounded-md bg-cyan-300/10 px-1.5 py-0.5 text-xs text-cyan-300">{orders.data.pendingCount}</span>}</button>)}
+      {([{ id: 'pending', label: '待核实' }, { id: 'ledger', label: '已处理记录' }, { id: 'adjust', label: '调整用户额度' }, { id: 'channels', label: '收款码' }, { id: 'settings', label: '充值设置' }] as const).map(item => <button type="button" key={item.id} role="tab" aria-selected={tab === item.id} className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${tab === item.id ? 'bg-slate-800 text-cyan-200' : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'}`} onClick={() => { setTab(item.id); setError(null); setNotice(null); }}>{item.label}{item.id === 'pending' && orders.data && <span className="ml-2 rounded-md bg-cyan-300/10 px-1.5 py-0.5 text-xs text-cyan-300">{orders.data.pendingCount}</span>}</button>)}
     </div>
     {notice && <p role="status" className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{notice}</p>}
     {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
@@ -67,6 +68,7 @@ export default function AdminWalletTab({ csrfToken, accountId }: { csrfToken: st
     </section>}
     {tab === 'adjust' && <WalletAdjustmentPanel key={accountId} accountId={accountId} csrfToken={csrfToken} onChanged={changed} />}
     {tab === 'ledger' && <WalletLedgerPanel key={accountId} accountId={accountId} csrfToken={csrfToken} onChanged={changed} />}
+    {tab === 'settings' && <RechargeSettings key={accountId} accountId={accountId} csrfToken={csrfToken} />}
     {tab === 'channels' && <section aria-label="收款码配置" className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 sm:p-6">
       <h3 className="font-semibold">收款码</h3><p className="mt-2 text-sm text-slate-400">用户创建充值申请后，将看到对应渠道的收款码。</p>
       {channels.isPending && <p role="status" className="mt-4 text-sm text-slate-400">正在读取收款码…</p>}
