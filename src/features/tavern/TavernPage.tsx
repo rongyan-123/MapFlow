@@ -14,6 +14,8 @@ import MobileDrawer from '../navigation/MobileDrawer';
 import ThemeSwitcher from '../theme/ThemeSwitcher';
 import CardImportDialog from './CardImportDialog';
 import CreateCharacterDialog from './CreateCharacterDialog';
+import EditCharacterDialog from './EditCharacterDialog';
+import CharacterLibraryItem from './CharacterLibraryItem';
 import ConversationPane from './ConversationPane';
 import ConversationProfilePanel from './ConversationProfilePanel';
 import GenerationSettingsPanel from './GenerationSettingsPanel';
@@ -38,6 +40,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const [characterId, setCharacterId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<{ character: Character; renameOnly: boolean; conversation?: ConversationDetail } | null>(null);
   const [configurationOpen, setConfigurationOpen] = useState(false);
   const [configurationSection, setConfigurationSection] = useState('overview');
   const [openingCharacter, setOpeningCharacter] = useState<string | null>(null);
@@ -45,7 +48,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const openingLock = useRef(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [drawer, setDrawer] = useState<'library' | 'details' | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState<Character | null>(null);
   const [modelSelection, setModelSelection] = useState<TavernModelSelection>({
     provider: 'custom', apiKey: '', model: '', baseUrl: '', settings: {}, historyBytes: 32768,
   });
@@ -70,11 +73,11 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const removing = useMutation({ mutationFn: (id: string) => deleteCharacter(id, session.csrfToken), onSuccess: (_, id) => {
     void queryClient.cancelQueries({ queryKey: charactersKey, exact: true });
     queryClient.setQueryData<Character[]>(charactersKey, previous => previous?.filter(item => item.characterId !== id));
-    setDeleteConfirm(false); if (!conversationId) setCharacterId(null);
+    setDeleting(null); if (!conversationId && characterId === id) setCharacterId(null);
   } });
 
   function selectConversation(id: string | null) {
-    setConversationId(id); setDeleteConfirm(false); setDrawer(null);
+    setConversationId(id); setDeleting(null); setDrawer(null);
     try { if (id) window.localStorage.setItem(selectionKey, id); else window.localStorage.removeItem(selectionKey); } catch { /* Server history remains available without local storage. */ }
   }
   async function openCharacter(character: Character) {
@@ -141,6 +144,17 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     queryClient.setQueryData(detailKey, updated);
     queryClient.setQueryData<Conversation[]>(conversationsKey, previous => previous?.map(item => item.conversationId === updated.conversation.conversationId ? updated.conversation : item));
   }
+  function onCharacterSaved(result: { character: Character; conversation: ConversationDetail | null }) {
+    void queryClient.cancelQueries({ queryKey: charactersKey, exact: true });
+    queryClient.setQueryData<Character[]>(charactersKey, previous => previous?.map(item => item.characterId === result.character.characterId ? result.character : item));
+    if (result.conversation) onProfileUpdated(result.conversation);
+    setEditing(null);
+  }
+  function editCharacter(character: Character, renameOnly: boolean) {
+    setDrawer(null);
+    setEditing({ character, renameOnly, ...(conversationQuery.data?.conversation.characterId === character.characterId
+      ? { conversation: conversationQuery.data } : {}) });
+  }
 
   const library = <div className="space-y-4">
     <div className="flex items-center justify-between"><h2 className="text-base font-semibold">角色库</h2><span className="text-xs text-slate-500">{characters.data?.length ?? 0} 个角色</span></div>
@@ -149,18 +163,12 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     <ErrorNotice error={characters.error} onRetry={() => void characters.refetch()} />
     {characters.isPending && <p role="status" className="text-sm text-slate-400">正在读取角色库…</p>}
     {characters.data?.length === 0 && <p className="text-sm leading-6 text-slate-400">导入一张 PNG 或 JSON 角色卡，开始你的第一个故事。</p>}
-    <div className="space-y-2">{characters.data?.map(item => <button type="button" key={item.characterId} aria-label={`选择角色 ${item.card.name}`} aria-pressed={selectedCharacter?.characterId === item.characterId}
-      className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition hover:border-cyan-500 ${selectedCharacter?.characterId === item.characterId ? 'border-cyan-600 bg-slate-800' : 'border-slate-800 bg-slate-900'}`}
-      disabled={openingCharacter !== null || !conversations.isSuccess} onClick={() => void openCharacter(item)}>
-      <CharacterAvatar character={item} /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{item.card.name}</span><span className="text-xs text-slate-400">{openingCharacter === item.characterId ? '正在开启…' : '点击继续故事'}</span></span><span aria-hidden="true" className="text-slate-500">›</span>
-    </button>)}</div>
-    {selectedCharacter && canCreate && <div className="border-t border-slate-800 pt-3">
-      {deleteConfirm ? <div className="space-y-2"><p className="text-xs leading-6 text-slate-400">从角色库移除「{selectedCharacter.card.name}」？已有会话和历史将保留。</p>
-        <button type="button" className={buttonClass} disabled={removing.isPending} onClick={() => removing.mutate(selectedCharacter.characterId)}>确认移除</button>{' '}
-        <button type="button" className={buttonClass} disabled={removing.isPending} onClick={() => setDeleteConfirm(false)}>取消</button></div>
-        : <button type="button" className="text-xs text-slate-500 hover:text-rose-300" onClick={() => setDeleteConfirm(true)}>移出角色库</button>}
-      <ErrorNotice error={removing.error} />
-    </div>}
+    <div className="space-y-2">{characters.data?.map(item => <CharacterLibraryItem key={item.characterId} character={item}
+      selected={selectedCharacter?.characterId === item.characterId} opening={openingCharacter === item.characterId}
+      disabled={openingCharacter !== null || !conversations.isSuccess} onSelect={() => void openCharacter(item)}
+      actionsDisabled={openingCharacter !== null || (!!conversationId && !conversationQuery.isSuccess)}
+      onRename={() => editCharacter(item, true)} onEdit={() => editCharacter(item, false)}
+      onDelete={() => { setDrawer(null); removing.reset(); setDeleting(item); }} />)}</div>
   </div>;
   const historyCharacterId = selectedCharacter?.characterId
     ?? conversations.data?.find(item => item.conversationId === conversationId)?.characterId;
@@ -246,6 +254,15 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     {configurationOpen && !conversationQuery.data && <TavernDialog title="配置" initialSection={configurationSection} onClose={() => setConfigurationOpen(false)} sections={configurationSections} />}
     {importOpen && <CardImportDialog csrfToken={session.csrfToken} onImported={onImported} onClose={() => setImportOpen(false)} />}
     {createOpen && <CreateCharacterDialog csrfToken={session.csrfToken} onCreated={onImported} onClose={() => setCreateOpen(false)} />}
+    {editing && <EditCharacterDialog character={editing.character} renameOnly={editing.renameOnly} csrfToken={session.csrfToken}
+      conversation={editing.conversation} onSaved={onCharacterSaved} onClose={() => setEditing(null)}
+      onConflict={async () => { await Promise.all([characters.refetch(), conversationId ? conversationQuery.refetch() : Promise.resolve()]); }} />}
+    {deleting && <TavernDialog title="删除角色卡" onClose={() => setDeleting(null)} busy={removing.isPending}>
+      <p className="text-sm leading-6 text-slate-300">从角色库删除「{deleting.card.name}」？已有会话和聊天记录会保留。</p>
+      <ErrorNotice error={removing.error} />
+      <div className="mt-4 flex gap-3"><button type="button" className={buttonClass} disabled={removing.isPending} onClick={() => removing.mutate(deleting.characterId)}>{removing.isPending ? '删除中…' : '确认删除'}</button>
+        <button type="button" className={buttonClass} disabled={removing.isPending} onClick={() => setDeleting(null)}>取消</button></div>
+    </TavernDialog>}
     <LogoutConfirmDialog open={logoutOpen} pending={logoutPending} error={logoutError?.message ?? null} onCancel={() => setLogoutOpen(false)} onConfirm={() => void logout().catch(() => undefined)} />
   </div>;
 }

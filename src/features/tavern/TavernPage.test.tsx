@@ -43,6 +43,18 @@ beforeEach(() => {
       characters = [...characters, imported]; return json(imported);
     }
     if (url === '/api/me/tavern/characters') return json({ characters });
+    if (url === '/api/me/tavern/characters/character-1' && init?.method === 'PATCH') {
+      const { expectedHash, card, conversation: selected } = JSON.parse(init.body as string);
+      const previous = characters.find(item => item.characterId === 'character-1')!;
+      if (expectedHash !== previous.normalizedHash || (selected && selected.expectedRevision !== savedDetail.graph.revision)) {
+        return new Response(JSON.stringify({ error: { code: 'tavern.turn_conflict', message: '角色或会话已变化，请重新打开编辑窗口。' } }), { status: 409 });
+      }
+      const updated = { ...previous, card, normalizedHash: 'e'.repeat(64) };
+      characters = characters.map(item => item.characterId === updated.characterId ? updated : item);
+      if (selected) savedDetail = { ...savedDetail, character: updated,
+        conversation: { ...savedDetail.conversation, title: card.name }, graph: { ...savedDetail.graph, revision: selected.expectedRevision + 1 } };
+      return json({ character: updated, conversation: selected ? savedDetail : null });
+    }
     if (url === '/api/me/tavern/characters/character-1' && init?.method === 'DELETE') {
       characters = characters.filter(item => item.characterId !== 'character-1');
       return new Response(null, { status: 204 });
@@ -192,6 +204,130 @@ async function configurePaidPlatform(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('Tavern page', () => {
+  it('renames a library card from its own action menu without opening a new story', async () => {
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '角色操作 旅人' }));
+    await user.click(screen.getByRole('menuitem', { name: '重命名' }));
+    const dialog = await screen.findByRole('dialog', { name: '重命名角色卡' });
+    await user.clear(within(dialog).getByLabelText('角色名称'));
+    await user.type(within(dialog).getByLabelText('角色名称'), '灯塔守望者');
+    await user.click(within(dialog).getByRole('button', { name: '保存名称' }));
+    await screen.findByRole('button', { name: '选择角色 灯塔守望者' });
+    const [, request] = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')!;
+    expect(JSON.parse(request!.body as string)).toEqual({ expectedHash: character.normalizedHash, card: { ...character.card, name: '灯塔守望者' } });
+    expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/me/tavern/conversations' && init?.method === 'POST')).toBe(false);
+  });
+  it('edits the current card for the next turn and future stories while preserving the draft message and past dialogue', async () => {
+    restoreConversation(); const user = userEvent.setup(); const { client } = renderPage();
+    await screen.findByText('请用茶。');
+    await user.type(screen.getByLabelText('消息'), '尚未发送的消息');
+    await user.click(screen.getByRole('button', { name: '角色操作 旅人' }));
+    await user.click(screen.getByRole('menuitem', { name: '编辑角色卡' }));
+    const dialog = screen.getByRole('dialog', { name: '编辑角色卡' });
+    expect(within(dialog).getByLabelText('角色设定（提示词）')).toHaveValue(character.card.description);
+    fireEvent.change(within(dialog).getByLabelText('角色设定（提示词）'), { target: { value: '你是灯塔守望者，讲述海边的故事。' } });
+    fireEvent.change(within(dialog).getByLabelText('开场白（用于新会话）'), { target: { value: '新的开场' } });
+    await user.click(within(dialog).getByRole('button', { name: '保存修改' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '编辑角色卡' })).not.toBeInTheDocument());
+    expect(screen.getByText('请用茶。')).toBeInTheDocument();
+    expect(screen.getByLabelText('消息')).toHaveValue('尚未发送的消息');
+    const current = client.getQueryData<ConversationDetail>(['me', 'player-1', 'tavern', 'conversation', 'conversation-1'])!;
+    expect(current.character.card.description).toBe('你是灯塔守望者，讲述海边的故事。');
+    expect(current.graph.messages).toEqual(detail.graph.messages);
+    expect(current.graph.revision).toBe(detail.graph.revision + 1);
+    expect(current.character.card.lorebook).toEqual(character.card.lorebook);
+    const [, request] = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')!;
+    expect(JSON.parse(request!.body as string).conversation).toEqual({ conversationId: 'conversation-1', expectedRevision: detail.graph.revision });
+  });
+
+  it('cancels card edits without sending an update or changing the library', async () => {
+    const user = userEvent.setup(); renderPage();
+    await user.click(await screen.findByRole('button', { name: '角色操作 旅人' }));
+    await user.click(screen.getByRole('menuitem', { name: '编辑角色卡' }));
+    const dialog = screen.getByRole('dialog', { name: '编辑角色卡' });
+    fireEvent.change(within(dialog).getByLabelText('角色名称'), { target: { value: '未保存名称' } });
+    await user.click(within(dialog).getByRole('button', { name: '取消' }));
+    expect(screen.getByRole('button', { name: '选择角色 旅人' })).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false);
+  });
+
+  it('deletes the card whose menu was opened even when a different story is selected', async () => {
+    restoreConversation();
+    characters.push({ ...structuredClone(character), characterId: 'other-character', card: { ...character.card, name: '另一张卡' } });
+    const originalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => url.endsWith('/other-character') && init?.method === 'DELETE'
+      ? Promise.resolve(new Response(null, { status: 204 })) : originalFetch(url, init));
+    const user = userEvent.setup(); renderPage();
+    await screen.findByText('请用茶。');
+    await user.click(screen.getByRole('button', { name: '角色操作 另一张卡' }));
+    await user.click(screen.getByRole('menuitem', { name: '删除' }));
+    const dialog = await screen.findByRole('dialog', { name: '删除角色卡' });
+    expect(within(dialog).getByText(/另一张卡/)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+    await user.click(within(dialog).getByRole('button', { name: '确认删除' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: '选择角色 另一张卡' })).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: '选择角色 旅人' })).toBeInTheDocument();
+    expect(screen.getByText('请用茶。')).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => url)).toEqual(['/api/me/tavern/characters/other-character']);
+  });
+  it('preserves the edit draft on a conflict and reloads current versions for reopening', async () => {
+    restoreConversation(); const user = userEvent.setup(); renderPage();
+    await screen.findByText('请用茶。');
+    await user.click(screen.getByRole('button', { name: '角色操作 旅人' }));
+    await user.click(screen.getByRole('menuitem', { name: '编辑角色卡' }));
+    const dialog = screen.getByRole('dialog', { name: '编辑角色卡' });
+    fireEvent.change(within(dialog).getByLabelText('角色设定（提示词）'), { target: { value: '冲突时保留的草稿' } });
+    characters[0] = { ...characters[0], normalizedHash: 'f'.repeat(64), card: { ...characters[0].card, description: '另一页面保存的设定' } };
+    savedDetail.graph.revision += 1;
+    await user.click(within(dialog).getByRole('button', { name: '保存修改' }));
+    await within(dialog).findByText(/草稿仍在此窗口中/);
+    expect(within(dialog).getByLabelText('角色设定（提示词）')).toHaveValue('冲突时保留的草稿');
+    await user.click(within(dialog).getByRole('button', { name: '取消' }));
+    await user.click(screen.getByRole('button', { name: '角色操作 旅人' }));
+    await user.click(screen.getByRole('menuitem', { name: '编辑角色卡' }));
+    expect(screen.getByLabelText('角色设定（提示词）')).toHaveValue('另一页面保存的设定');
+  });
+
+  it('keeps a saved card when an older library response arrives later', async () => {
+    const user = userEvent.setup(); const { client } = renderPage();
+    await user.click(await screen.findByRole('button', { name: '角色操作 旅人' }));
+    await user.click(screen.getByRole('menuitem', { name: '重命名' }));
+    const dialog = screen.getByRole('dialog', { name: '重命名角色卡' });
+    fireEvent.change(within(dialog).getByLabelText('角色名称'), { target: { value: '已保存名称' } });
+    let resolveList!: (response: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>(resolve => { resolveList = resolve; }));
+    let refresh!: Promise<void>;
+    act(() => { refresh = client.refetchQueries({ queryKey: ['me', 'player-1', 'tavern', 'characters'] }); });
+    await user.click(within(dialog).getByRole('button', { name: '保存名称' }));
+    await screen.findByRole('button', { name: '选择角色 已保存名称' });
+    await act(async () => { resolveList(json({ characters: [character] })); await refresh; });
+    expect(screen.getByRole('button', { name: '选择角色 已保存名称' })).toBeInTheDocument();
+  });
+
+  it('opens and dismisses character actions using the keyboard without selecting the card', async () => {
+    const user = userEvent.setup(); renderPage();
+    const trigger = await screen.findByRole('button', { name: '角色操作 旅人' });
+    trigger.focus(); await user.keyboard('{Enter}');
+    expect(screen.getByRole('menuitem', { name: '重命名' })).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: '编辑角色卡' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    expect(fetchMock.mock.calls.some(([url, init]) => url === '/api/me/tavern/conversations' && init?.method === 'POST')).toBe(false);
+  });
+  it('waits for the selected story before allowing card actions so its next-turn update cannot be omitted', async () => {
+    restoreConversation();
+    const originalFetch = fetchMock.getMockImplementation()!;
+    let finishRead!: (response: Response) => void;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => url === '/api/me/tavern/conversations/conversation-1'
+      ? new Promise<Response>(resolve => { finishRead = resolve; }) : originalFetch(url, init));
+    renderPage();
+    const trigger = await screen.findByRole('button', { name: '角色操作 旅人' });
+    expect(trigger).toBeDisabled();
+    await act(async () => { finishRead(json(detail)); });
+    await waitFor(() => expect(trigger).toBeEnabled());
+  });
   it('opens model setup directly after the upstream rejects the users key', async () => {
     restoreConversation(); const user = userEvent.setup(); renderPage(); await configureSelfKey(user);
     const original = fetchMock.getMockImplementation()!;
@@ -633,7 +769,8 @@ describe('Tavern page', () => {
 
   it('does not resurrect a removed character on a late library read and preserves its conversation history', async () => {
     restoreConversation(); const user = userEvent.setup(); const { client } = renderPage();
-    await user.click(await screen.findByRole('button', { name: '移出角色库' }));
+    await user.click(await screen.findByRole('button', { name: '角色操作 旅人' }));
+    await user.click(screen.getByRole('menuitem', { name: '删除' }));
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
     let resolveList!: (response: Response) => void;
     fetchMock.mockImplementationOnce((url: string) => {
@@ -642,7 +779,7 @@ describe('Tavern page', () => {
     });
     let refresh!: Promise<void>;
     act(() => { refresh = client.refetchQueries({ queryKey: ['me', 'player-1', 'tavern', 'characters'] }); });
-    await user.click(screen.getByRole('button', { name: '确认移除' }));
+    await user.click(screen.getByRole('button', { name: '确认删除' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: '选择角色 旅人' })).not.toBeInTheDocument());
     await act(async () => { resolveList(json({ characters: [character] })); await refresh; });
     expect(client.getQueryData<Character[]>(['me', 'player-1', 'tavern', 'characters'])).toHaveLength(0);

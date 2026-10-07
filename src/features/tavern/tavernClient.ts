@@ -50,6 +50,13 @@ export async function fetchCharacters(signal?: AbortSignal): Promise<Character[]
 export async function deleteCharacter(id: string, csrfToken: string): Promise<void> {
   await request(`${ROOT}/characters/${pathId(id)}`, { method: 'DELETE', headers: mutationHeaders(csrfToken) });
 }
+export async function updateCharacter(id: string, expectedHash: string, card: NormalizedCharacterCard, csrfToken: string,
+  conversation?: { conversationId: string; expectedRevision: number }): Promise<{ character: Character; conversation: ConversationDetail | null }> {
+  const body = await readJson(await request(`${ROOT}/characters/${pathId(id)}`, { method: 'PATCH',
+    headers: mutationHeaders(csrfToken, true), body: JSON.stringify({ expectedHash, card, ...(conversation ? { conversation } : {}) }) }));
+  if (!isRecord(body)) throw invalidResponse();
+  return { character: parseCharacter(body.character), conversation: body.conversation === null ? null : parseConversationDetail(body.conversation) };
+}
 export async function createConversation(input: CreateConversationInput, csrfToken: string): Promise<Conversation> {
   return parseConversation(await readJson(await request(`${ROOT}/conversations`, { method: 'POST',
     headers: mutationHeaders(csrfToken, true), body: JSON.stringify(prepareConversationInput(input)) })));
