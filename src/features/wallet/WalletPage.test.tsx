@@ -14,6 +14,15 @@ beforeEach(() => { client = new QueryClient({ defaultOptions: { queries: { retry
 afterEach(() => { client.clear(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.useRealTimers(); });
 function mount(accountId = 'a') { return render(<QueryClientProvider client={client}><WalletPage accountId={accountId} csrfToken="csrf" onBack={() => {}} onNavigateModels={() => {}} /></QueryClientProvider>); }
 
+it('shows the configured QQ group after a credited recharge, but never for an unconfirmed payment', async () => {
+  api.readWallet.mockResolvedValue({ ...wallet, qqGroup: '123456789', topups: [{ ...topup, status: 'awaiting_review' }] });
+  mount();
+  await screen.findByText('待核实');
+  expect(screen.queryByText(/可以加入 Q 群/)).not.toBeInTheDocument();
+  await act(async () => client.setQueryData(['me', 'a', 'wallet'], { ...wallet, qqGroup: '123456789', topups: [{ ...topup, status: 'credited' }] }));
+  expect(await screen.findByText('可以加入 Q 群：123456789')).toBeVisible();
+});
+
 it('shows model consumption amounts without internal settlement notes', async () => {
   api.readWallet.mockResolvedValueOnce({ ...wallet, balanceMicros: 99884, ledger: [{
     entryId: 'usage-1', kind: 'usage', amountMicros: -116, balanceAfterMicros: 99884,

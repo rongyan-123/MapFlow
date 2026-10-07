@@ -59,6 +59,27 @@ function mount(accountId = 'admin-a') {
 function writes(suffix: string) { return http.mock.calls.filter(([path, options]) => String(path).endsWith(suffix) && options?.method === 'POST'); }
 function payload(suffix: string, index = 0) { return JSON.parse(String(writes(suffix)[index]?.[1]?.body)); }
 
+it('saves the editable recharge QQ group and restores the saved value', async () => {
+  const original = http.getMockImplementation()!;
+  let group = '123456789';
+  http.mockImplementation(async (path, options) => {
+    if (String(path) === '/api/admin/wallet/settings') {
+      if (options?.method === 'POST') group = JSON.parse(String(options.body)).qqGroup;
+      return respond({ qqGroup: group });
+    }
+    return original(path, options);
+  });
+  const user = userEvent.setup(); mount();
+  await user.click(screen.getByRole('tab', { name: '充值设置' }));
+  const input = await screen.findByLabelText('充值成功后的 Q 群号');
+  expect(input).toHaveValue('123456789');
+  await user.clear(input); await user.type(input, '987654321');
+  await user.click(screen.getByRole('button', { name: '保存充值设置' }));
+  expect(await screen.findByText('充值设置已保存')).toBeVisible();
+  expect(payload('/settings')).toEqual({ qqGroup: '987654321' });
+  expect(writes('/settings')[0][1]?.headers).toMatchObject({ 'X-CSRF-Token': 'csrf' });
+});
+
 it('approves the named amount with the admin password and no receipt, blocks duplicate submission, and clears the password', async () => {
   let finishApproval: (response: Response) => void = () => {};
   approval = () => new Promise(resolve => { finishApproval = resolve; });

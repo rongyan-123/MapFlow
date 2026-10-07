@@ -107,6 +107,7 @@ export default function WalletPage({ accountId, csrfToken, onBack, onNavigateMod
   return <div className="h-dvh min-h-0 overflow-y-auto overflow-x-hidden bg-slate-950 text-slate-100">
     <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur-xl"><div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 sm:px-8"><button ref={backButtonRef} className={button} onClick={onBack}>返回</button><h1 className="min-w-0 truncate text-base font-semibold sm:text-lg">我的额度</h1><button className={`${button} ml-auto`} onClick={onNavigateModels}>模型价格</button></div></header>
     <main className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-8 sm:py-8">{notice && <p role="status" className="text-emerald-300">{notice}</p>}
+      {wallet.data?.qqGroup && wallet.data.topups.some(order => order.status === 'credited') && <p className="rounded-xl border border-cyan-400/25 bg-cyan-400/10 p-4 text-cyan-200">可以加入 Q 群：{wallet.data.qqGroup}</p>}
       {wallet.isPending && <p role="status" className="py-16 text-center text-sm text-slate-400">正在读取额度…</p>}
       {wallet.error && <div role="alert" className={surface}><p className="mb-3 text-sm text-rose-300">{wallet.error.message}</p><button className={button} onClick={() => void wallet.refetch()}>重试读取额度</button></div>}
       {wallet.data && !wallet.error && <>

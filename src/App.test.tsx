@@ -1598,7 +1598,7 @@ describe('手机端视图栈', () => {
       await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
     );
     await waitFor(() => expect(tavernApi.openTreeConversation).toHaveBeenCalledWith(personalEntry.library_entry_id, authenticated.csrfToken, expect.any(AbortSignal)));
-    expect(screen.getByTestId('knowledge-chat-panel').className.split(' ')).toContain('lg:flex');
+    expect(screen.getByTestId('knowledge-chat-panel').className.split(' ')).toContain('hidden');
     await user.click(
       await screen.findByRole('button', { name: '查看节点 基础节点' }),
     );
@@ -1614,7 +1614,7 @@ describe('手机端视图栈', () => {
     expect(screen.getByRole('heading', { name: '基础节点' })).toBeInTheDocument();
   });
 
-  it('桌面端聊天面板默认较宽，并可通过分隔条拖拽到边界', async () => {
+  it('学习聊天卸载地图并去掉分隔条，查看地图后能恢复同一聊天', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
@@ -1631,27 +1631,14 @@ describe('手机端视图栈', () => {
     );
     await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
 
-    const chatPanel = screen.getByTestId('knowledge-chat-panel');
-    const resizeHandle = screen.getByRole('separator', {
-      name: '调整聊天面板宽度',
-    });
-    expect(chatPanel).toHaveStyle({ '--knowledge-chat-width': '460px' });
-    expect(resizeHandle).toHaveAttribute('aria-valuetext', '460px');
-
-    resizeHandle.focus();
-    await user.keyboard('{ArrowLeft}');
-    expect(chatPanel).toHaveStyle({ '--knowledge-chat-width': '476px' });
-    expect(resizeHandle).toHaveAttribute('aria-valuenow', '476');
-
-    fireEvent.mouseDown(resizeHandle, { clientX: 500, button: 0 });
-    fireEvent.mouseMove(window, { clientX: -500 });
-    fireEvent.mouseUp(window, { clientX: -500 });
-    expect(chatPanel).toHaveStyle({ '--knowledge-chat-width': '720px' });
-
-    fireEvent.mouseDown(resizeHandle, { clientX: 500, button: 0 });
-    fireEvent.mouseMove(window, { clientX: 2_000 });
-    fireEvent.mouseUp(window, { clientX: 2_000 });
-    expect(chatPanel).toHaveStyle({ '--knowledge-chat-width': '360px' });
+    expect(screen.getByTestId('knowledge-chat-panel')).toBeInTheDocument();
+    expect(screen.queryByRole('separator',{name:'调整聊天面板宽度'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'查看节点 基础节点'})).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button',{name:'查看地图'}));
+    expect(await screen.findByRole('button',{name:'查看节点 基础节点'})).toBeInTheDocument();
+    await user.click(screen.getByRole('button',{name:'返回聊天'}));
+    expect(screen.queryByRole('button',{name:'查看节点 基础节点'})).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox',{name:'消息'})).toBeVisible();
   });
 
   it('关闭再打开同一棵树时保留聊天气泡，但切换树会隔离会话', async () => {

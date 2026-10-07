@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,9 +9,6 @@ import CompletionFlash from './features/skill-tree/CompletionFlash';
 import NodeDetailPanel from './features/skill-tree/NodeDetailPanel';
 import ProgressOverview from './features/skill-tree/ProgressOverview';
 import SkillTreeCanvas from './features/skill-tree/SkillTreeCanvas';
-import ResizableChatPane, {
-  DEFAULT_CHAT_WIDTH,
-} from './features/knowledge-chat/ResizableChatPane';
 import IdentityAccess from './features/identity/IdentityAccess';
 import { useIdentity } from './features/identity/IdentityContext';
 import LogoutConfirmDialog from './features/identity/LogoutConfirmDialog';
@@ -239,7 +236,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
   const [layoutMode, setLayoutMode] = useState<TreeLayoutMode>('relationship');
   const [mobileView, setMobileView] = useState<MobileView>('list');
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatWidth, setChatWidth] = useState(DEFAULT_CHAT_WIDTH);
+  const [learningMapOpen, setLearningMapOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [announcementsOpen, setAnnouncementsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -516,9 +513,9 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
   const nodeProgress =
     view === 'personal' ? personalTree.data?.node_progress : undefined;
   const displayMode: TreeDisplayMode = view === 'public' ? 'showcase' : 'personal';
-  const snapshot = activeGraph
+  const snapshot = useMemo(() => activeGraph
     ? snapshotFromGraph(activeGraph, completedNodeIds, nodeProgress)
-    : null;
+    : null, [activeGraph, personalTree.data, view]);
   const hasBlockLayout = Boolean(
     snapshot?.blocks?.length &&
       snapshot.node_block_assignments?.some((assignment) =>
@@ -695,7 +692,8 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
     setSelectedLibraryEntryId(libraryEntryId);
     setSelectedNodeId(null);
     setCompletion(null);
-    setChatOpen(true);
+    setChatOpen(false);
+    setLearningMapOpen(false);
     setLayoutMode('relationship');
     setMobileView('graph');
   };
@@ -884,6 +882,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
     }
     if (view !== 'personal' || !selectedLibraryEntryId) return;
     setChatOpen(true);
+    setLearningMapOpen(false);
     setMobileView('chat');
   };
   const closeKnowledgeChat = () => {
@@ -1241,11 +1240,14 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
           )}
         </aside>
 
-        <section
+        {!(view === 'personal' && chatOpen && !learningMapOpen) && <section
           ref={publicMapSectionRef}
           data-testid="mobile-graph"
           className={`${graphVisible || (view === 'public' && mobileView === 'detail') ? 'block' : 'hidden'} relative min-w-0 flex-1 overflow-clip lg:block`}
         >
+          {view === 'personal' && chatOpen && learningMapOpen && <button type="button"
+            onClick={() => { setLearningMapOpen(false); setMobileView('chat'); }}
+            className="absolute left-3 top-3 z-20 rounded-xl border border-cyan-400/30 bg-slate-950 px-4 py-2 text-sm text-cyan-200">返回聊天</button>}
           {view === 'public' && selectedPublicTree && (
             <PublicTreePreviewHeader
               tree={selectedPublicTree}
@@ -1329,7 +1331,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
               />
             </div>
           )}
-        </section>
+        </section>}
 
         {view === 'personal' && (snapshot ? (
           <div
@@ -1409,13 +1411,16 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
         )}
 
         {snapshot && view === 'personal' && session && selectedLibraryEntryId && (
-          <ResizableChatPane
-            testId="knowledge-chat-panel"
-            hidden={!chatOpen}
-            width={chatWidth}
-            onWidthChange={setChatWidth}
-            className={`${mobileView === 'chat' ? 'flex' : 'hidden'} min-h-0 w-full flex-1 flex-col overflow-hidden ${chatOpen ? 'lg:flex' : 'lg:hidden'}`}
+          <div
+            data-testid="knowledge-chat-panel"
+            hidden={!chatOpen || learningMapOpen}
+            className={`${chatOpen && !learningMapOpen ? 'flex lg:flex' : 'hidden lg:hidden'} min-h-0 w-full flex-1 flex-col overflow-hidden`}
           >
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-800 px-3 py-2">
+              <span className="truncate text-xs text-slate-400">{selectedNodeId ? snapshot.nodes.find(node => node.id === selectedNodeId)?.title : activeTitle}</span>
+              <button type="button" onClick={() => { setLearningMapOpen(true); setMobileView('graph'); }}
+                className="shrink-0 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-cyan-200">查看地图</button>
+            </div>
             <TavernPage
               treeContext={{ title: activeTitle, libraryEntryId: selectedLibraryEntryId }}
               onNavigateConsole={closeKnowledgeChat}
@@ -1430,11 +1435,11 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
                 void personalTree.refetch();
               }}
             />
-          </ResizableChatPane>
+          </div>
         )}
       </main>
 
-      {snapshot && (
+      {snapshot && !(view === 'personal' && chatOpen && !learningMapOpen) && (
         <ProgressOverview
           displayMode={displayMode}
           totalNodes={snapshot.nodes.length}
