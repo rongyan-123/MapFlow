@@ -179,6 +179,7 @@ async function configureSelfKey(user: ReturnType<typeof userEvent.setup>) {
   await user.type(within(dialog).getByLabelText('API Key'), 'test-only-key');
   await user.type(within(dialog).getByLabelText('API URL'), 'https://gateway.example.com/v1');
   await user.type(within(dialog).getByLabelText('上游模型'), 'test-model');
+  await user.click(within(dialog).getByRole('button', { name: '保存并使用' }));
   await user.keyboard('{Escape}');
 }
 
@@ -191,6 +192,20 @@ async function configurePaidPlatform(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('Tavern page', () => {
+  it('opens model setup directly after the upstream rejects the users key', async () => {
+    restoreConversation(); const user = userEvent.setup(); renderPage(); await configureSelfKey(user);
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => url.endsWith('/turns')
+      ? new Response(JSON.stringify({ error: { code: 'tavern.user_model_authentication', message: 'Key 无效' } }), { status: 403 })
+      : original(url, init));
+    await user.type(screen.getByLabelText('消息'), '修正 Key 后重试');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await screen.findByText('Key 无效');
+    await user.click(screen.getByRole('button', { name: '填写 API Key 或使用平台额度' }));
+    const setup = screen.getByRole('dialog', { name: '配置' });
+    expect(within(setup).getByRole('button', { name: '模型接入' })).toHaveAttribute('aria-current', 'page');
+    expect(within(setup).getByLabelText('API Key')).toBeVisible();
+  });
   it('sends a paid platform turn directly after obtaining its quote and preserves its measured cash receipt',async()=>{
     platformPaid=true;restoreConversation();const user=userEvent.setup();renderPage();
     await user.click(await screen.findByRole('button',{name:'配置'}));
@@ -274,6 +289,16 @@ describe('Tavern page', () => {
     expect(route).toHaveAttribute('aria-pressed', 'true');
     expect(within(dialog).queryByRole('combobox')).not.toBeInTheDocument();
   });
+  it('restores the saved custom setup after switching to platform mode and returning', async () => {
+    const user = userEvent.setup(); renderPage(); await configureSelfKey(user);
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    await user.click(screen.getByRole('button', { name: '模型接入' }));
+    await user.click(screen.getByRole('button', { name: '使用平台模型（需要充值）' }));
+    await user.click(screen.getByRole('button', { name: '自填 API Key' }));
+    expect(screen.getByLabelText('API Key')).toHaveValue('test-only-key');
+    expect(screen.getByLabelText('API URL')).toHaveValue('https://gateway.example.com/v1');
+    expect(screen.getByLabelText('上游模型')).toHaveValue('test-model');
+  });
 
   it('does not send or reserve a payment when platform quota chatting is unavailable', async () => {
     platformEnabled = false; restoreConversation(); const user = userEvent.setup(); renderPage();
@@ -338,28 +363,24 @@ describe('Tavern page', () => {
   it('validates each custom field, sends the selected endpoint and forgets the key after remount', async () => {
     restoreConversation(); const user = userEvent.setup(); const first = renderPage();
     await screen.findByText('请用茶。');
-    async function configure(url?: string, model?: string) {
-      await user.click(screen.getByRole('button', { name: '配置' }));
-      const dialog = screen.getByRole('dialog', { name: '配置' });
-      await user.click(within(dialog).getByRole('button', { name: '模型接入' }));
-      const key = within(dialog).getByLabelText('API Key');
-      await user.clear(key); await user.type(key, 'custom-secret');
-      if (url !== undefined) { const input = within(dialog).getByLabelText('API URL'); await user.clear(input); await user.type(input, url); }
-      if (model !== undefined) await user.type(within(dialog).getByLabelText('上游模型'), model);
-      await user.keyboard('{Escape}');
-    }
-    await configure();
-    await user.type(screen.getByLabelText('消息'), '测试自定义模型');
-    await user.click(screen.getByRole('button', { name: '发送' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('尚未填写 API URL');
-    await configure('http://gateway.example.com/v1');
-    await user.click(screen.getByRole('button', { name: '发送' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('API URL 必须是公开 HTTPS');
-    await configure('https://gateway.example.com/v1');
-    await user.click(screen.getByRole('button', { name: '发送' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('尚未填写上游模型');
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    const configuration = screen.getByRole('dialog', { name: '配置' });
+    await user.click(within(configuration).getByRole('button', { name: '模型接入' }));
+    await user.type(within(configuration).getByLabelText('API Key'), 'custom-secret');
+    const save = within(configuration).getByRole('button', { name: '保存并使用' });
+    await user.click(save);
+    expect(within(configuration).getByRole('alert')).toHaveTextContent('尚未填写 API URL');
+    const url = within(configuration).getByLabelText('API URL');
+    await user.type(url, 'http://gateway.example.com/v1');
+    await user.click(save);
+    expect(within(configuration).getByRole('alert')).toHaveTextContent('API URL 必须是公开 HTTPS');
+    await user.clear(url); await user.type(url, 'https://gateway.example.com/v1');
+    await user.click(save);
+    expect(within(configuration).getByRole('alert')).toHaveTextContent('尚未填写上游模型');
     expect(attempts).toHaveLength(0);
-    await configure(undefined, 'my-model');
+    await user.type(within(configuration).getByLabelText('上游模型'), 'my-model');
+    await user.click(save); await user.keyboard('{Escape}');
+    await user.type(screen.getByLabelText('消息'), '测试自定义模型');
     await user.click(screen.getByRole('button', { name: '发送' }));
     await screen.findByText('新回复 🌙');
     const sent = fetchMock.mock.calls.find(([url]) => url.endsWith('/turns'))?.[1];
@@ -384,6 +405,12 @@ describe('Tavern page', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('尚未填写 API Key');
     expect(screen.getByLabelText('消息')).toHaveValue('还没配置');
     expect(attempts).toHaveLength(0);
+    await user.click(screen.getByRole('button', { name: '填写 API Key 或使用平台额度' }));
+    const setup = screen.getByRole('dialog', { name: '配置' });
+    expect(within(setup).getByRole('button', { name: '模型接入' })).toHaveAttribute('aria-current', 'page');
+    expect(within(setup).getByLabelText('API Key')).toBeVisible();
+    await user.keyboard('{Escape}');
+    expect(screen.getByLabelText('消息')).toHaveValue('还没配置');
     expect(window.sessionStorage.getItem('mapflow.tavern.pending.v1.player-1.conversation-1')).toBeNull();
   });
 
@@ -691,7 +718,9 @@ describe('Tavern page', () => {
     await user.type(within(dialog).getByLabelText('API Key'), 'test-key');
     await user.type(within(dialog).getByLabelText('API URL'), 'https://anyai.token6688.com/v1');
     await user.type(within(dialog).getByLabelText('上游模型'), 'gemini-3.8-flash');
+    await user.click(within(dialog).getByRole('button', { name: '保存并使用' }));
     await user.click(within(dialog).getByRole('button', { name: '最近 8 KiB' }));
+    await user.click(within(dialog).getByRole('button', { name: '保存并使用' }));
     await user.click(within(dialog).getByRole('button', { name: '关闭配置' }));
     await user.type(screen.getByRole('textbox', { name: '消息' }), '你好');
     await user.click(screen.getByRole('button', { name: '发送' }));

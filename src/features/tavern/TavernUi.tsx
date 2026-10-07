@@ -40,11 +40,12 @@ export function CharacterAvatar({ character, previewUrl, name, large = false }: 
 
 export interface TavernDialogSection { id: string; label: string; content: ReactNode }
 
-export function TavernDialog({ title, children, sections, onClose, busy = false }: {
+export function TavernDialog({ title, children, sections, onClose, busy = false, initialSection }: {
   title: string; children?: ReactNode; sections?: TavernDialogSection[]; onClose: () => void; busy?: boolean;
+  initialSection?: string;
 }) {
   const panel = useRef<HTMLElement>(null);
-  const [activeSection, setActiveSection] = useState(sections?.[0]?.id ?? '');
+  const [activeSection, setActiveSection] = useState(initialSection ?? sections?.[0]?.id ?? '');
   const closeRef = useRef(onClose); closeRef.current = onClose;
   const busyRef = useRef(busy); busyRef.current = busy;
   useEffect(() => {

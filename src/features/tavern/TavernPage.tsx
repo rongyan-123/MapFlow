@@ -39,6 +39,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const [importOpen, setImportOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [configurationOpen, setConfigurationOpen] = useState(false);
+  const [configurationSection, setConfigurationSection] = useState('overview');
   const [openingCharacter, setOpeningCharacter] = useState<string | null>(null);
   const [openError, setOpenError] = useState<unknown>(null);
   const openingLock = useRef(false);
@@ -48,6 +49,14 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const [modelSelection, setModelSelection] = useState<TavernModelSelection>({
     provider: 'custom', apiKey: '', model: '', baseUrl: '', settings: {}, historyBytes: 32768,
   });
+  const savedCustomSelection = useRef(modelSelection);
+  function changeModelSelection(selection: TavernModelSelection) {
+    if (selection.provider === 'custom') {
+      if (selection.apiKey) savedCustomSelection.current = selection;
+      else if (modelSelection.provider === 'platform') selection = { ...savedCustomSelection.current, historyBytes: selection.historyBytes };
+    }
+    setModelSelection(selection);
+  }
   const charactersKey = ['me', accountId, 'tavern', 'characters'] as const;
   const conversationsKey = ['me', accountId, 'tavern', 'conversations'] as const;
   const detailKey = ['me', accountId, 'tavern', 'conversation', conversationId] as const;
@@ -183,7 +192,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   </div>;
   const configurationSections = [
     { id: 'overview', label: '角色与会话', content: summary },
-    { id: 'model', label: '模型接入', content: <ModelAccessPanel modelSelection={modelSelection} onModelSelectionChange={setModelSelection} accountId={accountId} onNavigateWallet={onNavigateWallet} /> },
+    { id: 'model', label: '模型接入', content: <ModelAccessPanel modelSelection={modelSelection} onModelSelectionChange={changeModelSelection} csrfToken={session.csrfToken} accountId={accountId} onNavigateWallet={onNavigateWallet} /> },
     ...(conversationQuery.data && conversationId ? [
       { id: 'profile', label: '会话设定', content: <ConversationProfilePanel detail={conversationQuery.data} csrfToken={session.csrfToken}
         onUpdated={onProfileUpdated} onConflict={async () => { await conversationQuery.refetch(); }} /> },
@@ -214,13 +223,15 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-800 px-5 py-3">
           <button type="button" className={`${buttonClass} lg:hidden`} aria-label="打开角色列表" onClick={() => setDrawer('library')}>☰</button>
           <div className="flex min-w-0 items-center gap-3"><CharacterAvatar character={selectedCharacter} /><div className="min-w-0"><h2 className="truncate text-sm font-semibold">{selectedCharacter?.card.name ?? '欢迎来到酒馆'}</h2><p className="mt-0.5 text-xs text-slate-500">{conversationId ? '故事正在继续' : '选择角色，开启故事'}</p></div></div>
-          <button type="button" className={buttonClass} onClick={() => setConfigurationOpen(true)}>配置</button>
+          <button type="button" className={buttonClass} onClick={() => { setConfigurationSection('overview'); setConfigurationOpen(true); }}>配置</button>
         </div>
         {openError != null && <div className="p-4"><ErrorNotice error={openError} /></div>}
         {conversations.error && <div className="p-4"><ErrorNotice error={conversations.error} onRetry={() => void conversations.refetch()} /></div>}
         {conversationId ? conversationQuery.data ? <ConversationPane key={`${accountId}.${conversationId}`} detail={conversationQuery.data} accountId={accountId} csrfToken={session.csrfToken} onCompleted={onCompleted} onGraphChanged={onGraphChanged}
           modelSelection={modelSelection}
-          configurationOpen={configurationOpen} onCloseConfiguration={() => setConfigurationOpen(false)} configuration={configurationSections} />
+          configurationOpen={configurationOpen} configurationSection={configurationSection}
+          onOpenModelConfiguration={() => { setConfigurationSection('model'); setConfigurationOpen(true); }}
+          onNavigateWallet={onNavigateWallet} onCloseConfiguration={() => setConfigurationOpen(false)} configuration={configurationSections} />
           : <div className="p-6">{conversationQuery.isPending ? <p role="status" className="text-sm text-slate-400">正在恢复会话与历史…</p> : <ErrorNotice error={conversationQuery.error} onRetry={() => void conversationQuery.refetch()} />}</div>
           : <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto p-8 text-center">
             <CharacterAvatar character={selectedCharacter} large /><h2 className="text-xl font-bold">{selectedCharacter ? `与${selectedCharacter.card.name}相遇` : '你的故事，从这里开始'}</h2>
@@ -232,7 +243,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
       <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">{drawer === 'library' ? '角色与账号' : '会话详情'}</h2><button type="button" className={buttonClass} onClick={() => setDrawer(null)}>关闭</button></div>
       {drawer === 'library' ? <><IdentityAccess onRequestLogout={() => { setDrawer(null); setLogoutOpen(true); }} /><div className="mt-5">{library}</div></> : summary}
     </MobileDrawer>
-    {configurationOpen && !conversationQuery.data && <TavernDialog title="配置" onClose={() => setConfigurationOpen(false)} sections={configurationSections} />}
+    {configurationOpen && !conversationQuery.data && <TavernDialog title="配置" initialSection={configurationSection} onClose={() => setConfigurationOpen(false)} sections={configurationSections} />}
     {importOpen && <CardImportDialog csrfToken={session.csrfToken} onImported={onImported} onClose={() => setImportOpen(false)} />}
     {createOpen && <CreateCharacterDialog csrfToken={session.csrfToken} onCreated={onImported} onClose={() => setCreateOpen(false)} />}
     <LogoutConfirmDialog open={logoutOpen} pending={logoutPending} error={logoutError?.message ?? null} onCancel={() => setLogoutOpen(false)} onConfirm={() => void logout().catch(() => undefined)} />

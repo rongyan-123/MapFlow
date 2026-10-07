@@ -14,11 +14,12 @@ interface PendingGeneration { clientActionId: string; expectedRevision: number; 
   platformBinding?: { model: string; historyBytes: 8192 | 16384 | 32768 };
   modelBinding?: { model: string; baseUrl: string; historyBytes: 8192 | 16384 | 32768 } }
 
-export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, onCompleted, onGraphChanged, configurationOpen, onCloseConfiguration, configuration }: {
+export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, onCompleted, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onNavigateWallet, onCloseConfiguration, configuration }: {
   detail: ConversationDetail; accountId: string; csrfToken: string;
   modelSelection: TavernModelSelection;
   onCompleted: (completed: CompletedTurn) => void; onGraphChanged: (graph: ConversationGraph) => void;
   configurationOpen: boolean; onCloseConfiguration: () => void; configuration: TavernDialogSection[];
+  configurationSection?: string; onOpenModelConfiguration: () => void; onNavigateWallet?: () => void;
 }) {
   const storageKey = `mapflow.tavern.pending.v1.${accountId}.${detail.conversation.conversationId}`;
   const [pendingGeneration, setPendingGeneration] = useState<PendingGeneration | null>(() => {
@@ -194,6 +195,14 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     </div>
     <div className="mx-auto w-full max-w-4xl shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-8">
       <ErrorNotice error={error} />
+      {error instanceof TavernApiError && ['tavern.model_access_required', 'tavern.model_access_invalid',
+        'tavern.platform_model_required', 'tavern.runtime_unavailable', 'generation.model_access_invalid',
+        'tavern.user_model_authentication', 'tavern.user_model_balance', 'tavern.user_model_timeout',
+        'tavern.user_model_rejected', 'tavern.model_configuration_required', 'tavern.platform_trial_unavailable',
+        'tavern.platform_trial_rejected', 'tavern.cash_billing_unavailable'].includes(error.code)
+        && <button type="button" className={buttonClass} onClick={onOpenModelConfiguration}>填写 API Key 或使用平台额度</button>}
+      {error instanceof TavernApiError && error.code === 'tavern.cash_insufficient' && onNavigateWallet
+        && <button type="button" className={buttonClass} onClick={onNavigateWallet}>充值平台额度</button>}
       {error instanceof TavernApiError && error.code === 'tavern.runtime_unavailable' && <p className="text-xs leading-5 text-slate-400">
         模型连接暂不可用。请稍后重试，或取消本次重试返回编辑；不会使用模拟回复替代模型。
       </p>}
@@ -204,7 +213,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         <button type="button" className={buttonClass} disabled={graphBusy || activeAlternativeIndex < 0 || activeAlternativeIndex >= alternatives.length - 1}
           onClick={() => void applyGraphMutation({ type: 'select_alternative', assistantMessageId: alternatives[activeAlternativeIndex + 1].messageId })}>下一个回复</button>
       </div>}
-      {configurationOpen && <TavernDialog title="配置" onClose={onCloseConfiguration} sections={[...configuration, {
+      {configurationOpen && <TavernDialog title="配置" initialSection={configurationSection} onClose={onCloseConfiguration} sections={[...configuration, {
         id: 'branches', label: '历史与分支', content: <section>
         <h3 className="text-sm font-semibold text-slate-300">历史与分支</h3>
         <div className="mt-3 space-y-3">
