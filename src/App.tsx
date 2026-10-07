@@ -1973,13 +1973,16 @@ function TreeChoice({
             data-testid="tree-choice-actions"
             data-mapflow-tree-action-portal="true"
             data-mapflow-action-visible={actionOpen ? 'true' : 'false'}
+            onClickCapture={() => { cancelHide(); setActionOpen(false); }}
             role="group"
             aria-label={`技能树操作：${title}`}
             className="mapflow-tree-choice__actions"
             style={actionStyle}
             onMouseEnter={cancelHide}
             onMouseLeave={scheduleHide}
-            onFocusCapture={showActions}
+            onFocusCapture={(event) => {
+              if (event.currentTarget.contains(event.target)) showActions();
+            }}
             onBlurCapture={(event) => {
               if (!isInsideCardOrActions(event.relatedTarget)) scheduleHide();
             }}

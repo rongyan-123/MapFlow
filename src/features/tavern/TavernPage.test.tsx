@@ -879,7 +879,8 @@ describe('Tavern page', () => {
     await user.click(screen.getByRole('button',{name:'模型接入'}));
     await user.click(screen.getByRole('button',{name:'使用平台模型（需要充值）'}));
     await user.click(await screen.findByRole('button',{name:/trial-model/}));
-    expect(screen.queryByText(/上游.*(2|倍)|倍率/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/上游.*(2|倍)/)).not.toBeInTheDocument();
+    expect(screen.getByText('0.2')).toBeVisible();
     expect(screen.queryByText(/测试期间暂不扣费/)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button',{name:'关闭配置'}));
     await user.type(screen.getByLabelText('消息'),'付费聊一句');

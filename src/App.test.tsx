@@ -1526,7 +1526,11 @@ describe('手机端视图栈', () => {
     renameTriggers.forEach((button) => expect(button).not.toBeDisabled());
     deleteTriggers.forEach((button) => expect(button).not.toBeDisabled());
 
+    await user.hover(screen.getAllByTestId('tree-choice')[1]);
+    const exportActionGroup = screen.getAllByTestId('tree-choice-actions')[1];
+    expect(exportActionGroup).toHaveAttribute('data-mapflow-action-visible', 'true');
     await user.click(exportTriggers[1]);
+    expect(exportActionGroup).toHaveAttribute('data-mapflow-action-visible', 'false');
     expect(treeApi.fetchPersonalTree).toHaveBeenCalledWith(
       secondPersonalEntry.library_entry_id,
     );

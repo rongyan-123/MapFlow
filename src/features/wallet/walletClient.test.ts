@@ -1,8 +1,21 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { adjustWallet, approveTopup, createTopup, parseAmountFen, readAdminWalletAccounts, readAdminWalletLedger, readWallet, reverseWalletEntry, uploadChannel, updatePaymentDisplay } from './walletClient';
+import { adjustWallet, approveTopup, createTopup, parseAmountFen, readAdminWalletAccounts, readAdminWalletLedger, readWallet, readModelPricing, reverseWalletEntry, uploadChannel, updatePaymentDisplay } from './walletClient';
 
 const topup = { topupId: 'order-1', accountId: 'a', amountFen: 100, channel: 'wechat', status: 'awaiting_payment', qrCodeId: 'qr-1', qrImageUrl: '/api/wallet/qrcodes/qr-1', createdAt: '2026-09-30T00:00:00Z', updatedAt: '2026-09-30T00:00:00Z', reviewNote: null };
 afterEach(() => vi.unstubAllGlobals());
+it('reads unchanged upstream reference prices and the account multiplier separately', async () => {
+  const snapshot = { multiplierLabel: '计费倍率 0.2', currency: 'CNY', updatedAt: '2026-10-08T00:00:00Z', models: [{
+    id: 'deepseek-v4.1-flash', displayName: 'DeepSeek V4.1 Flash', provider: 'AnyAI', contextWindow: 1048576,
+    description: '教学对话模型', settings: [], vendorCodes: ['CBY'], availability: 'wallet',
+    pricing: { basis: 'upstream_reference', updatedAt: '2026-10-08T00:00:00Z',
+      maxInputMicrosPerMillion: 290394, maxOutputMicrosPerMillion: 798581, channels: [{
+        vendor: 'CBY', lane: 1, enabled: true, inputMicrosPerMillion: 290394, outputMicrosPerMillion: 798581,
+        statsSource: 'live', successRate24h: 99.7, avgResponseSeconds: 7.3,
+      }] },
+  }] };
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(snapshot))));
+  expect(await readModelPricing()).toEqual(snapshot);
+});
 it('authenticates queue changes and refuses an invalid or foreign QR grant', async () => {
   const grant = { windowId: 'window', status: 'active', serverNow: '2026-10-06T00:00:00Z', expiresAt: '2026-10-06T00:00:20Z', position: 0, imageUrl: '/api/wallet/topups/order/display/window/qr' };
   const fetchMock=vi.fn().mockResolvedValue(new Response(JSON.stringify(grant)));

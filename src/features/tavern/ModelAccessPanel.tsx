@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { modelPresets } from './modelPresets';
-import { formatAmountMicros, readWallet, readModelPricing, type ModelPriceSnapshot } from '../wallet/walletClient';
-import { modelPriceLabel } from '../wallet/pricePresentation';
+import { formatAmountMicros, readWallet, readModelPricing } from '../wallet/walletClient';
+import ModelReferencePrices, { ReferencePriceNote } from '../wallet/ModelReferencePrices';
 import type { TavernModelSelection } from './types';
 import { fetchPlatformModels, testModelConnection } from './tavernClient';
 import { inputClass } from './TavernUi';
@@ -74,14 +74,17 @@ export default function ModelAccessPanel({ modelSelection, onModelSelectionChang
           : platformCatalog.error ? <p role="alert">平台模型列表读取失败，请关闭配置后重试。</p>
           : !platformCatalog.data?.enabled || !platformCatalog.data.models.length
             ? <p role="status">平台模型暂不可用：服务器尚未配置爱你 AI API Key，或尚未开启平台试用，请联系管理员。</p>
-            : <ModelChoices label="平台模型" value={modelSelection.model}
+            : <ModelChoices label="平台模型" value={modelSelection.model} searchable
               options={platformCatalog.data.models.map(model => ({ value: model.id,
-                label: <><span className="block font-medium">{model.id} · {model.provider}</span>
+                label: <><span className="block font-medium">{prices.data?.models.find(item => item.id === model.id)?.displayName ?? model.id} · {model.provider}</span>
                   <span className="mt-1 block text-xs text-slate-400">上下文 {model.contextWindow.toLocaleString()} Token</span>
-                  <span className="mt-1 block text-xs text-cyan-200">{prices.isPending ? '价格读取中…' : priceLabel(prices.data?.models.find(item => item.id === model.id)?.pricing)}</span></> }))}
+                  <span className="mt-3 block">{prices.isPending ? '价格读取中…' : <ModelReferencePrices compact channels={prices.data?.models.find(item => item.id === model.id)?.pricing?.channels.filter(channel => channel.enabled) ?? []} />}</span></> }))}
               onChange={model => onModelSelectionChange({ ...modelSelection, model, apiKey: '', baseUrl: '', settings: {},billingPolicy:platformCatalog.data?.policyVersion })} />}
         {platformCatalog.data?.billingMode !== 'wallet' && <p className="text-xs leading-5 text-amber-200">当前为平台模型试用，测试期间暂不扣费，不扣额度或积分。</p>}
-        {platformCatalog.data?.billingMode === 'wallet' && <p className="text-xs leading-5 text-slate-400">价格为当前可用渠道的本站单价区间，按实际用量结算。输入包括角色设定和历史消息，输出为模型回复。</p>}
+        {platformCatalog.data?.billingMode === 'wallet' && <>
+          <ReferencePriceNote />
+          <p className="text-xs leading-5 text-slate-500">缓存命中参考价按输入参考价的 10% 换算；若有单独报价，优先显示单独报价。输入包括角色设定和历史消息，输出包括回复和模型返回的思考用量。</p>
+        </>}
       </section> : <div className="mt-4 space-y-3 rounded-xl border border-cyan-900 p-3">
         <p className="text-xs leading-5 text-slate-400">使用自己的上游额度；MapFlow 不扣现金额度或积分。Key 只保存在当前页面内存中，刷新后需重新填写；发送时经本站服务器转发给你填写的上游，请只使用可信服务。</p>
         <ModelChoices label="服务预设" value={presetId} options={modelPresets.map(preset => ({ value: preset.id, label: preset.label }))}
@@ -133,16 +136,20 @@ export default function ModelAccessPanel({ modelSelection, onModelSelectionChang
   );
 }
 
-function ModelChoices({ label, value, options, onChange }: {
+function ModelChoices({ label, value, options, onChange, searchable = false }: {
   label: string;
   value: string;
   options: { value: string; label: ReactNode }[];
   onChange: (value: string) => void;
+  searchable?: boolean;
 }) {
+  const [search, setSearch] = useState('');
+  const visible = searchable ? options.filter(option => option.value.toLowerCase().includes(search.trim().toLowerCase())) : options;
   return <fieldset className="min-w-0 space-y-2">
     <legend className="mb-1 text-xs text-slate-400">{label}</legend>
-    <div className="flex max-h-60 flex-wrap gap-2 overflow-y-auto overscroll-contain p-1">
-      {options.map(option => <button key={option.value} type="button"
+    {searchable && <input aria-label={`搜索${label}`} className={inputClass} placeholder="搜索模型名称…" value={search} onChange={event => setSearch(event.target.value)} />}
+    <div className={`${searchable ? 'grid max-h-[28rem] sm:grid-cols-2' : 'flex max-h-60 flex-wrap'} gap-2 overflow-y-auto overscroll-contain p-1`}>
+      {visible.map(option => <button key={option.value} type="button"
         aria-pressed={value === option.value}
         onClick={() => { if (value !== option.value) onChange(option.value); }}
         className={`min-h-10 rounded-xl border px-3 py-2 text-left text-sm break-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${value === option.value
@@ -151,10 +158,6 @@ function ModelChoices({ label, value, options, onChange }: {
         {option.label}
       </button>)}
     </div>
+    {searchable && <p className="text-xs text-slate-500">{visible.length ? `${visible.length} / ${options.length} 个模型` : '没有找到匹配的模型'}</p>}
   </fieldset>;
-}
-
-function priceLabel(pricing: ModelPriceSnapshot | null | undefined) {
-  const channels = pricing?.channels.filter(channel => channel.enabled) ?? [];
-  return modelPriceLabel(channels);
 }

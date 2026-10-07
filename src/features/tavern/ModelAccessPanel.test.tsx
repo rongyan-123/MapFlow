@@ -66,7 +66,20 @@ it('shows an unavailable price instead of inventing a price when pricing fails',
   expect(await screen.findByText('价格暂时无法获取')).toBeVisible();
   expect(screen.queryByText(/输入 ¥/u)).not.toBeInTheDocument();
 });
-it('shows the already calculated site price range using only available channels', async () => {
+it('filters a larger platform catalog and preserves the selected model when searching', async () => {
+  const models = ['deepseek-v4.1-flash', 'gpt-6-sol', 'claude-opus-5-5'].map(id => ({ id, provider: 'AnyAI', contextWindow: 1048576 }));
+  const saved = setup({ ...selection, provider: 'platform', model: 'gpt-6-sol' }, async url => new Response(JSON.stringify(
+    url === '/api/me/tavern/platform-models' ? { enabled: true, billingMode: 'wallet', policyVersion: 'cash-v1-actual-x2', models }
+      : { balanceMicros: 800000, currency: 'CNY', supportContact: '', channels: [], topups: [], ledger: [] }
+  )));
+  await screen.findByRole('button', { name: /deepseek-v4.1-flash/ });
+  fireEvent.change(screen.getByRole('textbox', { name: '搜索平台模型' }), { target: { value: '4.1' } });
+  expect(screen.queryByRole('button', { name: /gpt-6-sol/ })).not.toBeInTheDocument();
+  expect(saved).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: /deepseek-v4.1-flash/ }));
+  expect(saved).toHaveBeenCalledWith(expect.objectContaining({ model: 'deepseek-v4.1-flash', settings: {}, billingPolicy: 'cash-v1-actual-x2' }));
+});
+it('shows reference price ranges using only available channels and labels the account multiplier separately', async () => {
   setup({ ...selection, provider: 'platform' }, async url => new Response(JSON.stringify(
     url === '/api/me/tavern/platform-models' ? { enabled: true, billingMode: 'wallet', policyVersion: 'cash-v1-actual-x2', models: [{ id: 'priced-model', provider: 'AnyAI', contextWindow: 32768 }] }
     : url === '/api/model-catalog/pricing' ? { multiplierLabel: '', currency: 'CNY', updatedAt: '2026-10-07T00:00:00Z', models: [{
@@ -77,7 +90,10 @@ it('shows the already calculated site price range using only available channels'
           { vendor: 'C', lane: 3, enabled: false, inputMicrosPerMillion: 100000, outputMicrosPerMillion: 9000000, statsSource: 'unknown', successRate24h: null, avgResponseSeconds: null }] },
     }] } : { balanceMicros: 800000, currency: 'CNY', supportContact: '', channels: [], topups: [], ledger: [] }
   )));
-  expect(await screen.findByText('输入参考价（未区分缓存） ¥0.4–0.8 · 输入（缓存命中） 上游未提供 · 输出 ¥1.2–1.6 / 百万 Token')).toBeVisible();
+  expect(await screen.findByText('¥0.4–0.8')).toBeVisible();
+  expect(screen.getByText('¥0.04–0.08')).toBeVisible();
+  expect(screen.getByText('¥1.2–1.6')).toBeVisible();
+  expect(screen.getByText('0.2')).toBeVisible();
   expect(screen.queryByText(/上游.*×/u)).not.toBeInTheDocument();
 });
 it('only applies a validated draft after saving and clears the key when changing provider presets', () => {

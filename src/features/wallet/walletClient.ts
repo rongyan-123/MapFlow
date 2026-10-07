@@ -58,8 +58,8 @@ export async function saveCommunitySettings(qqGroup: string, csrfToken: string):
   return { qqGroup: settings.qqGroup };
 }
 export interface PricingChannel { vendor:string; lane:number; enabled:boolean; inputMicrosPerMillion:number; cacheHitInputMicrosPerMillion?:number|null; outputMicrosPerMillion:number; statsSource:'live'|'estimated'|'unknown'; successRate24h:number|null; avgResponseSeconds:number|null }
-export interface ModelPriceSnapshot {channels:PricingChannel[];maxInputMicrosPerMillion:number;maxOutputMicrosPerMillion:number;updatedAt:string;basis:'upstream_actual_x2'}
-export interface PricingModel { id: string; provider: string; contextWindow: number; settings: UserModelSetting[]; vendorCodes: string[]; availability: 'byok'|'wallet'; pricing: ModelPriceSnapshot|null }
+export interface ModelPriceSnapshot {channels:PricingChannel[];maxInputMicrosPerMillion:number;maxOutputMicrosPerMillion:number;updatedAt:string;basis:'upstream_actual_x2'|'upstream_reference'}
+export interface PricingModel { id: string; displayName?: string; description?: string; provider: string; contextWindow: number; settings: UserModelSetting[]; vendorCodes: string[]; availability: 'byok'|'wallet'; pricing: ModelPriceSnapshot|null }
 export interface ModelPricing { multiplierLabel: string; currency: 'CNY'; updatedAt: string; models: PricingModel[] }
 
 export function formatAmountMicros(micros: number): string { return (micros / 1_000_000).toFixed(6).replace(/0+$/u, '').replace(/\.$/u, ''); }
@@ -148,7 +148,7 @@ function validMicros(value:unknown):boolean {return typeof value==='number' && N
 function isModelPrice(value:unknown):boolean {
   if (value===null) return true;
   const price=asRecord(value);
-  return !!price && price.basis==='upstream_actual_x2' && typeof price.updatedAt==='string' && Number.isFinite(Date.parse(price.updatedAt))
+  return !!price && ['upstream_actual_x2','upstream_reference'].includes(String(price.basis)) && typeof price.updatedAt==='string' && Number.isFinite(Date.parse(price.updatedAt))
     && validMicros(price.maxInputMicrosPerMillion) && validMicros(price.maxOutputMicrosPerMillion)
     && Array.isArray(price.channels) && price.channels.every(channel=> {
       const item=asRecord(channel);
@@ -165,6 +165,8 @@ export async function readModelPricing(): Promise<ModelPricing> {
     || !Array.isArray(value.models) || !value.models.every(model=>{
       const item=asRecord(model);
       return item && typeof item.id==='string' && typeof item.provider==='string' && Number.isSafeInteger(item.contextWindow)
+        && (item.displayName === undefined || typeof item.displayName === 'string')
+        && (item.description === undefined || typeof item.description === 'string')
         && Array.isArray(item.vendorCodes) && item.vendorCodes.every((code:unknown)=>typeof code==='string')
         && ['byok','wallet'].includes(String(item.availability)) && isModelPrice(item.pricing)
         && Array.isArray(item.settings) && item.settings.every((setting:unknown)=> {

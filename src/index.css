@@ -183,19 +183,27 @@ select {
 }
 
 .mapflow-tree-choice__actions {
+  --mapflow-tree-drawer-background: #0f172a;
+  --mapflow-tree-drawer-shadow: #164e63;
   position: fixed;
   top: 50%;
   left: 0;
-  z-index: 40;
+  z-index: 10000;
   width: 8rem;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
   transform: translate3d(-0.9rem, -50%, 0);
   transition:
-    opacity 220ms ease,
-    visibility 220ms ease,
     transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html[data-mapflow-theme='light'] .mapflow-tree-choice__actions {
+  --mapflow-tree-drawer-background: #ffffff;
+}
+
+html[data-mapflow-theme='ivory'] .mapflow-tree-choice__actions {
+  --mapflow-tree-drawer-background: #fffdf5;
 }
 
 .mapflow-tree-choice:hover .mapflow-tree-choice__actions,
@@ -260,19 +268,19 @@ select {
 
 .mapflow-tree-action--export {
   border-color: rgba(34, 211, 238, 0.48);
-  background: rgba(8, 145, 178, 0.18);
+  background: #083344;
   color: #a5f3fc;
 }
 
 .mapflow-tree-action--rename {
   border-color: rgba(251, 191, 36, 0.42);
-  background: rgba(180, 83, 9, 0.16);
+  background: #422006;
   color: #fde68a;
 }
 
 .mapflow-tree-action--delete {
   border-color: rgba(251, 113, 133, 0.42);
-  background: rgba(159, 18, 57, 0.16);
+  background: #4c0519;
   color: #fecdd3;
 }
 
@@ -282,7 +290,7 @@ select {
 
 .mapflow-tree-action--export:not(:disabled):hover {
   border-color: rgba(103, 232, 249, 0.9);
-  background: rgba(8, 145, 178, 0.32);
+  background: #164e63;
 }
 
 .mapflow-tree-action:disabled {
