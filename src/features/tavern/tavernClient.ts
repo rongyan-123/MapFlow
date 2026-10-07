@@ -4,6 +4,16 @@ import { isRecord, NORMALIZED_CARD_BYTES, RAW_FILE_BYTES, tooLarge, utf8Bytes } 
 import type {CashCharge,CashQuote} from './types';
 
 const ROOT = '/api/me/tavern';
+export async function testModelConnection(apiKey: string, baseUrl: string, csrfToken: string, signal?: AbortSignal): Promise<{ ok: boolean; models: string[]; message: string }> {
+  const result = await readJson(await request(`${ROOT}/model-access/test`, {
+    method: 'POST', headers: mutationHeaders(csrfToken, true), credentials: 'same-origin',
+    body: JSON.stringify({ apiKey, baseUrl }), signal,
+  }));
+  if (!isRecord(result) || typeof result.ok !== 'boolean' || typeof result.message !== 'string'
+    || !Array.isArray(result.models) || result.models.length > 1000
+    || !result.models.every(model => typeof model === 'string' && model.trim() && model.length <= 256)) throw invalidResponse();
+  return result as { ok: boolean; models: string[]; message: string };
+}
 export async function fetchPlatformModels(signal?: AbortSignal): Promise<{ enabled: boolean; billingMode: 'trial'|'wallet'; policyVersion?:string; models: { id: string; provider: string; contextWindow: number }[] }> {
   const body = await getJson(`${ROOT}/platform-models`, signal);
   if (!isRecord(body) || typeof body.enabled !== 'boolean' || !['trial','wallet'].includes(String(body.billingMode)) || !Array.isArray(body.models)
