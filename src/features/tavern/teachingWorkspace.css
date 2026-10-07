@@ -1,0 +1,71 @@
+.tavern-workspace {
+  display: grid;
+  flex: 1;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tavern-canvas,
+.tavern-chat {
+  grid-area: 1 / 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.tavern-canvas {
+  display: flex;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-12px);
+  transition: opacity 250ms ease, transform 250ms ease, visibility 250ms;
+}
+
+.tavern-canvas[data-open='true'] {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition: opacity 250ms ease, transform 250ms ease, visibility 0s;
+}
+
+.tavern-chat {
+  display: flex;
+  flex-direction: column;
+  transition: opacity 250ms ease, visibility 250ms;
+}
+
+.tavern-chat[data-canvas-open='true'] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@media (min-width: 768px) {
+  .tavern-workspace { display: flex; }
+  .tavern-canvas {
+    flex: 0 0 0%;
+    transform: none;
+    transition: flex-basis 250ms ease, opacity 250ms ease, visibility 250ms;
+  }
+  .tavern-canvas > section { min-width: 320px; }
+  .tavern-canvas[data-open='true'] {
+    flex-basis: 58%;
+    transition: flex-basis 250ms ease, opacity 250ms ease, visibility 0s;
+  }
+  .tavern-canvas[data-open='true'][data-wide='false'] { flex-basis: 35%; }
+  .tavern-chat,
+  .tavern-chat[data-canvas-open='true'] {
+    flex: 1;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tavern-canvas,
+  .tavern-canvas[data-open='true'],
+  .tavern-chat { transition: none; transform: none; }
+}

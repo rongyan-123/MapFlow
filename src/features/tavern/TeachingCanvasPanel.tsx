@@ -59,7 +59,7 @@ function TeachingCanvasPanel({ document, busy, saving, wide, onSave, onChange, o
     api.current.updateScene({ elements });
     if (elements.length) api.current.scrollToContent(elements, { fitToContent: true, animate: true });
   }, [document]);
-  return <section aria-label="教学画布" className={`flex min-h-0 min-w-0 flex-1 flex-col border-r border-slate-800 ${wide ? 'md:basis-[58%]' : 'md:basis-[35%]'} md:flex-none`}>
+  return <section aria-label="教学画布" className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-slate-800">
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-2 text-xs">
       <span className="font-semibold">教学画布</span>
       <span role="status" className="text-slate-500">{busy ? 'AI 正在讲解 · 画布暂为只读' : saving ? '保存中…' : '自动保存'}</span>

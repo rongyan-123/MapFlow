@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useTeachingCanvas } from './useTeachingCanvas';
+import './teachingWorkspace.css';
 import GenerationProcess from './GenerationProcess';
 import type { GenerationProcessEvent } from './types';
 const TeachingCanvasPanel = lazy(() => import('./TeachingCanvasPanel'));
@@ -18,9 +19,11 @@ interface PendingGeneration { clientActionId: string; expectedRevision: number; 
   platformBinding?: { model: string; historyBytes: 8192 | 16384 | 32768 };
   modelBinding?: { model: string; baseUrl: string; historyBytes: 8192 | 16384 | 32768 } }
 
-export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, onCompleted, onRecovered, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onOpenParameters, onNavigateWallet, onCloseConfiguration, configuration }: {
+export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, platformModelError, onBusyChange, onCompleted, onRecovered, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onOpenParameters, onNavigateWallet, onCloseConfiguration, configuration }: {
   detail: ConversationDetail; accountId: string; csrfToken: string;
   modelSelection: TavernModelSelection;
+  platformModelError?: string;
+  onBusyChange?: (busy: boolean) => void;
   onCompleted: (completed: CompletedTurn) => void; onGraphChanged: (graph: ConversationGraph) => void;
   onRecovered: (saved: ConversationDetail) => void;
   configurationOpen: boolean; onCloseConfiguration: () => void; configuration: TavernDialogSection[];
@@ -44,6 +47,8 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [graphBusy, setGraphBusy] = useState(false);
+  useEffect(() => { onBusyChange?.(busy || graphBusy || pendingGeneration !== null); }, [busy, graphBusy, pendingGeneration, onBusyChange]);
+  useEffect(() => () => { onBusyChange?.(false); }, [onBusyChange]);
   const [branchName, setBranchName] = useState('');
   const [branchAnchorId, setBranchAnchorId] = useState('');
   const activeRequest = useRef<AbortController | null>(null);
@@ -89,6 +94,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     try {
       validateGenerationAction(action);
       if (retry?.platformBinding || (!retry && modelSelection.provider === 'platform')) {
+        if (platformModelError) throw new TavernApiError(400, 'tavern.platform_model_required', platformModelError);
         if (modelSelection.provider !== 'platform' || !modelSelection.model.trim()) {
           throw new TavernApiError(400, 'tavern.platform_model_required', '请选择可用的平台模型；如果列表为空，请联系管理员配置 AnyAI。');
         }
@@ -207,7 +213,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     } catch (failure) { setError(failure); }
   }
 
-  return <div className="flex min-h-0 min-w-0 flex-1 flex-col md:flex-row">
+  return <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {configurationOpen && <TavernDialog title="配置" initialSection={configurationSection} onClose={onCloseConfiguration} sections={[...configuration, {
         id: 'branches', label: '历史与分支', content: <section>
         <h3 className="text-sm font-semibold text-slate-300">历史与分支</h3>
@@ -250,15 +256,25 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         </div>
         </section>,
       }]} />}
-    <nav aria-label="学习工作区" className="flex shrink-0 items-center gap-2 border-b border-slate-800 px-4 py-2 text-xs md:hidden">
-      <button type="button" aria-pressed={!canvas.open} className={`rounded-full px-4 py-1.5 ${!canvas.open ? 'bg-cyan-300 text-slate-950' : 'bg-slate-800 text-slate-300'}`} onClick={() => canvas.setOpen(false)}>聊天</button>
-      <button type="button" aria-pressed={canvas.open} disabled={canvas.saving} className={`rounded-full px-4 py-1.5 ${canvas.open ? 'bg-cyan-300 text-slate-950' : 'bg-slate-800 text-slate-300'}`} onClick={() => void canvas.show()}>画布</button>
+    <nav aria-label="学习工作区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-2 text-xs">
+      <button type="button" aria-expanded={canvas.open} aria-controls={`tavern-canvas-${detail.conversation.conversationId}`} disabled={canvas.saving}
+        className={`${buttonClass} ${canvas.open ? 'border-cyan-500 text-cyan-200' : ''}`} onClick={() => canvas.open ? canvas.setOpen(false) : void canvas.show()}>
+        <span aria-hidden="true" className="mr-1.5">▧</span>{canvas.open ? '收起画布' : canvas.document ? '展开画布' : '绘图讲解'}</button>
+      <span className="hidden text-slate-500 sm:inline">让 AI 用图形讲解，也可以自己绘制</span>
+      {canvas.open && <div className="ml-auto flex gap-2 md:hidden">
+        <button type="button" className={buttonClass} onClick={() => canvas.setOpen(false)}>聊天</button>
+        <button type="button" className={buttonClass} onClick={onOpenParameters ?? onOpenModelConfiguration}>模型参数</button>
+      </div>}
     </nav>
-    {canvas.open && canvas.document && <Suspense fallback={<section aria-label="教学画布" className="flex-1 p-6" role="status">正在打开教学画布…</section>}>
+    <div className="tavern-workspace">
+    <div id={`tavern-canvas-${detail.conversation.conversationId}`} className="tavern-canvas" data-open={canvas.open} data-wide={canvas.wide}
+      aria-hidden={!canvas.open} {...(!canvas.open ? { inert: '' } : {})}>
+    {canvas.document && <Suspense fallback={<section aria-label="教学画布" className="flex-1 p-6" role="status">正在打开教学画布…</section>}>
       <TeachingCanvasPanel document={canvas.document} busy={busy} saving={canvas.saving} wide={canvas.wide}
         onSave={canvas.save} onChange={canvas.queue} onClose={() => canvas.setOpen(false)} onWidth={() => canvas.setWide(previous => !previous)} />
     </Suspense>}
-    <div className={`${canvas.open ? 'hidden md:flex' : 'flex'} min-h-0 min-w-0 flex-1 flex-col`}>
+    </div>
+    <div className="tavern-chat" data-canvas-open={canvas.open}>
     <div ref={pane} role="log" aria-label="对话消息" aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-8" onScroll={() => {
       const container = pane.current;
       if (container) followLatest.current = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
@@ -340,7 +356,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       <form onSubmit={event => { event.preventDefault(); void runGeneration({ type: 'reply', message }); }} className="rounded-3xl border border-slate-700 bg-slate-900 p-3 shadow-lg transition focus-within:border-cyan-500/70">
         <div className="mb-2 flex flex-wrap items-center gap-2 px-2 text-[11px] text-slate-400">
           <button type="button" className="rounded-full bg-slate-800 px-3 py-1.5 text-slate-200 hover:text-cyan-200" onClick={onOpenModelConfiguration}>{modelSelection.model || '选择模型'} · {modelSelection.provider === 'platform' ? '平台额度' : '自填 Key'}</button>
-          <span>历史 {modelSelection.historyBytes / 1024} KB · 最大输出 {detail.conversation.generationSettings.maxOutputTokens} Token</span>
+          <span>历史 {modelSelection.historyBytes / 1024} KiB · 最大输出 {detail.conversation.generationSettings.maxOutputTokens} Token</span>
         </div>
         <label htmlFor={`tavern-message-${detail.conversation.conversationId}`} className="sr-only">消息</label>
         <textarea id={`tavern-message-${detail.conversation.conversationId}`} className="max-h-48 min-h-20 w-full resize-y border-0 bg-transparent px-3 py-2 text-[15px] leading-6 text-slate-100 outline-none placeholder:text-slate-500 disabled:opacity-50" rows={2} placeholder="输入你的问题，或让 AI 画图讲解…" value={message} disabled={busy || graphBusy || pendingGeneration !== null || editing}
@@ -351,7 +367,6 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
           }} />
         <div className="flex items-center justify-between gap-2 px-2 pb-1">
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <button type="button" className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-300 hover:border-cyan-400 disabled:opacity-50" disabled={canvas.saving || busy} onClick={() => canvas.open ? canvas.setOpen(false) : void canvas.show()}>{canvas.open ? '收起画布' : canvas.document ? '展开画布' : '绘图讲解'}</button>
             <button type="button" className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-300 hover:border-cyan-400" onClick={onOpenParameters ?? onOpenModelConfiguration}>参数</button>
             <span className={`hidden text-[11px] sm:inline ${inputTooLarge ? 'text-rose-300' : 'text-slate-500'}`}>{inputTooLarge ? '消息过长（上限 8,192 字节）' : 'Enter 发送 · Shift+Enter 换行'}</span>
           </div>
@@ -359,6 +374,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
             : <button key="send" type="submit" className={primaryClass} disabled={graphBusy || editing || pendingGeneration !== null || !message.trim() || inputTooLarge}>发送</button>}
         </div>
       </form>
+    </div>
     </div>
     </div>
   </div>;

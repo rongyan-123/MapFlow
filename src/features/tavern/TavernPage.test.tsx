@@ -15,7 +15,7 @@ vi.mock('@excalidraw/excalidraw', () => ({
 
 vi.mock('../identity/identityClient', async importOriginal => ({
   ...await importOriginal<typeof import('../identity/identityClient')>(),
-  fetchCurrentSession: () => Promise.resolve({ account: { playerId: 'player-1', username: '小明', status: 'active', isAdmin: false }, csrfToken: 'csrf' }),
+  fetchCurrentSession: () => Promise.resolve({ account: { playerId: identityAccountId, username: '小明', status: 'active', isAdmin: false }, csrfToken: 'csrf' }),
   fetchCapabilities: () => Promise.resolve({ identity: { registrationEnabled: true }, generation: { enabled: true, platformFundedEnabled: true, models: [], thinkingModes: [], reasoningEfforts: [] } }),
 }));
 
@@ -27,6 +27,7 @@ let failFirstTurn: boolean;
 let modelUnavailable: boolean;
 let platformEnabled: boolean;
 let platformPaid: boolean;
+let identityAccountId: string;
 let fetchMock: ReturnType<typeof vi.fn>;
 const json = (body: unknown) => new Response(JSON.stringify(body));
 
@@ -35,6 +36,7 @@ beforeEach(() => {
   characters = [structuredClone(character)]; conversations = []; savedDetail = structuredClone(detail);
   attempts = []; failFirstTurn = false; modelUnavailable = false; platformEnabled = true;
   platformPaid=false;
+  identityAccountId = 'player-1';
   fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === '/api/me/tavern/platform-models') return json({ enabled: platformEnabled, billingMode: platformPaid?'wallet':'trial', ...(platformPaid?{policyVersion:'cash-v1-actual-x2'}:{}),models: platformEnabled ? [{ id: 'trial-model', provider: 'AnyAI', contextWindow: 32768 }] : [] });
     if (url.endsWith('/quote') && init?.method==='POST') return json({quoteId:'quote-1',maximumChargeMicros:10_000,policyVersion:'cash-v1-actual-x2',expiresInSeconds:60});
@@ -157,7 +159,7 @@ beforeEach(() => {
       const generation = { generationId: savedTurn.turnId, branchId: graph.activeBranchId, clientActionId: input.clientActionId,
         intent: action.type, anchorMessageId: action.type === 'reply' ? graph.activePath[graph.activePath.length - 3] ?? null : action.assistantMessageId,
         inputMessageId: action.type === 'continue' ? null : action.type === 'reply' ? graph.activePath[graph.activePath.length - 2] ?? null : target?.parentMessageId ?? null,
-        outputMessageId, promptFingerprint: 'b'.repeat(64), settingsSnapshot: conversation.generationSettings,
+        outputMessageId, promptFingerprint: 'b'.repeat(64), settingsSnapshot: savedDetail.conversation.generationSettings,
         modelId: 'deepseek-v4-flash', usage: savedTurn.usage, chargedCreditUnits: savedTurn.chargedCreditUnits, createdAt: savedTurn.createdAt };
       savedDetail = { ...savedDetail, turns: [...savedDetail.turns.filter(item => item.clientTurnId !== input.clientActionId), savedTurn],
         generations: [...savedDetail.generations.filter(item => item.clientActionId !== input.clientActionId), generation], graph };
@@ -171,8 +173,8 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-function renderPage(treeContext?: { libraryEntryId: string; title: string }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
+function renderPage(treeContext?: { libraryEntryId: string; title: string }, sharedClient?: QueryClient) {
+  const client = sharedClient ?? new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
   const rendered = render(<QueryClientProvider client={client}><IdentityProvider><TavernPage onNavigateConsole={() => {}} treeContext={treeContext} /></IdentityProvider></QueryClientProvider>);
   return { ...rendered, client };
 }
@@ -195,7 +197,9 @@ async function configureSelfKey(user: ReturnType<typeof userEvent.setup>) {
   const dialog = screen.getByRole('dialog', { name: '配置' });
   await user.click(within(dialog).getByRole('button', { name: '模型接入' }));
   await user.type(within(dialog).getByLabelText('API Key'), 'test-only-key');
+  await user.clear(within(dialog).getByLabelText('API URL'));
   await user.type(within(dialog).getByLabelText('API URL'), 'https://gateway.example.com/v1');
+  await user.clear(within(dialog).getByLabelText('上游模型'));
   await user.type(within(dialog).getByLabelText('上游模型'), 'test-model');
   await user.click(within(dialog).getByRole('button', { name: '保存并使用' }));
   await user.keyboard('{Escape}');
@@ -210,6 +214,255 @@ async function configurePaidPlatform(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('Tavern page', () => {
+  it('restores the last platform route and model after reentering the tavern without opening configuration', async () => {
+    platformPaid = true; restoreConversation();
+    const user = userEvent.setup(); const first = renderPage();
+    await configurePaidPlatform(user);
+    first.unmount();
+    renderPage();
+    await screen.findByText('请用茶。');
+    expect(screen.getByRole('button', { name: /trial-model · 平台额度/ })).toBeVisible();
+    await user.type(screen.getByLabelText('消息'), '重新进入后继续');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await screen.findByText('新回复 🌙');
+    const sent = fetchMock.mock.calls.find(([url, init]) => url.endsWith('/turns') && init?.method === 'POST')?.[1];
+    expect(JSON.parse(sent!.body as string)).toMatchObject({ platformModel: 'trial-model', billingPolicy: 'cash-v1-actual-x2' });
+  });
+
+  it('remembers custom model details and history without persisting the API Key', async () => {
+    restoreConversation();
+    const user = userEvent.setup(); const first = renderPage();
+    await configureSelfKey(user);
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    await user.click(screen.getByRole('button', { name: '模型接入' }));
+    await user.click(screen.getByRole('button', { name: '最近 16 KiB' }));
+    await user.click(screen.getByRole('button', { name: '保存并使用' }));
+    await user.keyboard('{Escape}');
+    expect(Object.values(window.localStorage).join(' ')).not.toContain('test-only-key');
+    first.unmount(); renderPage();
+    await screen.findByText('请用茶。');
+    expect(screen.getByText(/历史 16 KiB/)).toBeVisible();
+    await user.click(screen.getByRole('button', { name: /test-model · 自填 Key/ }));
+    const dialog = screen.getByRole('dialog', { name: '配置' });
+    expect(within(dialog).getByLabelText('API Key')).toHaveValue('');
+    expect(within(dialog).getByLabelText('API URL')).toHaveValue('https://gateway.example.com/v1');
+    expect(within(dialog).getByLabelText('上游模型')).toHaveValue('test-model');
+    await user.keyboard('{Escape}');
+    await user.type(screen.getByLabelText('消息'), '不能沿用旧 Key');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await screen.findByText(/尚未填写 API Key，请打开/);
+    expect(attempts).toHaveLength(0);
+  });
+
+  it('does not send a restored platform model when the current catalog has removed it', async () => {
+    restoreConversation();
+    const user = userEvent.setup(); const first = renderPage();
+    await configurePaidPlatform(user); first.unmount();
+    platformEnabled = false; renderPage();
+    await screen.findByText('请用茶。');
+    await user.type(screen.getByLabelText('消息'), '检查目录');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await screen.findByText('上次选择的平台模型暂不可用，请打开模型配置重新选择。');
+    expect(attempts).toHaveLength(0);
+    expect(screen.getByRole('button', { name: /trial-model · 平台额度/ })).toBeVisible();
+  });
+
+  it('keeps another account from inheriting the previous account model route', async () => {
+    restoreConversation();
+    const user = userEvent.setup(); const first = renderPage();
+    await configurePaidPlatform(user); first.unmount();
+    identityAccountId = 'player-2';
+    window.localStorage.setItem('mapflow.tavern.selection.v1.player-2', conversation.conversationId);
+    renderPage(); await screen.findByText('请用茶。');
+    expect(screen.getByRole('button', { name: /选择模型 · 自填 Key/ })).toBeVisible();
+  });
+
+  it.each([true, false])('creates a fresh tree conversation and retains the current tool permission (%s)', async treeToolsEnabled => {
+    const original = { ...structuredClone(detail), conversation: { ...conversation, libraryEntryId: 'entry-1', treeToolsEnabled } };
+    const fresh: ConversationDetail = { ...structuredClone(detail), turns: [], generations: [],
+      conversation: { ...conversation, conversationId: 'new-story', libraryEntryId: null, treeToolsEnabled: false },
+      graph: { ...detail.graph, revision: 0, messages: [{ ...detail.graph.messages[0], content: '新的开场' }], activePath: [detail.graph.messages[0].messageId] } };
+    conversations = [original.conversation]; savedDetail = original;
+    const normalFetch = fetchMock.getMockImplementation()!;
+    let linking: unknown;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/me/tavern/tree-conversations/entry-1') return json(original);
+      if (url === '/api/me/tavern/conversations' && init?.method === 'POST') {
+        conversations = [...conversations, fresh.conversation]; return json(fresh.conversation);
+      }
+      if (url === '/api/me/tavern/conversations/new-story/tree-connection' && init?.method === 'PATCH') {
+        linking = JSON.parse(init.body as string);
+        fresh.conversation = { ...fresh.conversation, libraryEntryId: 'entry-1', treeToolsEnabled };
+        conversations = conversations.map(item => item.conversationId === 'new-story' ? fresh.conversation : item);
+        return json(fresh);
+      }
+      if (url === '/api/me/tavern/conversations/new-story') return json(fresh);
+      return normalFetch(url, init);
+    });
+    const user = userEvent.setup(); const embedded = renderPage({ libraryEntryId: 'entry-1', title: '学习树' });
+    await screen.findByText('请用茶。');
+    await user.click(await screen.findByRole('button', { name: '新建会话' }));
+    await screen.findByText('新的开场');
+    expect(linking).toEqual({ expectedRevision: 0, libraryEntryId: 'entry-1', toolsEnabled: treeToolsEnabled });
+    expect(fetchMock.mock.calls.filter(([url, init]) => url === '/api/me/tavern/conversations' && init?.method === 'POST')).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    await user.selectOptions(screen.getByLabelText('选择会话'), conversation.conversationId);
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('log', { name: '对话消息' })).toHaveTextContent('请用茶。');
+    embedded.unmount();
+    const reopenedTree = renderPage({ libraryEntryId: 'entry-1', title: '学习树' });
+    await screen.findByText('请用茶。');
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/me/tavern/tree-conversations/entry-1')).toHaveLength(1);
+    reopenedTree.unmount(); renderPage();
+    await screen.findByText('请用茶。');
+    expect(screen.getByLabelText('消息')).toBeVisible();
+  });
+
+  it('prevents duplicate new stories while creation is in flight and can retry a failed tree link', async () => {
+    savedDetail = { ...savedDetail, conversation: { ...conversation, libraryEntryId: 'entry-1', treeToolsEnabled: false } };
+    conversations = [savedDetail.conversation];
+    const fresh: ConversationDetail = { ...structuredClone(savedDetail), conversation: { ...conversation, conversationId: 'new-story', libraryEntryId: null, treeToolsEnabled: false }, graph: { ...detail.graph, revision: 0 } };
+    const normalFetch = fetchMock.getMockImplementation()!;
+    let releaseCreate: (response: Response) => void = () => {};
+    const creating = new Promise<Response>(resolve => { releaseCreate = resolve; });
+    let linkAttempts = 0;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/me/tavern/tree-conversations/entry-1') return json(savedDetail);
+      if (url === '/api/me/tavern/conversations' && init?.method === 'POST') return creating;
+      if (url === '/api/me/tavern/conversations/new-story') return json(fresh);
+      if (url === '/api/me/tavern/conversations/new-story/tree-connection') {
+        if (++linkAttempts === 1) return new Response(JSON.stringify({ error: { code: 'tavern.unavailable', message: '关联失败，请重试' } }), { status: 503 });
+        fresh.conversation = { ...fresh.conversation, libraryEntryId: 'entry-1' }; return json(fresh);
+      }
+      return normalFetch(url, init);
+    });
+    const user = userEvent.setup(); renderPage({ libraryEntryId: 'entry-1', title: '学习树' });
+    await screen.findByText('请用茶。');
+    await waitFor(() => expect(screen.getByRole('button', { name: '新建会话' })).toBeEnabled());
+    const newStory = screen.getByRole('button', { name: '新建会话' });
+    fireEvent.click(newStory); fireEvent.click(newStory);
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url, init]) => url === '/api/me/tavern/conversations' && init?.method === 'POST')).toHaveLength(1));
+    expect(screen.getByRole('button', { name: '创建中…' })).toBeDisabled();
+    await act(async () => releaseCreate(json(fresh.conversation)));
+    await screen.findByText('关联失败，请重试');
+    await user.click(screen.getByRole('button', { name: '重试新建会话' }));
+    await waitFor(() => expect(window.localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe('new-story'));
+    expect(fetchMock.mock.calls.filter(([url, init]) => url === '/api/me/tavern/conversations' && init?.method === 'POST')).toHaveLength(1);
+  });
+
+  it('opens the model parameters directly, saves a slider value, and uses the saved settings on the next reply', async () => {
+    restoreConversation();
+    const user = userEvent.setup(); renderPage(); await configureSelfKey(user);
+    await user.click(screen.getByRole('button', { name: '参数' }));
+    const parameters = await screen.findByRole('dialog', { name: '模型参数' });
+    expect(screen.queryByRole('dialog', { name: '配置' })).not.toBeInTheDocument();
+    fireEvent.change(within(parameters).getByRole('slider', { name: '温度' }), { target: { value: '0.65' } });
+    const maximum = within(parameters).getByLabelText('最大输出 Token');
+    await user.clear(maximum); await user.type(maximum, '1024');
+    await user.click(within(parameters).getByText('高级参数'));
+    await user.type(within(parameters).getByLabelText('停止词（每行一个）'), '[[结束]');
+    await user.click(within(parameters).getByRole('button', { name: '保存生成参数' }));
+    await within(parameters).findByText(/参数已保存/);
+    expect(savedDetail.conversation.generationSettings).toEqual({ temperature: 0.65, maxOutputTokens: 1024, stopSequences: ['[结束]'] });
+    await user.keyboard('{Escape}');
+    await user.type(screen.getByLabelText('消息'), '按保存的参数继续');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await screen.findByText('新回复 🌙');
+    expect(savedDetail.generations[savedDetail.generations.length - 1]?.settingsSnapshot).toEqual({ temperature: 0.65, maxOutputTokens: 1024, stopSequences: ['[结束]'] });
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    expect(screen.queryByRole('button', { name: '生成参数' })).not.toBeInTheDocument();
+  });
+
+  it('recovers a new story when the server linked it but its response was lost', async () => {
+    savedDetail = { ...savedDetail, conversation: { ...conversation, libraryEntryId: 'entry-1', treeToolsEnabled: false } };
+    conversations = [savedDetail.conversation];
+    const fresh: ConversationDetail = { ...structuredClone(savedDetail), conversation: { ...conversation, conversationId: 'new-story', libraryEntryId: null, treeToolsEnabled: false }, graph: { ...detail.graph, revision: 0 } };
+    const normalFetch = fetchMock.getMockImplementation()!;
+    let linkAttempts = 0;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/me/tavern/tree-conversations/entry-1') return json(savedDetail);
+      if (url === '/api/me/tavern/conversations' && init?.method === 'POST') return json(fresh.conversation);
+      if (url === '/api/me/tavern/conversations/new-story') return json(fresh);
+      if (url === '/api/me/tavern/conversations/new-story/tree-connection') {
+        if (++linkAttempts > 1) return new Response(JSON.stringify({ error: { code: 'tavern.turn_conflict', message: '版本已经改变' } }), { status: 409 });
+        fresh.conversation = { ...fresh.conversation, libraryEntryId: 'entry-1' }; fresh.graph.revision = 1;
+        throw new Error('连接中断');
+      }
+      return normalFetch(url, init);
+    });
+    const user = userEvent.setup(); renderPage({ libraryEntryId: 'entry-1', title: '学习树' });
+    await screen.findByText('请用茶。');
+    await waitFor(() => expect(screen.getByRole('button', { name: '新建会话' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: '新建会话' }));
+    await user.click(await screen.findByRole('button', { name: '重试新建会话' }));
+    await waitFor(() => expect(window.localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe('new-story'));
+    expect(linkAttempts).toBe(1);
+  });
+
+  it('keeps the editor mounted when collapsing the canvas and offers its toggle outside the composer', async () => {
+    restoreConversation();
+    savedDetail = { ...savedDetail, canvas: { revision: 1, enabled: true, elements: [] } };
+    const normalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => url.endsWith('/canvas') ? json(savedDetail.canvas) : normalFetch(url, init));
+    const user = userEvent.setup(); renderPage();
+    const editor = await screen.findByLabelText('白板编辑器');
+    await user.click(within(screen.getByRole('region', { name: '教学画布' })).getByRole('button', { name: '收起画布' }));
+    expect(editor).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '教学画布' })).not.toBeInTheDocument();
+    const toolbar = screen.getByRole('navigation', { name: '学习工作区' });
+    await user.click(within(toolbar).getByRole('button', { name: '展开画布' }));
+    expect(screen.getByLabelText('白板编辑器')).toBe(editor);
+    expect(editor.closest('form')).toBeNull();
+    expect(screen.getByRole('button', { name: '参数' }).closest('form')?.textContent).not.toContain('展开画布');
+  });
+
+  it('restores the chosen tree story even when a cached tree opener contains another story', async () => {
+    const chosen = { ...structuredClone(detail), conversation: { ...conversation, libraryEntryId: 'entry-1', treeToolsEnabled: true } };
+    const latest = { ...structuredClone(chosen), conversation: { ...chosen.conversation, conversationId: 'latest-story', title: '最近创建的会话' },
+      graph: { ...chosen.graph, messages: chosen.graph.messages.map(message => ({ ...message, content: '不应自动跳到这段聊天' })) } };
+    savedDetail = chosen; conversations = [chosen.conversation, latest.conversation];
+    window.localStorage.setItem('mapflow.tavern.selection.v1.player-1.tree.entry-1', conversation.conversationId);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    client.setQueryData(['me', 'player-1', 'tavern', 'conversations'], conversations);
+    client.setQueryData(['me', 'player-1', 'tavern', 'tree-conversation', 'entry-1'], latest);
+    client.setQueryData(['me', 'player-1', 'tavern', 'conversation', conversation.conversationId], chosen);
+    client.setQueryData(['me', 'player-1', 'tavern', 'conversation', 'latest-story'], latest);
+    renderPage({ libraryEntryId: 'entry-1', title: '学习树' }, client);
+    await screen.findByText('请用茶。');
+    expect(screen.queryByText('不应自动跳到这段聊天')).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/me/tavern/tree-conversations/entry-1')).toBe(false);
+    client.clear();
+  });
+
+  it('ignores a remembered story that belongs to a different tree', async () => {
+    const other = { ...conversation, libraryEntryId: 'entry-2', treeToolsEnabled: true };
+    savedDetail = { ...savedDetail, conversation: { ...conversation, conversationId: 'current-tree-story', libraryEntryId: 'entry-1', treeToolsEnabled: false } };
+    conversations = [other, savedDetail.conversation];
+    window.localStorage.setItem('mapflow.tavern.selection.v1.player-1.tree.entry-1', conversation.conversationId);
+    const normalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/me/tavern/tree-conversations/entry-1' || url === '/api/me/tavern/conversations/current-tree-story') return json(savedDetail);
+      return normalFetch(url, init);
+    });
+    renderPage({ libraryEntryId: 'entry-1', title: '学习树' });
+    await screen.findByText('请用茶。');
+    expect(window.localStorage.getItem('mapflow.tavern.selection.v1.player-1.tree.entry-1')).toBe('current-tree-story');
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/me/tavern/conversations/conversation-1')).toBe(false);
+  });
+
+  it('discards invalid preference fields instead of restoring embedded credentials or a stale billing policy', async () => {
+    restoreConversation();
+    window.localStorage.setItem('mapflow.tavern.model-preferences.v1.player-1', JSON.stringify({
+      provider: 'custom', historyBytes: 999999, apiKey: 'must-not-restore', billingPolicy: 'stale-policy',
+      custom: { model: 'safe-model', baseUrl: 'https://user:password@gateway.example.com/v1?key=secret' },
+    }));
+    const user = userEvent.setup(); renderPage(); await screen.findByText('请用茶。');
+    await user.click(screen.getByRole('button', { name: /safe-model · 自填 Key/ }));
+    expect(screen.getByLabelText('API Key')).toHaveValue('');
+    expect(screen.getByLabelText('API URL')).toHaveValue('');
+    expect(screen.getByRole('button', { name: '最近 32 KiB' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('keeps undone editor shapes deleted when reopening the saved story', async () => {
     restoreConversation();
     const box = { type: 'rectangle', x: 0, y: 0, width: 200, height: 80, version: 2, versionNonce: 14, seed: 30 };
@@ -831,7 +1084,7 @@ describe('Tavern page', () => {
     const creates = fetchMock.mock.calls.filter(([url, init]) => url.endsWith('/conversations') && init?.method === 'POST');
     expect(creates).toHaveLength(1);
     expect(JSON.parse(creates[0][1]!.body as string)).toEqual({ characterId: 'character-1', userName: '小明', greetingIndex: 0 });
-    expect(screen.queryByRole('button', { name: '新建会话' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新建会话' })).toBeVisible();
   });
 
   it('restores an existing character conversation without clearing history or creating another', async () => {
@@ -1087,16 +1340,15 @@ describe('Tavern page', () => {
     expect(JSON.parse(update?.body as string).greetingIndex).toBe(1);
   });
 
-  it('edits real DSH generation parameters inside the existing conversation details panel', async () => {
+  it('edits real DSH generation parameters in the standalone parameters dialog', async () => {
     restoreConversation(); const user = userEvent.setup(); renderPage();
-    await user.click(await screen.findByRole('button', { name: '配置' }));
-    await user.click(screen.getByRole('button', { name: '生成参数' }));
-    const summary = await screen.findByRole('dialog', { name: '配置' });
-    await within(summary).findByText('旅人');
+    await user.click(await screen.findByRole('button', { name: '参数' }));
+    const summary = await screen.findByRole('dialog', { name: '模型参数' });
     const temperature = within(summary).getByLabelText('温度');
-    await user.type(temperature, '0.7');
+    fireEvent.change(temperature, { target: { value: '0.7' } });
     const maximum = within(summary).getByLabelText('最大输出 Token');
     await user.clear(maximum); await user.type(maximum, '1024');
+    await user.click(within(summary).getByText('高级参数'));
     await user.type(within(summary).getByLabelText('停止词（每行一个）'), 'END');
     await user.click(within(summary).getByRole('button', { name: '保存生成参数' }));
     expect(await within(summary).findByText('参数已保存 · 版本 2')).toBeInTheDocument();
@@ -1144,7 +1396,7 @@ describe('Tavern page', () => {
     }
   });
 
-  it('retains unsaved profile fields when generation parameters are saved', async () => {
+  it('does not commit discarded profile edits when only model parameters are saved', async () => {
     restoreConversation(); const user = userEvent.setup(); renderPage();
     await screen.findByText('请用茶。');
     await user.click(screen.getByRole('button', { name: '配置' }));
@@ -1153,12 +1405,16 @@ describe('Tavern page', () => {
     await user.clear(persona); await user.type(persona, '尚未保存的身份');
     const vocabulary = screen.getByLabelText('学习词表（可选）');
     await user.type(vocabulary, 'harbor');
-    await user.click(screen.getByRole('button', { name: '生成参数' }));
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: '参数' }));
     await user.click(screen.getByRole('button', { name: '保存生成参数' }));
     await screen.findByText('参数已保存 · 版本 2');
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: '配置' }));
     await user.click(screen.getByRole('button', { name: '会话设定' }));
-    expect(persona).toHaveValue('尚未保存的身份');
-    expect(vocabulary).toHaveValue('harbor');
+    expect(screen.getByLabelText('Persona（可选）')).toHaveValue(conversation.persona);
+    expect(screen.getByLabelText('学习词表（可选）')).toHaveValue('');
+    expect(fetchMock.mock.calls.some(([url, init]) => url.endsWith('/profile') && init?.method === 'PATCH')).toBe(false);
   });
 
   it('limits configuration history to the current character across session and character switches', async () => {
@@ -1202,10 +1458,8 @@ describe('Tavern page', () => {
 
   it('reloads the latest settings after a stale tab receives a version conflict', async () => {
     restoreConversation(); const user = userEvent.setup(); renderPage();
-    await user.click(await screen.findByRole('button', { name: '配置' }));
-    await user.click(screen.getByRole('button', { name: '生成参数' }));
-    const summary = await screen.findByRole('dialog', { name: '配置' });
-    await within(summary).findByText('旅人');
+    await user.click(await screen.findByRole('button', { name: '参数' }));
+    const summary = await screen.findByRole('dialog', { name: '模型参数' });
     savedDetail = { ...savedDetail, conversation: { ...savedDetail.conversation,
       generationSettings: { temperature: 1.2, maxOutputTokens: 512, stopSequences: [] }, generationSettingsVersion: 2 } };
     await user.click(within(summary).getByRole('button', { name: '保存生成参数' }));
