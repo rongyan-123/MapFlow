@@ -1,3 +1,5 @@
+> **最新发布（2026-10-07）**：前后端 main，笔记本镜像 `mapflow-server:postpaid-learning-20261007`，迁移 0034。平台现金大于 0 可以发送，完成后按实际费用结算，可扣成负数；后续发送需恢复正余额。学习酒馆独占内容区并卸载地图。管理员可设置 Q 群、检测上游余额。请先阅读 [最新部署记录](docs/deployment/2026-10-07-postpaid-learning.md)，以下旧预留逻辑和旧镜像仅供历史参考。
+
 > **Main 融合与发布（2026-10-06）**：日常前端以 `D:\MapFlow-main-integration-20261006` 的 `main` 为准，后端以 `D:\mapflow-server-main-integration-20261006` 的 `main` 为准。已融合公共树库搜索、筛选、分页、笔记与发布，以及 Vmq 自动充值、20 秒展示队列、酒馆和注册。笔记本生产状态以 `/opt/mapflow-laptop-migration-20261006/OPERATIONS.md` 首段为准；固定提交和验收证据见 `releases/20261006-main-integration/provenance.json`。不要再从未收齐功能的独立分支直接覆盖生产。详见 [main 整合记录](docs/deployment/2026-10-06-main-integration.md)。下文包含历史版本。
 
 # MapFlow 项目交接文档
