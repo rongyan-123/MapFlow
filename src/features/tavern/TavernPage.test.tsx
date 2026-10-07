@@ -338,6 +338,26 @@ describe('Tavern page', () => {
     await user.click(screen.getByText('思考过程'));
     expect(screen.getByText('这张图从浏览器开始。')).toBeVisible();
   });
+  it('keeps configuration visible while mobile chat is hidden behind the canvas', async () => {
+    restoreConversation();
+    savedDetail = { ...savedDetail, canvas: { revision: 1, enabled: true, elements: [] } };
+    const normalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => url.endsWith('/canvas') ? json(savedDetail.canvas) : normalFetch(url, init));
+    const mobileVisibility = document.createElement('style');
+    mobileVisibility.textContent = '.hidden { display: none; }';
+    document.head.append(mobileVisibility);
+    try {
+      const user = userEvent.setup(); renderPage();
+      await screen.findByRole('region', { name: '教学画布' });
+      await user.click(screen.getByRole('button', { name: '配置' }));
+      expect(screen.getByRole('dialog', { name: '配置', hidden: true })).toBeVisible();
+      await user.click(screen.getByRole('button', { name: '模型接入' }));
+      expect(screen.getByRole('button', { name: '保存并使用' })).toBeVisible();
+      await user.click(screen.getByRole('button', { name: '关闭配置' }));
+      expect(screen.queryByRole('dialog', { name: '配置', hidden: true })).not.toBeInTheDocument();
+    } finally { mobileVisibility.remove(); }
+  });
+
   it('shows streamed public reasoning and text before completion and offers stop', async () => {
     restoreConversation();
     const normalFetch = fetchMock.getMockImplementation()!;

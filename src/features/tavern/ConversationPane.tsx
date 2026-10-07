@@ -208,6 +208,48 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   }
 
   return <div className="flex min-h-0 min-w-0 flex-1 flex-col md:flex-row">
+      {configurationOpen && <TavernDialog title="配置" initialSection={configurationSection} onClose={onCloseConfiguration} sections={[...configuration, {
+        id: 'branches', label: '历史与分支', content: <section>
+        <h3 className="text-sm font-semibold text-slate-300">历史与分支</h3>
+        <div className="mt-3 space-y-3">
+          <label className="block text-xs text-slate-400">当前分支
+            <select aria-label="当前分支" className={`${inputClass} mt-1`} value={detail.graph.activeBranchId} disabled={graphBusy}
+              onChange={event => void applyGraphMutation({ type: 'select_branch', branchId: event.target.value })}>
+              {detail.graph.branches.filter(branch => branch.kind !== 'checkpoint').map(branch => <option key={branch.branchId} value={branch.branchId}>{branch.name}</option>)}
+            </select>
+          </label>
+          <label className="block text-xs text-slate-400">分支起点
+            <select aria-label="分支起点" className={`${inputClass} mt-1`} value={selectedBranchAnchorId} disabled={graphBusy || branchAnchors.length === 0}
+              onChange={event => setBranchAnchorId(event.target.value)}>
+              {branchAnchors.map((message, index) => <option key={message.messageId} value={message.messageId}>
+                {index + 1}. {message.content.trim().slice(0, 48) || '空白开场'}
+              </option>)}
+            </select>
+          </label>
+          <label className="block text-xs text-slate-400">分支或检查点名称
+            <input aria-label="分支或检查点名称" className={`${inputClass} mt-1`} maxLength={200} value={branchName} disabled={graphBusy}
+              onChange={event => setBranchName(event.target.value)} />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={buttonClass} disabled={!selectedBranchAnchorId || graphBusy || !branchName.trim()} onClick={() => {
+              if (selectedBranchAnchorId) void applyGraphMutation({ type: 'create_branch', anchorMessageId: selectedBranchAnchorId, name: branchName.trim(), activate: true });
+            }}>创建分支</button>
+            <button type="button" className={buttonClass} disabled={!selectedBranchAnchorId || graphBusy || !branchName.trim()} onClick={() => {
+              if (selectedBranchAnchorId) void applyGraphMutation({ type: 'create_checkpoint', anchorMessageId: selectedBranchAnchorId, name: branchName.trim() });
+            }}>保存检查点</button>
+          </div>
+          {detail.graph.branches.some(branch => branch.kind === 'checkpoint') && <div className="text-xs text-slate-400">
+            <p className="font-semibold text-slate-300">检查点</p>
+            <ul className="mt-1 space-y-1">{detail.graph.branches.filter(branch => branch.kind === 'checkpoint').map(branch => <li key={branch.branchId} className="flex items-center justify-between gap-2">
+              <span className="min-w-0 break-words">{branch.name}</span>
+              <button type="button" className={buttonClass} aria-label={`从${branch.name}回档`} disabled={graphBusy || !branch.leafMessageId}
+                onClick={() => { if (branch.leafMessageId) void applyGraphMutation({ type: 'create_branch', anchorMessageId: branch.leafMessageId,
+                  name: `${branch.name.slice(0, 190)} · 回档`, activate: true }); }}>回档</button>
+            </li>)}</ul>
+          </div>}
+        </div>
+        </section>,
+      }]} />}
     <nav aria-label="学习工作区" className="flex shrink-0 items-center gap-2 border-b border-slate-800 px-4 py-2 text-xs md:hidden">
       <button type="button" aria-pressed={!canvas.open} className={`rounded-full px-4 py-1.5 ${!canvas.open ? 'bg-cyan-300 text-slate-950' : 'bg-slate-800 text-slate-300'}`} onClick={() => canvas.setOpen(false)}>聊天</button>
       <button type="button" aria-pressed={canvas.open} disabled={canvas.saving} className={`rounded-full px-4 py-1.5 ${canvas.open ? 'bg-cyan-300 text-slate-950' : 'bg-slate-800 text-slate-300'}`} onClick={() => void canvas.show()}>画布</button>
@@ -275,48 +317,6 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         <button type="button" className={buttonClass} disabled={graphBusy || activeAlternativeIndex < 0 || activeAlternativeIndex >= alternatives.length - 1}
           onClick={() => void applyGraphMutation({ type: 'select_alternative', assistantMessageId: alternatives[activeAlternativeIndex + 1].messageId })}>下一个回复</button>
       </div>}
-      {configurationOpen && <TavernDialog title="配置" initialSection={configurationSection} onClose={onCloseConfiguration} sections={[...configuration, {
-        id: 'branches', label: '历史与分支', content: <section>
-        <h3 className="text-sm font-semibold text-slate-300">历史与分支</h3>
-        <div className="mt-3 space-y-3">
-          <label className="block text-xs text-slate-400">当前分支
-            <select aria-label="当前分支" className={`${inputClass} mt-1`} value={detail.graph.activeBranchId} disabled={graphBusy}
-              onChange={event => void applyGraphMutation({ type: 'select_branch', branchId: event.target.value })}>
-              {detail.graph.branches.filter(branch => branch.kind !== 'checkpoint').map(branch => <option key={branch.branchId} value={branch.branchId}>{branch.name}</option>)}
-            </select>
-          </label>
-          <label className="block text-xs text-slate-400">分支起点
-            <select aria-label="分支起点" className={`${inputClass} mt-1`} value={selectedBranchAnchorId} disabled={graphBusy || branchAnchors.length === 0}
-              onChange={event => setBranchAnchorId(event.target.value)}>
-              {branchAnchors.map((message, index) => <option key={message.messageId} value={message.messageId}>
-                {index + 1}. {message.content.trim().slice(0, 48) || '空白开场'}
-              </option>)}
-            </select>
-          </label>
-          <label className="block text-xs text-slate-400">分支或检查点名称
-            <input aria-label="分支或检查点名称" className={`${inputClass} mt-1`} maxLength={200} value={branchName} disabled={graphBusy}
-              onChange={event => setBranchName(event.target.value)} />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className={buttonClass} disabled={!selectedBranchAnchorId || graphBusy || !branchName.trim()} onClick={() => {
-              if (selectedBranchAnchorId) void applyGraphMutation({ type: 'create_branch', anchorMessageId: selectedBranchAnchorId, name: branchName.trim(), activate: true });
-            }}>创建分支</button>
-            <button type="button" className={buttonClass} disabled={!selectedBranchAnchorId || graphBusy || !branchName.trim()} onClick={() => {
-              if (selectedBranchAnchorId) void applyGraphMutation({ type: 'create_checkpoint', anchorMessageId: selectedBranchAnchorId, name: branchName.trim() });
-            }}>保存检查点</button>
-          </div>
-          {detail.graph.branches.some(branch => branch.kind === 'checkpoint') && <div className="text-xs text-slate-400">
-            <p className="font-semibold text-slate-300">检查点</p>
-            <ul className="mt-1 space-y-1">{detail.graph.branches.filter(branch => branch.kind === 'checkpoint').map(branch => <li key={branch.branchId} className="flex items-center justify-between gap-2">
-              <span className="min-w-0 break-words">{branch.name}</span>
-              <button type="button" className={buttonClass} aria-label={`从${branch.name}回档`} disabled={graphBusy || !branch.leafMessageId}
-                onClick={() => { if (branch.leafMessageId) void applyGraphMutation({ type: 'create_branch', anchorMessageId: branch.leafMessageId,
-                  name: `${branch.name.slice(0, 190)} · 回档`, activate: true }); }}>回档</button>
-            </li>)}</ul>
-          </div>}
-        </div>
-        </section>,
-      }]} />}
       {editing && activeLeaf && <div className="space-y-2 rounded-2xl border border-slate-700 bg-slate-900 p-3">
         <label htmlFor={`tavern-edit-${activeLeaf.messageId}`} className="text-xs font-semibold text-slate-300">编辑消息内容</label>
         <textarea id={`tavern-edit-${activeLeaf.messageId}`} aria-label="编辑消息内容" className={`${inputClass} max-h-48 resize-y`} rows={3}
