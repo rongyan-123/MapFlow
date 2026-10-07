@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import AssistantMarkdown from '../knowledge-chat/AssistantMarkdown';
 import { validateId, validateMessage } from './conversationInput';
-import { generateStream, mutateGraph, requestCashQuote } from './tavernClient';
+import { generateStream, mutateGraph, requestCashQuote, resolveTavernToolApproval } from './tavernClient';
 import {formatAmountMicros} from '../wallet/walletClient';
 import type {CashQuote} from './types';
 import { TavernApiError, type CompletedTurn, type ConversationDetail, type ConversationGraph, type GenerationAction, type GenerationRecord, type GraphMessage, type GraphMutation, type TavernModelSelection, type TavernUserModelAccess } from './types';
@@ -101,7 +101,12 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     try {
       const completed = await generateStream(detail.conversation.conversationId, outgoing.clientActionId, outgoing.expectedRevision, outgoing.action,
         csrfToken, delta => { if (!controller.signal.aborted) setDraft(previous => previous + delta); }, controller.signal,
-        modelAccess, modelAccess || platformModel ? modelSelection.historyBytes : undefined, platformModel,outgoing.billing);
+        modelAccess, modelAccess || platformModel ? modelSelection.historyBytes : undefined, platformModel,outgoing.billing,
+        async approval => {
+          const prompt=approval.destructive ? `请单独确认：${approval.action}（${approval.target}）。确认后才会执行。` : `确认${approval.action}（${approval.target}）？`;
+          const allowed=!controller.signal.aborted && window.confirm(prompt);
+          await resolveTavernToolApproval(detail.conversation.conversationId,approval.approvalRequestId,allowed,allowed && approval.destructive,csrfToken);
+        });
       if (controller.signal.aborted) return;
       storePending(storageKey, null);
       setPendingGeneration(null); setDraft(''); onCompleted(completed);

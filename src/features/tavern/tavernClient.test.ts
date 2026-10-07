@@ -10,6 +10,10 @@ function reply(body: unknown) {
 }
 
 describe('Tavern HTTP contract', () => {
+  it('rejects malformed tree permissions returned with a conversation', async () => {
+    reply({ ...detail, conversation: { ...conversation, libraryEntryId: 42, treeToolsEnabled: 'true' } });
+    await expect(fetchConversation('conversation-1')).rejects.toThrow();
+  });
   it('uploads normalized_card and the unchanged original file with session credentials and CSRF, without a multipart content-type override', async () => {
     const fetchMock = reply(character);
     const original = new File(['original text'], 'role.json');

@@ -9,7 +9,6 @@ import CompletionFlash from './features/skill-tree/CompletionFlash';
 import NodeDetailPanel from './features/skill-tree/NodeDetailPanel';
 import ProgressOverview from './features/skill-tree/ProgressOverview';
 import SkillTreeCanvas from './features/skill-tree/SkillTreeCanvas';
-import KnowledgeChatPanel from './features/knowledge-chat/KnowledgeChatPanel';
 import ResizableChatPane, {
   DEFAULT_CHAT_WIDTH,
 } from './features/knowledge-chat/ResizableChatPane';
@@ -696,7 +695,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
     setSelectedLibraryEntryId(libraryEntryId);
     setSelectedNodeId(null);
     setCompletion(null);
-    setChatOpen(false);
+    setChatOpen(true);
     setLayoutMode('relationship');
     setMobileView('graph');
   };
@@ -1027,7 +1026,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
           <ViewButton active={view === 'personal'} onClick={showPersonalLibrary}>
             我的学习
           </ViewButton>
-          <ViewButton active={false} onClick={onNavigateTavern}>酒馆</ViewButton>
+          <ViewButton active={false} onClick={onNavigateTavern}>独立酒馆</ViewButton>
         </nav>
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {(identityEnabled || session) && (
@@ -1292,6 +1291,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
                   isGraphVisible={graphVisible}
                   onSelectNode={(nodeId) => {
                     setSelectedNodeId(nodeId);
+                    setChatOpen(false);
                     setMobileView('detail');
                   }}
                 />
@@ -1416,20 +1416,19 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
             onWidthChange={setChatWidth}
             className={`${mobileView === 'chat' ? 'flex' : 'hidden'} min-h-0 w-full flex-1 flex-col overflow-hidden ${chatOpen ? 'lg:flex' : 'lg:hidden'}`}
           >
-            <KnowledgeChatPanel
-              treeTitle={activeTitle}
-              libraryEntryId={selectedLibraryEntryId}
-              csrfToken={session.csrfToken}
+            <TavernPage
+              treeContext={{ title: activeTitle, libraryEntryId: selectedLibraryEntryId }}
+              onNavigateConsole={closeKnowledgeChat}
+              onNavigateWallet={onNavigateWallet}
+              onNavigateModels={onNavigateModels}
               onClose={closeKnowledgeChat}
-              isVisible={chatOpen}
-              onCreditChanged={() => {
+              onTreeChanged={() => {
                 void creditQuery.refetch();
-              }}
-              onTreeChanged={() =>
-                queryClient.invalidateQueries({
+                void queryClient.invalidateQueries({
                   queryKey: personalTreeLibraryQueryKey,
-                })
-              }
+                });
+                void personalTree.refetch();
+              }}
             />
           </ResizableChatPane>
         )}
@@ -1602,7 +1601,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
               管理面板
             </DrawerItem>
           )}
-          <DrawerItem onClick={onNavigateTavern}>酒馆</DrawerItem>
+          <DrawerItem onClick={onNavigateTavern}>独立酒馆</DrawerItem>
           <DrawerItem onClick={onNavigateWallet}>额度</DrawerItem>
           <DrawerItem onClick={onNavigateModels}>模型价格</DrawerItem>
         </nav>

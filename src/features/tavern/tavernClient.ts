@@ -68,6 +68,27 @@ export async function fetchConversation(id: string, signal?: AbortSignal): Promi
   const body = await getJson(`${ROOT}/conversations/${pathId(id)}`, signal);
   return parseConversationDetail(body);
 }
+export async function updateTreeConnection(id: string, expectedRevision: number, libraryEntryId: string | null, toolsEnabled: boolean, csrfToken: string): Promise<ConversationDetail> {
+  return parseConversationDetail(await readJson(await request(`${ROOT}/conversations/${pathId(id)}/tree-connection`, {
+    method: 'PATCH', headers: mutationHeaders(csrfToken, true),
+    body: JSON.stringify({ expectedRevision, libraryEntryId, toolsEnabled }),
+  })));
+}
+export async function openTreeConversation(libraryEntryId: string, csrfToken: string, signal?: AbortSignal): Promise<ConversationDetail> {
+  return parseConversationDetail(await readJson(await request(`${ROOT}/tree-conversations/${pathId(libraryEntryId)}`, {
+    method: 'POST', headers: mutationHeaders(csrfToken, true), body: '{}', signal,
+  })));
+}
+export async function resolveTavernToolApproval(conversation: string, approvalId: string, allowed: boolean, destructiveConfirmed: boolean, csrfToken: string): Promise<void> {
+  await request(`${ROOT}/conversations/${pathId(conversation)}/tool-approvals/${pathId(approvalId)}`, {
+    method: 'POST', headers: mutationHeaders(csrfToken, true), body: JSON.stringify({ allowed, destructiveConfirmed }),
+  });
+}
+export async function switchConversationCharacter(conversation: string, expectedRevision: number, characterId: string, csrfToken: string): Promise<ConversationDetail> {
+  return parseConversationDetail(await readJson(await request(`${ROOT}/conversations/${pathId(conversation)}/character`, {
+    method: 'PATCH', headers: mutationHeaders(csrfToken, true), body: JSON.stringify({ expectedRevision, characterId }),
+  })));
+}
 export async function updateConversationProfile(id: string, expectedRevision: number, input: CreateConversationInput, csrfToken: string): Promise<ConversationDetail> {
   const { userName, persona, vocabulary, greetingIndex } = prepareConversationInput(input);
   if (!nonNegativeInteger(expectedRevision)) throw new TavernApiError(409, 'tavern.turn_conflict', '请刷新会话后重试。');
@@ -103,7 +124,8 @@ export async function mutateGraph(id: string, expectedRevision: number, action: 
 
 export async function generateStream(id: string, clientActionId: string, expectedRevision: number, action: GenerationAction, csrfToken: string,
   onDelta: (delta: string) => void, signal?: AbortSignal, modelAccess?: TavernUserModelAccess,
-  historyBytes?: 8192 | 16384 | 32768, platformModel?: string,billing?:{quoteId:string;policyVersion:string}): Promise<CompletedTurn> {
+  historyBytes?: 8192 | 16384 | 32768, platformModel?: string,billing?:{quoteId:string;policyVersion:string},
+  onApproval?: (approval: { approvalRequestId: string; action: string; target: string; destructive: boolean }) => Promise<void>): Promise<CompletedTurn> {
   if (modelAccess && platformModel) throw new TavernApiError(400, 'tavern.model_access_invalid', '请选择一种模型线路。');
   validateId(clientActionId);
   if (!nonNegativeInteger(expectedRevision)) throw new TavernApiError(409, 'tavern.turn_conflict', '会话版本已变化，请刷新后重试。');
@@ -118,17 +140,25 @@ export async function generateStream(id: string, clientActionId: string, expecte
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  const consume = (frame: string): CompletedTurn | undefined => {
+  const consume = async (frame: string): Promise<CompletedTurn | undefined> => {
     let event = 'message';
     const lines: string[] = [];
     for (const line of frame.split(/\r\n|\r|\n/u)) {
       if (line.startsWith('event:')) event = line.slice(6).replace(/^ /u, '');
       if (line.startsWith('data:')) lines.push(line.slice(5).replace(/^ /u, ''));
     }
-    if (!lines.length || !['delta', 'completed', 'error'].includes(event)) return;
+    if (!lines.length || !['delta', 'completed', 'error', 'approval_required'].includes(event)) return;
     let payload: unknown;
     try { payload = JSON.parse(lines.join('\n')) as unknown; } catch { throw invalidResponse(); }
     if (event === 'error') throw parseErrorBody(payload, 502);
+    if (event === 'approval_required') {
+      if (!isRecord(payload) || !isRecord(payload.approval)) throw invalidResponse();
+      const approval=payload.approval;
+      if (!strings(approval,['approvalRequestId','action','target']) || typeof approval.destructive !== 'boolean') throw invalidResponse();
+      if (onApproval) await onApproval(approval as { approvalRequestId: string; action: string; target: string; destructive: boolean });
+      else await resolveTavernToolApproval(id, approval.approvalRequestId as string, false, false, csrfToken);
+      return;
+    }
     if (event === 'delta') {
       if (!isRecord(payload) || typeof payload.delta !== 'string') throw invalidResponse();
       onDelta(payload.delta);
@@ -152,11 +182,11 @@ export async function generateStream(id: string, clientActionId: string, expecte
       while ((boundary = /\r\n\r\n|\n\n|\r\r/u.exec(buffer))) {
         const frame = buffer.slice(0, boundary.index);
         buffer = buffer.slice(boundary.index + boundary[0].length);
-        const completed = consume(frame);
+        const completed = await consume(frame);
         if (completed) return completed;
       }
       if (done) {
-        const completed = consume(buffer);
+        const completed = await consume(buffer);
         if (completed) return completed;
         throw interrupted();
       }
@@ -217,6 +247,8 @@ function isCard(value: unknown): value is NormalizedCharacterCard {
 }
 function parseConversation(value: unknown): Conversation {
   if (!isRecord(value) || !strings(value, ['conversationId', 'characterId', 'title', 'userName', 'openingMessage', 'createdAt']) || !nullableString(value.persona) ||
+    !(value.libraryEntryId === undefined || nullableString(value.libraryEntryId)) ||
+    !(value.treeToolsEnabled === undefined || typeof value.treeToolsEnabled === 'boolean') ||
     !(value.vocabulary === null || (Array.isArray(value.vocabulary) && value.vocabulary.every(entry => isRecord(entry) && typeof entry.term === 'string' && (entry.meaning === undefined || entry.meaning === null || typeof entry.meaning === 'string')))) ||
     !isGenerationSettings(value.generationSettings) || !positiveInteger(value.generationSettingsVersion)) throw invalidResponse();
   return value as unknown as Conversation;

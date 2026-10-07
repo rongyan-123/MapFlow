@@ -165,9 +165,9 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-function renderPage() {
+function renderPage(treeContext?: { libraryEntryId: string; title: string }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
-  const rendered = render(<QueryClientProvider client={client}><IdentityProvider><TavernPage onNavigateConsole={() => {}} /></IdentityProvider></QueryClientProvider>);
+  const rendered = render(<QueryClientProvider client={client}><IdentityProvider><TavernPage onNavigateConsole={() => {}} treeContext={treeContext} /></IdentityProvider></QueryClientProvider>);
   return { ...rendered, client };
 }
 function restoreConversation() {
@@ -204,6 +204,78 @@ async function configurePaidPlatform(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('Tavern page', () => {
+  it('switches the tutor inside a connected story while retaining its existing messages', async () => {
+    const tutor={...character,characterId:'tutor-2',card:{...character.card,name:'耐心导师'}};
+    characters=[character,tutor];
+    savedDetail={...savedDetail,conversation:{...savedDetail.conversation,libraryEntryId:'entry-1',treeToolsEnabled:true}};
+    const normalFetch=fetchMock.getMockImplementation()!;
+    let switched: unknown;
+    fetchMock.mockImplementation(async (url:string,init?:RequestInit)=>{
+      if(url==='/api/me/tavern/tree-conversations/entry-1'){conversations=[savedDetail.conversation];return json(savedDetail);}
+      if(url.endsWith('/character') && init?.method==='PATCH'){
+        switched=JSON.parse(init.body as string);
+        savedDetail={...savedDetail,character:tutor,conversation:{...savedDetail.conversation,characterId:tutor.characterId},graph:{...savedDetail.graph,revision:2}};
+        return json(savedDetail);
+      }
+      return normalFetch(url,init);
+    });
+    const user=userEvent.setup();renderPage({libraryEntryId:'entry-1',title:'Python 学习'});
+    await screen.findByRole('textbox',{name:'消息'});
+    await user.click(screen.getByRole('button',{name:'打开角色列表'}));
+    await user.click(screen.getByRole('button',{name:'选择角色 耐心导师'}));
+    await waitFor(()=>expect(switched).toEqual({expectedRevision:detail.graph.revision,characterId:'tutor-2'}));
+    expect(screen.getByRole('log',{name:'对话消息'})).toHaveTextContent('请用茶。');
+  });
+  it('asks before executing a tree modification and resolves that exact story proposal', async () => {
+    restoreConversation();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const normalFetch = fetchMock.getMockImplementation()!;
+    let decision: unknown;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/tool-approvals/approval-1')) { decision = JSON.parse(init!.body as string); return new Response(null, { status: 204 }); }
+      if (url.endsWith('/turns') && init?.method === 'POST') {
+        const input=JSON.parse(init.body as string);
+        const completed={ ...completion, turn:{ ...completion.turn,clientTurnId:input.clientActionId,userMessage:input.action.message } };
+        return new Response(`event: approval_required\ndata: ${JSON.stringify({approval:{approvalRequestId:'approval-1',action:'修改节点',target:'当前个人树',destructive:false}})}\n\nevent: completed\ndata: ${JSON.stringify(completed)}\n\n`, { headers:{'content-type':'text/event-stream'} });
+      }
+      return normalFetch(url,init);
+    });
+    const user=userEvent.setup(); renderPage(); await configureSelfKey(user);
+    await user.type(screen.getByRole('textbox',{name:'消息'}),'修改节点描述');
+    await user.click(screen.getByRole('button',{name:'发送'}));
+    await waitFor(()=>expect(confirm).toHaveBeenCalledWith('确认修改节点（当前个人树）？'));
+    expect(decision).toEqual({allowed:true,destructiveConfirmed:false});
+    confirm.mockRestore();
+  });
+  it('shows only the connected tree stories when selecting history in the learning panel', async () => {
+    savedDetail={...savedDetail,conversation:{...savedDetail.conversation,libraryEntryId:'entry-1',treeToolsEnabled:true}};
+    conversations=[savedDetail.conversation,{...savedDetail.conversation,conversationId:'other-tree-story',libraryEntryId:'entry-2',title:'另一棵树的故事'}];
+    const normalFetch=fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url:string,init?:RequestInit)=>url==='/api/me/tavern/tree-conversations/entry-1'?json(savedDetail):normalFetch(url,init));
+    const user=userEvent.setup();renderPage({libraryEntryId:'entry-1',title:'Python 学习'});
+    await screen.findByRole('textbox',{name:'消息'});
+    await user.click(screen.getByRole('button',{name:'配置'}));
+    expect(screen.queryByRole('option',{name:/另一棵树的故事/})).not.toBeInTheDocument();
+  });
+  it('restores the same server conversation in the tree panel and independent tavern', async () => {
+    const normalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/me/tavern/tree-conversations/entry-1') {
+        savedDetail = { ...savedDetail, conversation: { ...savedDetail.conversation, libraryEntryId: 'entry-1', treeToolsEnabled: true } };
+        conversations = [savedDetail.conversation]; return json(savedDetail);
+      }
+      return normalFetch(url, init);
+    });
+    const embedded = renderPage({ libraryEntryId: 'entry-1', title: 'Python 学习' });
+    await screen.findByText('已关联：Python 学习');
+    expect(screen.getByRole('textbox', { name: '消息' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '返回学习控制台' })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe(conversation.conversationId);
+    embedded.unmount();
+    renderPage();
+    await screen.findByRole('textbox', { name: '消息' });
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/me/tavern/conversations/conversation-1')).toBe(true);
+  });
   it('renames a library card from its own action menu without opening a new story', async () => {
     const user = userEvent.setup(); renderPage();
     await user.click(await screen.findByRole('button', { name: '角色操作 旅人' }));

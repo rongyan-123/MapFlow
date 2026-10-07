@@ -4,9 +4,10 @@ interface MobileDrawerProps {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
+  desktopVisible?: boolean;
 }
 
-export default function MobileDrawer({ open, onClose, children }: MobileDrawerProps) {
+export default function MobileDrawer({ open, onClose, children, desktopVisible = false }: MobileDrawerProps) {
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -18,7 +19,7 @@ export default function MobileDrawer({ open, onClose, children }: MobileDrawerPr
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 lg:hidden">
+    <div className={`fixed inset-0 z-50 ${desktopVisible ? '' : 'lg:hidden'}`}>
       <div
         data-testid="mobile-drawer-overlay"
         className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"

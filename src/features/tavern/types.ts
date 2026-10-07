@@ -40,6 +40,7 @@ export interface GenerationSettingsState {
 export interface Conversation {
   conversationId: string; characterId: string; title: string; userName: string;
   persona: string | null; vocabulary: VocabularyEntry[] | null; openingMessage: string;
+  libraryEntryId?: string | null; treeToolsEnabled?: boolean;
   generationSettings: GenerationSettings; generationSettingsVersion: number; createdAt: string;
 }
 export interface Turn {

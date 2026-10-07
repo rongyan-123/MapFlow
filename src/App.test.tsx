@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { detail as tavernDetail, character as tavernCharacter } from './features/tavern/testFixtures';
 import {
   IdentityProvider,
   SESSION_QUERY_KEY,
@@ -37,7 +38,8 @@ const legacyApi = vi.hoisted(() => ({ fetchLearningTree: vi.fn() }));
 const walletApi = vi.hoisted(() => ({ readWallet: vi.fn(), readModelPricing: vi.fn(), readAdminTopups: vi.fn() }));
 vi.mock('./features/wallet/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('./features/wallet/walletClient')>(), ...walletApi }));
 
-const tavernApi = vi.hoisted(() => ({ fetchCharacters: vi.fn(), fetchConversations: vi.fn() }));
+const tavernApi = vi.hoisted(() => ({ fetchCharacters: vi.fn(), fetchConversations: vi.fn(), openTreeConversation: vi.fn(), fetchConversation: vi.fn(),
+  generateStream: vi.fn(),fetchPlatformModels: vi.fn(),requestCashQuote:vi.fn(),resolveTavernToolApproval:vi.fn() }));
 vi.mock('./features/tavern/tavernClient', () => tavernApi);
 
 const chatApi = vi.hoisted(() => ({
@@ -295,6 +297,17 @@ beforeEach(() => {
   window.localStorage.clear();
   tavernApi.fetchCharacters.mockReset().mockResolvedValue([]);
   tavernApi.fetchConversations.mockReset().mockResolvedValue([]);
+  tavernApi.openTreeConversation.mockReset().mockImplementation(async (entry: string) => ({ ...tavernDetail,
+    conversation: { ...tavernDetail.conversation, libraryEntryId: entry, treeToolsEnabled: true } }));
+  tavernApi.fetchConversation.mockReset().mockResolvedValue(tavernDetail);
+  tavernApi.fetchPlatformModels.mockReset().mockResolvedValue({ enabled:true,billingMode:'trial',models:[{id:'learning-model',provider:'AnyAI',contextWindow:32768}] });
+  tavernApi.requestCashQuote.mockReset(); tavernApi.resolveTavernToolApproval.mockReset();
+  tavernApi.generateStream.mockReset().mockImplementation(async (_id:string, clientActionId:string,_revision:number,action:{message:string}) => {
+    const user={messageId:'chat-user',parentMessageId:'message-assistant-1',role:'user' as const,origin:'user' as const,characterId:null,content:action.message};
+    const assistant={messageId:'chat-answer',parentMessageId:user.messageId,role:'assistant' as const,origin:'model' as const,characterId:tavernCharacter.characterId,content:'测试回答'};
+    return { turn:{turnId:'chat-turn',clientTurnId:clientActionId,userMessage:action.message,assistantMessage:'测试回答',usage:{inputTokens:1,outputTokens:1,cacheHitInputTokens:0,cacheMissInputTokens:0},chargedCreditUnits:0,createdAt:'2026-10-07T00:00:00Z'},
+      graph:{...tavernDetail.graph,revision:2,messages:[...tavernDetail.graph.messages,user,assistant],activePath:[...tavernDetail.graph.activePath,user.messageId,assistant.messageId]},creditBalance:10,chargedCredits:0,idempotencyHit:false };
+  });
   window.localStorage.setItem('mapflow.guide.public.v1.seen', 'true');
   window.history.replaceState({}, '', '/console');
 });
@@ -349,24 +362,24 @@ describe('Tavern navigation', () => {
     await user.type(within(gate).getByLabelText('密码'), 'password123');
     const loginButtons = within(gate).getAllByRole('button', { name: '登录' });
     await user.click(loginButtons[loginButtons.length - 1]);
-    expect(await screen.findByRole('heading', { name: '酒馆' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '独立酒馆' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/tavern');
   });
   it('opens the standalone page from desktop navigation and restores it through popstate', async () => {
     const user = userEvent.setup(); renderApp('/console');
-    await user.click(await screen.findByRole('button', { name: '酒馆' }));
-    expect(await screen.findByRole('heading', { name: '酒馆' })).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: '独立酒馆' }));
+    expect(await screen.findByRole('heading', { name: '独立酒馆' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/tavern');
     await user.click(screen.getByRole('button', { name: '返回学习控制台' }));
     expect(window.location.pathname).toBe('/console');
     window.history.pushState({}, '', '/tavern'); fireEvent.popState(window);
-    expect(await screen.findByRole('heading', { name: '酒馆' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '独立酒馆' })).toBeInTheDocument();
   });
   it('offers Tavern in the existing mobile navigation drawer', async () => {
     const user = userEvent.setup(); renderApp('/console');
     await user.click(await screen.findByRole('button', { name: '打开功能菜单' }));
-    await user.click(within(screen.getByRole('dialog', { name: '功能菜单' })).getByRole('button', { name: '酒馆' }));
-    expect(await screen.findByRole('heading', { name: '酒馆' })).toBeInTheDocument();
+    await user.click(within(screen.getByRole('dialog', { name: '功能菜单' })).getByRole('button', { name: '独立酒馆' }));
+    expect(await screen.findByRole('heading', { name: '独立酒馆' })).toBeInTheDocument();
   });
 });
 
@@ -1584,12 +1597,15 @@ describe('手机端视图栈', () => {
     await user.click(
       await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
     );
+    await waitFor(() => expect(tavernApi.openTreeConversation).toHaveBeenCalledWith(personalEntry.library_entry_id, authenticated.csrfToken, expect.any(AbortSignal)));
+    expect(screen.getByTestId('knowledge-chat-panel').className.split(' ')).toContain('lg:flex');
     await user.click(
       await screen.findByRole('button', { name: '查看节点 基础节点' }),
     );
     await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
 
     expect(screen.getByTestId('knowledge-chat-panel')).toBeInTheDocument();
+    await waitFor(() => expect(tavernApi.openTreeConversation).toHaveBeenCalled());
     expect(screen.getByTestId('mobile-detail').className).toContain('hidden');
     expect(chatApi.sendKnowledgeChatMessageStream).not.toHaveBeenCalled();
 
@@ -1655,7 +1671,12 @@ describe('手机端视图栈', () => {
     );
     await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
 
-    await user.type(screen.getByRole('textbox', { name: '输入问题' }), '保留这条消息');
+    await user.click(screen.getByRole('button', { name: '配置' }));
+    await user.click(screen.getByRole('button', { name: '模型接入' }));
+    await user.click(screen.getByRole('button', { name: '使用平台模型（需要充值）' }));
+    await user.click(await screen.findByRole('button', { name: /learning-model/ }));
+    await user.click(screen.getByRole('button', { name: '关闭配置' }));
+    await user.type(screen.getByRole('textbox', { name: '消息' }), '保留这条消息');
     await user.click(screen.getByRole('button', { name: '发送' }));
     expect(await screen.findByText('测试回答')).toBeInTheDocument();
 
