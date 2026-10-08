@@ -3,7 +3,7 @@ from pathlib import Path
 import copy, importlib.util, json, shutil, sys, time
 
 root = Path('/opt/mapflow-laptop-migration-20261006')
-source = root / 'releases/20261008-chat-reliability/2026-10-08-chat-reliability-release.py'
+source = root / 'releases/20261008-chat-reliability/mapflow-chat-reliability-release.py'
 spec = importlib.util.spec_from_file_location('chat_release', source)
 chat = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(chat)
