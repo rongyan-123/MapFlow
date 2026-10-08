@@ -91,6 +91,24 @@ describe('Tavern HTTP contract', () => {
     await expect(fetchCharacters()).rejects.toMatchObject({ status: 500, code: 'tavern.request_failed' });
   });
 
+  it.each([
+    ['tavern.user_model_rejected', 502, '本次生成失败，请稍后重试。'],
+    ['tavern.user_model_authentication', 502, '模型配置不可用，请重新配置后重试。'],
+    ['tavern.user_model_balance', 402, '服务暂时不可用，请稍后重试。'],
+    ['tavern.platform_trial_rejected', 502, '本次生成失败，请稍后重试。'],
+    ['tavern.platform_trial_unavailable', 503, '服务暂时不可用，请稍后重试。'],
+    ['server.network_unavailable', 503, '服务器网络异常，请稍后重试。'],
+    ['unrecognized.service_failure', 500, '请求暂时失败，请稍后重试。'],
+  ])('uses a safe public message for %s in HTTP and streamed failures', async (code, status, message) => {
+    const serverError = {code, message: '上游 AnyAI https://private.example/v1 API Key: private-test-key', traceId: 'safe-trace'};
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({error: serverError}), {status: Number(status)}))
+      .mockResolvedValueOnce(sseResponse([{event:'error', payload:{...serverError, httpStatus:status}}])));
+    await expect(fetchCharacters()).rejects.toMatchObject({code, status, message, traceId:'safe-trace', generationFailed:false});
+    await expect(generateStream('conversation-1', 'stable', 0, {type:'reply', message:'你好'}, 'csrf', () => {}))
+      .rejects.toMatchObject({code, status, message, traceId:'safe-trace', generationFailed:true});
+  });
+
   it('rejects malformed history/completion structures before the UI consumes them', async () => {
     reply({ ...detail, turns: [{ ...turn, usage: { inputTokens: -1 } }] });
     await expect(fetchConversation('conversation-1')).rejects.toMatchObject({ code: 'tavern.invalid_response' });

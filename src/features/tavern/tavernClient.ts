@@ -248,11 +248,30 @@ async function request(path: string, init: RequestInit): Promise<Response> {
 }
 function parseErrorBody(body: unknown, status: number, generationFailed = false): TavernApiError {
   if (isRecord(body) && typeof body.code === 'string' && typeof body.message === 'string') {
-    return new TavernApiError(typeof body.httpStatus === 'number' && body.httpStatus >= 400 && body.httpStatus <= 599 ? body.httpStatus : status,
-      body.code, body.message, typeof body.traceId === 'string' ? body.traceId : undefined,
+    const httpStatus = typeof body.httpStatus === 'number' && body.httpStatus >= 400 && body.httpStatus <= 599 ? body.httpStatus : status;
+    return new TavernApiError(httpStatus,
+      body.code, publicErrorMessage(body.code, httpStatus, body.message), typeof body.traceId === 'string' ? body.traceId : undefined,
       generationFailed && !['tavern.turn_conflict', 'tavern.persistence_failed'].includes(body.code));
   }
   return new TavernApiError(status, 'tavern.request_failed', '酒馆请求失败，请稍后重试。');
+}
+function publicErrorMessage(code: string, status: number, message: string): string {
+  const safeMessages: Record<string, string> = {
+    'server.network_unavailable': '服务器网络异常，请稍后重试。',
+    'generation.model_access_invalid': '模型配置无效，请重新配置。',
+    'tavern.user_model_authentication': '模型配置不可用，请重新配置后重试。',
+    'tavern.user_model_balance': '服务暂时不可用，请稍后重试。',
+    'tavern.user_model_rate_limited': '请求较多，请稍后重试。',
+    'tavern.user_model_timeout': '响应超时，请稍后重试。',
+    'tavern.user_model_unavailable': '服务暂时不可用，请稍后重试。',
+    'tavern.user_model_output_limit': '本次生成达到输出上限，请调整参数后重试。',
+    'tavern.user_model_invalid_response': '本次生成未完成，请重试。',
+    'tavern.user_model_rejected': '本次生成失败，请稍后重试。',
+    'tavern.platform_trial_rejected': '本次生成失败，请稍后重试。',
+    'tavern.platform_trial_unavailable': '服务暂时不可用，请稍后重试。',
+    'tavern.cash_billing_unavailable': '本次生成未完成，请重试。',
+  };
+  return Object.prototype.hasOwnProperty.call(safeMessages, code) ? safeMessages[code] : status >= 500 ? '请求暂时失败，请稍后重试。' : message;
 }
 async function readJson(response: Response): Promise<unknown> {
   try { return await response.json() as unknown; } catch { throw invalidResponse(); }

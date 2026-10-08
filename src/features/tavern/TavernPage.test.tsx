@@ -344,7 +344,7 @@ describe('Tavern page', () => {
     await waitFor(() => expect(fetchMock.mock.calls.filter(([url, init]) => url === '/api/me/tavern/conversations' && init?.method === 'POST')).toHaveLength(1));
     expect(screen.getByRole('button', { name: '创建中…' })).toBeDisabled();
     await act(async () => releaseCreate(json(fresh.conversation)));
-    await screen.findByText('关联失败，请重试');
+    await screen.findByText('请求暂时失败，请稍后重试。');
     await user.click(screen.getByRole('button', { name: '重试新建会话' }));
     await waitFor(() => expect(window.localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe('new-story'));
     expect(fetchMock.mock.calls.filter(([url, init]) => url === '/api/me/tavern/conversations' && init?.method === 'POST')).toHaveLength(1);
@@ -867,7 +867,7 @@ describe('Tavern page', () => {
       : original(url, init));
     await user.type(screen.getByLabelText('消息'), '修正 Key 后重试');
     await user.click(screen.getByRole('button', { name: '发送' }));
-    await screen.findByText('Key 无效');
+    await screen.findByText('模型配置不可用，请重新配置后重试。');
     await user.click(screen.getByRole('button', { name: '填写 API Key 或使用平台额度' }));
     const setup = screen.getByRole('dialog', { name: '配置' });
     expect(within(setup).getByRole('button', { name: '模型接入' })).toHaveAttribute('aria-current', 'page');
@@ -1190,7 +1190,7 @@ describe('Tavern page', () => {
       ? Promise.resolve(new Response(JSON.stringify({ error: { code: 'tavern.persistence_failed', message: '保存失败，请重试' } }), { status: 503 }))
       : originalFetch(url, init));
     await user.click(within(dialog).getByRole('button', { name: '保存角色卡' }));
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent('保存失败');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('请求暂时失败，请稍后重试。');
     expect(within(dialog).getByLabelText('角色名称')).toHaveValue('守望者');
     expect(within(dialog).getByLabelText('角色设定（提示词）')).toHaveValue('用中文交谈。');
   });
@@ -1652,6 +1652,8 @@ describe('Tavern page', () => {
     await screen.findByText('本次生成失败，未扣除本站额度。可重试或返回编辑。');
     expect(screen.queryByText('这条消息尚未确认完成，请重试以核对结果。')).not.toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('failure-trace');
+    expect(screen.getByRole('alert')).toHaveTextContent('本次生成失败，请稍后重试。');
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/上游|URL|模型和参数/);
     expect(await screen.findByRole('button', { name: '重试这条消息' })).toBeEnabled();
     expect(savedDetail.generations).toHaveLength(1);
   });
