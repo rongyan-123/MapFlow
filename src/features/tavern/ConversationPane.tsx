@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useTeachingCanvas } from './useTeachingCanvas';
 import './teachingWorkspace.css';
+import PanelResizeHandle from './PanelResizeHandle';
 import GenerationProcess from './GenerationProcess';
 import type { GenerationProcessEvent } from './types';
 const TeachingCanvasPanel = lazy(() => import('./TeachingCanvasPanel'));
@@ -84,6 +85,12 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         storePending(storageKey, null); setPendingGeneration(null); setDraft(''); setProcess([]); setError(null);
         canvas.setPreview(null); onRecovered(saved);
         return true;
+      }
+      const latestAttempt = saved.diagnostics?.find(record=>record.actionId===expected.clientActionId&&record.payload.type==='attempt');
+      if(!signal?.aborted&&latestAttempt&&['failed','cancelled','interrupted'].includes(String(latestAttempt.payload.state))) {
+        storePending(storageKey,null);setPendingGeneration(null);
+        if(expected.action.type==='reply')setMessage(expected.action.message);
+        canvas.setPreview(null);onRecovered(saved);return true;
       }
     } catch { /* Keep the original failure and request ID when recovery cannot confirm a saved result. */ }
     finally { setRecovering(false); }
@@ -285,10 +292,11 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     <div id={`tavern-canvas-${detail.conversation.conversationId}`} className="tavern-canvas" data-open={canvas.open} data-wide={canvas.wide}
       aria-hidden={!canvas.open} {...(!canvas.open ? { inert: '' } : {})}>
     {canvas.document && <Suspense fallback={<section aria-label="教学画布" className="flex-1 p-6" role="status">正在打开教学画布…</section>}>
-      <TeachingCanvasPanel document={canvas.document} busy={busy} saving={canvas.saving} wide={canvas.wide}
+      <TeachingCanvasPanel accountId={accountId} document={canvas.document} busy={busy} saving={canvas.saving} wide={canvas.wide}
         onSave={canvas.save} onChange={canvas.queue} onClose={() => canvas.setOpen(false)} onWidth={() => canvas.setWide(previous => !previous)} />
     </Suspense>}
     </div>
+    {canvas.open&&<PanelResizeHandle label="调整画布与聊天宽度" storageKey={`mapflow.layout.canvas.${accountId}`} />}
     <div className="tavern-chat" data-canvas-open={canvas.open}>
     <div ref={pane} role="log" aria-label="对话消息" aria-live="polite" aria-relevant="additions" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-8" onScroll={() => {
       const container = pane.current;

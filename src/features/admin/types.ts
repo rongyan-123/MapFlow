@@ -201,6 +201,8 @@ export interface AdminRequestStageOperation {
 }
 
 export interface AdminRequestObservation extends AdminRequestObservationSummary {
+  executionRecords?: {eventId:string; generationId:string; actionId:string; recordedAt:string; payload:Record<string,unknown>}[];
+  executionRecordsUnavailable?: boolean;
   peerIp: string | null;
   lifecycleSchemaVersion: number;
   redactionSchemaVersion: number;

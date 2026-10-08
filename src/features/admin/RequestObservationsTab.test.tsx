@@ -100,6 +100,20 @@ it('draws every fixed lifecycle node and exposes friendly plus raw diagnostics',
   expect(within(dialog).getByText('请求 128 B · 响应 256 B')).toBeInTheDocument();
 });
 
+it('shows independently saved tool errors with the execution phase and exact reason', async () => {
+  const observed = detail();
+  observed.executionRecords = [{eventId:'event',generationId:'generation',actionId:'action',recordedAt:'2026-10-08T00:00:00Z',
+    payload:{name:'apply_canvas_patch',state:'failed',phase:'validation',callId:'drawing',result:{ok:false,error:{field:'upsert[0].width',actual:-10,message:'width must be nonnegative'}}}}];
+  adminApi.fetchAdminRequestObservation.mockResolvedValueOnce(observed);
+  const user = userEvent.setup();renderTab();
+  await screen.findByRole('button',{name:`查看请求 ${REQUEST_ID}`});
+  await user.click(screen.getByRole('button',{name:`查看请求 ${REQUEST_ID}`}));
+  const dialog = await screen.findByRole('dialog',{name:'请求生命周期详情'});
+  await user.click(within(dialog).getByText('apply_canvas_patch · failed · validation'));
+  const execution = within(dialog).getByText('apply_canvas_patch · failed · validation').closest('details')!;
+  expect(within(execution).getByText(/width must be nonnegative/)).toHaveTextContent('upsert[0].width');
+});
+
 it('shows captured operations beside the friendly explanation and raw diagnostic', async () => {
   const observedDetail = detail();
   Object.assign(observedDetail.stages[3], {

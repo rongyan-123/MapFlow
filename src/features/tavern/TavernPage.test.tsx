@@ -1848,3 +1848,29 @@ it('keeps live cash quota in the tavern header and makes model, theme and logout
   expect(within(menu).getByText('学习积分')).toBeInTheDocument();
   client.clear();
 });
+
+it('restores editing after the server confirms a failed attempt following refresh', async () => {
+  failFirstTurn=true;restoreConversation();const user=userEvent.setup();const mounted=renderPage();
+  await configureSelfKey(user);await user.type(screen.getByLabelText('消息'),'Keep my failed message');
+  await user.click(screen.getByRole('button',{name:'发送'}));await screen.findByRole('button',{name:'重试这条消息'});
+  savedDetail={...savedDetail,diagnostics:[{actionId:attempts[0].clientActionId,payload:{type:'attempt',state:'failed',partialAnswer:'Partial reply'}}]};
+  mounted.unmount();renderPage();
+  await waitFor(()=>expect(screen.getByLabelText('消息')).toBeEnabled());
+  expect(screen.getByLabelText('消息')).toHaveValue('Keep my failed message');
+  expect(attempts).toHaveLength(1);
+});
+
+it('allows resizing the canvas boundary and remembers its width',async()=>{
+  restoreConversation();savedDetail={...savedDetail,canvas:{revision:1,enabled:true,elements:[]}};
+  const normal=fetchMock.getMockImplementation()!;fetchMock.mockImplementation(async(url:string,init?:RequestInit)=>url.endsWith('/canvas')?json(savedDetail.canvas):normal(url,init));
+  const user=userEvent.setup();renderPage();await screen.findByText('请用茶。');
+  await screen.findByLabelText('白板编辑器');
+  const handle=await screen.findByRole('separator',{name:'调整画布与聊天宽度'});
+  const panel=handle.previousElementSibling as HTMLElement;
+  const parent=handle.parentElement!;
+  vi.spyOn(parent,'getBoundingClientRect').mockReturnValue({width:1400} as DOMRect);
+  vi.spyOn(panel,'getBoundingClientRect').mockReturnValue({width:500} as DOMRect);
+  fireEvent.keyDown(handle,{key:'ArrowRight'});
+  expect(panel.style.getPropertyValue('--panel-width')).toBe('520px');
+  expect(localStorage.getItem('mapflow.layout.canvas.player-1')).toBe('520');
+});

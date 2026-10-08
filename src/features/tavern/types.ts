@@ -82,6 +82,7 @@ export interface ConversationDetail {
   canvas?: TeachingCanvasState;
   conversation: Conversation; character: Character; turns: Turn[];
   generations: GenerationRecord[]; graph: ConversationGraph;
+  diagnostics?: {actionId:string;payload:Record<string,unknown>}[];
   cashCharges?: CashCharge[];
 }
 export interface CashCharge { generationId:string; outputMessageId:string; amountMicros:number; balanceAfterMicros:number; capped:boolean; createdAt:string }

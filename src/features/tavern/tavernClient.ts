@@ -114,6 +114,7 @@ export async function updateConversationProfile(id: string, expectedRevision: nu
 function parseConversationDetail(body: unknown): ConversationDetail {
   if (!isRecord(body)) throw invalidResponse();
   return { conversation: parseConversation(body.conversation), character: parseCharacter(body.character),
+    ...(Array.isArray(body.diagnostics)?{diagnostics:body.diagnostics.filter((record):record is {actionId:string;payload:Record<string,unknown>}=>isRecord(record)&&typeof record.actionId==='string'&&isRecord(record.payload))}:{}),
     ...(body.canvas === undefined ? {} : { canvas: parseTeachingCanvas(body.canvas) }),
     turns: parseList(body, 'turns', parseTurn), generations: parseList(body, 'generations', parseGeneration), graph: parseGraph(body.graph),
     ...(body.cashCharges===undefined?{}:{cashCharges:parseList(body,'cashCharges',parseCashCharge)}) };

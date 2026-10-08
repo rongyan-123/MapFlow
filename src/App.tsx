@@ -1,3 +1,4 @@
+import PanelResizeHandle from './features/tavern/PanelResizeHandle';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -1239,6 +1240,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
             </>
           )}
         </aside>
+        {view==='personal'&&personalSidebarOpen&&<PanelResizeHandle label="调整树库与工作区宽度" storageKey={`mapflow.layout.tree-sidebar.${session?.account.playerId??'visitor'}`} minWidth={180} remainingWidth={640} panelSelector="[data-mapflow-tree-sidebar]" />}
 
         {!(view === 'personal' && chatOpen && !learningMapOpen) && <section
           ref={publicMapSectionRef}

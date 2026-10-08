@@ -702,6 +702,16 @@ function ObservationDrawer({
             />
             <RuntimeLanes stages={detail.stages} />
             <StageInspector stage={selectedStage} />
+            <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+              <h3 className="text-sm font-bold text-white">工具与生成执行记录</h3>
+              <p className="mt-1 text-xs text-slate-400">独立保存的执行阶段、调用编号、具体原因和实际影响，按时间倒序显示。</p>
+              {detail.executionRecordsUnavailable && <p className="mt-2 text-amber-300">执行记录暂时读取失败，请重试。</p>}
+              {!detail.executionRecordsUnavailable && !detail.executionRecords?.length && <p className="mt-2 text-sm text-slate-500">此请求没有独立执行记录。</p>}
+              {detail.executionRecords?.map(record => <details key={record.eventId} className="mt-3 rounded-lg border border-slate-700">
+                <summary className="cursor-pointer px-3 py-2 text-sm text-slate-200">{String(record.payload.name ?? '生成')} · {String(record.payload.state ?? '')} · {String(record.payload.phase ?? '')}</summary>
+                <pre className="max-h-96 overflow-auto border-t border-slate-700 p-3 text-xs text-slate-300">{JSON.stringify(record,null,2)}</pre>
+              </details>)}
+            </section>
             <details className="rounded-xl border border-slate-800 bg-slate-900/55">
               <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-300">
                 完整脱敏 JSON

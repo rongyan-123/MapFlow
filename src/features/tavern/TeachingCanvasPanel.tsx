@@ -4,6 +4,7 @@ import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import type { ExcalidrawElementSkeleton } from '@excalidraw/excalidraw/data/transform';
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import '@excalidraw/excalidraw/index.css';
+import CanvasShortcuts from './CanvasShortcuts';
 import type { TeachingCanvasState } from './types';
 
 function materialize(elements: Record<string, unknown>[]) {
@@ -27,12 +28,13 @@ function canvasTheme(): 'dark' | 'light' {
   return ['light', 'ivory'].includes(window.document.documentElement.dataset.mapflowTheme ?? '') ? 'light' : 'dark';
 }
 
-function TeachingCanvasPanel({ document, busy, saving, wide, onSave, onChange, onClose, onWidth }: {
-  document: TeachingCanvasState; busy: boolean; saving: boolean; wide: boolean;
+function TeachingCanvasPanel({ document, busy, saving, wide, accountId, onSave, onChange, onClose, onWidth }: {
+  accountId?:string; document: TeachingCanvasState; busy: boolean; saving: boolean; wide: boolean;
   onSave: (elements?: Record<string, unknown>[], enabled?: boolean) => Promise<void>;
   onChange: (elements: Record<string, unknown>[]) => void;
   onClose: () => void; onWidth: () => void;
 }) {
+  const root=useRef<HTMLElement>(null);
   const api = useRef<ExcalidrawImperativeAPI | null>(null);
   const fittedInitialScene = useRef(false);
   const initial = useRef(materialize(document.elements));
@@ -57,16 +59,17 @@ function TeachingCanvasPanel({ document, busy, saving, wide, onSave, onChange, o
     api.current.updateScene({ elements });
     if (elements.length) api.current.scrollToContent(elements, { fitToContent: true, animate: true });
   }, [document]);
-  return <section aria-label="教学画布" className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-slate-800">
+  return <section ref={root} tabIndex={-1} aria-label="教学画布" className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-slate-800">
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-2 text-xs">
       <span className="font-semibold">教学画布</span>
       <span role="status" className="text-slate-500">{busy ? 'AI 正在讲解 · 画布暂为只读' : saving ? '保存中…' : '自动保存'}</span>
-      <label className="ml-auto flex items-center gap-1.5"><input type="checkbox" aria-label="允许 AI 绘图" checked={document.enabled} disabled={busy || saving}
+      <div className="ml-auto"><CanvasShortcuts api={api} root={root} busy={busy} accountId={accountId} /></div>
+      <label className=" flex items-center gap-1.5"><input type="checkbox" aria-label="允许 AI 绘图" checked={document.enabled} disabled={busy || saving}
         onChange={event => void onSave(undefined, event.target.checked)} />允许 AI 绘图</label>
       <button type="button" className="hidden rounded-lg px-2 py-1 hover:bg-slate-800 md:block" onClick={onWidth}>{wide ? '收窄画布' : '放宽画布'}</button>
       <button type="button" className="rounded-lg px-2 py-1 hover:bg-slate-800" onClick={onClose}>收起画布</button>
     </div>
-    <div className="min-h-0 flex-1" onPointerDownCapture={() => { userEditing.current = !busy; }} onKeyDownCapture={() => { userEditing.current = !busy; }}>
+    <div className="min-h-0 flex-1" onPointerDownCapture={event => { userEditing.current=!busy; if((event.target as HTMLElement).tagName==='CANVAS')root.current?.focus({preventScroll:true}); }} onKeyDownCapture={() => { userEditing.current = !busy; }}>
       <Excalidraw excalidrawAPI={instance => { api.current = instance; }} langCode="zh-CN" theme={theme} viewModeEnabled={busy}
         initialData={{ elements: initial.current, scrollToContent: true, appState: { viewBackgroundColor: '#ffffff' } }}
         UIOptions={{ tools: { image: false }, canvasActions: { loadScene: false, saveToActiveFile: false, export: false, toggleTheme: false } }}
@@ -77,6 +80,7 @@ function TeachingCanvasPanel({ document, busy, saving, wide, onSave, onChange, o
             const instance = api.current;
             if (elements.length) requestAnimationFrame(() => { if (api.current === instance) instance.scrollToContent(elements, { fitToContent: true, animate: false }); });
           }
+          if(window.document.documentElement.dataset.mapflowResizing==='true')return;
           const serialized = sceneFingerprint(elements);
           if (serialized === lastScene.current || busy) return;
           lastScene.current = serialized;
@@ -88,5 +92,5 @@ function TeachingCanvasPanel({ document, busy, saving, wide, onSave, onChange, o
 }
 
 // Text streaming must not rerender the whiteboard. These callbacks use the same story's stable refs/setters.
-export default memo(TeachingCanvasPanel, (previous, next) => previous.document === next.document
+export default memo(TeachingCanvasPanel, (previous, next) => previous.accountId === next.accountId && previous.document === next.document
   && previous.busy === next.busy && previous.saving === next.saving && previous.wide === next.wide);
