@@ -21,6 +21,15 @@ original_run = base.run
 def run(command, **kwargs):
     # Supply a writable durable journal to the clone despite its read-only root.
     if 'run' in command and base.stage_app in command and command[-1] == base.image:
+        # The inherited production journal must stay isolated from clone events.
+        filtered, index = [], 0
+        while index < len(command):
+            if command[index] == '--mount' and 'dst=/var/lib/mapflow/diagnostics' in command[index + 1].split(','):
+                index += 2
+                continue
+            filtered.append(command[index])
+            index += 1
+        command = filtered
         command = command[:-1] + ['-e', 'MAPFLOW_DIAGNOSTICS_DIR=/var/lib/mapflow/diagnostics',
             '--mount', 'type=bind,src=' + str(base.release / 'clone-diagnostics') + ',dst=/var/lib/mapflow/diagnostics', base.image]
     if 'curl' in command and '--max-time' in command:
