@@ -145,6 +145,16 @@ describe('Tavern HTTP contract', () => {
     await expect(generateStream('conversation-1', 'stable', 0, { type: 'reply', message: '你好' }, 'csrf', () => {})).rejects.toMatchObject({ status: 409, code: 'tavern.turn_conflict', traceId: 'trace-2' });
   });
 
+  it('identifies a terminal model failure while keeping a proxy failure ambiguous', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(sseResponse([{ event: 'error', payload: { code: 'tavern.user_model_rejected', message: '模型请求失败', httpStatus: 502, traceId: 'trace-failed' } }]))
+      .mockResolvedValueOnce(new Response('Bad Gateway', { status: 502 })));
+    await expect(generateStream('conversation-1', 'stable', 0, { type: 'reply', message: '你好' }, 'csrf', () => {}))
+      .rejects.toMatchObject({ generationFailed: true, traceId: 'trace-failed' });
+    await expect(generateStream('conversation-1', 'stable', 0, { type: 'reply', message: '你好' }, 'csrf', () => {}))
+      .rejects.toMatchObject({ generationFailed: false, code: 'tavern.request_failed' });
+  });
+
   it('rejects oversized UTF-8 messages, control characters, invalid IDs and missing CSRF before fetch', async () => {
     const fetchMock = reply({});
     for (const message of ['', '中'.repeat(2731), 'x'.repeat(8001), 'bad\u0000']) {

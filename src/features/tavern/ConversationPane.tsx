@@ -36,6 +36,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     if (saved && detail.generations.some(generation => generation.clientActionId === saved.clientActionId)) { storePending(storageKey, null); return null; }
     return saved;
   });
+  const restoredPending = useRef(pendingGeneration);
   const [message, setMessage] = useState('');
   const [draft, setDraft] = useState('');
   const [process, setProcess] = useState<GenerationProcessEvent[]>([]);
@@ -66,18 +67,27 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       setPendingGeneration(null); setDraft(''); setError(null); storePending(storageKey, null);
     }
   }, [busy, detail.generations, pendingGeneration, storageKey]);
+  useEffect(() => {
+    const saved = restoredPending.current;
+    if (!saved) return;
+    const controller = new AbortController();
+    void recoverSavedResult(saved, controller.signal);
+    return () => controller.abort();
+  }, []);
 
-  async function recoverSavedResult() {
-    if (!pendingGeneration || recovering) return;
+  async function recoverSavedResult(expected = pendingGeneration, signal?: AbortSignal): Promise<boolean> {
+    if (!expected || recovering) return false;
     setRecovering(true);
     try {
-      const saved = await fetchConversation(detail.conversation.conversationId);
-      if (saved.generations.some(generation => generation.clientActionId === pendingGeneration.clientActionId)) {
+      const saved = await fetchConversation(detail.conversation.conversationId, signal);
+      if (!signal?.aborted && saved.generations.some(generation => generation.clientActionId === expected.clientActionId)) {
         storePending(storageKey, null); setPendingGeneration(null); setDraft(''); setProcess([]); setError(null);
         canvas.setPreview(null); onRecovered(saved);
+        return true;
       }
-    } catch (failure) { setError(failure); }
+    } catch { /* Keep the original failure and request ID when recovery cannot confirm a saved result. */ }
     finally { setRecovering(false); }
+    return false;
   }
 
   function stopGeneration() {
@@ -160,7 +170,11 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       storePending(storageKey, null);
       setPendingGeneration(null); setDraft(''); setProcess([]); canvas.setPreview(null); onCompleted(completed);
     } catch (failure) { if (!controller.signal.aborted) {
+      cancelPaint();
       publish();
+      if (failure instanceof TavernApiError && !failure.generationFailed && (failure.status === 0 || failure.status >= 500)
+        && await recoverSavedResult(outgoing, controller.signal)) return;
+      if (controller.signal.aborted) return;
       if (failure instanceof TavernApiError && failure.code==='tavern.cash_quote_expired') {
         const renewed={...outgoing,billing:undefined};setPendingGeneration(renewed);storePending(storageKey,renewed);
       }
@@ -171,6 +185,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const inputTooLarge = Array.from(message).length > 8000 || utf8Bytes(message) > 8192;
   const mayEdit = error instanceof TavernApiError && error.status === 400;
   const pendingReply = pendingGeneration?.action.type === 'reply' ? pendingGeneration.action : null;
+  const generationFailed = error instanceof TavernApiError && error.generationFailed;
   const messagesById = new Map(detail.graph.messages.map(item => [item.messageId, item]));
   const activeMessages = detail.graph.activePath.flatMap(messageId => {
     const activeMessage = messagesById.get(messageId);
@@ -307,7 +322,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         {pendingReply && <Message author={detail.conversation.userName} text={pendingReply.message} user />}
         <GenerationProcess events={process} live={busy} />
         {draft && <Message author={detail.character.card.name} character={detail.character} text={draft} />}
-        <p role="status" className="mx-auto max-w-3xl text-xs text-slate-400">{stopped ? '已停止生成。可核对结果或取消本次重试。' : busy ? '正在生成，完成后保存…' : '这条消息尚未确认完成，请重试以核对结果。'}</p>
+        <p role="status" className="mx-auto max-w-3xl text-xs text-slate-400">{stopped ? '已停止生成。可核对结果或取消本次重试。' : busy ? '正在生成，完成后保存…' : generationFailed ? '本次生成失败，未扣除本站额度。可重试或返回编辑。' : '这条消息尚未确认完成，请重试以核对结果。'}</p>
       </div>}
       {!activeMessages.length && !pendingGeneration && <p className="py-12 text-center text-sm text-slate-400">故事从你的第一句话开始。</p>}
       <div ref={bottom} />
@@ -318,11 +333,14 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       {error instanceof TavernApiError && ['tavern.model_access_required', 'tavern.model_access_invalid',
         'tavern.platform_model_required', 'tavern.runtime_unavailable', 'generation.model_access_invalid',
         'tavern.user_model_authentication', 'tavern.user_model_balance', 'tavern.user_model_timeout',
-        'tavern.user_model_rejected', 'tavern.model_configuration_required', 'tavern.platform_trial_unavailable',
+        'tavern.user_model_rejected', 'tavern.user_model_unavailable', 'tavern.user_model_invalid_response',
+        'tavern.model_configuration_required', 'tavern.platform_trial_unavailable',
         'tavern.platform_trial_rejected', 'tavern.cash_billing_unavailable'].includes(error.code)
         && <button type="button" className={buttonClass} onClick={onOpenModelConfiguration}>填写 API Key 或使用平台额度</button>}
       {error instanceof TavernApiError && error.code === 'tavern.cash_insufficient' && onNavigateWallet
         && <button type="button" className={buttonClass} onClick={onNavigateWallet}>充值平台额度</button>}
+      {error instanceof TavernApiError && error.code === 'tavern.user_model_output_limit' && onOpenParameters
+        && <button type="button" className={buttonClass} onClick={onOpenParameters}>调整生成参数</button>}
       {error instanceof TavernApiError && error.code === 'tavern.runtime_unavailable' && <p className="text-xs leading-5 text-slate-400">
         模型连接暂不可用。请稍后重试，或取消本次重试返回编辑；不会使用模拟回复替代模型。
       </p>}

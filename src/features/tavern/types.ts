@@ -90,7 +90,8 @@ export interface CompletedTurn { turn: Turn; graph: ConversationGraph; creditBal
 export type GenerationProcessEvent = { type: 'reasoning'; text: string } | { type: 'tool'; name: string; state: 'started' | 'completed' | 'failed' };
 export type TavernLiveProcessEvent = GenerationProcessEvent | { type: 'canvas'; canvas: TeachingCanvasState } | { type: 'status'; state: 'generating' };
 export class TavernApiError extends Error {
-  constructor(public readonly status: number, public readonly code: string, message: string, public readonly traceId?: string) {
+  constructor(public readonly status: number, public readonly code: string, message: string, public readonly traceId?: string,
+    public readonly generationFailed = false) {
     super(message); this.name = 'TavernApiError';
   }
 }

@@ -1639,6 +1639,95 @@ describe('Tavern page', () => {
     expect(client.getQueryData(['me', 'player-1', 'credit'])).toMatchObject({ balance: 9.9998 });
   });
 
+  it('distinguishes a confirmed upstream failure from a connection with an unknown result', async () => {
+    restoreConversation();
+    const originalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => url.endsWith('/turns')
+      ? Promise.resolve(sseResponse([{ event: 'process', payload: { type: 'reasoning', text: '先看学习进度。' } },
+        { event: 'error', payload: { code: 'tavern.user_model_rejected', message: '上游模型请求失败，请检查 URL、模型和参数。', httpStatus: 502, traceId: 'failure-trace' } }]))
+      : originalFetch(url, init));
+    const user = userEvent.setup(); renderPage(); await configureSelfKey(user);
+    await user.type(await screen.findByLabelText('消息'), '今天该学c语言的哪部分了');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await screen.findByText('本次生成失败，未扣除本站额度。可重试或返回编辑。');
+    expect(screen.queryByText('这条消息尚未确认完成，请重试以核对结果。')).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('failure-trace');
+    expect(await screen.findByRole('button', { name: '重试这条消息' })).toBeEnabled();
+    expect(savedDetail.generations).toHaveLength(1);
+  });
+
+  it('opens parameters from a reasoning-only output limit without losing the failed input', async () => {
+    restoreConversation(); platformPaid = true;
+    const normalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => url.endsWith('/turns')
+      ? Promise.resolve(sseResponse([{ event:'process', payload:{type:'reasoning',text:'正在分析学习计划。'} },
+        {event:'error',payload:{code:'tavern.user_model_output_limit',message:'模型在生成正文前已用尽输出上限，请调整参数。',httpStatus:502,traceId:'limit-trace'}}]))
+      : normalFetch(url,init));
+    const user = userEvent.setup(); renderPage(); await configurePaidPlatform(user);
+    await user.type(screen.getByLabelText('消息'),'今天该学c语言的哪部分了');
+    await user.click(screen.getByRole('button',{name:'发送'}));
+    await user.click(await screen.findByRole('button',{name:'调整生成参数'}));
+    expect(screen.getByRole('dialog',{name:'模型参数'})).toBeVisible();
+    expect(window.sessionStorage.getItem('mapflow.tavern.pending.v1.player-1.conversation-1')).toContain('今天该学c语言的哪部分了');
+    expect(savedDetail.cashCharges).toBeUndefined();
+  });
+
+  it('recovers a committed turn after the completed frame is lost without sending or charging again', async () => {
+    restoreConversation(); platformPaid = true;
+    const normalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const response = await normalFetch(url, init);
+      if (!url.endsWith('/turns') || init?.method !== 'POST') return response;
+      return sseResponse([{ event: 'delta', payload: { delta: '临时草稿' } }]);
+    });
+    const user = userEvent.setup(); renderPage(); await configurePaidPlatform(user);
+    await user.type(await screen.findByLabelText('消息'), '今天该学c语言的哪部分了');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    expect(await screen.findByText('新回复 🌙')).toBeVisible();
+    expect(screen.queryByText('临时草稿')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重试这条消息' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('消息')).toBeEnabled();
+    expect(attempts).toHaveLength(1);
+    expect(window.sessionStorage.getItem('mapflow.tavern.pending.v1.player-1.conversation-1')).toBeNull();
+    expect(screen.getByText(/本次费用 ¥0\.00046/)).toBeVisible();
+  });
+
+  it('offers recovery on refresh for a saved pending request without resending it', async () => {
+    restoreConversation();
+    savedDetail = { ...savedDetail, generations: savedDetail.generations.filter(generation => generation.clientActionId !== 'client-turn-1') };
+    const committed = structuredClone(detail);
+    window.sessionStorage.setItem('mapflow.tavern.pending.v1.player-1.conversation-1', JSON.stringify({
+      clientActionId: 'client-turn-1', expectedRevision: 0, action: { type: 'reply', message: '来杯茶' },
+    }));
+    const normalFetch = fetchMock.getMockImplementation()!;
+    let reads = 0;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === '/api/me/tavern/conversations/conversation-1' && !init?.method && ++reads >= 2) return Promise.resolve(json(committed));
+      return normalFetch(url, init);
+    });
+    renderPage();
+    await waitFor(() => expect(window.sessionStorage.getItem('mapflow.tavern.pending.v1.player-1.conversation-1')).toBeNull());
+    expect(await screen.findByText('请用茶。')).toBeVisible();
+    expect(attempts).toHaveLength(0);
+    expect(screen.getByLabelText('消息')).toBeEnabled();
+  });
+
+  it('keeps a proxy error ambiguous and retains the original request when recovery also fails', async () => {
+    restoreConversation(); const user = userEvent.setup(); renderPage(); await configureSelfKey(user);
+    const normalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.endsWith('/turns')) return Promise.resolve(new Response('Bad Gateway', { status: 502 }));
+      if (url === '/api/me/tavern/conversations/conversation-1') return Promise.resolve(new Response(null, { status: 503 }));
+      return normalFetch(url, init);
+    });
+    await user.type(screen.getByLabelText('消息'), '保留这个请求');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+    await screen.findByText('这条消息尚未确认完成，请重试以核对结果。');
+    expect(screen.queryByText('本次生成失败，未扣除本站额度。可重试或返回编辑。')).not.toBeInTheDocument();
+    expect(window.sessionStorage.getItem('mapflow.tavern.pending.v1.player-1.conversation-1')).toContain('保留这个请求');
+    expect(screen.getByRole('button', { name: '重试这条消息' })).toBeEnabled();
+  });
+
   it('explains a model outage, preserves the retry identity and can return the failed input to editing', async () => {
     restoreConversation(); modelUnavailable = true; const user = userEvent.setup(); const { client } = renderPage(); await configureSelfKey(user);
     await user.type(await screen.findByLabelText('消息'), '保留这条消息');

@@ -168,7 +168,7 @@ export async function generateStream(id: string, clientActionId: string, expecte
     if (!lines.length || !['delta', 'completed', 'error', 'approval_required', 'started', 'process'].includes(event)) return;
     let payload: unknown;
     try { payload = JSON.parse(lines.join('\n')) as unknown; } catch { throw invalidResponse(); }
-    if (event === 'error') throw parseErrorBody(payload, 502);
+    if (event === 'error') throw parseErrorBody(payload, 502, true);
     if (event === 'started') { onProcess?.({ type: 'status', state: 'generating' }); return; }
     if (event === 'process') {
       if (isRecord(payload) && payload.type === 'canvas') onProcess?.({ type: 'canvas', canvas: parseTeachingCanvas(payload.canvas) });
@@ -246,10 +246,11 @@ async function request(path: string, init: RequestInit): Promise<Response> {
   }
   return response;
 }
-function parseErrorBody(body: unknown, status: number): TavernApiError {
+function parseErrorBody(body: unknown, status: number, generationFailed = false): TavernApiError {
   if (isRecord(body) && typeof body.code === 'string' && typeof body.message === 'string') {
     return new TavernApiError(typeof body.httpStatus === 'number' && body.httpStatus >= 400 && body.httpStatus <= 599 ? body.httpStatus : status,
-      body.code, body.message, typeof body.traceId === 'string' ? body.traceId : undefined);
+      body.code, body.message, typeof body.traceId === 'string' ? body.traceId : undefined,
+      generationFailed && !['tavern.turn_conflict', 'tavern.persistence_failed'].includes(body.code));
   }
   return new TavernApiError(status, 'tavern.request_failed', '酒馆请求失败，请稍后重试。');
 }
