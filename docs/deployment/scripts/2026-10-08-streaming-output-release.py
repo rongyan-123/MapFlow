@@ -107,7 +107,7 @@ def clone_acceptance():
     paid=completed[0]
     output=paid['turn']['usage']['outputTokens']
     answer=paid['turn']['assistantMessage']
-    chinese=len(re.findall(r'[\u4e00-\u9fff]',answer))
+    chinese=sum(0x4E00 <= ord(character) <= 0x9FFF for character in answer)
     if output<=8192: raise RuntimeError('Long test did not exceed the old 8192 token boundary: '+str(output))
     receipt=json.loads(catalog.clone_sql("SELECT row_to_json(bill) FROM (SELECT upstream_cost_cny,amount_micros FROM wallet_tavern_charges WHERE account_id='"+account_id+"'::uuid) bill"))
     expected=int((Decimal(receipt['upstream_cost_cny'])*2000000).to_integral_value(rounding=ROUND_CEILING))
