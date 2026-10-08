@@ -126,13 +126,16 @@ def clone_acceptance():
     duplicate=[f['data'] for f in replay if f['event']=='completed']
     after_replay,_=catalog.accepted(container,'GET','/api/wallet',cookie=cookie)
     if not duplicate[-1]['idempotencyHit'] or after_replay!=after: raise RuntimeError('Long-output replay charged twice')
-    saved,_=catalog.accepted(container,'GET',story,cookie=cookie)
-    records=[r['payload'] for r in saved.get('diagnostics',[]) if r['actionId']==turn['clientActionId']]
+    # Conversation previews are intentionally bounded; inspect persisted model phases.
+    records=json.loads(catalog.clone_sql("SELECT COALESCE(jsonb_agg(payload ORDER BY event_id),'[]'::jsonb) FROM tavern_execution_records WHERE account_id='"+account_id+"'::uuid AND action_id='"+turn['clientActionId']+"' AND payload->>'phase' IN ('model_request','model_finish','model_usage')"))
     if not any(r.get('phase')=='model_request' and r.get('maxTokens')==32768 for r in records): raise RuntimeError('Effective settings missing from diagnostics')
     if not any(r.get('phase')=='model_finish' and r.get('raw',{}).get('choices',[{}])[0].get('finish_reason')=='stop' for r in records): raise RuntimeError('Original successful finish not retained')
+    if sum(r.get('phase')=='model_finish' for r in records)!=1: raise RuntimeError('Unfinished deltas were written as finish diagnostics')
     if not any(r.get('phase')=='model_usage' and r.get('raw',{}).get('completion_tokens')==output for r in records): raise RuntimeError('Measured usage not retained')
+    reasoning=max((r.get('raw',{}).get('completion_tokens_details',{}).get('reasoning_tokens',0) for r in records if r.get('phase')=='model_usage'),default=0)
     report={'checkedAt':time.time(),'durationSeconds':round(time.time()-started,2),'model':'deepseek-v4.1-flash',
         'outputTokens':output,'inputTokens':paid['turn']['usage']['inputTokens'],'answerCharacters':len(answer),'chineseCharacters':chinese,
+        'reasoningOutputTokens':reasoning,'answerOutputTokens':output-reasoning,'finishDiagnosticRecords':1,
         'requestedMaxTokens':32768,'upstreamCostCny':receipt['upstream_cost_cny'],'chargeMicros':expected,
         'actualCostTimesTwoVerified':True,'replayUncharged':True,'originalFinishAndUsageRetained':True,'newConversationModelDefault':True}
     (base.release/'clone-long-stream-passed.json').write_text(json.dumps(report,indent=2))
