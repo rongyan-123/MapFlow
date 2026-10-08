@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createLearningArea, fetchLearningAreas } from './tavernClient';
+import { createLearningArea, createLearningConversation, fetchLearningAreas, fetchLearningAreaConversations, fetchConversations, fetchConversation } from './tavernClient';
+import { conversation, detail } from './testFixtures';
 
 const area = {
   areaId: 'personal-map-1', libraryEntryId: 'personal-map-1', title: 'Python 学习',
@@ -13,6 +14,36 @@ function reply(body: unknown, status = 200) {
 }
 
 describe('learning-area HTTP contract', () => {
+  it('creates a fresh area conversation with an optional owned role and reads only that area history', async () => {
+    const learning = { ...conversation, scene: 'learning', learningAreaId: area.areaId, libraryEntryId: area.libraryEntryId, treeToolsEnabled: true };
+    const fetchMock = reply({ ...detail, conversation: learning });
+    expect((await createLearningConversation(area.areaId, { characterId: 'character-1' }, 'csrf')).conversation).toEqual(learning);
+    expect(fetchMock).toHaveBeenCalledWith('/api/me/learning-areas/personal-map-1/conversations', expect.objectContaining({
+      method: 'POST', headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf' }), body: JSON.stringify({ characterId: 'character-1' }),
+    }));
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ conversations: [learning] })));
+    expect(await fetchLearningAreaConversations(area.areaId)).toEqual([learning]);
+  });
+
+  it('explicitly requests management histories while the independent list uses its default scene', async () => {
+    const fetchMock = reply({ conversations: [] });
+    await fetchConversations(undefined, 'management');
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/me/tavern/conversations?scene=management', expect.anything());
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ conversations: [] })));
+    await fetchConversations();
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/me/tavern/conversations', expect.anything());
+  });
+
+  it.each([
+    { scene: 'other', learningAreaId: null },
+    { scene: 'tavern', learningAreaId: 'map-1' },
+    { scene: 'learning', learningAreaId: null },
+    { scene: 'learning', learningAreaId: 'map-1', libraryEntryId: 'map-2' },
+    { scene: 'management', learningAreaId: null, libraryEntryId: 'map-1' },
+  ])('rejects inconsistent server conversation scope %j', async metadata => {
+    reply({ ...detail, conversation: { ...conversation, ...metadata } });
+    await expect(fetchConversation('conversation-1')).rejects.toThrow();
+  });
   it('lists persisted areas with session credentials and abort support without opening a chat', async () => {
     const fetchMock = reply({ areas: [area, { ...area, areaId: 'archived', libraryEntryId: 'archived', available: false }] });
     const controller = new AbortController();

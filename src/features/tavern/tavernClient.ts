@@ -12,6 +12,18 @@ export async function createLearningArea(libraryEntryId: string, csrfToken: stri
     method: 'POST', headers: mutationHeaders(csrfToken, true), body: JSON.stringify({}),
   })));
 }
+export async function fetchLearningAreaConversations(areaId: string, signal?: AbortSignal): Promise<Conversation[]> {
+  const conversations = parseList(await getJson(`/api/me/learning-areas/${pathId(areaId)}/conversations`, signal), 'conversations', parseConversation);
+  if (conversations.some(item => item.scene !== 'learning' || item.learningAreaId !== areaId)) throw invalidResponse();
+  return conversations;
+}
+export async function createLearningConversation(areaId: string, input: Partial<CreateConversationInput>, csrfToken: string): Promise<ConversationDetail> {
+  const detail = parseConversationDetail(await readJson(await request(`/api/me/learning-areas/${pathId(areaId)}/conversations`, {
+    method: 'POST', headers: mutationHeaders(csrfToken, true), body: JSON.stringify(input),
+  })));
+  if (detail.conversation.scene !== 'learning' || detail.conversation.learningAreaId !== areaId) throw invalidResponse();
+  return detail;
+}
 function parseLearningArea(value: unknown): import('./types').LearningArea {
   if (!isRecord(value) || typeof value.areaId !== 'string' || !value.areaId.trim()
     || value.libraryEntryId !== value.areaId || typeof value.title !== 'string' || !value.title.trim()
@@ -90,8 +102,8 @@ export async function createConversation(input: CreateConversationInput, csrfTok
   return parseConversation(await readJson(await request(`${ROOT}/conversations`, { method: 'POST',
     headers: mutationHeaders(csrfToken, true), body: JSON.stringify(prepareConversationInput(input)) })));
 }
-export async function fetchConversations(signal?: AbortSignal): Promise<Conversation[]> {
-  return parseList(await getJson(`${ROOT}/conversations`, signal), 'conversations', parseConversation);
+export async function fetchConversations(signal?: AbortSignal, scene: import('./types').ConversationScene = 'tavern'): Promise<Conversation[]> {
+  return parseList(await getJson(`${ROOT}/conversations${scene === 'tavern' ? '' : `?scene=${scene}`}`, signal), 'conversations', parseConversation);
 }
 export async function fetchConversation(id: string, signal?: AbortSignal): Promise<ConversationDetail> {
   const body = await getJson(`${ROOT}/conversations/${pathId(id)}`, signal);
@@ -318,6 +330,13 @@ function parseConversation(value: unknown): Conversation {
     !(value.treeToolsEnabled === undefined || typeof value.treeToolsEnabled === 'boolean') ||
     !(value.vocabulary === null || (Array.isArray(value.vocabulary) && value.vocabulary.every(entry => isRecord(entry) && typeof entry.term === 'string' && (entry.meaning === undefined || entry.meaning === null || typeof entry.meaning === 'string')))) ||
     !isGenerationSettings(value.generationSettings) || !positiveInteger(value.generationSettingsVersion)) throw invalidResponse();
+  if (value.scene === undefined) {
+    if (value.learningAreaId !== undefined) throw invalidResponse();
+  } else if (!['tavern', 'learning', 'management'].includes(String(value.scene))
+    || (value.scene === 'learning'
+      ? typeof value.learningAreaId !== 'string' || !value.learningAreaId.trim()
+        || (value.libraryEntryId != null && value.libraryEntryId !== value.learningAreaId)
+      : value.learningAreaId !== null || value.libraryEntryId != null || value.treeToolsEnabled === true)) throw invalidResponse();
   return value as unknown as Conversation;
 }
 function parseGenerationSettingsState(value: unknown): GenerationSettingsState {

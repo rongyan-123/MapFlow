@@ -13,6 +13,7 @@ export interface SourceInfo { sourceFormat: 'json' | 'png'; fileName: string; fi
 export interface LearningArea {
   areaId: string; libraryEntryId: string; title: string; available: boolean; createdAt: string;
 }
+export type ConversationScene = 'tavern' | 'learning' | 'management';
 export interface CardImport { card: NormalizedCharacterCard; sourceFile: File; sourceInfo: SourceInfo }
 export interface VocabularyEntry { term: string; meaning?: string }
 export interface Character {
@@ -41,6 +42,7 @@ export interface GenerationSettingsState {
   generationSettings: GenerationSettings; generationSettingsVersion: number;
 }
 export interface Conversation {
+  scene?: ConversationScene; learningAreaId?: string | null;
   conversationId: string; characterId: string; title: string; userName: string;
   persona: string | null; vocabulary: VocabularyEntry[] | null; openingMessage: string;
   libraryEntryId?: string | null; treeToolsEnabled?: boolean;
