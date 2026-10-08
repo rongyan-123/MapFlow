@@ -59,3 +59,39 @@ it('offers an opaque shortcuts dialog with two bindings and ignores keys typed i
   expect(screen.getByRole('button',{name:'矩形：主要绑定'})).toHaveTextContent('R');
   expect(JSON.parse(localStorage.getItem('mapflow.canvas.shortcuts.v1.local')!)).toMatchObject({rectangle:['KeyR','Digit2']});
 });
+
+it('captures wheel directions, remembers bindings, and only executes them inside the canvas', () => {
+  vi.useFakeTimers();
+  const tool=vi.fn();
+  render(<TeachingCanvasPanel document={{revision:1,enabled:true,elements:[]}} busy={false} saving={false} wide
+    onSave={async()=>{}} onChange={()=>{}} onClose={()=>{}} onWidth={()=>{}} />);
+  act(()=>editor.props.excalidrawAPI({setActiveTool:tool}));
+  fireEvent.click(screen.getByRole('button',{name:'快捷键'}));
+  const dialog=screen.getByRole('dialog',{name:'画布快捷键'});
+  fireEvent.click(screen.getByRole('button',{name:'矩形：主要绑定'}));
+  fireEvent.wheel(dialog,{deltaY:-100});
+  expect(screen.getByRole('button',{name:'矩形：主要绑定'})).toHaveTextContent('mouse+');
+  fireEvent.click(screen.getByRole('button',{name:'箭头：备用绑定'}));
+  fireEvent.wheel(dialog,{deltaY:100});
+  expect(screen.getByRole('button',{name:'箭头：备用绑定'})).toHaveTextContent('mouse-');
+  fireEvent.click(screen.getByRole('button',{name:'关闭画布快捷键'}));
+  const canvas=document.querySelector('section[aria-label="教学画布"]')!;
+  fireEvent.wheel(canvas,{deltaY:-20});
+  expect(tool).not.toHaveBeenCalled();
+  fireEvent.wheel(canvas,{deltaY:-30});
+  expect(tool).toHaveBeenLastCalledWith({type:'rectangle'});
+  tool.mockClear();
+  fireEvent.wheel(canvas,{deltaY:-100});
+  expect(tool).not.toHaveBeenCalled();
+  act(()=>vi.advanceTimersByTime(200));
+  fireEvent.wheel(canvas,{deltaY:100});
+  expect(tool).toHaveBeenLastCalledWith({type:'arrow'});
+  tool.mockClear();
+  act(()=>vi.advanceTimersByTime(200));
+  fireEvent.wheel(document.body,{deltaY:100});
+  expect(fireEvent.wheel(canvas,{deltaY:100,ctrlKey:true})).toBe(true);
+  const input=document.createElement('textarea');canvas.append(input);
+  expect(fireEvent.wheel(input,{deltaY:100})).toBe(true);input.remove();
+  expect(tool).not.toHaveBeenCalled();
+  expect(JSON.parse(localStorage.getItem('mapflow.canvas.shortcuts.v1.local')!)).toMatchObject({rectangle:['mouse+','Digit2'],arrow:['KeyA','mouse-']});
+});

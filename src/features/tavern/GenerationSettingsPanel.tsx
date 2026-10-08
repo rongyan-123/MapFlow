@@ -10,7 +10,7 @@ export default function GenerationSettingsPanel({ conversationId, settings, vers
   onBusyChange?: (busy: boolean) => void;
 }) {
   const [temperature, setTemperature] = useState(settings.temperature?.toString() ?? '');
-  const [maxOutputTokens, setMaxOutputTokens] = useState(settings.maxOutputTokens.toString());
+  const [maxOutputTokens, setMaxOutputTokens] = useState(settings.maxOutputTokens?.toString() ?? '');
   const [stopSequences, setStopSequences] = useState(settings.stopSequences.join('\n'));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -19,7 +19,7 @@ export default function GenerationSettingsPanel({ conversationId, settings, vers
   useEffect(() => () => { onBusyChange?.(false); }, [onBusyChange]);
   useEffect(() => {
     setTemperature(settings.temperature?.toString() ?? '');
-    setMaxOutputTokens(settings.maxOutputTokens.toString());
+    setMaxOutputTokens(settings.maxOutputTokens?.toString() ?? '');
     setStopSequences(settings.stopSequences.join('\n'));
   }, [settings, version]);
 
@@ -29,7 +29,7 @@ export default function GenerationSettingsPanel({ conversationId, settings, vers
     const parsedTemperature = temperature.trim() === '' ? undefined : Number(temperature);
     const next: GenerationSettings = {
       ...(parsedTemperature === undefined ? {} : { temperature: parsedTemperature }),
-      maxOutputTokens: Number(maxOutputTokens),
+      maxOutputTokens: maxOutputTokens.trim() === '' ? null : Number(maxOutputTokens),
       stopSequences: stopSequences.split(/\r?\n/u).map(value => value.trim()).filter(Boolean),
     };
     try {
@@ -55,9 +55,9 @@ export default function GenerationSettingsPanel({ conversationId, settings, vers
             aria-pressed={temperature === ''} onClick={() => { setTemperature(''); setSavedVersion(null); }}>使用模型默认</button></div>
       </div>
       <div><label htmlFor="tavern-maximum-output" className="block text-sm font-medium">最大输出 Token</label>
-        <input id="tavern-maximum-output" aria-describedby="tavern-maximum-output-help" className={`${inputClass} mt-2`} type="number" min="1" max="8192" step="1" inputMode="numeric" value={maxOutputTokens}
+        <input id="tavern-maximum-output" aria-describedby="tavern-maximum-output-help" className={`${inputClass} mt-2`} type="number" min="1" max="4294967295" placeholder="模型默认" step="1" inputMode="numeric" value={maxOutputTokens}
           disabled={busy} onChange={event => setMaxOutputTokens(event.target.value)} />
-        <p id="tavern-maximum-output-help" className="mt-2 text-xs leading-5 text-slate-500">限制本次回复长度，支持 1–8,192 Token。模型上下文窗口包含输入与输出，以实际模型限制为准。</p>
+        <p id="tavern-maximum-output-help" className="mt-2 text-xs leading-5 text-slate-500">留空使用模型默认输出长度。填写时以所选模型支持的输出上限为准；上下文窗口包含输入与输出。</p>
       </div>
       <details open={settings.stopSequences.length > 0 || undefined} className="rounded-xl border border-slate-800 p-3">
         <summary className="cursor-pointer text-sm font-medium text-slate-300">高级参数</summary>

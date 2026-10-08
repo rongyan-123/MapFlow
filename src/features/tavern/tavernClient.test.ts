@@ -10,6 +10,13 @@ function reply(body: unknown) {
 }
 
 describe('Tavern HTTP contract', () => {
+  it.each([null, 131072])('accepts model default and long output settings %s', async maxOutputTokens => {
+    const generationSettings = { maxOutputTokens, stopSequences: [] };
+    const state = { generationSettings, generationSettingsVersion: 2 };
+    reply(state);
+    expect(await updateGenerationSettings('conversation-1', 1, generationSettings, 'csrf')).toEqual(state);
+  });
+
   it('accepts the measured cash receipt and persisted negative balance after a successful turn', async () => {
     const cashCharge = {generationId:turn.turnId,outputMessageId:'message-assistant-1',amountMicros:460,
       balanceAfterMicros:-459,capped:false,createdAt:turn.createdAt};

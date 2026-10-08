@@ -534,7 +534,7 @@ describe('Tavern page', () => {
     await user.click(screen.getByRole('button', { name: '发送' }));
     await waitFor(() => expect(committed).toBe(true));
     await user.click(await screen.findByRole('button', { name: '停止生成' }));
-    expect(await screen.findByText('新回复 🌙')).toBeVisible();
+    await waitFor(() => expect(screen.getByText('新回复 🌙')).toBeVisible());
     expect(screen.queryByRole('button', { name: '重试这条消息' })).not.toBeInTheDocument();
     expect(attempts).toHaveLength(1);
   });
@@ -555,7 +555,7 @@ describe('Tavern page', () => {
     await user.click(await screen.findByRole('button', { name: '白板：绘制矩形' }));
     await user.type(screen.getByLabelText('消息'), '解释这张图');
     await user.click(screen.getByRole('button', { name: '发送' }));
-    expect(await screen.findByText('新回复 🌙')).toBeVisible();
+    await waitFor(() => expect(screen.getByText('新回复 🌙')).toBeVisible());
     expect(canvas.elements[0].id).toBe('manual-box');
   });
   it('keeps the completed reasoning receipt visible alongside the saved reply', async () => {
@@ -1108,7 +1108,7 @@ describe('Tavern page', () => {
     await user.keyboard('{Shift>}{Enter}{/Shift}世界');
     expect(input).toHaveValue('你好\n世界');
     await user.keyboard('{Enter}');
-    expect(await screen.findByText('新回复 🌙')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('新回复 🌙')).toBeInTheDocument());
     expect(attempts).toHaveLength(1);
     expect(attempts[0].action).toEqual({ type: 'reply', message: '你好\n世界' });
   });
@@ -1564,12 +1564,14 @@ describe('Tavern page', () => {
     const log = await screen.findByRole('log', { name: '对话消息' });
     await within(log).findByText('请用茶。');
     await user.click(screen.getByRole('button', { name: '重新生成' }));
-    expect(await screen.findByText('重新斟茶。')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('重新斟茶。')).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: '继续' }));
     await waitFor(() => expect(attempts).toHaveLength(2));
-    const articles = within(log).getAllByRole('article');
-    expect(articles).toHaveLength(3);
-    expect(articles[2]).toHaveTextContent('重新斟茶。 夜色更深。');
+    await waitFor(() => {
+      const articles = within(log).getAllByRole('article');
+      expect(articles).toHaveLength(3);
+      expect(articles[2]).toHaveTextContent('重新斟茶。 夜色更深。');
+    });
     expect(attempts.map(attempt => attempt.action.type)).toEqual(['regenerate', 'continue']);
     expect(attempts.map(attempt => attempt.expectedRevision)).toEqual([1, 2]);
     expect(screen.getByRole('button', { name: '重新生成' })).toBeDisabled();
@@ -1631,7 +1633,7 @@ describe('Tavern page', () => {
     expect(await screen.findByRole('button', { name: '重试这条消息' })).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('尚未确认保存');
     await user.click(screen.getByRole('button', { name: '重试这条消息' }));
-    expect(await screen.findByText('新回复 🌙')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('新回复 🌙')).toBeInTheDocument());
     expect(screen.queryByText('未完成草稿')).not.toBeInTheDocument();
     expect(attempts).toHaveLength(2);
     expect(attempts[1]).toEqual(attempts[0]);
@@ -1685,7 +1687,7 @@ describe('Tavern page', () => {
     const user = userEvent.setup(); renderPage(); await configurePaidPlatform(user);
     await user.type(await screen.findByLabelText('消息'), '今天该学c语言的哪部分了');
     await user.click(screen.getByRole('button', { name: '发送' }));
-    expect(await screen.findByText('新回复 🌙')).toBeVisible();
+    await waitFor(() => expect(screen.getByText('新回复 🌙')).toBeVisible());
     expect(screen.queryByText('临时草稿')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '重试这条消息' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('消息')).toBeEnabled();
@@ -1753,7 +1755,7 @@ describe('Tavern page', () => {
     first.unmount(); renderPage();
     await configureSelfKey(user);
     await user.click(await screen.findByRole('button', { name: '重试这条消息' }));
-    expect(await screen.findByText('新回复 🌙')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('新回复 🌙')).toBeInTheDocument());
     expect(attempts[1].clientActionId).toBe(attempts[0].clientActionId);
   });
 

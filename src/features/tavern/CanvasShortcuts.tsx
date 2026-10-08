@@ -35,6 +35,28 @@ export default function CanvasShortcuts({api,root,busy,accountId='local'}:{api:R
   const current=useRef({bindings,open,listening,busy});current.current={bindings,open,listening,busy};
   function save(next:Bindings) {setBindings(next);try{localStorage.setItem(storageKey,JSON.stringify(next));}catch{/* Keep bindings for this view. */}}
   useEffect(()=>{
+    let wheelDistance=0;let wheelDirection=0;let lastWheelAt=-Infinity;let lastSampleAt=-Infinity;
+    const capture=(next:string)=>{
+      const state=current.current;if(!state.listening)return;
+      const used=commands.find(([id])=>state.bindings[id].some((key,slot)=>key===next&&(id!==state.listening!.id||slot!==state.listening!.slot)));
+      if(used){setConflict(`已绑定到“${used[1]}”，请先清除该绑定。`);return;}
+      const updated=structuredClone(state.bindings);updated[state.listening.id][state.listening.slot]=next;
+      save(updated);setListening(null);setConflict('');
+    };
+    const execute=(command:typeof commands[number],target:HTMLElement)=>{
+      const instance=api.current;if(!instance)return;
+      const [id]=command;
+      if(id==='help'){setOpen(true);return;}
+      if(id==='library'){instance.toggleSidebar({name:'library'});return;}
+      if(id==='lock'){instance.updateScene({appState:{activeTool:{...instance.getAppState().activeTool,locked:!instance.getAppState().activeTool.locked}}});return;}
+      if(['selection','hand','rectangle','diamond','ellipse','arrow','line','freedraw','text','eraser'].includes(id)) {
+        instance.setActiveTool({type:id as 'selection'});return;
+      }
+      const parts=command[2].split('+');const code=parts[parts.length-1];
+      const nativeKey=code.startsWith('Key')?code.slice(3).toLowerCase():code.startsWith('Digit')?code.slice(5):code==='Equal'?'=':code==='Minus'?'-':code;
+      const forwarded=new KeyboardEvent('keydown',{key:nativeKey,code,ctrlKey:parts.includes('Ctrl'),metaKey:parts.includes('Meta'),shiftKey:parts.includes('Shift'),bubbles:true,cancelable:true});
+      bypass.add(forwarded);target.dispatchEvent(forwarded);
+    };
     const onKey=(event:KeyboardEvent)=>{
       if(bypass.has(event)||event.isComposing)return;
       const state=current.current;
@@ -43,11 +65,7 @@ export default function CanvasShortcuts({api,root,busy,accountId='local'}:{api:R
         event.preventDefault();event.stopPropagation();
         if(event.key==='Escape'){setListening(null);return;}
         if(['Control','Shift','Alt','Meta'].includes(event.key))return;
-        const next=chord(event);
-        const used=commands.find(([id])=>state.bindings[id].some((key,slot)=>key===next&&(id!==state.listening!.id||slot!==state.listening!.slot)));
-        if(used){setConflict(`已绑定到“${used[1]}”，请先清除该绑定。`);return;}
-        const updated=structuredClone(state.bindings);updated[state.listening.id][state.listening.slot]=next;
-        save(updated);setListening(null);setConflict('');return;
+        capture(chord(event));return;
       }
       const target=event.target as HTMLElement|null;
       if(state.busy||!target||target.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]')||!root.current?.contains(target))return;
@@ -58,26 +76,31 @@ export default function CanvasShortcuts({api,root,busy,accountId='local'}:{api:R
         return;
       }
       event.preventDefault();event.stopPropagation();
-      const instance=api.current;if(!instance)return;
-      const [id]=command;
-      if(id==='help'){setOpen(true);return;}
-      if(id==='library'){instance.toggleSidebar({name:'library'});return;}
-      if(id==='lock'){instance.updateScene({appState:{activeTool:{...instance.getAppState().activeTool,locked:!instance.getAppState().activeTool.locked}}});return;}
-      if(['selection','hand','rectangle','diamond','ellipse','arrow','line','freedraw','text','eraser'].includes(id)) {
-        instance.setActiveTool({type:id as 'selection'});return;
-      }
-      const native=command[2];
-      const parts=native.split('+');const code=parts[parts.length-1];
-      const nativeKey=code.startsWith('Key')?code.slice(3).toLowerCase():code.startsWith('Digit')?code.slice(5):code==='Equal'?'=':code==='Minus'?'-':code;
-      const forwarded=new KeyboardEvent('keydown',{key:nativeKey,code,ctrlKey:parts.includes('Ctrl'),metaKey:parts.includes('Meta'),shiftKey:parts.includes('Shift'),bubbles:true,cancelable:true});
-      bypass.add(forwarded);target.dispatchEvent(forwarded);
+      execute(command,target);
     };
-    document.addEventListener('keydown',onKey,true);return()=>document.removeEventListener('keydown',onKey,true);
+    const onWheel=(event:WheelEvent)=>{
+      if(event.ctrlKey||event.metaKey||event.deltaY===0||Math.abs(event.deltaX)>Math.abs(event.deltaY))return;
+      const state=current.current;const binding=event.deltaY<0?'mouse+':'mouse-';
+      if(state.open){if(state.listening){event.preventDefault();event.stopPropagation();capture(binding);}return;}
+      const target=event.target as HTMLElement|null;
+      if(state.busy||!target||target.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]')||!root.current?.contains(target))return;
+      const command=commands.find(([id])=>state.bindings[id].includes(binding));if(!command)return;
+      event.preventDefault();event.stopPropagation();
+      const now=Date.now();const direction=Math.sign(event.deltaY);
+      if(direction!==wheelDirection||now-lastSampleAt>200)wheelDistance=0;
+      wheelDirection=direction;lastSampleAt=now;
+      if(now-lastWheelAt<150)return;
+      wheelDistance+=Math.abs(event.deltaY)*(event.deltaMode===1?16:event.deltaMode===2?window.innerHeight:1);
+      if(wheelDistance<50)return;
+      wheelDistance=0;lastWheelAt=now;execute(command,target);
+    };
+    document.addEventListener('keydown',onKey,true);document.addEventListener('wheel',onWheel,{capture:true,passive:false});
+    return()=>{document.removeEventListener('keydown',onKey,true);document.removeEventListener('wheel',onWheel,true);};
   },[storageKey]);
   return <>
     <button type="button" className={buttonClass} onClick={()=>setOpen(true)}>快捷键</button>
     {open&&createPortal(<div className="canvas-shortcuts-layer"><TavernDialog title="画布快捷键" onClose={()=>{setOpen(false);setListening(null);}}>
-      <p className="mb-3 text-sm text-slate-400">点击绑定，再按下按键组合。仅在画布内生效，不影响聊天输入。</p>
+      <p className="mb-3 text-sm text-slate-400">点击绑定，再按键或滚动鼠标：上滚 mouse+，下滚 mouse-。仅在画布内生效，不影响聊天输入。</p>
       {conflict&&<p role="alert" className="mb-3 text-amber-300">{conflict}</p>}
       <div className="grid grid-cols-[minmax(120px,1fr)_1fr_1fr] gap-2 text-sm">
         <strong>功能</strong><strong>主要绑定</strong><strong>备用绑定</strong>

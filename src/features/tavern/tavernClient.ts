@@ -166,11 +166,15 @@ export async function generateStream(id: string, clientActionId: string, expecte
       if (line.startsWith('event:')) event = line.slice(6).replace(/^ /u, '');
       if (line.startsWith('data:')) lines.push(line.slice(5).replace(/^ /u, ''));
     }
-    if (!lines.length || !['delta', 'completed', 'error', 'approval_required', 'started', 'process'].includes(event)) return;
+    if (!lines.length || !['delta', 'completed', 'error', 'approval_required', 'started', 'process', 'process_snapshot'].includes(event)) return;
     let payload: unknown;
     try { payload = JSON.parse(lines.join('\n')) as unknown; } catch { throw invalidResponse(); }
     if (event === 'error') throw parseErrorBody(payload, 502, true);
     if (event === 'started') { onProcess?.({ type: 'status', state: 'generating' }); return; }
+    if (event === 'process_snapshot') {
+      if (!isRecord(payload)) throw invalidResponse();
+      onProcess?.({ type: 'snapshot', process: parseProcess(payload.process) }); return;
+    }
     if (event === 'process') {
       if (isRecord(payload) && payload.type === 'canvas') onProcess?.({ type: 'canvas', canvas: parseTeachingCanvas(payload.canvas) });
       else onProcess?.(parseProcessEvent(payload));
@@ -307,7 +311,7 @@ function parseGenerationSettingsState(value: unknown): GenerationSettingsState {
 }
 function isGenerationSettings(value: unknown): value is GenerationSettings {
   return isRecord(value) && (value.temperature === undefined || (typeof value.temperature === 'number' && Number.isFinite(value.temperature) && value.temperature >= 0 && value.temperature <= 2)) &&
-    typeof value.maxOutputTokens === 'number' && Number.isSafeInteger(value.maxOutputTokens) && value.maxOutputTokens >= 1 && value.maxOutputTokens <= 8192 &&
+    (value.maxOutputTokens === null || (typeof value.maxOutputTokens === 'number' && Number.isSafeInteger(value.maxOutputTokens) && value.maxOutputTokens >= 1 && value.maxOutputTokens <= 4294967295)) &&
     Array.isArray(value.stopSequences) && value.stopSequences.length <= 4 && value.stopSequences.every(item => typeof item === 'string' && item.length > 0 && utf8Bytes(item) <= 1024);
 }
 function validateGenerationSettings(settings: GenerationSettings) {

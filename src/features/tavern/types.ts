@@ -21,7 +21,7 @@ export interface CreateConversationInput {
   vocabulary?: VocabularyEntry[]; greetingIndex?: number;
 }
 export interface GenerationSettings {
-  temperature?: number; maxOutputTokens: number; stopSequences: string[];
+  temperature?: number; maxOutputTokens: number | null; stopSequences: string[];
 }
 export interface TavernUserModelAccess {
   apiKey: string; model: string; baseUrl: string;
@@ -89,7 +89,7 @@ export interface CashCharge { generationId:string; outputMessageId:string; amoun
 export interface CashQuote { quoteId:string; maximumChargeMicros:number; policyVersion:string; expiresInSeconds:number }
 export interface CompletedTurn { turn: Turn; graph: ConversationGraph; creditBalance: number; chargedCredits: number; idempotencyHit: boolean; cashCharge?:CashCharge; walletBalanceMicros?:number; process?: GenerationProcessEvent[]; canvas?:TeachingCanvasState; generation?: GenerationRecord }
 export type GenerationProcessEvent = { type: 'reasoning'; text: string } | { type: 'tool'; name: string; state: 'started' | 'completed' | 'failed' };
-export type TavernLiveProcessEvent = GenerationProcessEvent | { type: 'canvas'; canvas: TeachingCanvasState } | { type: 'status'; state: 'generating' };
+export type TavernLiveProcessEvent = GenerationProcessEvent | { type: 'snapshot'; process: GenerationProcessEvent[] } | { type: 'canvas'; canvas: TeachingCanvasState } | { type: 'status'; state: 'generating' };
 export class TavernApiError extends Error {
   constructor(public readonly status: number, public readonly code: string, message: string, public readonly traceId?: string,
     public readonly generationFailed = false) {

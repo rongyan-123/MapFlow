@@ -3,6 +3,7 @@ import { useTeachingCanvas } from './useTeachingCanvas';
 import './teachingWorkspace.css';
 import PanelResizeHandle from './PanelResizeHandle';
 import GenerationProcess from './GenerationProcess';
+import { StreamingPresentation } from './streamingPresentation';
 import type { GenerationProcessEvent } from './types';
 const TeachingCanvasPanel = lazy(() => import('./TeachingCanvasPanel'));
 import AssistantMarkdown from '../knowledge-chat/AssistantMarkdown';
@@ -55,10 +56,11 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const [branchAnchorId, setBranchAnchorId] = useState('');
   const activeRequest = useRef<AbortController | null>(null);
   const publishPreview = useRef<(() => void) | null>(null);
+  const presentationRef=useRef<StreamingPresentation|null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
-  useEffect(() => () => { activeRequest.current?.abort(); }, []);
+  useEffect(() => () => { presentationRef.current?.dispose(); activeRequest.current?.abort(); }, []);
   useEffect(() => {
     if (followLatest.current) bottom.current?.scrollIntoView?.({ block: 'nearest' });
   }, [draft, process, detail.graph.revision, pendingGeneration]);
@@ -99,6 +101,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
 
   function stopGeneration() {
     publishPreview.current?.();
+    presentationRef.current?.dispose();
     activeRequest.current?.abort(); setBusy(false); setStopped(true); canvas.setPreview(null);
     void recoverSavedResult();
   }
@@ -134,19 +137,11 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     } catch (failure) { setError(failure); return; }
     const controller = new AbortController();
     activeRequest.current = controller;
-    let streamedText = '';
-    const streamedProcess: GenerationProcessEvent[] = [];
-    let paint: ReturnType<typeof setTimeout> | null = null;
-    const publish = () => {
-      if (controller.signal.aborted) return;
-      setDraft(streamedText); setProcess([...streamedProcess]);
-    };
-    const schedulePaint = () => {
-      if (paint !== null) return;
-      paint = setTimeout(() => { paint = null; publish(); }, 16);
-    };
-    const cancelPaint = () => { if (paint !== null) clearTimeout(paint); paint = null; };
-    publishPreview.current = publish;
+    const presentation=new StreamingPresentation((answer,events)=>{
+      if(!controller.signal.aborted){setDraft(answer);setProcess(events);}
+    });
+    presentationRef.current=presentation;
+    publishPreview.current=()=>presentation.flush();
     // Persist before sending: a refresh between request and completed must reuse the same ID.
     storePending(storageKey, outgoing);
     setPendingGeneration(outgoing);
@@ -155,7 +150,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     try {
       await canvas.flush();
       const completed = await generateStream(detail.conversation.conversationId, outgoing.clientActionId, outgoing.expectedRevision, outgoing.action,
-        csrfToken, delta => { if (!controller.signal.aborted) { streamedText += delta; schedulePaint(); } }, controller.signal,
+        csrfToken, delta => { if (!controller.signal.aborted) presentation.answer(delta); }, controller.signal,
         modelAccess, modelAccess || platformModel ? modelSelection.historyBytes : undefined, platformModel,
         platformModel && modelSelection.billingPolicy ? { policyVersion: modelSelection.billingPolicy } : undefined,
         async approval => {
@@ -165,20 +160,16 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         }, event => {
           if (controller.signal.aborted) return;
           if (event.type === 'canvas') canvas.setPreview(event.canvas);
-          else if (event.type !== 'status') {
-            const previous = streamedProcess[streamedProcess.length - 1];
-            if (event.type === 'reasoning' && previous?.type === 'reasoning') previous.text = (previous.text + event.text).slice(0, 1024 * 1024);
-            else if (streamedProcess.length < 128) streamedProcess.push(event);
-            schedulePaint();
-          }
+          else if(event.type==='snapshot')presentation.restore(event.process);
+          else if(event.type==='reasoning')presentation.reasoning(event.text);
+          else if(event.type==='tool')presentation.tool(event);
         });
+      await presentation.drain();
       if (controller.signal.aborted) return;
-      cancelPaint();
       storePending(storageKey, null);
       setPendingGeneration(null); setDraft(''); setProcess([]); canvas.setPreview(null); onCompleted(completed);
     } catch (failure) { if (!controller.signal.aborted) {
-      cancelPaint();
-      publish();
+      presentation.flush();
       if (failure instanceof TavernApiError && !failure.generationFailed && (failure.status === 0 || failure.status >= 500)
         && await recoverSavedResult(outgoing, controller.signal)) return;
       if (controller.signal.aborted) return;
@@ -187,7 +178,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       }
       setError(failure); canvas.setPreview(null);
     } }
-    finally { cancelPaint(); if (activeRequest.current === controller) { activeRequest.current = null; publishPreview.current = null; setBusy(false); } }
+    finally { presentation.dispose(); if (activeRequest.current === controller) { activeRequest.current = null; publishPreview.current = null;presentationRef.current=null; setBusy(false); } }
   }
   const inputTooLarge = Array.from(message).length > 8000 || utf8Bytes(message) > 8192;
   const mayEdit = error instanceof TavernApiError && error.status === 400;
@@ -382,7 +373,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       <form onSubmit={event => { event.preventDefault(); void runGeneration({ type: 'reply', message }); }} className="rounded-3xl border border-slate-700 bg-slate-900 p-3 shadow-lg transition focus-within:border-cyan-500/70">
         <div className="mb-2 flex flex-wrap items-center gap-2 px-2 text-[11px] text-slate-400">
           <button type="button" className="rounded-full bg-slate-800 px-3 py-1.5 text-slate-200 hover:text-cyan-200" onClick={onOpenModelConfiguration}>{modelSelection.model || '选择模型'} · {modelSelection.provider === 'platform' ? '平台额度' : '自填 Key'}</button>
-          <span>历史 {modelSelection.historyBytes / 1024} KiB · 最大输出 {detail.conversation.generationSettings.maxOutputTokens} Token</span>
+          <span>历史 {modelSelection.historyBytes / 1024} KiB · 最大输出 {detail.conversation.generationSettings.maxOutputTokens === null ? '模型默认' : `${detail.conversation.generationSettings.maxOutputTokens} Token`}</span>
         </div>
         <label htmlFor={`tavern-message-${detail.conversation.conversationId}`} className="sr-only">消息</label>
         <textarea id={`tavern-message-${detail.conversation.conversationId}`} className="max-h-48 min-h-20 w-full resize-y border-0 bg-transparent px-3 py-2 text-[15px] leading-6 text-slate-100 outline-none placeholder:text-slate-500 disabled:opacity-50" rows={2} placeholder="输入你的问题，或让 AI 画图讲解…" value={message} disabled={busy || graphBusy || pendingGeneration !== null || editing}
