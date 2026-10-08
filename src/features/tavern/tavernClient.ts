@@ -4,6 +4,21 @@ import { isRecord, NORMALIZED_CARD_BYTES, RAW_FILE_BYTES, tooLarge, utf8Bytes } 
 import type {CashCharge,CashQuote} from './types';
 
 const ROOT = '/api/me/tavern';
+export async function fetchLearningAreas(signal?: AbortSignal): Promise<import('./types').LearningArea[]> {
+  return parseList(await getJson('/api/me/learning-areas', signal), 'areas', parseLearningArea);
+}
+export async function createLearningArea(libraryEntryId: string, csrfToken: string): Promise<import('./types').LearningArea> {
+  return parseLearningArea(await readJson(await request(`/api/me/learning-areas/${pathId(libraryEntryId)}`, {
+    method: 'POST', headers: mutationHeaders(csrfToken, true), body: JSON.stringify({}),
+  })));
+}
+function parseLearningArea(value: unknown): import('./types').LearningArea {
+  if (!isRecord(value) || typeof value.areaId !== 'string' || !value.areaId.trim()
+    || value.libraryEntryId !== value.areaId || typeof value.title !== 'string' || !value.title.trim()
+    || typeof value.available !== 'boolean' || typeof value.createdAt !== 'string'
+    || !Number.isFinite(Date.parse(value.createdAt))) throw invalidResponse();
+  return value as unknown as import('./types').LearningArea;
+}
 export async function fetchTeachingCanvas(id: string, signal?: AbortSignal) {
   return parseTeachingCanvas(await getJson(`${ROOT}/conversations/${pathId(id)}/canvas`, signal));
 }
