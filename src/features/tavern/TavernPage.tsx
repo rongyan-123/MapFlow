@@ -1,6 +1,6 @@
 import ModelAccessPanel from './ModelAccessPanel';
 import { readModelSelection, saveModelSelection } from './modelPreferences';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import TreeToolsPanel from './TreeToolsPanel';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import CreditPill from '../credit/CreditPill';
@@ -15,6 +15,7 @@ import type { IdentitySession } from '../identity/types';
 import MobileDrawer from '../navigation/MobileDrawer';
 import ThemeSwitcher from '../theme/ThemeSwitcher';
 import CardImportDialog from './CardImportDialog';
+import useIsMobile from '../../lib/useIsMobile';
 import CreateCharacterDialog from './CreateCharacterDialog';
 import EditCharacterDialog from './EditCharacterDialog';
 import CharacterLibraryItem from './CharacterLibraryItem';
@@ -28,6 +29,8 @@ import { CharacterAvatar, CompatibilityReport, ErrorNotice, TavernDialog, button
 interface TavernPageProps {
   onNavigateConsole: () => void; onNavigateWallet?: () => void; onNavigateModels?: () => void;
   treeContext?: { libraryEntryId: string; title: string; nodeTitle?: string }; onClose?: () => void; onTreeChanged?: () => void; onShowMap?: () => void;
+  // 手机端聊天会隐藏控制台顶栏，原本挂在顶栏上的额度与账号入口改由这里落到对话工具栏的“操作”菜单里。
+  mobileHeaderActions?: ReactNode;
 }
 export default function TavernPage(props: TavernPageProps) {
   const { session } = useIdentity();
@@ -35,8 +38,11 @@ export default function TavernPage(props: TavernPageProps) {
   return <AuthenticatedTavernPage key={`${session.account.playerId}.${props.treeContext?.libraryEntryId ?? 'independent'}`} session={session} {...props} />;
 }
 
-function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet, onNavigateModels, treeContext, onClose, onTreeChanged, onShowMap }: TavernPageProps & { session: IdentitySession }) {
+function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet, onNavigateModels, treeContext, onClose, onTreeChanged, onShowMap, mobileHeaderActions }: TavernPageProps & { session: IdentitySession }) {
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
+  // 手机端从知识点进入的对话会独占整屏，工具栏必须压成一行，否则消息区被挤得只剩几百像素。
+  const compactToolbar = isMobile && Boolean(treeContext);
   const { logout, logoutPending, logoutError } = useIdentity();
   const accountId = session.account.playerId;
   const selectionKey = `mapflow.tavern.selection.v1.${accountId}`;
@@ -325,14 +331,22 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     <main className="flex min-h-0 flex-1">
       {!treeContext && <aside aria-label="角色库" className="hidden w-60 shrink-0 overflow-y-auto border-r border-slate-800 p-4 lg:block">{library}</aside>}
       <section aria-label="角色对话" className="flex min-w-0 flex-1 flex-col">
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-2 sm:px-5">
+        <div className={compactToolbar
+          ? 'flex shrink-0 flex-nowrap items-center gap-2 border-b border-slate-800 px-3 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]'
+          : 'flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-2 sm:px-5'}>
           {treeContext && onClose && <button type="button" className={buttonClass} aria-label="返回节点详情" onClick={onClose}>←</button>}
           <button type="button" className={`${buttonClass} ${treeContext ? '' : 'lg:hidden'}`} aria-label="打开角色列表" onClick={() => setDrawer('library')}>☰</button>
-          <div className="flex min-w-[100px] flex-1 items-center gap-2"><CharacterAvatar character={selectedCharacter} /><div className="min-w-0"><h2 className="truncate text-sm font-semibold">{selectedCharacter?.card.name ?? '欢迎来到酒馆'}</h2><p className="mt-0.5 truncate text-xs text-slate-500">{treeContext ? treeContext.nodeTitle ?? treeContext.title : conversationId ? '故事正在继续' : '选择角色，开启故事'}</p></div></div>
-          {onShowMap && <button type="button" className={`${buttonClass} shrink-0`} onClick={onShowMap}>查看地图</button>}
-          {canCreate && <button type="button" className={`${buttonClass} shrink-0`} disabled={creatingConversation || generationBusy || openingCharacter !== null || !conversations.isSuccess || (!!conversationId && !conversationQuery.data)}
+          <div className={`flex ${compactToolbar ? 'min-w-0' : 'min-w-[100px]'} flex-1 items-center gap-2`}><CharacterAvatar character={selectedCharacter} /><div className="min-w-0"><h2 className="truncate text-sm font-semibold">{selectedCharacter?.card.name ?? '欢迎来到酒馆'}</h2><p className="mt-0.5 truncate text-xs text-slate-500">{treeContext ? treeContext.nodeTitle ?? treeContext.title : conversationId ? '故事正在继续' : '选择角色，开启故事'}</p></div></div>
+          {!compactToolbar && onShowMap && <button type="button" className={`${buttonClass} shrink-0`} onClick={onShowMap}>查看地图</button>}
+          {!compactToolbar && canCreate && <button type="button" className={`${buttonClass} shrink-0`} disabled={creatingConversation || generationBusy || openingCharacter !== null || !conversations.isSuccess || (!!conversationId && !conversationQuery.data)}
             onClick={() => void createNewConversation()}>{creatingConversation ? '创建中…' : pendingNewConversation.current ? '重试新建会话' : '新建会话'}</button>}
           <button type="button" className={`${buttonClass} shrink-0`} onClick={() => { setConfigurationSection('overview'); setConfigurationOpen(true); }}>配置</button>
+          {compactToolbar && <HeaderMoreMenu label="操作" menuLabel="会话操作">
+            {onShowMap && <button type="button" className={headerMenuItem} onClick={onShowMap}>查看地图</button>}
+            {canCreate && <button type="button" className={headerMenuItem} disabled={creatingConversation || generationBusy || openingCharacter !== null || !conversations.isSuccess || (!!conversationId && !conversationQuery.data)}
+              onClick={() => void createNewConversation()}>{creatingConversation ? '创建中…' : pendingNewConversation.current ? '重试新建会话' : '新建会话'}</button>}
+            {mobileHeaderActions}
+          </HeaderMoreMenu>}
         </div>
         {treeContext && conversationQuery.data?.conversation.libraryEntryId === treeContext.libraryEntryId && <span className="sr-only">已关联：{treeContext.title}</span>}
         {treeStory.error && <ErrorNotice error={treeStory.error} onRetry={() => void treeStory.refetch()} />}

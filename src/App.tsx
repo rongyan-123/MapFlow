@@ -17,6 +17,7 @@ import AnnouncementsDialog from './features/announcements/AnnouncementsDialog';
 import FeedbackDialog from './features/feedback/FeedbackDialog';
 import LandingPage from './features/landing/LandingPage';
 import MobileDrawer from './features/navigation/MobileDrawer';
+import useIsMobile from './lib/useIsMobile';
 import HeaderMoreMenu, { headerMenuItem } from './features/navigation/HeaderMoreMenu';
 import WalletBalance from './features/wallet/WalletBalance';
 import PublicMapGuide, {
@@ -236,6 +237,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
   );
   const [layoutMode, setLayoutMode] = useState<TreeLayoutMode>('relationship');
   const [mobileView, setMobileView] = useState<MobileView>('list');
+  const isMobile = useIsMobile();
   const [chatOpen, setChatOpen] = useState(false);
   const [learningMapOpen, setLearningMapOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -972,10 +974,31 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
     ((view === 'public' &&
       (visiblePublicGuideStep === 'map' || visiblePublicGuideStep === 'library')) ||
       (view === 'personal' && isPersonalGuideStep));
+  // 手机端聊天独占整屏：顶栏只重复下方的角色名与节点名，却要占掉 64px 以上，
+  // 所以整条不渲染，把额度和账号入口原样挂到对话工具栏的“操作”菜单里，功能一个不少。
+  const mobileChatActive =
+    isMobile && view === 'personal' && chatOpen && !learningMapOpen;
+  const headerWallet = session && (
+    <WalletBalance accountId={session.account.playerId} onClick={onNavigateWallet} />
+  );
+  const headerMenuItems = <>
+    <button type="button" className={headerMenuItem} onClick={onNavigateModels}>模型价格</button>
+    {session?.account.isAdmin && <button type="button" className={headerMenuItem} onClick={() => setView('admin')}>管理面板</button>}
+    <a href="/?marketing=1" aria-label="查看产品首页" className={headerMenuItem}>产品首页</a>
+    <button type="button" aria-label="如何在自己的 Agent 里连接 MapFlow" onClick={() => openMcpGuide()} className={headerMenuItem}>Agent 接入教程</button>
+    <button type="button" aria-label="查看引导" onClick={replayPublicGuide} className={headerMenuItem}>查看引导</button>
+    <button type="button" onClick={() => setAnnouncementsOpen(true)} className={headerMenuItem}>公告</button>
+    <button type="button" aria-label="意见反馈" onClick={() => setFeedbackOpen(true)} className={headerMenuItem}>意见反馈</button>
+    <div data-keep-menu-open className="space-y-3 border-t border-slate-800 px-2 py-3">
+      <ThemeSwitcher />
+      {session && generationCapabilities?.platformFundedEnabled === true && <div><p className="mb-2 text-xs text-slate-500">学习积分</p><CreditPill credit={creditQuery.data ?? null} onSignedIn={() => { void creditQuery.refetch(); void platformEntitlements.refetch(); }} /></div>}
+    </div>
+    <IdentityAccess onRequestLogout={requestLogout} />
+  </>;
 
   return (
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-slate-950 text-slate-100">
-      <header className="relative z-30 flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-800 bg-slate-950/95 px-3 py-2 sm:gap-3 sm:px-5 max-lg:pt-[max(0.5rem,env(safe-area-inset-top))]">
+      {!mobileChatActive && <header className="relative z-30 flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-800 bg-slate-950/95 px-3 py-2 sm:gap-3 sm:px-5 max-lg:pt-[max(0.5rem,env(safe-area-inset-top))]">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {mobileView === 'list' && (
             <button
@@ -1061,23 +1084,10 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
               </span>
             </button>
           )}
-          {session && <WalletBalance accountId={session.account.playerId} onClick={onNavigateWallet} />}
-          <HeaderMoreMenu>
-            <button type="button" className={headerMenuItem} onClick={onNavigateModels}>模型价格</button>
-            {session?.account.isAdmin && <button type="button" className={headerMenuItem} onClick={() => setView('admin')}>管理面板</button>}
-            <a href="/?marketing=1" aria-label="查看产品首页" className={headerMenuItem}>产品首页</a>
-            <button type="button" aria-label="如何在自己的 Agent 里连接 MapFlow" onClick={() => openMcpGuide()} className={headerMenuItem}>Agent 接入教程</button>
-            <button type="button" aria-label="查看引导" onClick={replayPublicGuide} className={headerMenuItem}>查看引导</button>
-            <button type="button" onClick={() => setAnnouncementsOpen(true)} className={headerMenuItem}>公告</button>
-            <button type="button" aria-label="意见反馈" onClick={() => setFeedbackOpen(true)} className={headerMenuItem}>意见反馈</button>
-            <div data-keep-menu-open className="space-y-3 border-t border-slate-800 px-2 py-3">
-              <ThemeSwitcher />
-              {session && generationCapabilities?.platformFundedEnabled === true && <div><p className="mb-2 text-xs text-slate-500">学习积分</p><CreditPill credit={creditQuery.data ?? null} onSignedIn={() => { void creditQuery.refetch(); void platformEntitlements.refetch(); }} /></div>}
-            </div>
-            <IdentityAccess onRequestLogout={requestLogout} />
-          </HeaderMoreMenu>
+          {headerWallet}
+          <HeaderMoreMenu>{headerMenuItems}</HeaderMoreMenu>
         </div>
-      </header>
+      </header>}
 
       <main className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
         {!personalSidebarOpen && (view === 'personal' || !selectedPublicTree) && (
@@ -1425,6 +1435,10 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
               onNavigateConsole={closeKnowledgeChat}
               onNavigateWallet={onNavigateWallet}
               onNavigateModels={onNavigateModels}
+              mobileHeaderActions={<>
+                <div className="border-t border-slate-800 pt-1">{headerWallet}</div>
+                {headerMenuItems}
+              </>}
               onClose={closeKnowledgeChat}
               onTreeChanged={() => {
                 void creditQuery.refetch();

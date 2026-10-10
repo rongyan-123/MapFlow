@@ -7,6 +7,7 @@ import { StreamingPresentation } from './streamingPresentation';
 import type { GenerationProcessEvent } from './types';
 const TeachingCanvasPanel = lazy(() => import('./TeachingCanvasPanel'));
 import AssistantMarkdown from '../knowledge-chat/AssistantMarkdown';
+import useIsMobile from '../../lib/useIsMobile';
 import { validateId, validateMessage } from './conversationInput';
 import { fetchConversation, generateStream, mutateGraph, resolveTavernToolApproval } from './tavernClient';
 import {formatAmountMicros} from '../wallet/walletClient';
@@ -59,6 +60,9 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const presentationRef=useRef<StreamingPresentation|null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLDivElement>(null);
+  // 手机端输入区每多一行就少一行聊天记录，模型选择并到底部按钮行，历史字节说明收起。
+  const isMobile = useIsMobile();
+  const modelChipButton = <button type="button" className="shrink-0 rounded-full bg-slate-800 px-3 py-1.5 text-slate-200 hover:text-cyan-200" onClick={onOpenModelConfiguration}>{modelSelection.model || '选择模型'} · {modelSelection.provider === 'platform' ? '平台额度' : '自填 Key'}</button>;
   const followLatest = useRef(true);
   useEffect(() => () => { presentationRef.current?.dispose(); activeRequest.current?.abort(); }, []);
   useEffect(() => {
@@ -269,7 +273,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         </div>
         </section>,
       }]} />}
-    <nav aria-label="学习工作区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-2 text-xs">
+    <nav aria-label="学习工作区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-1.5 text-xs sm:py-2">
       <button type="button" aria-expanded={canvas.open} aria-controls={`tavern-canvas-${detail.conversation.conversationId}`} disabled={canvas.saving}
         className={`${buttonClass} ${canvas.open ? 'border-cyan-500 text-cyan-200' : ''}`} onClick={() => canvas.open ? canvas.setOpen(false) : void canvas.show()}>
         <span aria-hidden="true" className="mr-1.5">▧</span>{canvas.open ? '收起画布' : canvas.document ? '展开画布' : '绘图讲解'}</button>
@@ -326,7 +330,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       {!activeMessages.length && !pendingGeneration && <p className="py-12 text-center text-sm text-slate-400">故事从你的第一句话开始。</p>}
       <div ref={bottom} />
     </div>
-    <div className="mx-auto w-full max-w-4xl shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:px-8">
+    <div className="mx-auto w-full max-w-4xl shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-1 sm:px-8 sm:pt-2">
       <ErrorNotice error={error} />
       <ErrorNotice error={canvas.error} />
       {error instanceof TavernApiError && ['tavern.model_access_required', 'tavern.model_access_invalid',
@@ -370,20 +374,21 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
           setPendingGeneration(null); setDraft(''); setError(null); storePending(storageKey, null);
         }}>取消本次重试</button>
       </div>}
-      <form onSubmit={event => { event.preventDefault(); void runGeneration({ type: 'reply', message }); }} className="rounded-3xl border border-slate-700 bg-slate-900 p-3 shadow-lg transition focus-within:border-cyan-500/70">
-        <div className="mb-2 flex flex-wrap items-center gap-2 px-2 text-[11px] text-slate-400">
-          <button type="button" className="rounded-full bg-slate-800 px-3 py-1.5 text-slate-200 hover:text-cyan-200" onClick={onOpenModelConfiguration}>{modelSelection.model || '选择模型'} · {modelSelection.provider === 'platform' ? '平台额度' : '自填 Key'}</button>
+      <form onSubmit={event => { event.preventDefault(); void runGeneration({ type: 'reply', message }); }} className="rounded-3xl border border-slate-700 bg-slate-900 p-2 shadow-lg transition focus-within:border-cyan-500/70 sm:p-3">
+        {!isMobile && <div className="mb-2 flex flex-wrap items-center gap-2 px-2 text-[11px] text-slate-400">
+          {modelChipButton}
           <span>历史 {modelSelection.historyBytes / 1024} KiB · 最大输出 {detail.conversation.generationSettings.maxOutputTokens === null ? '模型默认' : `${detail.conversation.generationSettings.maxOutputTokens} Token`}</span>
-        </div>
+        </div>}
         <label htmlFor={`tavern-message-${detail.conversation.conversationId}`} className="sr-only">消息</label>
-        <textarea id={`tavern-message-${detail.conversation.conversationId}`} className="max-h-48 min-h-20 w-full resize-y border-0 bg-transparent px-3 py-2 text-[15px] leading-6 text-slate-100 outline-none placeholder:text-slate-500 disabled:opacity-50" rows={2} placeholder="输入你的问题，或让 AI 画图讲解…" value={message} disabled={busy || graphBusy || pendingGeneration !== null || editing}
+        <textarea id={`tavern-message-${detail.conversation.conversationId}`} className="max-h-48 min-h-14 w-full resize-y border-0 bg-transparent px-3 py-2 text-[15px] leading-6 text-slate-100 outline-none placeholder:text-slate-500 disabled:opacity-50 sm:min-h-20" rows={2} placeholder="输入你的问题，或让 AI 画图讲解…" value={message} disabled={busy || graphBusy || pendingGeneration !== null || editing}
           onChange={event => setMessage(event.target.value)} onKeyDown={event => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
               event.preventDefault(); if (message.trim() && !inputTooLarge) void runGeneration({ type: 'reply', message });
             }
           }} />
-        <div className="flex items-center justify-between gap-2 px-2 pb-1">
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+        <div className="flex items-center justify-between gap-2 px-2 pb-0 sm:pb-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+            {isMobile && modelChipButton}
             <button type="button" className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-300 hover:border-cyan-400" onClick={onOpenParameters ?? onOpenModelConfiguration}>参数</button>
             <span className={`hidden text-[11px] sm:inline ${inputTooLarge ? 'text-rose-300' : 'text-slate-500'}`}>{inputTooLarge ? '消息过长（上限 8,192 字节）' : 'Enter 发送 · Shift+Enter 换行'}</span>
           </div>

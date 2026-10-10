@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -1875,4 +1876,74 @@ it('allows resizing the canvas boundary and remembers its width',async()=>{
   fireEvent.keyDown(handle,{key:'ArrowRight'});
   expect(panel.style.getPropertyValue('--panel-width')).toBe('520px');
   expect(localStorage.getItem('mapflow.layout.canvas.player-1')).toBe('520');
+});
+
+describe('手机端对话工具栏', () => {
+  const originalInnerWidth = window.innerWidth;
+  afterEach(() => { window.innerWidth = originalInnerWidth; });
+
+  function renderTreeChat(mobileHeaderActions?: ReactNode) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return render(<QueryClientProvider client={client}><IdentityProvider>
+      <TavernPage onNavigateConsole={() => {}} onShowMap={() => {}} treeContext={{ libraryEntryId: 'entry-1', title: 'Python 学习' }}
+        mobileHeaderActions={mobileHeaderActions} />
+    </IdentityProvider></QueryClientProvider>);
+  }
+
+  it('把次要动作收进会话菜单，且不在工具栏里重复渲染', async () => {
+    window.innerWidth = 390;
+    const user = userEvent.setup();
+    renderTreeChat(<button type="button">自定义顶栏动作</button>);
+
+    // 桌面端直接平铺的按钮，在手机端不能再出现在工具栏顶层。
+    expect(await screen.findByRole('button', { name: '打开角色列表' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '配置' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '查看地图' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: '会话操作' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '操作' }));
+    const menu = screen.getByRole('navigation', { name: '会话操作' });
+    expect(within(menu).getByRole('button', { name: '查看地图' })).toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: '自定义顶栏动作' })).toBeInTheDocument();
+    // 保持直接可见的动作不允许再进菜单，否则同一次操作会有两个入口。
+    expect(within(menu).queryByRole('button', { name: '配置' })).not.toBeInTheDocument();
+  });
+
+  it('桌面端保持原有平铺按钮，不引入会话菜单', async () => {
+    window.innerWidth = 1280;
+    renderTreeChat();
+    await screen.findByRole('button', { name: '打开角色列表' });
+    expect(screen.getByRole('button', { name: '查看地图' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '配置' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '操作' })).not.toBeInTheDocument();
+  });
+});
+
+describe('手机端输入区', () => {
+  const originalInnerWidth = window.innerWidth;
+  afterEach(() => { window.innerWidth = originalInnerWidth; });
+
+  it('模型胶囊并到底部按钮行，冗长的历史与输出说明不再占行', async () => {
+    window.innerWidth = 390;
+    restoreConversation();
+    renderPage();
+    await screen.findByText('请用茶。');
+
+    const modelChip = screen.getByRole('button', { name: /选择模型 · 自填 Key/ });
+    const parameterButton = screen.getByRole('button', { name: '参数' });
+    expect(modelChip.parentElement).toBe(parameterButton.parentElement);
+    expect(screen.queryByText(/历史 .* KiB/)).not.toBeInTheDocument();
+  });
+
+  it('桌面端保持模型独立一行并显示历史与输出说明', async () => {
+    window.innerWidth = 1280;
+    restoreConversation();
+    renderPage();
+    await screen.findByText('请用茶。');
+
+    const modelChip = screen.getByRole('button', { name: /选择模型 · 自填 Key/ });
+    const parameterButton = screen.getByRole('button', { name: '参数' });
+    expect(modelChip.parentElement).not.toBe(parameterButton.parentElement);
+    expect(screen.getByText(/历史 32 KiB/)).toBeVisible();
+  });
 });
