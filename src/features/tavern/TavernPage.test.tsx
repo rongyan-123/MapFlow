@@ -1947,3 +1947,45 @@ describe('手机端输入区', () => {
     expect(screen.getByText(/历史 32 KiB/)).toBeVisible();
   });
 });
+
+describe('手机端独立酒馆顶栏', () => {
+  const originalInnerWidth = window.innerWidth;
+  afterEach(() => { window.innerWidth = originalInnerWidth; });
+
+  // 独立酒馆是 /tavern 的独立路由，不带 treeContext；它的顶栏只有 !treeContext 时才渲染。
+  function renderTavern() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    return render(<QueryClientProvider client={client}><IdentityProvider>
+      <TavernPage onNavigateConsole={() => {}} onNavigateWallet={() => {}} onNavigateModels={() => {}} />
+    </IdentityProvider></QueryClientProvider>);
+  }
+
+  it('整条顶栏不再渲染，额度与返回入口原样落进「操作」菜单', async () => {
+    window.innerWidth = 390;
+    const user = userEvent.setup();
+    renderTavern();
+
+    // 顶栏占掉 69px 却只重复下方信息，手机端整条不渲染：标题与返回按钮都不该出现。
+    await screen.findByRole('button', { name: '打开角色列表' });
+    expect(screen.queryByRole('heading', { name: '独立酒馆' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '返回学习控制台' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '操作' }));
+    const menu = screen.getByRole('navigation', { name: '操作菜单' });
+    // 顶栏上的入口必须一个不少地出现在菜单里。
+    expect(within(menu).getByRole('button', { name: /额度/ })).toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: '学习控制台' })).toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: '模型价格' })).toBeInTheDocument();
+    // 直接留在工具栏上的动作不允许再进菜单，否则同一次操作会有两个入口。
+    expect(within(menu).queryByRole('button', { name: '配置' })).not.toBeInTheDocument();
+  });
+
+  it('桌面端顶栏保持原样，不引入「操作」菜单', async () => {
+    window.innerWidth = 1280;
+    renderTavern();
+    await screen.findByRole('button', { name: '打开角色列表' });
+    expect(screen.getByRole('heading', { name: '独立酒馆' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '返回学习控制台' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '操作' })).not.toBeInTheDocument();
+  });
+});
