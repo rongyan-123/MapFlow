@@ -1618,6 +1618,65 @@ describe('手机端视图栈', () => {
     expect(screen.getByRole('heading', { name: '基础节点' })).toBeInTheDocument();
   });
 
+  it('手机端进入聊天后隐藏控制台顶栏，额度与账号入口改挂到会话操作菜单', async () => {
+    const originalInnerWidth = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      const user = userEvent.setup();
+      identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+      treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+      treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+      renderApp();
+
+      await screen.findByText(authenticated.account.playerId);
+      await user.click(screen.getByRole('button', { name: '我的学习' }));
+      await user.click(
+        await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+      );
+      await user.click(
+        await screen.findByRole('button', { name: '查看节点 基础节点' }),
+      );
+      await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
+
+      expect(screen.getByTestId('knowledge-chat-panel')).toBeInTheDocument();
+      // 顶栏在聊天模式下只重复显示标题，却要占掉 64px 以上，整条不再渲染。
+      expect(screen.queryByRole('button', { name: '更多' })).not.toBeInTheDocument();
+      // 顶栏上的额度必须是转移而不是消失，否则等于删功能。
+      expect(screen.queryByRole('button', { name: /现金额度/ })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: '操作' }));
+      const menu = screen.getByRole('navigation', { name: '会话操作' });
+      expect(within(menu).getByRole('button', { name: /现金额度/ })).toBeInTheDocument();
+      expect(within(menu).getByRole('button', { name: '模型价格' })).toBeInTheDocument();
+      expect(within(menu).getByRole('button', { name: '退出登录' })).toBeInTheDocument();
+    } finally {
+      window.innerWidth = originalInnerWidth;
+    }
+  });
+
+  it('桌面端进入聊天后保留控制台顶栏，不产生重复入口', async () => {
+    const user = userEvent.setup();
+    identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp();
+
+    await screen.findByText(authenticated.account.playerId);
+    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(
+      await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
+    );
+    await user.click(
+      await screen.findByRole('button', { name: '查看节点 基础节点' }),
+    );
+    await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
+
+    expect(screen.getByTestId('knowledge-chat-panel')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '更多' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /现金额度/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '操作' })).not.toBeInTheDocument();
+  });
+
   it('学习聊天卸载地图并去掉分隔条，查看地图后能恢复同一聊天', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
