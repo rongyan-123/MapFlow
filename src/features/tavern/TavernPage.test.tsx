@@ -216,6 +216,108 @@ function restoreConversation() {
   window.localStorage.setItem('mapflow.tavern.selection.v1.player-1', conversation.conversationId);
 }
 
+it('shows all scene roles by default and filters history without changing the active story or draft', async () => {
+  restoreConversation();
+  const tutor = { ...character, characterId: 'tutor-2', card: { ...character.card, name: '耐心导师' } };
+  characters.push(tutor);
+  conversations.push({ ...conversation, conversationId: 'story-2', characterId: tutor.characterId, title: '另一角色的课程' });
+  const user = userEvent.setup(); renderPage();
+  await user.type(await screen.findByRole('textbox', { name: '消息' }), '保留未发送草稿');
+  await user.click(screen.getByRole('button', { name: '配置' }));
+  expect(screen.getByRole('combobox', { name: '筛选历史角色' })).toHaveValue('all');
+  expect(screen.getByRole('option', { name: /另一角色的课程/ })).toBeInTheDocument();
+  await user.selectOptions(screen.getByRole('combobox', { name: '筛选历史角色' }), tutor.characterId);
+  expect(screen.getByRole('option', { name: /旅人的茶馆/ })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '关闭配置' }));
+  expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('保留未发送草稿');
+  expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe('conversation-1');
+  expect(fetchMock.mock.calls.some(([url, init]) => url.endsWith('/character') && init?.method === 'PATCH')).toBe(false);
+});
+
+it('keeps import non-disruptive and clears account-scoped new-role notice only on opening the selector', async () => {
+  restoreConversation(); const user = userEvent.setup(); const mounted = renderPage();
+  await user.type(await screen.findByRole('textbox', { name: '消息' }), '导入之后保留草稿');
+  await user.click(screen.getByRole('button', { name: '导入角色卡' }));
+  await user.upload(screen.getByLabelText('选择 PNG 或 JSON 角色卡'), new File([JSON.stringify({ name: '新导师', description: '教学' })], 'teacher.json', { type: 'application/json' }));
+  await user.click(await screen.findByRole('button', { name: '确认导入' }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: '导入角色卡' })).not.toBeInTheDocument());
+  expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('导入之后保留草稿');
+  expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe('conversation-1');
+  expect(screen.getByText('新增 1')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '使用新导师' })).toBeInTheDocument();
+  mounted.unmount(); renderPage();
+  expect(await screen.findByText('新增 1')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '打开角色列表' }));
+  expect(screen.queryByText('新增 1')).not.toBeInTheDocument();
+  expect(attempts).toHaveLength(0);
+});
+
+it('explicitly switches the independent active role without creating or opening another story', async () => {
+  restoreConversation(); const tutor = { ...character, characterId: 'tutor-2', card: { ...character.card, name: '耐心导师' } }; characters.push(tutor);
+  const normalFetch = fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/character') && init?.method === 'PATCH') {
+      savedDetail = { ...savedDetail, character: tutor, conversation: { ...savedDetail.conversation, characterId: tutor.characterId }, graph: { ...savedDetail.graph, revision: 2 } };
+      return json(savedDetail);
+    }
+    return normalFetch(url, init);
+  });
+  const user = userEvent.setup(); renderPage();
+  await user.type(await screen.findByRole('textbox', { name: '消息' }), '切换后保留草稿');
+  await user.click(screen.getByRole('button', { name: '选择角色 耐心导师' }));
+  await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => url.endsWith('/character') && init?.method === 'PATCH')).toBe(true));
+  expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('切换后保留草稿');
+  expect(screen.getByRole('log')).toHaveTextContent('请用茶。');
+  expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe('conversation-1');
+  expect(fetchMock.mock.calls.some(([url, init]) => url.endsWith('/conversations') && init?.method === 'POST')).toBe(false);
+});
+
+it('chooses a role without implicitly creating a story until New conversation is pressed', async () => {
+  const user = userEvent.setup(); renderPage();
+  await user.click(await screen.findByRole('button', { name: '选择角色 旅人' }));
+  expect(fetchMock.mock.calls.some(([url, init]) => url.endsWith('/conversations') && init?.method === 'POST')).toBe(false);
+  await user.click(screen.getByRole('button', { name: '新建会话' }));
+  expect(await screen.findByRole('textbox', { name: '消息' })).toBeInTheDocument();
+});
+
+it('renders anchored role changes only on their visible history path', async () => {
+  restoreConversation();
+  savedDetail = { ...savedDetail, roleChanges: [
+    { changeId: 'change-1', afterMessageId: 'message-assistant-1', characterId: 'tutor-2', characterName: '耐心导师', createdAt: turn.createdAt },
+    { changeId: 'change-other', afterMessageId: 'not-active', characterId: 'tutor-3', characterName: '其他分支角色', createdAt: turn.createdAt },
+  ] } as ConversationDetail;
+  renderPage();
+  expect(await screen.findByRole('log')).toHaveTextContent('已切换角色：耐心导师');
+  expect(screen.queryByText('已切换角色：其他分支角色')).not.toBeInTheDocument();
+});
+
+it('keeps a role-change marker between the original reply and its continuation', async () => {
+  restoreConversation();
+  const continued = { ...detail.graph.messages[2], messageId: 'continued', parentMessageId: 'message-assistant-1', origin: 'continue' as const, content: '新角色接着解释' };
+  savedDetail = { ...savedDetail, roleChanges: [{ changeId: 'change-1', afterMessageId: 'message-assistant-1', characterId: 'tutor-2', characterName: '耐心导师', createdAt: turn.createdAt }],
+    graph: { ...detail.graph, messages: [...detail.graph.messages, continued], activePath: [...detail.graph.activePath, continued.messageId] } } as ConversationDetail;
+  renderPage(); const log = await screen.findByRole('log');
+  expect(log.textContent!.indexOf('已切换角色：耐心导师')).toBeLessThan(log.textContent!.indexOf('新角色接着解释'));
+});
+
+it('does not allow generation from an archived learning area while keeping its history', async () => {
+  savedDetail = { ...savedDetail, conversation: { ...conversation, scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: 'entry-1' } };
+  conversations = [savedDetail.conversation]; localStorage.setItem('mapflow.tavern.selection.v1.player-1.tree.entry-1', 'conversation-1');
+  renderPage({ libraryEntryId: 'entry-1', title: '已归档地图', available: false });
+  expect(await screen.findByRole('log')).toHaveTextContent('请用茶。');
+  expect(screen.getByRole('textbox', { name: '消息' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '重新生成' })).toBeDisabled();
+  expect(attempts).toHaveLength(0);
+});
+
+it('keeps new-role notices separate between accounts', async () => {
+  localStorage.setItem('mapflow.roles.unread.v1.player-1', JSON.stringify(['unread-role']));
+  const first = renderPage(); await screen.findByText('新增 1'); first.unmount();
+  identityAccountId = 'player-2'; renderPage(); await screen.findByRole('button', { name: '打开角色列表' });
+  expect(screen.queryByText('新增 1')).not.toBeInTheDocument();
+  expect(localStorage.getItem('mapflow.roles.unread.v1.player-1')).toBe(JSON.stringify(['unread-role']));
+});
+
 function setActiveLeaf(graph: ConversationDetail['graph'], leafMessageId: string | null): ConversationDetail['graph'] {
   const byId = new Map(graph.messages.map(message => [message.messageId, message]));
   const reversed: string[] = [];
@@ -1105,9 +1207,9 @@ describe('Tavern page', () => {
     expect(window.sessionStorage.getItem('mapflow.tavern.pending.v1.player-1.conversation-1')).toBeNull();
   });
 
-  it('opens a character with defaults in one click and does not create again on repeated clicks', async () => {
+  it('creates with defaults only through New conversation and repeated role clicks retain it', async () => {
     const user = userEvent.setup(); renderPage();
-    await user.dblClick(await screen.findByRole('button', { name: '选择角色 旅人' }));
+    await user.dblClick(await screen.findByRole('button', { name: '新建会话' }));
     expect(await screen.findByText('你好，小明！')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '选择角色 旅人' }));
     expect(screen.getByText('你好，小明！')).toBeInTheDocument();
@@ -1118,7 +1220,7 @@ describe('Tavern page', () => {
   });
 
   it('restores an existing character conversation without clearing history or creating another', async () => {
-    conversations = [conversation];
+    restoreConversation();
     const user = userEvent.setup(); renderPage();
     await user.click(await screen.findByRole('button', { name: '选择角色 旅人' }));
     expect(await screen.findByText('请用茶。')).toBeInTheDocument();
@@ -1294,7 +1396,7 @@ describe('Tavern page', () => {
 
   it('creates ordinary conversations without a setup dialog or a mandatory vocabulary', async () => {
     const user = userEvent.setup(); renderPage();
-    await user.click(await screen.findByRole('button', { name: '选择角色 旅人' }));
+    await user.click(await screen.findByRole('button', { name: '新建会话' }));
     expect(await screen.findByText('你好，小明！')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '继续' })).not.toBeInTheDocument();
     const create = fetchMock.mock.calls.find(([url, init]) => url.endsWith('/conversations') && init?.method === 'POST')?.[1];
@@ -1359,7 +1461,7 @@ describe('Tavern page', () => {
 
   it('offers alternate greetings only before dialogue starts and sends the selected index', async () => {
     const user = userEvent.setup(); renderPage();
-    await user.click(await screen.findByRole('button', { name: '选择角色 旅人' }));
+    await user.click(await screen.findByRole('button', { name: '新建会话' }));
     await screen.findByText('你好，小明！');
     await user.click(screen.getByRole('button', { name: '配置' }));
     await user.click(screen.getByRole('button', { name: '会话设定' }));
@@ -1447,7 +1549,7 @@ describe('Tavern page', () => {
     expect(fetchMock.mock.calls.some(([url, init]) => url.endsWith('/profile') && init?.method === 'PATCH')).toBe(false);
   });
 
-  it('limits configuration history to the current character across session and character switches', async () => {
+  it('filters history independently of the active role and retains the current selected story', async () => {
     restoreConversation();
     const otherCharacter = { ...character, characterId: 'character-2', card: { ...character.card, name: '灯塔守卫' } };
     const secondSession = { ...conversation, conversationId: 'conversation-2', title: '旅人的第二夜' };
@@ -1464,16 +1566,13 @@ describe('Tavern page', () => {
     await screen.findByText('请用茶。');
     await user.click(screen.getByRole('button', { name: '配置' }));
     const history = screen.getByLabelText('选择会话');
-    expect(within(history).queryByRole('option', { name: '灯塔之夜 · 小明' })).not.toBeInTheDocument();
+    expect(within(history).getByRole('option', { name: '灯塔之夜 · 小明' })).toBeInTheDocument();
     expect(within(history).getByRole('option', { name: '旅人的茶馆 · 小明' })).toBeInTheDocument();
     await user.selectOptions(history, 'conversation-2');
     await waitFor(() => expect(screen.getByLabelText('选择会话')).toHaveValue('conversation-2'));
-    await user.click(screen.getByRole('button', { name: '关闭配置' }));
-    await user.click(screen.getByRole('button', { name: '选择角色 灯塔守卫' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: '选择角色 灯塔守卫' })).toHaveAttribute('aria-pressed', 'true'));
-    await user.click(screen.getByRole('button', { name: '配置' }));
+    await user.selectOptions(screen.getByLabelText('筛选历史角色'), 'character-2');
     expect(within(screen.getByLabelText('选择会话')).getAllByRole('option').map(option => option.textContent))
-      .toEqual(['选择历史会话', '灯塔之夜 · 小明']);
+      .toEqual(['选择历史会话', '旅人的第二夜 · 小明', '灯塔之夜 · 小明']);
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   });
 
@@ -1571,7 +1670,7 @@ describe('Tavern page', () => {
     });
     let refresh!: Promise<void>;
     act(() => { refresh = client.refetchQueries({ queryKey: ['me', 'player-1', 'tavern', 'conversations'] }); });
-    await user.click(screen.getByRole('button', { name: '选择角色 旅人' }));
+    await user.click(screen.getByRole('button', { name: '新建会话' }));
     await screen.findByLabelText('消息');
     await act(async () => { resolveList(json({ conversations: [] })); await refresh; });
     expect(client.getQueryData<Conversation[]>(['me', 'player-1', 'tavern', 'conversations'])).toHaveLength(1);

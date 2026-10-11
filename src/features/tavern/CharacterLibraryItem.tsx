@@ -27,7 +27,7 @@ export default function CharacterLibraryItem({ character, selected, opening, dis
       <button type="button" aria-label={`选择角色 ${character.card.name}`} aria-pressed={selected}
         className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
         disabled={disabled} onClick={onSelect}>
-        <CharacterAvatar character={character} /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{character.card.name}</span><span className="text-xs text-slate-400">{opening ? '正在开启…' : '点击继续故事'}</span></span>
+        <CharacterAvatar character={character} /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{character.card.name}</span><span className="text-xs text-slate-400">{opening ? '正在切换…' : '作为当前角色'}</span></span>
       </button>
       <button ref={trigger} type="button" aria-label={`角色操作 ${character.card.name}`} aria-haspopup="menu" aria-expanded={open}
         className={`mr-2 rounded-lg px-2 py-2 text-lg text-slate-300 transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 ${open ? 'sm:!opacity-100' : ''}`}

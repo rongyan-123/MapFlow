@@ -22,7 +22,7 @@ interface PendingGeneration { clientActionId: string; expectedRevision: number; 
   platformBinding?: { model: string; historyBytes: 8192 | 16384 | 32768 };
   modelBinding?: { model: string; baseUrl: string; historyBytes: 8192 | 16384 | 32768 } }
 
-export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, platformModelError, onBusyChange, onCompleted, onRecovered, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onOpenParameters, onNavigateWallet, onCloseConfiguration, configuration, nodeReference, mapVisible, onOpenCanvas }: {
+export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, platformModelError, onBusyChange, onCompleted, onRecovered, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onOpenParameters, onNavigateWallet, onCloseConfiguration, configuration, nodeReference, mapVisible, onOpenCanvas, readOnly = false }: {
   detail: ConversationDetail; accountId: string; csrfToken: string;
   modelSelection: TavernModelSelection;
   platformModelError?: string;
@@ -34,6 +34,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   onOpenParameters?: () => void;
   nodeReference?: { id: string; title: string };
   mapVisible?: boolean; onOpenCanvas?: () => void;
+  readOnly?: boolean;
 }) {
   const storageKey = `mapflow.tavern.pending.v1.${accountId}.${detail.conversation.conversationId}`;
   const [pendingGeneration, setPendingGeneration] = useState<PendingGeneration | null>(() => {
@@ -122,6 +123,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   }
 
   async function runGeneration(action: GenerationAction, retry?: PendingGeneration) {
+    if (readOnly) return;
     if (activeRequest.current || graphBusy || editing || (pendingGeneration && !retry)) return;
     if (!retry && action.type === 'reply' && referenceActive && nodeReference) {
       action = { ...action, message: `${action.message}\n\n[学习节点参考：${nodeReference.title}；节点 ID：${nodeReference.id}]` };
@@ -208,7 +210,8 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     const activeMessage = messagesById.get(messageId);
     return activeMessage ? [activeMessage] : [];
   });
-  const displayMessages = mergeContinuationMessages(activeMessages);
+  const roleChangeAnchors = new Set((detail.roleChanges ?? []).flatMap(change => change.afterMessageId ? [change.afterMessageId] : []));
+  const displayMessages = mergeContinuationMessages(activeMessages, roleChangeAnchors);
   const activeLeaf = activeMessages[activeMessages.length - 1];
   const branchAnchors = activeMessages.filter(item => item.role === 'assistant');
   const selectedBranchAnchorId = branchAnchors.some(item => item.messageId === branchAnchorId)
@@ -225,6 +228,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const activeAlternativeIndex = alternatives.findIndex(item => item.messageId === activeLeaf?.messageId);
 
   async function applyGraphMutation(action: GraphMutation): Promise<boolean> {
+    if (readOnly) return false;
     if (graphBusy) return false;
     try {
       setGraphBusy(true); setError(null);
@@ -289,7 +293,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         </section>,
       }]} />}
     <nav aria-label="学习工作区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-1.5 text-xs sm:py-2">
-      <button type="button" aria-expanded={canvas.open} aria-controls={`tavern-canvas-${detail.conversation.conversationId}`} disabled={canvas.saving}
+      <button type="button" aria-expanded={canvas.open} aria-controls={`tavern-canvas-${detail.conversation.conversationId}`} disabled={canvas.saving || readOnly}
         className={`${buttonClass} ${canvas.open ? 'border-cyan-500 text-cyan-200' : ''}`} onClick={() => canvas.open ? canvas.setOpen(false) : void openTeachingCanvas()}>
         <span aria-hidden="true" className="mr-1.5">▧</span>{canvas.open ? '收起画布' : canvas.document ? '展开画布' : '绘图讲解'}</button>
       <span className="hidden text-slate-500 sm:inline">让 AI 用图形讲解，也可以自己绘制</span>
@@ -312,6 +316,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       const container = pane.current;
       if (container) followLatest.current = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
     }}>
+      {(detail.roleChanges ?? []).filter(change => change.afterMessageId === null).map(change => <p key={change.changeId} className="mx-auto mb-4 max-w-3xl text-center text-xs text-slate-500">已切换角色：{change.characterName}</p>)}
       {displayMessages.map(activeMessage => <div key={activeMessage.messageId}>
         <GenerationProcess events={detail.generations.filter(generation => generation.outputMessageId === activeMessage.messageId).flatMap(generation => generation.process ?? [])} />
         <Message
@@ -320,20 +325,24 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         text={activeMessage.content} user={activeMessage.role === 'user'} />
         {(detail.cashCharges??[]).filter(charge=>charge.outputMessageId===activeMessage.messageId
           || activeMessages.some(message=>message.messageId===charge.outputMessageId && message.origin==='continue' &&
-            continuationRoot(message,messagesById)===activeMessage.messageId)).map(charge=> {
+            continuationRoot(message,messagesById,roleChangeAnchors)===activeMessage.messageId)).map(charge=> {
             const usage=detail.turns.find(turn=>turn.turnId===charge.generationId)?.usage;
             return <p key={charge.generationId} className="mx-auto -mt-4 mb-6 max-w-3xl pl-14 text-xs text-slate-400">
               {usage&&<>输入 {usage.inputTokens} · 输出 {usage.outputTokens} Token · </>}
               本次费用 ¥{formatAmountMicros(charge.amountMicros)} · 现金余额 ¥{formatAmountMicros(charge.balanceAfterMicros)}
               {charge.capped&&' · 已按预留上限结算'}
             </p>;
-          })}</div>)}
+          })}
+        {(detail.roleChanges ?? []).filter(change => change.afterMessageId === activeMessage.messageId
+          || activeMessages.some(message => message.origin === 'continue' && message.messageId === change.afterMessageId && continuationRoot(message, messagesById, roleChangeAnchors) === activeMessage.messageId))
+          .map(change => <p key={change.changeId} className="mx-auto mb-4 max-w-3xl text-center text-xs text-slate-500">已切换角色：{change.characterName}</p>)}
+      </div>)}
       {activeLeaf && activeLeaf.origin !== 'opening' && <div aria-label="回复操作" className="mx-auto mb-6 flex max-w-3xl flex-wrap items-center gap-1 pl-14 text-xs text-slate-500">
-        <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={!canReviseAssistant || busy || graphBusy || pendingGeneration !== null || editing}
+        <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={readOnly || !canReviseAssistant || busy || graphBusy || pendingGeneration !== null || editing}
           onClick={() => { if (canReviseAssistant) { setEditContent(activeLeaf.content); setEditing(true); setError(null); } }}>编辑当前消息</button>
-        <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={!canReviseAssistant || busy || graphBusy || pendingGeneration !== null || editing}
+        <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={readOnly || !canReviseAssistant || busy || graphBusy || pendingGeneration !== null || editing}
           onClick={() => { if (canReviseAssistant) void runGeneration({ type: 'regenerate', assistantMessageId: activeLeaf.messageId }); }}>重新生成</button>
-        <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={!canContinueAssistant || busy || graphBusy || pendingGeneration !== null || editing}
+        <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={readOnly || !canContinueAssistant || busy || graphBusy || pendingGeneration !== null || editing}
           onClick={() => { if (canContinueAssistant) void runGeneration({ type: 'continue', assistantMessageId: activeLeaf.messageId }); }}>继续</button>
       </div>}
       {pendingGeneration && <div className="space-y-5">
@@ -399,7 +408,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
           <span>历史 {modelSelection.historyBytes / 1024} KiB · 最大输出 {detail.conversation.generationSettings.maxOutputTokens === null ? '模型默认' : `${detail.conversation.generationSettings.maxOutputTokens} Token`}</span>
         </div>}
         <label htmlFor={`tavern-message-${detail.conversation.conversationId}`} className="sr-only">消息</label>
-        <textarea id={`tavern-message-${detail.conversation.conversationId}`} className="max-h-48 min-h-14 w-full resize-y border-0 bg-transparent px-3 py-2 text-[15px] leading-6 text-slate-100 outline-none placeholder:text-slate-500 disabled:opacity-50 sm:min-h-20" rows={2} placeholder="输入你的问题，或让 AI 画图讲解…" value={message} disabled={busy || graphBusy || pendingGeneration !== null || editing}
+        <textarea id={`tavern-message-${detail.conversation.conversationId}`} className="max-h-48 min-h-14 w-full resize-y border-0 bg-transparent px-3 py-2 text-[15px] leading-6 text-slate-100 outline-none placeholder:text-slate-500 disabled:opacity-50 sm:min-h-20" rows={2} placeholder="输入你的问题，或让 AI 画图讲解…" value={message} disabled={readOnly || busy || graphBusy || pendingGeneration !== null || editing}
           onChange={event => setMessage(event.target.value)} onKeyDown={event => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
               event.preventDefault(); if (message.trim() && !inputTooLarge) void runGeneration({ type: 'reply', message });
@@ -412,7 +421,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
             <span className={`hidden text-[11px] sm:inline ${inputTooLarge ? 'text-rose-300' : 'text-slate-500'}`}>{inputTooLarge ? '消息过长（上限 8,192 字节）' : 'Enter 发送 · Shift+Enter 换行'}</span>
           </div>
           {busy ? <button key="stop" type="button" className={primaryClass} onClick={stopGeneration}>停止生成</button>
-            : <button key="send" type="submit" className={primaryClass} disabled={graphBusy || editing || pendingGeneration !== null || !message.trim() || inputTooLarge}>发送</button>}
+            : <button key="send" type="submit" className={primaryClass} disabled={readOnly || graphBusy || editing || pendingGeneration !== null || !message.trim() || inputTooLarge}>发送</button>}
         </div>
       </form>
     </div>
@@ -428,10 +437,10 @@ function Message({ author, text, user = false, character }: { author: string; te
     <div className="text-[15px] leading-7 text-slate-200 [overflow-wrap:anywhere] [&_em]:text-slate-400 [&_p+p]:mt-3"><AssistantMarkdown content={text} /></div></div>
   </article>;
 }
-function mergeContinuationMessages(messages: GraphMessage[]): GraphMessage[] {
+function mergeContinuationMessages(messages: GraphMessage[], boundaries: Set<string>): GraphMessage[] {
   return messages.reduce<GraphMessage[]>((display, message) => {
     const previous = display[display.length - 1];
-    if (message.role === 'assistant' && message.origin === 'continue' && previous?.role === 'assistant') {
+    if (message.role === 'assistant' && message.origin === 'continue' && previous?.role === 'assistant' && !boundaries.has(message.parentMessageId ?? '')) {
       return [...display.slice(0, -1), { ...previous, content: `${previous.content}\n${message.content}` }];
     }
     return [...display, message];
@@ -486,10 +495,10 @@ function readPending(key: string, currentRevision: number): PendingGeneration | 
     return null;
   } catch { return null; }
 }
-function continuationRoot(message:GraphMessage,messages:Map<string,GraphMessage>):string {
+function continuationRoot(message:GraphMessage,messages:Map<string,GraphMessage>,boundaries:Set<string>):string {
   let root=message;
   for (let count=0;count<messages.size && root.origin==='continue' && root.parentMessageId;count++) {
-    const parent=messages.get(root.parentMessageId);if (!parent) break;root=parent;
+    const parent=messages.get(root.parentMessageId);if (!parent || boundaries.has(parent.messageId)) break;root=parent;
   }
   return root.messageId;
 }

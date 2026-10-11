@@ -10,6 +10,13 @@ function reply(body: unknown) {
 }
 
 describe('Tavern HTTP contract', () => {
+  it('retains role-change anchors and rejects malformed role-change records', async () => {
+    const event = { changeId: 'change-1', afterMessageId: 'message-assistant-1', characterId: 'character-2', characterName: '导师', createdAt: turn.createdAt };
+    reply({ ...detail, roleChanges: [event] });
+    expect((await fetchConversation('conversation-1')).roleChanges).toEqual([event]);
+    reply({ ...detail, roleChanges: [{ ...event, afterMessageId: 42 }] });
+    await expect(fetchConversation('conversation-1')).rejects.toThrow();
+  });
   it.each([null, 131072])('accepts model default and long output settings %s', async maxOutputTokens => {
     const generationSettings = { maxOutputTokens, stopSequences: [] };
     const state = { generationSettings, generationSettingsVersion: 2 };

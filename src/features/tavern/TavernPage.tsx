@@ -1,5 +1,6 @@
 import ModelAccessPanel from './ModelAccessPanel';
 import { readModelSelection, saveModelSelection } from './modelPreferences';
+import useRoleNotices from './useRoleNotices';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import TreeToolsPanel from './TreeToolsPanel';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -47,6 +48,9 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   // 独立酒馆（/tavern）与从知识点进入的对话走同一条紧凑路径，桌面端逐区域不变。
   const { logout, logoutPending, logoutError } = useIdentity();
   const accountId = session.account.playerId;
+  const roleNotices = useRoleNotices(accountId);
+  const [importedRole, setImportedRole] = useState<Character | null>(null);
+  const [historyRole, setHistoryRole] = useState('all');
   const selectionKey = `mapflow.tavern.selection.v1.${accountId}${management ? '.management' : ''}`;
   const treeSelectionKey = treeContext ? `${selectionKey}.tree.${treeContext.libraryEntryId}` : null;
   const [rememberedTreeConversation] = useState(() => {
@@ -198,9 +202,10 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   }
   async function openCharacter(character: Character) {
     if (openingLock.current || !conversations.isSuccess || !treeReady) return;
+    if (currentDetail?.character.characterId === character.characterId) { setDrawer(null); return; }
     setCharacterId(character.characterId);
     setOpenError(null);
-    if ((treeContext || management || currentDetail?.conversation.libraryEntryId) && conversationId) {
+    if (conversationId) {
       if (!currentDetail) return;
       openingLock.current=true; setOpeningCharacter(character.characterId);
       try {
@@ -210,19 +215,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
       finally { openingLock.current=false; setOpeningCharacter(null); }
       return;
     }
-    const available = (queryClient.getQueryData<Conversation[]>(conversationsKey) ?? []).filter(belongsToCurrentScene);
-    let remembered: string | null = null;
-    try { remembered = window.localStorage.getItem(`${selectionKey}.${character.characterId}`); } catch { /* Optional preference. */ }
-    const existing = available.find(item => item.characterId === character.characterId && item.conversationId === (remembered ?? conversationId))
-      ?? available.filter(item => item.characterId === character.characterId)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.conversationId.localeCompare(a.conversationId))[0];
-    if (existing) { selectConversation(existing.conversationId); return; }
-    openingLock.current = true;
-    setOpeningCharacter(character.characterId);
-    try {
-      onCreated(await createConversation({ characterId: character.characterId, userName: session.account.username, greetingIndex: 0 }, session.csrfToken));
-    } catch (failure) { setOpenError(failure); }
-    finally { openingLock.current = false; setOpeningCharacter(null); }
+    setDrawer(null);
   }
   function onCompleted(completed: CompletedTurn) {
     onTreeChanged?.();
@@ -246,10 +239,8 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   }
   function onImported(imported: Character) {
     void queryClient.cancelQueries({ queryKey: charactersKey, exact: true });
-    queryClient.setQueryData<Character[]>(charactersKey, previous => [...(previous ?? []), imported]);
-    setImportOpen(false); setCreateOpen(false); setCharacterId(imported.characterId);
-    if (treeContext || currentDetail?.conversation.libraryEntryId) void openCharacter(imported);
-    else selectConversation(null);
+    queryClient.setQueryData<Character[]>(charactersKey, previous => [...(previous ?? []).filter(item => item.characterId !== imported.characterId), imported]);
+    setImportOpen(false); setCreateOpen(false); setImportedRole(imported); roleNotices.added(imported.characterId);
   }
   function onCreated(created: Conversation) {
     void queryClient.cancelQueries({ queryKey: conversationsKey, exact: true });
@@ -306,14 +297,15 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
       onRename={() => editCharacter(item, true)} onEdit={() => editCharacter(item, false)}
       onDelete={() => { setDrawer(null); removing.reset(); setDeleting(item); }} />)}</div>
   </div>;
-  const historyCharacterId = selectedCharacter?.characterId
-    ?? scopedConversations?.find(item => item.conversationId === conversationId)?.characterId;
-  // Without an active character, retain access to archived cards' saved history.
-  // While an active conversation loads, never briefly expose other characters.
   const characterConversations = (scopedConversations ?? []).filter(item =>
-    (!treeContext || item.learningAreaId === treeContext.libraryEntryId) &&
-    (historyCharacterId ? item.characterId === historyCharacterId : !conversationId));
+    historyRole === 'all' || item.characterId === historyRole || item.conversationId === conversationId);
+  const historyRoles = [...new Set((scopedConversations ?? []).map(item => item.characterId))];
   const summary = <div className="space-y-4">
+    <label className="block text-xs text-slate-400">历史角色
+      <select aria-label="筛选历史角色" className={`${inputClass} mt-2`} value={historyRole} onChange={event => setHistoryRole(event.target.value)}>
+        <option value="all">全部角色</option>{historyRoles.map(id => <option key={id} value={id}>{characters.data?.find(item => item.characterId === id)?.card.name ?? '已隐藏角色'}</option>)}
+      </select>
+    </label>
     <label className="block text-xs text-slate-400">历史会话
       <select aria-label="选择会话" className={`${inputClass} mt-2`} value={conversationId ?? ''} disabled={creatingConversation || generationBusy || !!pendingCreation.current} onChange={event => {
         const selected = characterConversations.find(item => item.conversationId === event.target.value);
@@ -370,7 +362,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
           ? 'flex shrink-0 flex-nowrap items-center gap-2 border-b border-slate-800 px-3 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]'
           : 'flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-2 sm:px-5'}>
           {(treeContext || management) && onClose && <button type="button" className={buttonClass} aria-label="返回学习区列表" onClick={onClose}>←</button>}
-          <button type="button" className={`${buttonClass} ${treeContext || management ? '' : 'lg:hidden'}`} aria-label="打开角色列表" onClick={() => setDrawer('library')}>☰</button>
+          <button type="button" className={buttonClass} aria-label="打开角色列表" onClick={() => { roleNotices.clear(); setDrawer('library'); }}>☰{roleNotices.count > 0 && <span className="ml-1 text-xs text-cyan-200">新增 {roleNotices.count}</span>}</button>
           <div className={`flex ${isMobile ? 'min-w-0' : 'min-w-[100px]'} flex-1 items-center gap-2`}><CharacterAvatar character={selectedCharacter} /><div className="min-w-0"><h2 className="truncate text-sm font-semibold">{selectedCharacter?.card.name ?? '欢迎来到酒馆'}</h2><p className="mt-0.5 truncate text-xs text-slate-500">{treeContext ? treeContext.nodeTitle ?? treeContext.title : conversationId ? '故事正在继续' : '选择角色，开启故事'}</p></div></div>
           {!isMobile && onShowMap && <button type="button" className={`${buttonClass} shrink-0`} onClick={onShowMap}>查看地图</button>}
           {!isMobile && canCreate && <button type="button" className={`${buttonClass} shrink-0`} disabled={creatingConversation || generationBusy || openingCharacter !== null || !conversations.isSuccess || (!!conversationId && !currentDetail)}
@@ -390,11 +382,17 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         {treeContext && currentDetail?.conversation.libraryEntryId === treeContext.libraryEntryId && <span className="sr-only">已关联：{treeContext.title}</span>}
         {treeStory.error && <ErrorNotice error={treeStory.error} onRetry={() => void treeStory.refetch()} />}
         {managementOpening.error && <ErrorNotice error={managementOpening.error} onRetry={() => void managementOpening.refetch()} />}
+        {importedRole && <div role="status" className="flex items-center gap-3 border-b border-slate-800 px-4 py-2 text-sm text-cyan-200">
+          <span>角色卡「{importedRole.card.name}」已加入角色库</span><button type="button" className={buttonClass} aria-label={`使用${importedRole.card.name}`}
+            disabled={generationBusy || !treeReady || !!pendingCreation.current} onClick={() => { void openCharacter(importedRole); setImportedRole(null); }}>使用</button>
+          <button type="button" aria-label="关闭导入提示" onClick={() => setImportedRole(null)}>×</button>
+        </div>}
         {openError != null && <div className="p-4"><ErrorNotice error={openError} /></div>}
         {conversations.error && <div className="p-4"><ErrorNotice error={conversations.error} onRetry={() => void conversations.refetch()} /></div>}
         {conversationId ? currentDetail ? <ConversationPane key={`${accountId}.${conversationId}`} detail={currentDetail} accountId={accountId} csrfToken={session.csrfToken} onCompleted={onCompleted} onRecovered={onRecovered} onGraphChanged={onGraphChanged}
           nodeReference={treeContext?.nodeId && treeContext.nodeTitle ? { id: treeContext.nodeId, title: treeContext.nodeTitle } : undefined}
           mapVisible={mapVisible} onOpenCanvas={onOpenCanvas}
+          readOnly={treeContext?.available === false}
           modelSelection={{ ...modelSelection, billingPolicy: platformCatalog.data?.policyVersion }} platformModelError={platformModelError}
           onBusyChange={setGenerationBusy}
           configurationOpen={configurationOpen} configurationSection={configurationSection}
@@ -408,7 +406,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
           </div>}
       </section>
     </main>
-    <MobileDrawer open={drawer !== null} desktopVisible={!!treeContext || !!management} onClose={() => setDrawer(null)}>
+    <MobileDrawer open={drawer !== null} desktopVisible onClose={() => setDrawer(null)}>
       <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">{drawer === 'library' ? '角色与账号' : '会话详情'}</h2><button type="button" className={buttonClass} onClick={() => setDrawer(null)}>关闭</button></div>
       {drawer === 'library' ? <><IdentityAccess onRequestLogout={() => { setDrawer(null); setLogoutOpen(true); }} /><div className="mt-5">{library}</div></> : summary}
     </MobileDrawer>

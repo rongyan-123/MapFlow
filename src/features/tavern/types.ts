@@ -87,12 +87,14 @@ export type GenerationAction =
   | { type: 'regenerate'; assistantMessageId: string }
   | { type: 'continue'; assistantMessageId: string };
 export interface ConversationDetail {
+  roleChanges?: RoleChange[];
   canvas?: TeachingCanvasState;
   conversation: Conversation; character: Character; turns: Turn[];
   generations: GenerationRecord[]; graph: ConversationGraph;
   diagnostics?: {actionId:string;payload:Record<string,unknown>}[];
   cashCharges?: CashCharge[];
 }
+export interface RoleChange { changeId: string; afterMessageId: string | null; characterId: string; characterName: string; createdAt: string }
 export interface CashCharge { generationId:string; outputMessageId:string; amountMicros:number; balanceAfterMicros:number; capped:boolean; createdAt:string }
 export type OpenManagementConversationInput = Partial<CreateConversationInput> & { newConversation?: boolean; clientRequestId?: string };
 export interface CashQuote { quoteId:string; maximumChargeMicros:number; policyVersion:string; expiresInSeconds:number }

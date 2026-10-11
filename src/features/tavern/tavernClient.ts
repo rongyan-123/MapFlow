@@ -148,10 +148,16 @@ export async function updateConversationProfile(id: string, expectedRevision: nu
 function parseConversationDetail(body: unknown): ConversationDetail {
   if (!isRecord(body)) throw invalidResponse();
   return { conversation: parseConversation(body.conversation), character: parseCharacter(body.character),
+    ...(body.roleChanges === undefined ? {} : { roleChanges: parseList(body, 'roleChanges', parseRoleChange) }),
     ...(Array.isArray(body.diagnostics)?{diagnostics:body.diagnostics.filter((record):record is {actionId:string;payload:Record<string,unknown>}=>isRecord(record)&&typeof record.actionId==='string'&&isRecord(record.payload))}:{}),
     ...(body.canvas === undefined ? {} : { canvas: parseTeachingCanvas(body.canvas) }),
     turns: parseList(body, 'turns', parseTurn), generations: parseList(body, 'generations', parseGeneration), graph: parseGraph(body.graph),
     ...(body.cashCharges===undefined?{}:{cashCharges:parseList(body,'cashCharges',parseCashCharge)}) };
+}
+function parseRoleChange(value: unknown): import('./types').RoleChange {
+  if (!isRecord(value) || !strings(value, ['changeId', 'characterId', 'characterName', 'createdAt'])
+    || (value.afterMessageId !== null && typeof value.afterMessageId !== 'string')) throw invalidResponse();
+  return value as unknown as import('./types').RoleChange;
 }
 export async function fetchTurns(id: string, signal?: AbortSignal): Promise<Turn[]> {
   return parseList(await getJson(`${ROOT}/conversations/${pathId(id)}/turns`, signal), 'turns', parseTurn);
