@@ -38,6 +38,24 @@ it('begins with the complete selection layer and enters without loading a map', 
   expect(localStorage.getItem('mapflow.learning.area.v1.account-1')).toBe('map-1');
 });
 
+it('keeps navigation reachable on the mobile selection layer while the main header is hidden', async () => {
+  const originalWidth = window.innerWidth;
+  window.innerWidth = 390;
+  try {
+    const user = userEvent.setup();
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <LearningChatWorkspace accountId="account-1" csrfToken="csrf" {...callbacks}
+        mobileHeaderActions={<><button>公共书库</button><button>我的额度</button><button>退出登录</button></>} />
+    </QueryClientProvider>);
+    await screen.findByRole('region', { name: '学习区选择' });
+    await user.click(screen.getByRole('button', { name: '操作' }));
+    expect(screen.getByRole('button', { name: '公共书库' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '我的额度' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '退出登录' })).toBeInTheDocument();
+    expect(api.fetchPersonalTree).not.toHaveBeenCalled();
+  } finally { window.innerWidth = originalWidth; }
+});
+
 it('restores only an owned remembered area and gives an explicit target priority', async () => {
   localStorage.setItem('mapflow.learning.area.v1.account-1', 'map-1');
   mount('map-2');

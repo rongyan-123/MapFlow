@@ -6,6 +6,7 @@ import PanelResizeHandle from '../tavern/PanelResizeHandle';
 import { buttonClass, ErrorNotice, inputClass } from '../tavern/TavernUi';
 import LearningAreaSelector from './LearningAreaSelector';
 import useIsMobile from '../../lib/useIsMobile';
+import HeaderMoreMenu from '../navigation/HeaderMoreMenu';
 const LearningMapPanel = lazy(() => import('./LearningMapPanel'));
 
 interface LearningChatWorkspaceProps {
@@ -49,16 +50,20 @@ export default function LearningChatWorkspace({ accountId, csrfToken, requestedA
     address.searchParams.delete('node'); address.searchParams.delete('title');
     window.history.replaceState(window.history.state, '', `${address.pathname}${address.search}${address.hash}`);
   };
+  const selectionNavigation = isMobile && mobileHeaderActions && <nav aria-label="学习页面操作" className="flex shrink-0 items-center justify-between border-b border-slate-800 px-3 py-2">
+    <span className="text-sm font-semibold">学习聊天</span>
+    <HeaderMoreMenu label="操作" menuLabel="学习页面操作菜单">{mobileHeaderActions}</HeaderMoreMenu>
+  </nav>;
   if (managerOpen) return <section aria-label="学习区管理助手" className="flex min-h-0 flex-1 flex-col">
     <div className="shrink-0 border-b border-slate-800 px-3 py-2"><button className={buttonClass} onClick={() => setManagerOpen(false)}>返回学习区列表</button></div>
     <TavernPage management onNavigateConsole={() => setManagerOpen(false)}
       onNavigateWallet={onNavigateWallet} onNavigateModels={onNavigateModels} mobileHeaderActions={mobileHeaderActions} />
   </section>;
-  if (areaId && areas.isPending) return <p role="status" className="p-6 text-sm text-slate-400">正在恢复学习区…</p>;
-  if (areaId && areas.error) return <div className="p-6"><ErrorNotice error={areas.error} onRetry={() => void areas.refetch()} />
-    <button className={buttonClass} onClick={() => enter(null)}>返回学习区列表</button></div>;
-  if (!area) return <LearningAreaSelector accountId={accountId} csrfToken={csrfToken}
-    onEnterArea={selected => enter(selected.areaId)} onOpenMaps={onOpenMaps} onOpenManager={() => { enter(null); setManagerOpen(true); onOpenManager?.(); }} />;
+  if (areaId && areas.isPending) return <>{selectionNavigation}<p role="status" className="p-6 text-sm text-slate-400">正在恢复学习区…</p></>;
+  if (areaId && areas.error) return <>{selectionNavigation}<div className="p-6"><ErrorNotice error={areas.error} onRetry={() => void areas.refetch()} />
+    <button className={buttonClass} onClick={() => enter(null)}>返回学习区列表</button></div></>;
+  if (!area) return <>{selectionNavigation}<LearningAreaSelector accountId={accountId} csrfToken={csrfToken}
+    onEnterArea={selected => enter(selected.areaId)} onOpenMaps={onOpenMaps} onOpenManager={() => { enter(null); setManagerOpen(true); onOpenManager?.(); }} /></>;
 
   return <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
     <nav aria-label="当前学习区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2">

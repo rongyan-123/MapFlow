@@ -312,14 +312,14 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     <div className="space-y-1">{characterConversations.filter(item=>historyRole==='all'||item.characterId===historyRole).map(item=><button type="button" key={item.conversationId}
       aria-label={`打开会话 ${item.title}`} aria-current={item.conversationId===conversationId?'page':undefined}
       className={`w-full rounded-xl px-3 py-2.5 text-left text-sm transition ${item.conversationId===conversationId?'bg-cyan-400/15 text-cyan-200':'text-slate-300 hover:bg-slate-800'}`}
-      disabled={creatingConversation||generationBusy||!!pendingCreation.current} onClick={()=>{selectConversation(item.conversationId);setDrawer(null);}}>
+      disabled={creatingConversation||!!pendingCreation.current} onClick={()=>{selectConversation(item.conversationId);setDrawer(null);}}>
       <span className="block truncate">{item.title}</span><span className="mt-1 block truncate text-xs text-slate-500">{characters.data?.find(role=>role.characterId===item.characterId)?.card.name??'已隐藏角色'}</span>
     </button>)}</div>
     {conversations.isSuccess&&scopedConversations?.length===0&&<p className="text-xs leading-6 text-slate-500">当前还没有会话。选择角色后新建会话即可开始。</p>}
   </nav>;
   const summary = <div className="space-y-4">
     <label className="block text-xs text-slate-400">历史会话
-      <select aria-label="选择会话" className={`${inputClass} mt-2`} value={conversationId ?? ''} disabled={creatingConversation || generationBusy || !!pendingCreation.current} onChange={event => {
+      <select aria-label="选择会话" className={`${inputClass} mt-2`} value={conversationId ?? ''} disabled={creatingConversation || !!pendingCreation.current} onChange={event => {
         const selected = characterConversations.find(item => item.conversationId === event.target.value);
         if (selected) {
           try { window.localStorage.setItem(`${selectionKey}.${selected.characterId}`, selected.conversationId); } catch { /* Optional preference. */ }

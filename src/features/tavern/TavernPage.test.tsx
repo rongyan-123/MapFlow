@@ -294,10 +294,12 @@ it('commits a background completion only to the initiating chat while another ch
     return normalFetch(url,init);
   });
   const user=userEvent.setup();const client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
-  const first=renderPage(undefined,client);await configureSelfKey(user);
+  renderPage(undefined,client);await configureSelfKey(user);
   await user.type(screen.getByRole('textbox',{name:'消息'}),'原会话继续');await user.click(screen.getByRole('button',{name:'发送'}));
-  await waitFor(()=>expect(stream).toBeDefined());first.unmount();
-  localStorage.setItem('mapflow.tavern.selection.v1.player-1','second-chat');renderPage(undefined,client);
+  await waitFor(()=>expect(stream).toBeDefined());
+  const otherHistory = screen.getByRole('button', { name: '打开会话 第二个会话' });
+  expect(otherHistory).toBeEnabled();
+  await user.click(otherHistory);
   await screen.findByText('第二个会话自己的答复');
   expect(screen.queryByRole('button',{name:'停止生成'})).not.toBeInTheDocument();
   const completed={...completion,turn:{...turn,clientTurnId:input!.clientActionId,userMessage:input!.action.message},graph:{...detail.graph,revision:2}};
@@ -421,6 +423,61 @@ it('does not allow generation from an archived learning area while keeping its h
   expect(screen.getByRole('textbox', { name: '消息' })).toBeDisabled();
   expect(screen.getByRole('button', { name: '重新生成' })).toBeDisabled();
   expect(attempts).toHaveLength(0);
+});
+
+it('starts a learning chat with its canvas collapsed even when drawing permission is saved', async () => {
+  restoreConversation();
+  savedDetail = { ...savedDetail, canvas: { revision: 1, enabled: true, elements: [] },
+    conversation: { ...savedDetail.conversation, scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: 'entry-1' } };
+  conversations = [savedDetail.conversation];
+  localStorage.setItem('mapflow.tavern.selection.v1.player-1.tree.entry-1', 'conversation-1');
+  renderPage({ libraryEntryId: 'entry-1', title: 'Python' });
+  await screen.findByRole('textbox', { name: '消息' });
+  expect(screen.queryByRole('region', { name: '教学画布' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '展开画布' })).toBeEnabled();
+});
+
+it('consumes the staged node reference when a committed reply is recovered after losing its receipt', async () => {
+  savedDetail = { ...savedDetail, conversation: { ...savedDetail.conversation, scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: 'entry-1', treeToolsEnabled: true } };
+  conversations = [savedDetail.conversation];
+  localStorage.setItem('mapflow.tavern.selection.v1.player-1.tree.entry-1', 'conversation-1');
+  const normalFetch = fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    const response = await normalFetch(url, init);
+    return url.endsWith('/turns') && init?.method === 'POST'
+      ? sseResponse([{ event: 'delta', payload: { delta: '已经完成的回复' } }]) : response;
+  });
+  const consumed = vi.fn();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  render(<QueryClientProvider client={client}><IdentityProvider><TavernPage onNavigateConsole={() => {}}
+    treeContext={{ libraryEntryId: 'entry-1', title: 'Python', nodeId: 'node-1', nodeTitle: '基础节点' }}
+    onNodeReferenceConsumed={consumed} /></IdentityProvider></QueryClientProvider>);
+  const user = userEvent.setup(); await configureSelfKey(user);
+  await user.type(screen.getByRole('textbox', { name: '消息' }), '解释一下');
+  await user.click(screen.getByRole('button', { name: '发送' }));
+  await screen.findByText('新回复 🌙');
+  await waitFor(() => expect(consumed).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText('节点参考：基础节点')).not.toBeInTheDocument();
+  expect(attempts).toHaveLength(1);
+});
+
+it('opens an archived learning canvas for viewing without permitting edits or permission changes', async () => {
+  restoreConversation();
+  const canvas = { revision: 1, enabled: true, elements: [] };
+  savedDetail = { ...savedDetail, canvas,
+    conversation: { ...savedDetail.conversation, scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: 'entry-1' } };
+  conversations = [savedDetail.conversation];
+  localStorage.setItem('mapflow.tavern.selection.v1.player-1.tree.entry-1', 'conversation-1');
+  const normalFetch = fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation(async (url: string, init?: RequestInit) => url.endsWith('/canvas') ? json(canvas) : normalFetch(url, init));
+  const user = userEvent.setup(); renderPage({ libraryEntryId: 'entry-1', title: '已归档地图', available: false });
+  const opener = await screen.findByRole('button', { name: '展开画布' });
+  expect(opener).toBeEnabled(); await user.click(opener);
+  await screen.findByRole('region', { name: '教学画布' });
+  expect(screen.getByRole('checkbox', { name: '允许 AI 绘图' })).toBeDisabled();
+  expect(screen.getByRole('status')).toHaveTextContent('仅查看历史');
+  await user.click(screen.getByRole('button', { name: '白板：绘制矩形' }));
+  expect(fetchMock.mock.calls.some(([url, init]) => url.endsWith('/canvas') && init?.method === 'PATCH')).toBe(false);
 });
 
 it('keeps new-role notices separate between accounts', async () => {

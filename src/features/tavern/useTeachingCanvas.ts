@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { fetchTeachingCanvas, saveTeachingCanvas } from './tavernClient';
 import type { TeachingCanvasState } from './types';
 
-export function useTeachingCanvas(conversationId: string, csrfToken: string, graphRevision: number, initial?: TeachingCanvasState) {
+export function useTeachingCanvas(conversationId: string, csrfToken: string, graphRevision: number, initial?: TeachingCanvasState,
+  options?: { readOnly: boolean; initiallyOpen: boolean }) {
+  const readOnly = options?.readOnly === true;
   const [document, setDocument] = useState<TeachingCanvasState | null>(initial?.enabled || initial?.elements.length ? initial : null);
-  const [open, setOpen] = useState(!!initial?.enabled);
+  const [open, setOpen] = useState(options?.initiallyOpen ?? !!initial?.enabled);
   const [wide, setWide] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -29,12 +31,13 @@ export function useTeachingCanvas(conversationId: string, csrfToken: string, gra
     try {
       setSaving(true); setError(null);
       const saved = current.current ?? await fetchTeachingCanvas(conversationId);
-      const enabled = saved.revision > 0 ? saved : await saveTeachingCanvas(conversationId, { ...saved, enabled: true }, csrfToken);
+      const enabled = readOnly || saved.revision > 0 ? saved : await saveTeachingCanvas(conversationId, { ...saved, enabled: true }, csrfToken);
       setDocument(enabled); setOpen(true);
     } catch (failure) { setError(failure); }
     finally { setSaving(false); }
   }
   async function persist(enabled?: boolean) {
+    if (readOnly) return;
     if (pendingSave.current) await pendingSave.current;
     if (!current.current || (!queuedElements.current && enabled === undefined)) return;
     const elements = queuedElements.current ?? undefined; queuedElements.current = null;
@@ -54,11 +57,13 @@ export function useTeachingCanvas(conversationId: string, csrfToken: string, gra
   async function flush() { clearTimeout(timer.current); await persist(); }
   flushLatest.current = flush;
   function queue(elements: Record<string, unknown>[]) {
+    if (readOnly) return;
     queuedElements.current = elements;
     clearTimeout(timer.current);
     timer.current = setTimeout(() => { void flushLatest.current().catch(() => undefined); }, 800);
   }
   async function save(elements?: Record<string, unknown>[], enabled?: boolean) {
+    if (readOnly) return;
     if (elements) queuedElements.current = elements;
     try { await persist(enabled); } catch { /* The canvas keeps the unsaved draft and displays the API error. */ }
   }

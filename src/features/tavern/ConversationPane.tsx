@@ -55,7 +55,8 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const [referenceActive, setReferenceActive] = useState(!!nodeReference);
   useEffect(() => { setReferenceActive(!!nodeReference); }, [nodeReference?.id, nodeReference?.title]);
   const [recovering, setRecovering] = useState(false);
-  const canvas = useTeachingCanvas(detail.conversation.conversationId, csrfToken, detail.graph.revision, detail.canvas);
+  const canvas = useTeachingCanvas(detail.conversation.conversationId, csrfToken, detail.graph.revision, detail.canvas,
+    { readOnly, initiallyOpen: !detail.conversation.libraryEntryId && !readOnly && !!detail.canvas?.enabled });
   useEffect(()=>{canvas.setPreview(canvasPreview);},[canvasPreview,canvas.setPreview]);
   const mapVisibleRef = useRef(mapVisible); mapVisibleRef.current = mapVisible;
   useEffect(() => { if (mapVisible) canvas.setOpen(false); }, [mapVisible]);
@@ -104,6 +105,10 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       const saved = await fetchConversation(detail.conversation.conversationId, signal);
       if (!signal?.aborted && saved.generations.some(generation => generation.clientActionId === expected.clientActionId)) {
         storePending(storageKey, null); setPendingGeneration(null); setDraft(''); setProcess([]); setError(null);
+        if (expected.action.type === 'reply' && referenceActive && nodeReference
+          && expected.action.message.includes(`[学习节点参考：${nodeReference.title}；节点 ID：${nodeReference.id}]`)) {
+          setReferenceActive(false); onNodeReferenceConsumed?.();
+        }
         run.set({canvasPreview:null}); onRecovered(saved);
         return true;
       }
@@ -294,7 +299,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         </section>,
       }]} />}
     <nav aria-label="学习工作区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-1.5 text-xs sm:py-2">
-      <button type="button" aria-expanded={canvas.open} aria-controls={`tavern-canvas-${detail.conversation.conversationId}`} disabled={canvas.saving || readOnly}
+      <button type="button" aria-expanded={canvas.open} aria-controls={`tavern-canvas-${detail.conversation.conversationId}`} disabled={canvas.saving}
         className={`${buttonClass} ${canvas.open ? 'border-cyan-500 text-cyan-200' : ''}`} onClick={() => canvas.open ? canvas.setOpen(false) : void openTeachingCanvas()}>
         <span aria-hidden="true" className="mr-1.5">▧</span>{canvas.open ? '收起画布' : canvas.document ? '展开画布' : '绘图讲解'}</button>
       <span className="hidden text-slate-500 sm:inline">让 AI 用图形讲解，也可以自己绘制</span>
@@ -307,7 +312,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     <div id={`tavern-canvas-${detail.conversation.conversationId}`} className="tavern-canvas" data-open={canvas.open} data-wide={canvas.wide}
       aria-hidden={!canvas.open} {...(!canvas.open ? { inert: '' } : {})}>
     {canvas.open && canvas.document && <Suspense fallback={<section aria-label="教学画布" className="flex-1 p-6" role="status">正在打开教学画布…</section>}>
-      <TeachingCanvasPanel accountId={accountId} document={canvas.document} busy={busy} saving={canvas.saving} wide={canvas.wide}
+      <TeachingCanvasPanel accountId={accountId} document={canvas.document} busy={busy} saving={canvas.saving} wide={canvas.wide} readOnly={readOnly}
         onSave={canvas.save} onChange={canvas.queue} onClose={() => canvas.setOpen(false)} onWidth={() => canvas.setWide(previous => !previous)} />
     </Suspense>}
     </div>
