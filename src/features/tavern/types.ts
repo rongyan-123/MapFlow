@@ -94,7 +94,8 @@ export interface ConversationDetail {
   diagnostics?: {actionId:string;payload:Record<string,unknown>}[];
   cashCharges?: CashCharge[];
 }
-export interface RoleChange { changeId: string; afterMessageId: string | null; characterId: string; characterName: string; createdAt: string }
+export interface RoleChange { changeId: string; afterMessageId: string | null; characterId: string; characterName: string; createdAt: string;
+  previousCharacterId?: string | null; previousCharacterName?: string | null }
 export interface CashCharge { generationId:string; outputMessageId:string; amountMicros:number; balanceAfterMicros:number; capped:boolean; createdAt:string }
 export type OpenManagementConversationInput = Partial<CreateConversationInput> & { newConversation?: boolean; clientRequestId?: string };
 export interface CashQuote { quoteId:string; maximumChargeMicros:number; policyVersion:string; expiresInSeconds:number }

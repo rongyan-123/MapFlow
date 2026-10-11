@@ -28,4 +28,16 @@ The node failure persisted tool name, `reading` phase, `nodeId`, exact attempted
 
 Complete frontend: **654 passed / 1 skipped**; TypeScript and production build passed; diff whitespace check passed. Baseline bundle-size warnings remain. Local ignored artifacts include RED/GREEN logs, desktop/mobile screenshots, SSE receipts and private fixture files. Backend manual host/receipt tests are opt-in and never run against a production database.
 
-This is an integration checkpoint, not completion of the redesign. Confirmed note/progress write tools, migration clone invariants, remaining historical-role presentation, whole-branch review and final integration/release approval still need completion. Ordinary browsing checks and the three charged requests do not substitute for those gates.
+## Subsequent learning-write and migration acceptance
+
+The granular note/progress tools now share the existing atomic map receipt/audit transaction. The Agent must read the note version or current progress and map revision, propose one change, then wait for the matching explicit confirmation. Overwrite/deletion use a separate destructive confirmation. Conflicts, rejection and scope boundaries have behavioral tests.
+
+A separate disposable fixture completed one actual learning request: the Agent saved `验收笔记：Session 保存持续的对话，Run 表示一次执行。` at note version 1 and changed the selected node from 0% to 35%. Two approval events were explicitly accepted by the acceptance driver after verifying the exact target and values. Cumulative input/output: 25,394 / 1,431; cache hit/miss: 23,936 / 1,458. One generation and one **¥0.003342** charge were audited against actual provider cost × 2 and a unique debit. This fixture's balance was ¥10 → ¥9.996658; it is not the earlier three-request fixture. Reloading the real browser recovered the saved answer, note and progress without issuing a model turn.
+
+New role switches retain outgoing ID/name snapshots. The frontend uses anchored historical names and keeps unknown legacy names unknown. Note/progress caches refresh only in the permitted learning/management scope. The complete frontend gate now has **665 passed / 1 skipped**, with TypeScript/build green; worker **97 passed / 1 skipped**, types/build green.
+
+Actual 390 × 844 mobile checks clicked model-price navigation from selection, learning and independent menus. The bottom logout action was within the viewport and opened/cancelled its confirmation. No page errors, horizontal overflow or automatic model calls were found.
+
+The production database was copied privately for migration preflight; the source was read-only. An unlinked historical conversation with an enabled tool preference exposed migration 0040's excessive constraint. A regression reproduced it before correction; historical fields remain intact, and server authorization continues to deny learning tools in independent tavern. Actual SQLx admin migrations then ran twice through version 43. Complete original-field fingerprints and row counts matched for **54 original tables**; **66 conversations** became 56 learning / 10 tavern, **45 areas**, with no invalid scopes. The clone and private dump are temporary and are removed after acceptance.
+
+This remains an integration checkpoint. The final repeated backend gate, fresh whole-branch review and concrete integration/release approval are still required. These checks did not deploy or modify production accounts/data.

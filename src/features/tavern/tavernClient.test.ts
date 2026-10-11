@@ -24,6 +24,15 @@ describe('Tavern HTTP contract', () => {
     expect(await updateGenerationSettings('conversation-1', 1, generationSettings, 'csrf')).toEqual(state);
   });
 
+  it('retains the outgoing role snapshot but rejects an incomplete snapshot pair', async () => {
+    const event = { changeId: 'change-1', afterMessageId: 'message-assistant-1', characterId: 'character-2', characterName: '导师', createdAt: turn.createdAt,
+      previousCharacterId: 'character-1', previousCharacterName: '旅人' };
+    reply({ ...detail, roleChanges: [event] });
+    expect((await fetchConversation('conversation-1')).roleChanges).toEqual([event]);
+    reply({ ...detail, roleChanges: [{ ...event, previousCharacterName: null }] });
+    await expect(fetchConversation('conversation-1')).rejects.toThrow();
+  });
+
   it('accepts the measured cash receipt and persisted negative balance after a successful turn', async () => {
     const cashCharge = {generationId:turn.turnId,outputMessageId:'message-assistant-1',amountMicros:460,
       balanceAfterMicros:-459,capped:false,createdAt:turn.createdAt};

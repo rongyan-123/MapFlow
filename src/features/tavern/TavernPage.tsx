@@ -220,8 +220,16 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     }
     setDrawer(null);
   }
-  function onCompleted(completed: CompletedTurn) {
+  function refreshLearningRecords() {
+    if (treeContext || management) {
+      void queryClient.invalidateQueries({ queryKey: treeContext
+        ? ['me', accountId, 'tree-library', treeContext.libraryEntryId] : ['me', accountId, 'tree-library'] });
+      void queryClient.invalidateQueries({ queryKey: treeContext ? ['node-note', treeContext.libraryEntryId] : ['node-note'] });
+    }
     onTreeChanged?.();
+  }
+  function onCompleted(completed: CompletedTurn) {
+    refreshLearningRecords();
     // Discard reads started before this commit so they cannot replace saved history.
     void queryClient.cancelQueries({ queryKey: detailKey, exact: true });
     queryClient.setQueryData<ConversationDetail>(detailKey, previous => previous ? { ...previous,
@@ -270,7 +278,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     queryClient.setQueryData<Conversation[]>(conversationsKey, previous => previous?.map(item => item.conversationId === updated.conversation.conversationId ? updated.conversation : item));
   }
   function onRecovered(saved: ConversationDetail) {
-    onProfileUpdated(saved); onTreeChanged?.();
+    onProfileUpdated(saved); refreshLearningRecords();
     void queryClient.invalidateQueries({ queryKey: ['me', accountId, 'wallet'] });
     void credit.refetch();
   }

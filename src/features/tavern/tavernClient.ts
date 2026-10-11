@@ -157,6 +157,9 @@ function parseConversationDetail(body: unknown): ConversationDetail {
 function parseRoleChange(value: unknown): import('./types').RoleChange {
   if (!isRecord(value) || !strings(value, ['changeId', 'characterId', 'characterName', 'createdAt'])
     || (value.afterMessageId !== null && typeof value.afterMessageId !== 'string')) throw invalidResponse();
+  if ((value.previousCharacterId != null || value.previousCharacterName != null)
+    && (typeof value.previousCharacterId !== 'string' || !value.previousCharacterId.trim()
+      || typeof value.previousCharacterName !== 'string' || !value.previousCharacterName.trim())) throw invalidResponse();
   return value as unknown as import('./types').RoleChange;
 }
 export async function fetchTurns(id: string, signal?: AbortSignal): Promise<Turn[]> {

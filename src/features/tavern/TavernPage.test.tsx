@@ -80,6 +80,7 @@ beforeEach(() => {
     }
     if (url === '/api/me/learning-areas/entry-1/conversations' && init?.method !== 'POST') return json({ conversations: conversations.filter(item => item.learningAreaId === 'entry-1') });
     if (url === '/api/me/tavern/conversations') return json({ conversations: conversations.filter(item => !item.libraryEntryId) });
+    if (url === '/api/me/tavern/conversations?scene=management') return json({ conversations: conversations.filter(item => item.scene === 'management') });
     if (url === '/api/me/tavern/conversations/conversation-1/profile' && init?.method === 'PATCH') {
       const { expectedRevision, userName, persona, vocabulary } = JSON.parse(init.body as string);
       if (expectedRevision !== savedDetail.graph.revision) return new Response(JSON.stringify({ error: { code: 'tavern.turn_conflict', message: '会话已变化' } }), { status: 409 });
@@ -175,9 +176,9 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-function renderPage(treeContext?: { libraryEntryId: string; title: string; available?: boolean; nodeId?: string; nodeTitle?: string }, sharedClient?: QueryClient) {
+function renderPage(treeContext?: { libraryEntryId: string; title: string; available?: boolean; nodeId?: string; nodeTitle?: string }, sharedClient?: QueryClient, management = false) {
   const client = sharedClient ?? new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
-  const rendered = render(<QueryClientProvider client={client}><IdentityProvider><TavernPage onNavigateConsole={() => {}} treeContext={treeContext} /></IdentityProvider></QueryClientProvider>);
+  const rendered = render(<QueryClientProvider client={client}><IdentityProvider><TavernPage onNavigateConsole={() => {}} treeContext={treeContext} management={management} /></IdentityProvider></QueryClientProvider>);
   return { ...rendered, client };
 }
 
@@ -199,6 +200,26 @@ it('stages a node reference without sending or replacing the user draft, and inc
   await user.click(screen.getByRole('button', { name: '发送' }));
   await waitFor(() => expect(attempts).toHaveLength(1));
   expect(attempts[0].action).toMatchObject({ type: 'reply', message: expect.stringContaining('node-1') });
+});
+
+it.each(['learning', 'management', 'tavern'] as const)('refreshes changed learning records only in the permitted scope after a %s turn', async scene => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const firstNote = ['node-note', 'entry-1', 'node-1'];
+  const otherNote = ['node-note', 'entry-2', 'node-2'];
+  client.setQueryData(firstNote, { markdown: '旧笔记', version: 1 });
+  client.setQueryData(otherNote, { markdown: '其他地图', version: 1 });
+  savedDetail = { ...savedDetail, conversation: { ...conversation, scene,
+    ...(scene === 'learning' ? { learningAreaId: 'entry-1', libraryEntryId: 'entry-1', treeToolsEnabled: true } : { learningAreaId: null, libraryEntryId: null, treeToolsEnabled: false }) } };
+  conversations = [savedDetail.conversation];
+  localStorage.setItem(`mapflow.tavern.selection.v1.player-1${scene === 'learning' ? '.tree.entry-1' : scene === 'management' ? '.management' : ''}`, 'conversation-1');
+  renderPage(scene === 'learning' ? { libraryEntryId: 'entry-1', title: 'Python' } : undefined, client, scene === 'management');
+  const user = userEvent.setup();
+  await configureSelfKey(user);
+  await user.type(screen.getByRole('textbox', { name: '消息' }), '保存学习结果');
+  await user.click(screen.getByRole('button', { name: '发送' }));
+  await screen.findByText('新回复 🌙');
+  await waitFor(() => expect(client.getQueryState(firstNote)?.isInvalidated).toBe(scene !== 'tavern'));
+  expect(client.getQueryState(otherNote)?.isInvalidated).toBe(scene === 'management');
 });
 
 it('collapses an enabled teaching canvas when the learning map takes the visual slot', async () => {
@@ -404,6 +425,21 @@ it('renders anchored role changes only on their visible history path', async () 
   renderPage();
   expect(await screen.findByRole('log')).toHaveTextContent('已切换角色：耐心导师');
   expect(screen.queryByText('已切换角色：其他分支角色')).not.toBeInTheDocument();
+});
+
+it('labels historical assistant messages with their anchored role rather than the current character', async () => {
+  restoreConversation();
+  const next = { ...detail.graph.messages[2], messageId: 'next-role-message', parentMessageId: 'message-assistant-1', characterId: 'tutor-2', content: '新导师的解释' };
+  savedDetail = { ...savedDetail,
+    character: { ...character, characterId: 'tutor-2', card: { ...character.card, name: '改名后的导师' } },
+    roleChanges: [{ changeId: 'change-1', afterMessageId: 'message-assistant-1', characterId: 'tutor-2', characterName: '当时的导师', createdAt: turn.createdAt }],
+    graph: { ...detail.graph, messages: [...detail.graph.messages, next], activePath: [...detail.graph.activePath, next.messageId] },
+  };
+  renderPage();
+  const log = await screen.findByRole('log');
+  expect(within(log).getAllByText('历史角色')).toHaveLength(2);
+  expect(within(log).getByText('当时的导师', { exact: true })).toBeInTheDocument();
+  expect(within(log).queryByText('改名后的导师', { exact: true })).not.toBeInTheDocument();
 });
 
 it('keeps a role-change marker between the original reply and its continuation', async () => {

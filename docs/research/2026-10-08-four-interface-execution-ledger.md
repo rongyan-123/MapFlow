@@ -5,7 +5,7 @@
 - Approved design: `docs/specs/2026-10-08-four-interface-learning-design.md`; user explicitly said to start implementation and create a long-running task on 2026-10-08.
 - Frontend: `D:/MapFlow-chat-first-design-20261008`, branch `codex/four-interface-learning-20261008`, initial design checkpoint `290e09f`.
 - Backend: `D:/MapFlow-four-interface-server-20261008`, branch `codex/four-interface-learning-20261008`, base `6547705`.
-- First completed subsystem: learning-area API and frontend client. Backend checkpoint `eea79ea`; next task is scene/conversation binding.
+- First subsystem checkpoint: learning-area API and frontend client (`eea79ea`). Current scope is integrated acceptance and the final review/release candidate; see the latest evidence below.
 - Deployment and production writes are not part of implementation authorization; prepare a verified release candidate first.
 
 ## Decisions
@@ -22,10 +22,10 @@
 - [x] Existing Rust/SQLx integration test fixtures and isolated Linux test database located; Windows does not have cargo in PATH.
 - [x] Learning-area API: RED → GREEN and compatibility tests; 777 backend tests and configured checks passed.
 - [x] Scene/conversation binding and legacy migration: backend `8d84f06`, 782 full regression tests passed.
-- [ ] Four page navigation and learning-area selection.
-- [ ] Role filtering/import hints and scene-aware histories.
-- [ ] Management directory/tutorial tools and strict learning/tavern tool isolation.
-- [ ] Map/canvas views, viewport/notes recovery and generation ownership during navigation.
+- [x] Four page navigation and learning-area selection.
+- [x] Role filtering/import hints and scene-aware histories.
+- [x] Management directory/tutorial tools and strict learning/tavern tool isolation.
+- [x] Map/canvas views, viewport/notes recovery and generation ownership during navigation.
 - [ ] Full checks, real request/UI acceptance and independent review.
 - [ ] Concrete main integration/release candidate; deployment approval.
 
@@ -61,3 +61,9 @@ New implementation tests and request measurements are appended as they are run. 
 - Integrated actual browser checkpoint: all four routes, area/multi-chat creation, node staging/removal, lazy canvas, shared custom roles and compact mobile chat passed against actual isolated Rust/DSH services. Navigation sent zero model turns. Mobile selection navigation, live history switching, recovered references and archived canvas were fixed with behavioral RED/GREEN; complete frontend 654 passed / 1 skipped, types/build passed.
 - Three real charged requests passed: owned management directory ¥0.001714; learning structured-error correction plus five-element drawing ¥0.005688; independent role plus learning-note isolation ¥0.002418. Manual database audit confirmed actual cost × 2, unique ledger/charge rows and total ¥0.009820. Real saved diagram reloaded. See `2026-10-11-integrated-browser-and-billing.md`; remaining writes, migration clone checks, historical role presentation and final review/release are not complete.
 - Ruling: keep the user's compact mobile chat header; add only a compact operation menu to the new selection/loading/error layer where hiding the global header otherwise strands navigation. Required auxiliary access is preserved without restoring the taller conversation header.
+- Granular learning writes: PostgreSQL receipts, content, revision and audit commit atomically; note version and observed progress reject manual edits during confirmation. Note overwrite/deletion have separate confirmation. Management requires an explicit owned map, learning stays within its area, independent tavern has neither tool. Rust/DSH/UI behavioral RED → GREEN; full frontend 665 passed / 1 skipped, types/build passed; worker 97 passed / 1 skipped, types/build passed. Backend full suite passed 804 before the additional migration compatibility case; final repeated suite is pending.
+- Historical role presentation: outgoing ID/name snapshot is captured on new switches; message authors follow anchored changes on the visible branch. Legacy records with missing names show “历史角色” instead of inventing a name. Additive migration 0043, Rust/client/UI RED → GREEN.
+- A fourth actual charged request saved a versioned note and changed progress to 35%, after two explicit confirmation responses. 25,394 cumulative input / 1,431 output tokens; cache hit 23,936 / miss 1,458; site charge ¥0.003342. One generation/charge, exact actual cost × 2 and unique ledger audited. This used a separate disposable database, starting ¥10 and ending ¥9.996658. Browser reload recovered history, note and progress with zero automatic model calls/errors.
+- Production snapshot migration preflight reproduced one unlinked legacy conversation with an enabled tool preference failing migration 0040. Regression RED → GREEN preserves the preference; server scene authorization still denies private tools. Ruling: a historical preference is not an authorization grant. Migration 0040 is unpublished; migrations already applied in production remain byte-identical.
+- Actual SQLx admin migrations replayed twice against the private production snapshot clone through version 43. Row counts and complete original-field fingerprints matched for all 54 existing tables; 66 conversations classified as 56 learning / 10 tavern, 45 areas, zero invalid scopes. Production source was read-only; clone/dump are temporary acceptance artifacts.
+- Actual 390 × 844 browser acceptance covered the selection layer, active learning chat and independent tavern: menu bottom is within the viewport, logout confirmation opens/cancels, and model-price navigation works. Navigation generated no model turns and no browser errors. Fresh whole-branch review, final backend repeat and release candidate remain outstanding.

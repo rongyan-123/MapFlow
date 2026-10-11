@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalSt
 import { useQueryClient } from '@tanstack/react-query';
 import { conversationRun, type PendingGeneration } from './conversationRuns';
 import { approvalSummary } from './approvalSummary';
+import { messageAuthors } from './messageAuthors';
 import { useTeachingCanvas } from './useTeachingCanvas';
 import './teachingWorkspace.css';
 import PanelResizeHandle from './PanelResizeHandle';
@@ -218,6 +219,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   });
   const roleChangeAnchors = new Set((detail.roleChanges ?? []).flatMap(change => change.afterMessageId ? [change.afterMessageId] : []));
   const displayMessages = mergeContinuationMessages(activeMessages, roleChangeAnchors);
+  const historicalAuthors = messageAuthors(activeMessages, detail.roleChanges ?? [], detail.character.characterId, detail.character.card.name);
   const activeLeaf = activeMessages[activeMessages.length - 1];
   const branchAnchors = activeMessages.filter(item => item.role === 'assistant');
   const selectedBranchAnchorId = branchAnchors.some(item => item.messageId === branchAnchorId)
@@ -326,8 +328,8 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       {displayMessages.map(activeMessage => <div key={activeMessage.messageId}>
         <GenerationProcess events={detail.generations.filter(generation => generation.outputMessageId === activeMessage.messageId).flatMap(generation => generation.process ?? [])} />
         <Message
-        author={activeMessage.role === 'user' ? detail.conversation.userName : activeMessage.role === 'system' ? '系统' : detail.character.card.name}
-        character={activeMessage.role === 'assistant' ? detail.character : undefined}
+        author={activeMessage.role === 'user' ? detail.conversation.userName : activeMessage.role === 'system' ? '系统' : historicalAuthors.get(activeMessage.messageId) ?? '历史角色'}
+        character={activeMessage.role === 'assistant' && activeMessage.characterId === detail.character.characterId ? detail.character : undefined}
         text={activeMessage.content} user={activeMessage.role === 'user'} />
         {(detail.cashCharges??[]).filter(charge=>charge.outputMessageId===activeMessage.messageId
           || activeMessages.some(message=>message.messageId===charge.outputMessageId && message.origin==='continue' &&

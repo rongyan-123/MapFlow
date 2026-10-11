@@ -6,6 +6,7 @@ const labels: Record<string,string> = {
   learningObjectives:'学习目标', keyConcepts:'核心概念', recommendedDepth:'学习深度', depthRationale:'深度说明',
   observableEvidence:'验收标准', sourceNodeId:'起点', targetNodeId:'终点', edgeType:'关系类型', label:'标签',
   topic:'主题', difficultyLevel:'难度等级', layoutMode:'布局', name:'名称', color:'颜色', sortOrder:'排序', blockId:'学习块',
+  expectedVersion:'笔记版本', markdown:'笔记内容', expectedPercent:'原进度', progressPercent:'新进度',
 };
 export function approvalSummary(approval:TavernToolApproval):string {
   const target=approval.mapTitle ?? approval.target;
