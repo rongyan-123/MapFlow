@@ -1,3 +1,4 @@
+import { publicHttpErrorMessage } from '../../lib/publicErrors';
 import { IdentityApiError } from '../identity/identityClient';
 import type { UserModelSetting } from '../tree-generation/types';
 
@@ -79,7 +80,7 @@ async function request(path: string, init: RequestInit = get): Promise<unknown> 
   try { payload = await response.json(); } catch { throw new IdentityApiError(response.status, 'wallet.invalid_response', '额度服务返回了无法识别的结果。'); }
   if (!response.ok) {
     const error = asRecord(asRecord(payload)?.error);
-    throw new IdentityApiError(response.status, typeof error?.code === 'string' ? error.code : 'wallet.request_failed', typeof error?.message === 'string' ? error.message : '额度请求失败，请重试。');
+    throw new IdentityApiError(response.status, typeof error?.code === 'string' ? error.code : 'wallet.request_failed', publicHttpErrorMessage(typeof error?.code === 'string' ? error.code : 'wallet.request_failed', response.status));
   }
   return payload;
 }

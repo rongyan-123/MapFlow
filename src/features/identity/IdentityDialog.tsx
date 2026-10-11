@@ -1,3 +1,4 @@
+import { describePublicError } from '../../lib/publicErrors';
 import {
   Children,
   cloneElement,
@@ -479,5 +480,5 @@ function SubmitButton({ pending, children }: { pending: boolean; children: strin
 }
 
 function readableError(error: unknown): string | null {
-  return error instanceof Error ? error.message : null;
+  return error ? describePublicError(error) : null;
 }

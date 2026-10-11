@@ -216,6 +216,7 @@ const adminAccount = {
 };
 
 beforeEach(() => {
+  window.innerWidth = 1024;
   for (const mock of Object.values(identityApi)) mock.mockReset();
   for (const mock of Object.values(treeApi)) mock.mockReset();
   for (const mock of Object.values(adminApi)) mock.mockReset();
@@ -326,6 +327,45 @@ afterEach(() => {
 });
 
 describe('Four canonical pages', () => {
+  it('replays the guide on every explicit click from the shared navigation', async () => {
+    const user=userEvent.setup(); renderApp('/maps');
+    for (let replay=0;replay<2;replay++) {
+      await user.click(await screen.findByRole('button',{name:'查看引导'}));
+      expect(await screen.findByTestId('public-map-guide')).toBeInTheDocument();
+      await user.click(screen.getByRole('button',{name:'关闭引导'}));
+      expect(screen.queryByTestId('public-map-guide')).not.toBeInTheDocument();
+    }
+  });
+  it('shares a left business navigation across the console and independent tavern', async () => {
+    const user = userEvent.setup(); renderApp('/maps');
+    const navigation = await screen.findByRole('navigation', { name: '业务导航' });
+    expect(within(navigation).getAllByRole('button').map(button => button.textContent)).toEqual([
+      '公共书库', '我的地图', '学习聊天', '独立酒馆',
+    ]);
+    expect(screen.getByRole('navigation', { name: '辅助功能' })).toBeInTheDocument();
+    await user.click(within(navigation).getByRole('button', { name: '独立酒馆' }));
+    expect(window.location.pathname).toBe('/tavern');
+    expect(screen.getByRole('navigation', { name: '业务导航' })).toBeInTheDocument();
+    await user.click(within(screen.getByRole('navigation', { name: '业务导航' })).getByRole('button', { name: '公共书库' }));
+    expect(await screen.findByRole('textbox', { name: '搜索公共地图' })).toBeInTheDocument();
+  });
+  it('keeps model configuration available without creating or sending a conversation', async () => {
+    const user = userEvent.setup(); renderApp('/maps');
+    await user.click(await screen.findByRole('button', { name: '模型配置' }));
+    const dialog = screen.getByRole('dialog', { name: '模型配置' });
+    await user.type(within(dialog).getByLabelText('API Key'), 'sk-session-only');
+    await user.type(within(dialog).getByLabelText('API URL'), 'https://models.example/v1');
+    await user.type(within(dialog).getByLabelText('模型', { selector: 'input' }), 'my-model');
+    await user.click(within(dialog).getByRole('button', { name: '保存并使用' }));
+    await user.click(within(dialog).getByRole('button', { name: '关闭模型配置' }));
+    await user.click(screen.getByRole('button', { name: '独立酒馆' }));
+    await user.click(screen.getByRole('button', { name: '模型配置' }));
+    expect(within(screen.getByRole('dialog', { name: '模型配置' })).getByLabelText('API Key')).toHaveValue('sk-session-only');
+    expect(localStorage.getItem(`mapflow.tavern.model-preferences.v1.${authenticated.account.playerId}`)).toContain('my-model');
+    expect(localStorage.getItem(`mapflow.tavern.model-preferences.v1.${authenticated.account.playerId}`)).not.toContain('sk-session-only');
+    expect(tavernApi.generateStream).not.toHaveBeenCalled();
+    expect(tavernApi.openTreeConversation).not.toHaveBeenCalled();
+  });
   it('searches personal maps without replacing the currently opened map', async () => {
     const secondEntry = { ...personalEntry, library_entry_id: '44444444-4444-4444-8444-444444444444', tree: agentTree };
     treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry, secondEntry] });
@@ -383,8 +423,7 @@ describe('Four canonical pages', () => {
     identityApi.fetchCurrentSession.mockResolvedValue(adminAccount);
     const user = userEvent.setup(); renderApp('/learning');
     await screen.findByRole('region', { name: '学习区选择' });
-    await user.click(screen.getByRole('button', { name: '更多' }));
-    await user.click(screen.getByRole('button', { name: '管理面板' }));
+        await user.click(screen.getByRole('button', { name: '管理面板' }));
     await screen.findByRole('heading', { name: '管理面板' });
     await user.click(screen.getByRole('button', { name: '返回' }));
     expect(window.location.pathname).toBe('/maps');
@@ -444,8 +483,7 @@ describe('Cash quota and compact navigation', () => {
       title: 'NestJS', available: true, createdAt: '2026-10-11T00:00:00Z' }]);
     const user = userEvent.setup(); renderApp(address);
     await screen.findByText('节点参考：Original');
-    await user.click(screen.getByRole('button', { name: '更多' }));
-    await user.click(screen.getByRole('button', { name: '模型价格' }));
+        await user.click(screen.getByRole('button', { name: '模型价格' }));
     await screen.findByRole('heading', { name: '模型价格' });
     await user.click(await screen.findByRole('button', { name: /现金额度.*前往充值/ }));
     await screen.findByRole('heading', { name: '我的额度' });
@@ -470,8 +508,7 @@ describe('Cash quota and compact navigation', () => {
     await user.click(screen.getByRole('button', { name: '返回' }));
     expect(`${window.location.pathname}${window.location.search}`).toBe(address);
     await screen.findByText('节点参考：基础节点');
-    await user.click(screen.getByRole('button', { name: '更多' }));
-    await user.click(screen.getByRole('button', { name: '模型价格' }));
+        await user.click(screen.getByRole('button', { name: '模型价格' }));
     await screen.findByRole('heading', { name: '模型价格' });
     await user.click(screen.getByRole('button', { name: '返回' }));
     expect(`${window.location.pathname}${window.location.search}`).toBe(address);
@@ -492,23 +529,18 @@ describe('Cash quota and compact navigation', () => {
     expect(tavernApi.generateStream).not.toHaveBeenCalled();
   });
 
-  it('keeps cash quota available and opens secondary navigation from More without losing tools', async () => {
+  it('keeps cash quota available and exposes auxiliary navigation in the shared left rail without losing tools', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(adminAccount);
     renderApp('/console');
     const quota = await screen.findByRole('button', { name: '现金额度 3.1，前往充值' });
-    expect(screen.queryByRole('button', { name: '管理面板' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '更多' }));
-    const menu = screen.getByRole('navigation', { name: '更多功能' });
+    const menu = screen.getByRole('navigation', { name: '辅助功能' });
     expect(within(menu).getByRole('button', { name: '管理面板' })).toBeInTheDocument();
     expect(within(menu).getByRole('button', { name: '如何在自己的 Agent 里连接 MapFlow' })).toBeInTheDocument();
     expect(within(menu).getByRole('button', { name: '查看引导' })).toBeInTheDocument();
     expect(within(menu).getByLabelText('选择主题')).toBeInTheDocument();
     expect(within(menu).getByRole('button', { name: '退出登录' })).toBeInTheDocument();
     expect(within(menu).getByRole('button', { name: '意见反馈' })).toBeInTheDocument();
-    await user.keyboard('{Escape}');
-    expect(screen.getByRole('button', { name: '更多' })).toHaveFocus();
-    expect(screen.queryByRole('navigation', { name: '更多功能' })).not.toBeInTheDocument();
     await user.click(quota);
     expect(await screen.findByRole('heading', { name: '我的额度' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/wallet');
@@ -545,12 +577,13 @@ describe('Tavern navigation', () => {
     await user.click(await screen.findByRole('button', { name: '独立酒馆' }));
     expect(await screen.findByRole('heading', { name: '独立酒馆' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/tavern');
-    await user.click(screen.getByRole('button', { name: '返回学习控制台' }));
-    expect(window.location.pathname).toBe('/console');
+    await user.click(screen.getByRole('button', { name: '公共书库' }));
+    expect(window.location.pathname).toBe('/library');
     window.history.pushState({}, '', '/tavern'); fireEvent.popState(window);
     expect(await screen.findByRole('heading', { name: '独立酒馆' })).toBeInTheDocument();
   });
   it('offers Tavern in the existing mobile navigation drawer', async () => {
+    window.innerWidth = 390;
     const user = userEvent.setup(); renderApp('/console');
     await user.click(await screen.findByRole('button', { name: '打开功能菜单' }));
     await user.click(within(screen.getByRole('dialog', { name: '功能菜单' })).getByRole('button', { name: '独立酒馆' }));
@@ -711,8 +744,7 @@ describe('MapFlow tree library', () => {
     await user.click(screen.getByRole('button', { name: '关闭引导' }));
     expect(screen.queryByText(publicPoolCopy)).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '更多' }));
-    await user.click(screen.getByRole('button', { name: '查看引导' }));
+        await user.click(screen.getByRole('button', { name: '查看引导' }));
     expect(await screen.findByText(guideCopy)).toBeInTheDocument();
   });
 
@@ -878,8 +910,7 @@ describe('MapFlow tree library', () => {
       ),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '更多' }));
-    await user.click(screen.getByRole('button', { name: '查看引导' }));
+        await user.click(screen.getByRole('button', { name: '查看引导' }));
 
     const guide = screen.getByTestId('public-map-guide');
     expect(guide).toHaveClass('fixed', 'inset-0');
@@ -968,8 +999,7 @@ describe('MapFlow tree library', () => {
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     renderApp('/console');
 
-    await user.click(await screen.findByRole('button', { name: '更多' }));
-    const guideButton = await screen.findByRole('button', {
+        const guideButton = await screen.findByRole('button', {
       name: '如何在自己的 Agent 里连接 MapFlow',
     });
     await user.click(guideButton);
@@ -1154,14 +1184,12 @@ describe('MapFlow tree library', () => {
     await user.click(screen.getByRole('button', { name: '我的地图' }));
     expect(await screen.findByText('0/2 已完成')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '更多' }));
-    await user.click(screen.getByRole('button', { name: '退出登录' }));
+        await user.click(screen.getByRole('button', { name: '退出登录' }));
     expect(screen.getByRole('dialog', { name: '确认退出登录' })).toBeInTheDocument();
     expect(identityApi.logoutIdentity).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: '取消退出' }));
     expect(screen.queryByRole('dialog', { name: '确认退出登录' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '更多' }));
-    await user.click(screen.getByRole('button', { name: '退出登录' }));
+        await user.click(screen.getByRole('button', { name: '退出登录' }));
     await user.click(screen.getByRole('button', { name: '确认退出' }));
     const gate = await screen.findByTestId('identity-gate');
     await user.type(
@@ -1179,7 +1207,7 @@ describe('MapFlow tree library', () => {
       await screen.findByText('从公共树池加入一棵技能树后，就可以从零记录进度。'),
     ).toBeInTheDocument();
     expect(screen.queryByText('0/2 已完成')).not.toBeInTheDocument();
-    expect(treeApi.fetchPersonalLibrary).toHaveBeenCalledTimes(3);
+    expect(treeApi.fetchPersonalLibrary).toHaveBeenCalledTimes(2);
   });
 
   it('opens generation only from an authenticated personal library and selects its result', async () => {
@@ -1427,8 +1455,7 @@ describe('管理面板入口', () => {
     identityApi.fetchCurrentSession.mockResolvedValue(adminAccount);
     renderApp();
 
-    await user.click(await screen.findByRole('button', { name: '更多' }));
-    await user.click(await screen.findByRole('button', { name: '管理面板' }));
+        await user.click(await screen.findByRole('button', { name: '管理面板' }));
     expect(
       await screen.findByRole('heading', { name: '管理面板' }),
     ).toBeInTheDocument();
@@ -1469,8 +1496,7 @@ describe('管理面板入口', () => {
     identityApi.fetchCurrentSession.mockResolvedValue(adminAccount);
     const { queryClient } = renderApp();
 
-    await user.click(await screen.findByRole('button', { name: '更多' }));
-    await user.click(await screen.findByRole('button', { name: '管理面板' }));
+        await user.click(await screen.findByRole('button', { name: '管理面板' }));
     expect(
       await screen.findByRole('heading', { name: '管理面板' }),
     ).toBeInTheDocument();
@@ -1803,7 +1829,7 @@ describe('手机端视图栈', () => {
       treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
       renderApp();
 
-      await screen.findByText(authenticated.account.playerId);
+      await user.click(await screen.findByRole('button',{name:'打开功能菜单'}));
       await user.click(screen.getByRole('button', { name: '我的地图' }));
       await user.click(
         await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
@@ -1819,8 +1845,8 @@ describe('手机端视图栈', () => {
       // 顶栏上的额度必须是转移而不是消失，否则等于删功能。
       expect(screen.queryByRole('button', { name: /现金额度/ })).not.toBeInTheDocument();
 
-      await user.click(screen.getByRole('button', { name: '操作' }));
-      const menu = screen.getByRole('navigation', { name: '会话操作' });
+      await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+      const menu = screen.getByRole('navigation', { name: '辅助功能' });
       expect(within(menu).getByRole('button', { name: /现金额度/ })).toBeInTheDocument();
       expect(within(menu).getByRole('button', { name: '模型价格' })).toBeInTheDocument();
       expect(within(menu).getByRole('button', { name: '退出登录' })).toBeInTheDocument();
@@ -1847,7 +1873,7 @@ describe('手机端视图栈', () => {
     await user.click(screen.getByRole('button', { name: '进入学习区，向 AI 提问' }));
 
     expect(await screen.findByRole('region', { name: '角色对话' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '更多' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: '全局导航' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /现金额度/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '操作' })).not.toBeInTheDocument();
   });
@@ -1914,13 +1940,13 @@ describe('手机端视图栈', () => {
 });
 
 describe('手机端抽屉', () => {
+  beforeEach(() => { window.innerWidth = 390; });
+  afterEach(() => { window.innerWidth = 1024; });
   it('点 ☰ 打开抽屉，点「我的学习」进入个人视图并关闭抽屉', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     renderApp();
-    await screen.findByText(authenticated.account.playerId);
-
-    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    await user.click(await screen.findByRole('button', { name: '打开功能菜单' }));
     const drawer = screen.getByRole('dialog', { name: '功能菜单' });
     await user.click(within(drawer).getByRole('button', { name: '我的地图' }));
 
@@ -1936,9 +1962,7 @@ describe('手机端抽屉', () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(adminAccount);
     renderApp();
-    await screen.findByText(adminAccount.account.playerId);
-
-    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    await user.click(await screen.findByRole('button', { name: '打开功能菜单' }));
     await user.click(
       within(screen.getByRole('dialog', { name: '功能菜单' })).getByRole('button', {
         name: '管理面板',
@@ -1963,9 +1987,7 @@ describe('手机端抽屉', () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     renderApp();
-    await screen.findByText(authenticated.account.playerId);
-
-    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    await user.click(await screen.findByRole('button', { name: '打开功能菜单' }));
     await user.click(
       within(screen.getByRole('dialog', { name: '功能菜单' })).getByRole('button', {
         name: '公告',
@@ -2005,9 +2027,7 @@ describe('手机端抽屉', () => {
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     identityApi.logoutIdentity.mockRejectedValue(new Error('登出失败'));
     renderApp();
-    await screen.findByText(authenticated.account.playerId);
-
-    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    await user.click(await screen.findByRole('button', { name: '打开功能菜单' }));
     const drawer = screen.getByRole('dialog', { name: '功能菜单' });
     await user.click(
       within(drawer).getByRole('button', { name: '退出登录' }),
@@ -2016,16 +2036,14 @@ describe('手机端抽屉', () => {
     const dialog = await screen.findByRole('dialog', { name: '确认退出登录' });
     await user.click(within(dialog).getByRole('button', { name: '确认退出' }));
     const alert = await within(dialog).findByRole('alert');
-    expect(alert).toHaveTextContent('登出失败');
+    expect(alert).toHaveTextContent('请求暂时失败，请稍后重试。');
   });
 
   it('session 失效后重新登录不自动弹出残留的公告弹窗', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     const { queryClient } = renderApp();
-    await screen.findByText(authenticated.account.playerId);
-
-    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    await user.click(await screen.findByRole('button', { name: '打开功能菜单' }));
     await user.click(
       within(screen.getByRole('dialog', { name: '功能菜单' })).getByRole('button', {
         name: '公告',
@@ -2047,7 +2065,7 @@ describe('手机端抽屉', () => {
     // 重新登录后公告弹窗不应自动弹出
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
-    await screen.findByText(authenticated.account.playerId);
+    await screen.findByRole('button', { name: '打开功能菜单' });
 
     expect(
       screen.queryByRole('dialog', { name: '全部公告' }),
@@ -2147,7 +2165,7 @@ describe('登录门禁', () => {
     await user.click(loginButtons[loginButtons.length - 1]);
 
     expect(await within(gate).findByRole('alert')).toHaveTextContent(
-      '用户名或密码错误，请重试。',
+      '请求暂时失败，请稍后重试。',
     );
     expect(screen.getByTestId('identity-gate')).toBeInTheDocument();
     expect(screen.queryByTestId('mobile-list')).not.toBeInTheDocument();
@@ -2182,8 +2200,7 @@ describe('登录门禁', () => {
     );
     await user.click(screen.getByRole('button', { name: '我的地图' }));
     await screen.findByText('0/2 已完成');
-    await user.click(screen.getByRole('button', { name: '更多' }));
-    await user.click(screen.getByRole('button', { name: '退出登录' }));
+        await user.click(screen.getByRole('button', { name: '退出登录' }));
     await user.click(screen.getByRole('button', { name: '确认退出' }));
 
     expect(await screen.findByTestId('identity-gate')).toBeInTheDocument();

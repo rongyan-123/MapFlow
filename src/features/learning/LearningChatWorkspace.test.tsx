@@ -78,19 +78,35 @@ it('opens the map on the right only on demand and offers a return to selection',
   await user.click(await screen.findByRole('button', { name: '查看地图' }));
   expect(await screen.findByLabelText('学习地图画面')).toBeInTheDocument();
   expect(api.fetchPersonalTree).toHaveBeenCalledWith('map-1');
-  const workspace = screen.getByRole('region', { name: '学习工作区' });
+  const workspace = screen.getByRole('region', { name: '学习区' });
   expect(workspace.children[0]).toHaveAttribute('data-learning-chat', 'true');
   expect(workspace.lastElementChild).toHaveAttribute('data-learning-map', 'true');
   await user.click(screen.getByRole('button', { name: '返回学习区列表' }));
   expect(await screen.findByRole('region', { name: '学习区选择' })).toBeInTheDocument();
 });
 
-it('keeps archived history available without offering a map opener', async () => {
+it('explains an unavailable map at selection and preserves a deliberate history entry', async () => {
   api.fetchLearningAreas.mockResolvedValue([{ ...python, available: false }]);
+  const user = userEvent.setup();
   mount('map-1');
+  expect(await screen.findByRole('region', { name: '学习区选择' })).toBeInTheDocument();
+  expect(await screen.findByRole('status')).toHaveTextContent('地图暂不可用');
+  expect(screen.queryByRole('region', { name: '当前学习对话' })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '查看 Python 历史' }));
   expect(await screen.findByRole('region', { name: '当前学习对话' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '查看地图' })).not.toBeInTheDocument();
   expect(await screen.findByText('地图不可用，当前仅查看历史。')).toBeInTheDocument();
+  expect(api.fetchPersonalTree).not.toHaveBeenCalled();
+});
+
+it('shows the current area label and manages areas from the switcher without loading a map', async () => {
+  const user = userEvent.setup(); mount('map-1');
+  const switcher = await screen.findByRole('combobox', { name: '切换学习区' });
+  expect(screen.getByText('学习区：')).toBeInTheDocument();
+  await user.selectOptions(switcher, 'manage');
+  expect(await screen.findByRole('region', { name: '学习区选择' })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '打开管理助手' }));
+  expect(await screen.findByRole('region', { name: '学习区管理助手' })).toBeInTheDocument();
   expect(api.fetchPersonalTree).not.toHaveBeenCalled();
 });
 

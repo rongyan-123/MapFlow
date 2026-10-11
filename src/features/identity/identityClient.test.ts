@@ -221,7 +221,7 @@ describe('identityClient', () => {
     expect(error).toMatchObject({
       status: 429,
       code: 'rate_limit.exceeded',
-      message: '请求过于频繁，请稍后再试。',
+      message: '请求较多，请稍后重试。',
       traceId: 'trace-123',
     });
   });

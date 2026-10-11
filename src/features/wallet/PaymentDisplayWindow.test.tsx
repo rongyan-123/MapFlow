@@ -42,7 +42,7 @@ it('hides an unconfirmed QR on network failure and releases only its own token o
   const view=mount(); await flush();
   await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
-  expect(screen.getByRole('alert')).toHaveTextContent('连接中断');
+  expect(screen.getByRole('alert')).toHaveTextContent('请求暂时失败，请稍后重试。');
   view.unmount(); await flush();
   expect(api.updatePaymentDisplay).toHaveBeenLastCalledWith('order', { action: 'leave', windowId: 'first' }, 'csrf');
 });

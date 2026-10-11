@@ -1,8 +1,10 @@
+import { describePublicError } from '../../lib/publicErrors';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { readModelPricing, type PricingChannel } from './walletClient';
 import ModelReferencePrices, { ReferencePriceNote } from './ModelReferencePrices';
 import WalletBalance from './WalletBalance';
+import { useApplicationShell } from '../navigation/ApplicationShell';
 
 const button = 'rounded-xl border border-slate-700 px-3 py-2 text-sm font-medium transition hover:border-cyan-500 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300';
 const panel = 'min-w-0 rounded-2xl border border-slate-800 bg-slate-900';
@@ -10,6 +12,7 @@ const panel = 'min-w-0 rounded-2xl border border-slate-800 bg-slate-900';
 export default function ModelPricingPage({ accountId, onBack, onNavigateTavern, onNavigateWallet }: {
   accountId: string; onBack: () => void; onNavigateTavern: () => void; onNavigateWallet: () => void;
 }) {
+  const inApplicationShell = useApplicationShell();
   const catalog = useQuery({ queryKey: ['model-catalog', 'pricing'], queryFn: readModelPricing, retry: false, staleTime: 60_000 });
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -18,10 +21,10 @@ export default function ModelPricingPage({ accountId, onBack, onNavigateTavern, 
   const selected = models.find(model => model.id === selectedId) ?? models[0];
   const activeChannels = selected?.pricing?.channels.filter(channel => channel.enabled) ?? [];
 
-  return <div className="h-dvh min-h-0 overflow-y-auto overflow-x-hidden bg-slate-950 text-slate-100">
+  return <div className="h-full min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-slate-950 text-slate-100">
     <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950"><div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-8">
       <button type="button" className={button} onClick={onBack}>返回</button><h1 className="min-w-0 truncate text-base font-semibold sm:text-lg">模型价格</h1>
-      <div className="ml-auto"><WalletBalance accountId={accountId} onClick={onNavigateWallet} /></div>
+      {!inApplicationShell && <div className="ml-auto"><WalletBalance accountId={accountId} onClick={onNavigateWallet} /></div>}
     </div></header>
     <main className="mx-auto max-w-7xl px-4 py-6 sm:px-8 sm:py-8">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4"><div>
@@ -29,7 +32,7 @@ export default function ModelPricingPage({ accountId, onBack, onNavigateTavern, 
         <p className="mt-2 text-sm leading-6 text-slate-400">{catalog.data?.models.some(model => model.availability === 'wallet') ? '比较模型参考价、渠道状态与参数，选择适合你的模型。' : '查看模型、渠道与参数。目前使用自填 Key，额度调用尚未开放。'}</p>
       </div><button type="button" className={button} onClick={onNavigateTavern}>前往酒馆 ↗</button></div>
       {catalog.isPending && <p role="status" className="py-20 text-center text-sm text-slate-400">正在读取模型目录…</p>}
-      {catalog.error && <div role="alert" className={`${panel} border-rose-800 p-5 text-sm text-rose-300`}>{catalog.error.message} <button type="button" className={`${button} ml-2`} onClick={() => void catalog.refetch()}>重试</button></div>}
+      {catalog.error && <div role="alert" className={`${panel} border-rose-800 p-5 text-sm text-rose-300`}>{describePublicError(catalog.error)} <button type="button" className={`${button} ml-2`} onClick={() => void catalog.refetch()}>重试</button></div>}
       {catalog.data && <div className="grid items-start gap-5 lg:grid-cols-[minmax(16rem,21rem)_minmax(0,1fr)]">
         <aside aria-label="模型列表" className={`${panel} overflow-hidden lg:sticky lg:top-24`}>
           <div className="border-b border-slate-800 p-4"><h3 className="mb-3 text-sm font-semibold">模型价格查询</h3>

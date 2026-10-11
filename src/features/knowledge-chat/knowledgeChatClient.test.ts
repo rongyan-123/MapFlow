@@ -168,6 +168,14 @@ describe('knowledgeChatClient', () => {
       traceId: 'trace-rate-limit',
     });
   });
+  it('keeps streamed diagnostics private for an unrecognized error', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('event: error\ndata: ' + JSON.stringify({
+      httpStatus: 409, code: 'internal.unknown_failure', message: 'database_field=secret host=internal.example', traceId: 'safe-request-1',
+    }) + '\n\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(sendKnowledgeChatMessageStream('entry-id', '你好', 'turn-safe', 'csrf', () => {}))
+      .rejects.toMatchObject({ message: '请求暂时失败，请稍后重试。', traceId: 'safe-request-1' });
+  });
 
   it('pauses on a safe approval summary and posts the explicit decision', async () => {
     const stream = new ReadableStream<Uint8Array>({

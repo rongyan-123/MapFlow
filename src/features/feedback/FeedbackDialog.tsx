@@ -1,3 +1,4 @@
+import { describePublicError } from '../../lib/publicErrors';
 import { useState, type FormEvent } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useIdentity } from '../identity/IdentityContext';
@@ -66,7 +67,7 @@ export default function FeedbackDialog({ onClose }: { onClose: () => void }) {
             />
             {submit.error && (
               <p role="alert" className="mt-2 text-xs text-rose-300">
-                {submit.error.message}
+                {describePublicError(submit.error)}
               </p>
             )}
             <div className="mt-3 flex justify-end gap-2">

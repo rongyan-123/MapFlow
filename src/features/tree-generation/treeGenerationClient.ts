@@ -1,3 +1,5 @@
+import { publicHttpErrorMessage } from '../../lib/publicErrors';
+import { PublicUiError } from '../../lib/publicErrors';
 import type {
   GenerationInput,
   GenerationFundingMode,
@@ -43,7 +45,7 @@ export async function readUserModelCatalog(): Promise<UserModelProfile[]> {
   });
 }
 
-export class TreeGenerationApiError extends Error {
+export class TreeGenerationApiError extends PublicUiError {
   readonly status: number;
   readonly code: string;
   readonly traceId?: string;
@@ -405,7 +407,7 @@ async function parseError(
       return new TreeGenerationApiError(
         response.status,
         body.error.code,
-        redact(body.error.message, redactedValues),
+        publicHttpErrorMessage(body.error.code, response.status),
         typeof body.error.traceId === 'string' ? body.error.traceId : undefined,
         parseGenerationErrorDetails(body.error.details),
       );

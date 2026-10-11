@@ -6,6 +6,19 @@ import type { TavernModelSelection } from './types';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const selection: TavernModelSelection = { provider: 'custom', apiKey: '', baseUrl: '', model: '', settings: {}, historyBytes: 32768 };
+it('does not promise a free trial before the platform billing mode has been verified', () => {
+  setup({ ...selection, provider: 'platform' }, () => new Promise<Response>(() => {}));
+  expect(screen.getByText('正在读取平台模型…')).toBeVisible();
+  expect(screen.queryByText(/测试期间暂不扣费/u)).not.toBeInTheDocument();
+});
+it('does not display internal model-test diagnostics even when the HTTP request succeeds', async () => {
+  setup({ ...selection, apiKey: 'own-key', baseUrl: 'https://gateway.example.com/v1', model: 'model' });
+  vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({
+    ok: false, models: [], message: '上游 internal.example sk-private-secret',
+  })));
+  fireEvent.click(screen.getByRole('button', { name: '测试连接 / 获取模型' }));
+  expect(await screen.findByRole('alert')).not.toHaveTextContent(/上游|internal.example|sk-private-secret/u);
+});
 function setup(value = selection, respond = async (_url: string) => new Response('{}')) {
   const saved = vi.fn();
   vi.stubGlobal('fetch', vi.fn(respond));
@@ -19,13 +32,13 @@ it('tests the draft without saving or generating and lets the user select a retu
   const fetchMock = vi.mocked(fetch);
   fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, models: ['new-model'], message: '连接与 Key 验证成功' })));
   fireEvent.click(screen.getByRole('button', { name: '测试连接 / 获取模型' }));
-  expect(await screen.findByText('连接与 Key 验证成功')).toBeVisible();
+  expect(await screen.findByText(/连接与 Key 验证成功/u)).toBeVisible();
   expect(fetchMock).toHaveBeenCalledWith('/api/me/tavern/model-access/test', expect.objectContaining({
     method: 'POST', credentials: 'same-origin', headers: expect.objectContaining({ 'X-CSRF-Token': 'csrf' }),
     body: JSON.stringify({ apiKey: 'own-key', baseUrl: 'https://gateway.example.com/v1' }),
   }));
   fireEvent.change(screen.getByLabelText('已获取模型'), { target: { value: 'new-model' } });
-  expect(screen.getByLabelText('上游模型')).toHaveValue('new-model');
+  expect(screen.getByLabelText('模型', { selector: 'input' })).toHaveValue('new-model');
   expect(saved).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: '保存并使用' }));
   expect(saved).toHaveBeenCalledWith(expect.objectContaining({ model: 'new-model' }));
@@ -40,9 +53,9 @@ it('discards late connection results after changing the endpoint and shows faile
   await act(async () => resolve(new Response(JSON.stringify({ ok: true, models: ['late-model'], message: 'old result' }))));
   expect(screen.queryByText('old result')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('已获取模型')).not.toBeInTheDocument();
-  vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ ok: false, models: [], message: 'Key 无效或权限不足' })));
+  vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ ok: false, models: [], code: 'tavern.user_model_authentication', message: 'Key 无效或权限不足' })));
   fireEvent.click(screen.getByRole('button', { name: '测试连接 / 获取模型' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Key 无效或权限不足');
+  expect(await screen.findByRole('alert')).toHaveTextContent('模型配置不可用');
 });
 it('does not apply an incomplete custom configuration', () => {
   const saved = setup();

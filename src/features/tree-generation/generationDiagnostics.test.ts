@@ -7,6 +7,9 @@ import {
 } from './generationDiagnostics';
 
 describe('generationDiagnostics', () => {
+  it('does not present an arbitrary local exception as a public diagnostic', () => {
+    expect(readableGenerationError(new Error('private.example sk-private-secret'))).toBe('请求暂时失败，请稍后重试。');
+  });
   it('serializes only the closed diagnostic whitelist', () => {
     const error = new TreeGenerationApiError(
       502,

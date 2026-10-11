@@ -1,3 +1,4 @@
+import { PublicUiError } from '../../lib/publicErrors';
 export interface KnowledgeChatUsage {
   inputTokens: number;
   outputTokens: number;
@@ -33,7 +34,7 @@ export interface KnowledgeChatHistoryResponse {
   messages: KnowledgeChatMessage[];
 }
 
-export class KnowledgeChatApiError extends Error {
+export class KnowledgeChatApiError extends PublicUiError {
   readonly status: number;
   readonly code: string;
   readonly traceId?: string;

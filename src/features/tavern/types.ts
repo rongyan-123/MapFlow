@@ -1,3 +1,4 @@
+import { PublicUiError } from '../../lib/publicErrors';
 export interface CompatibilityWarning { code: string; field: string; message: string }
 export interface LoreEntry {
   id: string; keys: string[]; secondaryKeys: string[]; constant: boolean; enabled: boolean;
@@ -107,7 +108,7 @@ export interface TavernToolApproval {
   approvalRequestId: string; action: string; target: string; destructive: boolean;
   mapTitle?: string; proposal?: Record<string, unknown>;
 }
-export class TavernApiError extends Error {
+export class TavernApiError extends PublicUiError {
   constructor(public readonly status: number, public readonly code: string, message: string, public readonly traceId?: string,
     public readonly generationFailed = false) {
     super(message); this.name = 'TavernApiError';

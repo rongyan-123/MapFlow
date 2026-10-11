@@ -71,6 +71,7 @@ interface TreeGenerationDialogProps {
   onComplete: (libraryEntryId: string) => void;
   onClose: () => void;
   dialogRef?: RefObject<HTMLElement>;
+  initialInput?: GenerationInput;
 }
 
 type RevisionKind = 'replan' | 'adjust';
@@ -98,11 +99,12 @@ export default function TreeGenerationDialog({
   onComplete,
   onClose,
   dialogRef,
+  initialInput,
 }: TreeGenerationDialogProps) {
   const queryClient = useQueryClient();
   const [currentSessionId, setCurrentSessionId] = useState(sessionId);
   const [fundingMode, setFundingMode] = useState<GenerationFundingMode>('byok');
-  const [input, setInput] = useState<GenerationInput>(EMPTY_INPUT);
+  const [input, setInput] = useState<GenerationInput>(() => initialInput ? { ...initialInput } : EMPTY_INPUT);
   const [apiKey, setApiKey] = useState('');
   const [byokProvider, setByokProvider] = useState<ByokProvider>('deepseek');
   const [gatewayModelId, setGatewayModelId] = useState('');

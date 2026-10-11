@@ -310,12 +310,12 @@ describe('KnowledgeChatPanel', () => {
 
     await user.type(screen.getByRole('textbox', { name: '输入问题' }), '网络错误测试');
     await user.click(screen.getByRole('button', { name: '发送' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('知识聊天服务暂时不可用。');
+    expect(await screen.findByRole('alert')).toHaveTextContent('请求暂时失败，请稍后重试。');
 
     expect(screen.queryByRole('button', { name: '重置对话' })).not.toBeInTheDocument();
   });
 
-  it('shows the actionable error code and trace id for a server failure', async () => {
+  it('shows a safe explanation and trace id without exposing internal error codes', async () => {
     const user = userEvent.setup();
     chatApi.sendKnowledgeChatMessageStream.mockRejectedValueOnce(
       new KnowledgeChatApiError(
@@ -333,7 +333,7 @@ describe('KnowledgeChatPanel', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('消息包含无法处理的控制字符，请删除后重试。');
-    expect(alert).toHaveTextContent('错误代码：knowledge_chat.message_invalid_characters');
+    expect(alert).not.toHaveTextContent('knowledge_chat');
     expect(alert).toHaveTextContent('诊断编号：trace-chat-2');
   });
 

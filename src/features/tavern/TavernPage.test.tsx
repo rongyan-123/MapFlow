@@ -7,6 +7,7 @@ import { IdentityProvider } from '../identity/IdentityContext';
 import TavernPage from './TavernPage';
 import { character, completion, conversation, detail, sseResponse, turn } from './testFixtures';
 import type { Character, Conversation, ConversationDetail, GenerationAction } from './types';
+import type { MapGenerationDraft } from './tavernClient';
 vi.mock('@excalidraw/excalidraw', () => ({
   Excalidraw: ({ onChange, initialData }: { onChange: (elements: Record<string, unknown>[]) => void; initialData: { elements: Record<string, unknown>[] } }) => <div aria-label="白板编辑器">{initialData.elements.filter(element => !element.isDeleted).map(element => <span key={element.id as string}>{element.id as string}</span>)}<button type="button" onClick={() => onChange([{ id: 'manual-box', type: 'rectangle', x: 10, y: 20, width: 200, height: 80 }])}>白板：绘制矩形</button></div>,
   // Skeleton construction creates fresh elements; it must not be used to restore a saved editor scene.
@@ -29,6 +30,7 @@ let modelUnavailable: boolean;
 let platformEnabled: boolean;
 let platformPaid: boolean;
 let identityAccountId: string;
+let preparedMapDraft: MapGenerationDraft | null;
 let fetchMock: ReturnType<typeof vi.fn>;
 const json = (body: unknown) => new Response(JSON.stringify(body));
 
@@ -38,7 +40,9 @@ beforeEach(() => {
   attempts = []; failFirstTurn = false; modelUnavailable = false; platformEnabled = true;
   platformPaid=false;
   identityAccountId = 'player-1';
+  preparedMapDraft = null;
   fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/map-generation-draft')) return json({ draft: preparedMapDraft });
     if (url === '/api/me/tavern/platform-models') return json({ enabled: platformEnabled, billingMode: platformPaid?'wallet':'trial', ...(platformPaid?{policyVersion:'cash-v1-actual-x2'}:{}),models: platformEnabled ? [{ id: 'trial-model', provider: 'AnyAI', contextWindow: 32768 }] : [] });
     if (url.endsWith('/quote') && init?.method==='POST') return json({quoteId:'quote-1',maximumChargeMicros:10_000,policyVersion:'cash-v1-actual-x2',expiresInSeconds:60});
     if (url === '/api/credit/me') return json({ balance: 10, signedInToday: true, freeRemaining: 0, pricePerTree: 1 });
@@ -207,10 +211,12 @@ it('stages a node reference without sending or replacing the user draft, and inc
 
 it.each(['learning', 'management', 'tavern'] as const)('refreshes changed learning records only in the permitted scope after a %s turn', async scene => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const firstNote = ['node-note', 'entry-1', 'node-1'];
-  const otherNote = ['node-note', 'entry-2', 'node-2'];
+  const firstNote = ['me', 'player-1', 'node-note', 'entry-1', 'node-1'];
+  const otherNote = ['me', 'player-1', 'node-note', 'entry-2', 'node-2'];
+  const otherAccountNote = ['me', 'player-2', 'node-note', 'entry-1', 'node-1'];
   client.setQueryData(firstNote, { markdown: '旧笔记', version: 1 });
   client.setQueryData(otherNote, { markdown: '其他地图', version: 1 });
+  client.setQueryData(otherAccountNote, { markdown: '其他账号', version: 1 });
   savedDetail = { ...savedDetail, conversation: { ...conversation, scene,
     ...(scene === 'learning' ? { learningAreaId: 'entry-1', libraryEntryId: 'entry-1', treeToolsEnabled: true } : { learningAreaId: null, libraryEntryId: null, treeToolsEnabled: false }) } };
   conversations = [savedDetail.conversation];
@@ -223,6 +229,21 @@ it.each(['learning', 'management', 'tavern'] as const)('refreshes changed learni
   await screen.findByText('新回复 🌙');
   await waitFor(() => expect(client.getQueryState(firstNote)?.isInvalidated).toBe(scene !== 'tavern'));
   expect(client.getQueryState(otherNote)?.isInvalidated).toBe(scene === 'management');
+  expect(client.getQueryState(otherAccountNote)?.isInvalidated).toBe(false);
+});
+
+it('opens the real map generator from a management draft without generating or sending automatically', async () => {
+  savedDetail = { ...savedDetail, conversation: { ...conversation, scene: 'management', libraryEntryId: null, learningAreaId: null } };
+  conversations = [savedDetail.conversation];
+  preparedMapDraft = { draftId: 'draft-1', input: { topic: 'Python 入门', role: '初学者', goalDescription: '完成一个小项目', learnerContextSummary: '没有编程经验' } };
+  localStorage.setItem('mapflow.tavern.selection.v1.player-1.management', 'conversation-1');
+  renderPage(undefined, undefined, true);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: '核对需求并生成地图' }));
+  expect(await screen.findByDisplayValue('Python 入门')).toBeInTheDocument();
+  expect(screen.getByDisplayValue('没有编程经验')).toBeInTheDocument();
+  expect(attempts).toEqual([]);
+  expect(fetchMock.mock.calls.filter(([url, init]) => String(url).includes('/tree-generations') && init?.method === 'POST')).toEqual([]);
 });
 
 it('collapses an enabled teaching canvas when the learning map takes the visual slot', async () => {
@@ -389,6 +410,22 @@ it('keeps import non-disruptive and clears account-scoped new-role notice only o
   await user.click(screen.getByRole('button', { name: '打开角色列表' }));
   expect(screen.queryByText('新增 1')).not.toBeInTheDocument();
   expect(attempts).toHaveLength(0);
+});
+
+it('imports directly above the chat and reports new roles beside the history filter', async () => {
+  restoreConversation(); const user = userEvent.setup(); renderPage();
+  await user.type(await screen.findByRole('textbox', { name: '消息' }), '保留这里的草稿');
+  await user.click(screen.getByRole('button', { name: '在对话顶部导入角色卡' }));
+  await user.upload(screen.getByLabelText('选择 PNG 或 JSON 角色卡'), new File([JSON.stringify({ name: '新导师', description: '教学' })], 'teacher.json', { type: 'application/json' }));
+  await user.click(await screen.findByRole('button', { name: '确认导入' }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: '导入角色卡' })).not.toBeInTheDocument());
+  expect(within(screen.getByRole('navigation', { name: '会话历史' })).getByRole('button', { name: '新增 1' })).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('保留这里的草稿');
+  expect(savedDetail.character.characterId).toBe(character.characterId);
+  expect(attempts).toHaveLength(0);
+  await user.click(screen.getByRole('button', { name: '新增 1' }));
+  expect(screen.getByRole('dialog', { name: '功能菜单' })).toHaveTextContent('新导师');
+  expect(screen.queryByText('新增 1')).not.toBeInTheDocument();
 });
 
 it('explicitly switches the independent active role without creating or opening another story', async () => {
@@ -606,8 +643,8 @@ async function configureSelfKey(user: ReturnType<typeof userEvent.setup>) {
   await user.type(within(dialog).getByLabelText('API Key'), 'test-only-key');
   await user.clear(within(dialog).getByLabelText('API URL'));
   await user.type(within(dialog).getByLabelText('API URL'), 'https://gateway.example.com/v1');
-  await user.clear(within(dialog).getByLabelText('上游模型'));
-  await user.type(within(dialog).getByLabelText('上游模型'), 'test-model');
+  await user.clear(within(dialog).getByLabelText('模型'));
+  await user.type(within(dialog).getByLabelText('模型'), 'test-model');
   await user.click(within(dialog).getByRole('button', { name: '保存并使用' }));
   await user.keyboard('{Escape}');
 }
@@ -653,7 +690,7 @@ describe('Tavern page', () => {
     const dialog = screen.getByRole('dialog', { name: '配置' });
     expect(within(dialog).getByLabelText('API Key')).toHaveValue('');
     expect(within(dialog).getByLabelText('API URL')).toHaveValue('https://gateway.example.com/v1');
-    expect(within(dialog).getByLabelText('上游模型')).toHaveValue('test-model');
+    expect(within(dialog).getByLabelText('模型')).toHaveValue('test-model');
     await user.keyboard('{Escape}');
     await user.type(screen.getByLabelText('消息'), '不能沿用旧 Key');
     await user.click(screen.getByRole('button', { name: '发送' }));
@@ -865,7 +902,7 @@ describe('Tavern page', () => {
     await user.click(within(screen.getByRole('region', { name: '教学画布' })).getByRole('button', { name: '收起画布' }));
     expect(editor).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: '教学画布' })).not.toBeInTheDocument();
-    const toolbar = screen.getByRole('navigation', { name: '学习工作区' });
+    const toolbar = screen.getByRole('navigation', { name: '学习区' });
     await user.click(within(toolbar).getByRole('button', { name: '展开画布' }));
     const reopened = await screen.findByLabelText('白板编辑器');
     expect(reopened).not.toBe(editor);
@@ -1470,7 +1507,7 @@ describe('Tavern page', () => {
     await user.click(screen.getByRole('button', { name: '自填 API Key' }));
     expect(screen.getByLabelText('API Key')).toHaveValue('test-only-key');
     expect(screen.getByLabelText('API URL')).toHaveValue('https://gateway.example.com/v1');
-    expect(screen.getByLabelText('上游模型')).toHaveValue('test-model');
+    expect(screen.getByLabelText('模型')).toHaveValue('test-model');
   });
 
   it('does not send or reserve a payment when platform quota chatting is unavailable', async () => {
@@ -1530,7 +1567,7 @@ describe('Tavern page', () => {
     expect(within(dialog).getByRole('button', { name: '自填 API Key' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(dialog).getByLabelText('API Key')).toBeVisible();
     expect(within(dialog).getByLabelText('API URL')).toBeEnabled();
-    expect(within(dialog).getByLabelText('上游模型')).toBeEnabled();
+    expect(within(dialog).getByLabelText('模型')).toBeEnabled();
   });
 
   it('validates each custom field, sends the selected endpoint and forgets the key after remount', async () => {
@@ -1549,9 +1586,9 @@ describe('Tavern page', () => {
     expect(within(configuration).getByRole('alert')).toHaveTextContent('API URL 必须是公开 HTTPS');
     await user.clear(url); await user.type(url, 'https://gateway.example.com/v1');
     await user.click(save);
-    expect(within(configuration).getByRole('alert')).toHaveTextContent('尚未填写上游模型');
+    expect(within(configuration).getByRole('alert')).toHaveTextContent('尚未填写模型');
     expect(attempts).toHaveLength(0);
-    await user.type(within(configuration).getByLabelText('上游模型'), 'my-model');
+    await user.type(within(configuration).getByLabelText('模型'), 'my-model');
     await user.click(save); await user.keyboard('{Escape}');
     await user.type(screen.getByLabelText('消息'), '测试自定义模型');
     await user.click(screen.getByRole('button', { name: '发送' }));
@@ -1701,7 +1738,7 @@ describe('Tavern page', () => {
       ? Promise.resolve(new Response(JSON.stringify({ error: { code: 'tavern.persistence_failed', message: '保存失败，请重试' } }), { status: 503 }))
       : originalFetch(url, init));
     await user.click(within(dialog).getByRole('button', { name: '保存角色卡' }));
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent('请求暂时失败，请稍后重试。');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('回复保存状态尚未确认，请刷新后核对结果。');
     expect(within(dialog).getByLabelText('角色名称')).toHaveValue('守望者');
     expect(within(dialog).getByLabelText('角色设定（提示词）')).toHaveValue('用中文交谈。');
   });
@@ -1890,7 +1927,7 @@ describe('Tavern page', () => {
     await user.click(within(dialog).getByRole('button', { name: '模型接入' }));
     await user.type(within(dialog).getByLabelText('API Key'), 'test-key');
     await user.type(within(dialog).getByLabelText('API URL'), 'https://anyai.token6688.com/v1');
-    await user.type(within(dialog).getByLabelText('上游模型'), 'gemini-3.8-flash');
+    await user.type(within(dialog).getByLabelText('模型'), 'gemini-3.8-flash');
     await user.click(within(dialog).getByRole('button', { name: '保存并使用' }));
     await user.click(within(dialog).getByRole('button', { name: '最近 8 KiB' }));
     await user.click(within(dialog).getByRole('button', { name: '保存并使用' }));
@@ -1972,7 +2009,7 @@ describe('Tavern page', () => {
     savedDetail = { ...savedDetail, conversation: { ...savedDetail.conversation,
       generationSettings: { temperature: 1.2, maxOutputTokens: 512, stopSequences: [] }, generationSettingsVersion: 2 } };
     await user.click(within(summary).getByRole('button', { name: '保存生成参数' }));
-    expect(await within(summary).findByRole('alert')).toHaveTextContent('设置已变化');
+    expect(await within(summary).findByRole('alert')).toHaveTextContent('这段对话有更新，请刷新后再试。');
     await waitFor(() => expect(within(summary).getByLabelText('最大输出 Token')).toHaveValue(512));
   });
 
@@ -2154,7 +2191,7 @@ describe('Tavern page', () => {
     const originalFetch = fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation((url: string, init?: RequestInit) => url.endsWith('/turns')
       ? Promise.resolve(sseResponse([{ event: 'process', payload: { type: 'reasoning', text: '先看学习进度。' } },
-        { event: 'error', payload: { code: 'tavern.user_model_rejected', message: '上游模型请求失败，请检查 URL、模型和参数。', httpStatus: 502, traceId: 'failure-trace' } }]))
+        { event: 'error', payload: { code: 'tavern.user_model_rejected', message: '模型请求失败，请检查 URL、模型和参数。', httpStatus: 502, traceId: 'failure-trace' } }]))
       : originalFetch(url, init));
     const user = userEvent.setup(); renderPage(); await configureSelfKey(user);
     await user.type(await screen.findByLabelText('消息'), '今天该学c语言的哪部分了');

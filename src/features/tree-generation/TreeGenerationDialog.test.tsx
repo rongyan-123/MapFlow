@@ -53,6 +53,15 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('TreeGenerationDialog', () => {
+  it('lets the user review and edit a prepared requirement without starting generation', async () => {
+    renderDialog({ initialInput: generationInput });
+    expect(screen.getByRole('textbox',{name:'想学习什么知识？'})).toHaveValue('Rust');
+    expect(screen.getByRole('textbox',{name:'希望最终达到什么目标？'})).toHaveValue(generationInput.goalDescription);
+    fireEvent.change(screen.getByRole('textbox',{name:'想学习什么知识？'}),{target:{value:'Rust 项目实践'}});
+    expect(screen.getByRole('textbox',{name:'想学习什么知识？'})).toHaveValue('Rust 项目实践');
+    expect(generationApi.createTreeGeneration).not.toHaveBeenCalled();
+    expect(generationApi.createPlatformTreeGeneration).not.toHaveBeenCalled();
+  });
   it('restores only nonsecret user model choices for a resumed planning session', async () => {
     const user = userEvent.setup();
     window.sessionStorage.setItem('mapflow.generation.byok-choice.session-1', JSON.stringify({
@@ -733,7 +742,9 @@ function renderDialog({
   sessionId = null,
   generationCapabilities = capabilities,
   entitlements = entitlementSummary(),
+  initialInput,
 }: {
+  initialInput?: GenerationInput;
   sessionId?: string | null;
   generationCapabilities?: IdentityCapabilities['generation'];
   entitlements?: ReturnType<typeof entitlementSummary> | null;
@@ -747,6 +758,7 @@ function renderDialog({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const props = {
+    initialInput,
     capabilities: generationCapabilities,
     csrfToken: 'csrf-secret',
     sessionId,

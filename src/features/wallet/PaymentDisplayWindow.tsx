@@ -1,3 +1,4 @@
+import { describePublicError } from '../../lib/publicErrors';
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { updatePaymentDisplay, type PaymentDisplay, type PaymentChannel } from './walletClient';
 
@@ -44,7 +45,7 @@ export default function PaymentDisplayWindow({ topupId, channel, csrfToken, rele
         if (disposed) return;
         if (countdown !== undefined) window.clearInterval(countdown);
         setDisplay(null);
-        setError(failure instanceof Error ? failure.message : '暂时无法确认展示窗口，请重试。');
+        setError(describePublicError(failure));
       }
     }
     void refresh('join');

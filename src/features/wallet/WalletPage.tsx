@@ -1,3 +1,5 @@
+import { describePublicError } from '../../lib/publicErrors';
+import { useApplicationShell } from '../navigation/ApplicationShell';
 import { useEffect, useRef, useState } from 'react';
 import PaymentDisplayWindow from './PaymentDisplayWindow';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,6 +11,7 @@ const statusLabels: Record<Topup['status'], string> = { awaiting_payment: '待�
 const ledgerLabels: Record<LedgerEntry['kind'], string> = { welcome: '一次性赠送', topup: '充值入账', adjustment: '额度调整', reversal: '撤销变动',usage:'模型消费' };
 export default function WalletPage({ accountId, csrfToken, onBack, onNavigateModels }: { accountId: string; csrfToken: string; onBack: () => void; onNavigateModels: () => void }) {
   const queryClient = useQueryClient();
+  const inApplicationShell = useApplicationShell();
   const walletKey = ['me', accountId, 'wallet'] as const;
   const [activeTopup, setActiveTopup] = useState<Topup | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -94,22 +97,22 @@ export default function WalletPage({ accountId, csrfToken, onBack, onNavigateMod
     paymentReturnFocusRef.current = createButtonRef.current;
     pendingCreate.current = input; lock.current = true; setBusy(true); setError(null); setNotice(null);
     try { const created = await createTopup(input, csrfToken); pendingCreate.current = null; setActiveTopup(created); setChoiceOpen(false); await queryClient.invalidateQueries({ queryKey: walletKey }); }
-    catch (failure) { setError(failure instanceof Error ? failure.message : '创建失败，请重试。'); }
+    catch (failure) { setError(describePublicError(failure)); }
     finally { lock.current = false; setBusy(false); }
   }
   async function declare(paid: boolean) {
     if (!activeTopup || lock.current) return;
     lock.current = true; setBusy(true); setError(null);
     try { await (paid ? declarePaid(activeTopup.topupId, csrfToken) : declareUnpaid(activeTopup.topupId, csrfToken)); setActiveTopup(null); setChoiceOpen(false); await queryClient.invalidateQueries({ queryKey: walletKey }); }
-    catch (failure) { setError(failure instanceof Error ? failure.message : '提交失败，请重试。'); }
+    catch (failure) { setError(describePublicError(failure)); }
     finally { lock.current = false; setBusy(false); }
   }
-  return <div className="h-dvh min-h-0 overflow-y-auto overflow-x-hidden bg-slate-950 text-slate-100">
-    <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur-xl"><div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 sm:px-8"><button ref={backButtonRef} className={button} onClick={onBack}>返回</button><h1 className="min-w-0 truncate text-base font-semibold sm:text-lg">我的额度</h1><button className={`${button} ml-auto`} onClick={onNavigateModels}>模型价格</button></div></header>
+  return <div className="h-full min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-slate-950 text-slate-100">
+    <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur-xl"><div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 sm:px-8"><button ref={backButtonRef} className={button} onClick={onBack}>返回</button><h1 className="min-w-0 truncate text-base font-semibold sm:text-lg">我的额度</h1>{!inApplicationShell && <button className={`${button} ml-auto`} onClick={onNavigateModels}>模型价格</button>}</div></header>
     <main className="mx-auto max-w-5xl space-y-5 px-4 py-6 sm:px-8 sm:py-8">{notice && <p role="status" className="text-emerald-300">{notice}</p>}
       {wallet.data?.qqGroup && wallet.data.topups.some(order => order.status === 'credited') && <p className="rounded-xl border border-cyan-400/25 bg-cyan-400/10 p-4 text-cyan-200">可以加入 Q 群：{wallet.data.qqGroup}</p>}
       {wallet.isPending && <p role="status" className="py-16 text-center text-sm text-slate-400">正在读取额度…</p>}
-      {wallet.error && <div role="alert" className={surface}><p className="mb-3 text-sm text-rose-300">{wallet.error.message}</p><button className={button} onClick={() => void wallet.refetch()}>重试读取额度</button></div>}
+      {wallet.error && <div role="alert" className={surface}><p className="mb-3 text-sm text-rose-300">{describePublicError(wallet.error)}</p><button className={button} onClick={() => void wallet.refetch()}>重试读取额度</button></div>}
       {wallet.data && !wallet.error && <>
         <div className="grid items-start gap-5 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
           <section className={`${surface} relative overflow-hidden`}><div aria-hidden="true" className="pointer-events-none absolute -right-10 -top-10 h-48 w-48 rounded-full bg-cyan-400/5 blur-3xl" /><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">My Wallet</p><h2 className="mt-6 text-sm text-slate-400">可用额度</h2><p className="mt-3 break-all text-4xl font-semibold tracking-tight text-slate-100 sm:text-5xl">{formatAmountMicros(wallet.data.balanceMicros)} 额度</p><p className="mt-6 border-t border-slate-800 pt-4 text-xs leading-6 text-slate-500">1 元 = 1 额度。现金额度与学习积分分开记录。</p></section>

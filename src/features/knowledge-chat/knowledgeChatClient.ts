@@ -1,3 +1,4 @@
+import { publicHttpErrorMessage } from '../../lib/publicErrors';
 import type {
   KnowledgeChatHistoryResponse,
   KnowledgeChatApprovalEvent,
@@ -205,7 +206,7 @@ async function parseError(response: Response): Promise<KnowledgeChatApiError> {
       return new KnowledgeChatApiError(
         response.status,
         body.error.code,
-        body.error.message,
+        publicHttpErrorMessage(body.error.code, response.status),
         typeof body.error.traceId === 'string' ? body.error.traceId : undefined,
       );
     }
@@ -269,7 +270,7 @@ function parseSseError(value: string): KnowledgeChatApiError {
     return new KnowledgeChatApiError(
       isHttpStatus(body.httpStatus) ? body.httpStatus : 502,
       body.code,
-      body.message,
+      publicHttpErrorMessage(body.code, isHttpStatus(body.httpStatus) ? body.httpStatus : 502),
       typeof body.traceId === 'string' ? body.traceId : undefined,
     );
   }

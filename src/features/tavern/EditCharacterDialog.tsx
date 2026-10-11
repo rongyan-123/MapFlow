@@ -25,7 +25,7 @@ export default function EditCharacterDialog({ character, conversation, renameOnl
         applyToConversation && conversation ? { conversationId: conversation.conversation.conversationId, expectedRevision: conversation.graph.revision } : undefined));
     } catch (failure) {
       setError(failure instanceof TavernApiError && failure.status === 409
-        ? new Error('角色或会话已更新，或正在生成回复。草稿仍在此窗口中，请保留修改内容，稍后重新打开窗口读取最新设定。') : failure);
+        ? new TavernApiError(409, 'tavern.turn_conflict', '角色或会话已更新，或正在生成回复。草稿仍在此窗口中，请保留修改内容，稍后重新打开窗口读取最新设定。') : failure);
       if (failure instanceof TavernApiError && failure.status === 409) await onConflict().catch(() => undefined);
     } finally { saving.current = false; setBusy(false); }
   }

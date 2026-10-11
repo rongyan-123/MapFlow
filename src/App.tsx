@@ -1,10 +1,13 @@
+import { clearAccountNoteDrafts } from './features/node-notes/noteDrafts';
+import ApplicationShell from './features/navigation/ApplicationShell';
+import { ModelSelectionProvider } from './features/tavern/ModelSelectionContext';
+import { describePublicError } from './lib/publicErrors';
 import PanelResizeHandle from './features/tavern/PanelResizeHandle';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import AdminPanel from './features/admin/AdminPanel';
-import CreditPill from './features/credit/CreditPill';
 import { readCreditSummary } from './features/credit/creditClient';
 import CompletionFlash from './features/skill-tree/CompletionFlash';
 import NodeDetailPanel from './features/skill-tree/NodeDetailPanel';
@@ -13,21 +16,13 @@ import SkillTreeCanvas from './features/skill-tree/SkillTreeCanvas';
 import { snapshotFromGraph } from './features/skill-tree/snapshotFromGraph';
 import LearningChatWorkspace from './features/learning/LearningChatWorkspace';
 import { createLearningArea } from './features/tavern/tavernClient';
-import IdentityAccess from './features/identity/IdentityAccess';
 import { useIdentity } from './features/identity/IdentityContext';
-import LogoutConfirmDialog from './features/identity/LogoutConfirmDialog';
-import AnnouncementsDialog from './features/announcements/AnnouncementsDialog';
-import FeedbackDialog from './features/feedback/FeedbackDialog';
 import LandingPage from './features/landing/LandingPage';
-import MobileDrawer from './features/navigation/MobileDrawer';
 import useIsMobile from './lib/useIsMobile';
-import HeaderMoreMenu, { headerMenuItem } from './features/navigation/HeaderMoreMenu';
-import WalletBalance from './features/wallet/WalletBalance';
 import PublicMapGuide, {
   PUBLIC_GUIDE_STORAGE_KEY,
   type PublicGuideStep,
 } from './features/onboarding/PublicMapGuide';
-import ThemeSwitcher from './features/theme/ThemeSwitcher';
 import McpGuideDialog, {
   type AgentGuideSectionId,
 } from './features/mcp/McpGuideDialog';
@@ -50,6 +45,7 @@ import type {
   PublicTreeCatalog,
 } from './features/tree-library/types';
 import TreeExportMenu from './features/tree-library/TreeExportMenu';
+import TreeRestoreControl from './features/tree-library/TreeRestoreControl';
 import TreeLibraryActionDialog, {
   type TreeLibraryAction,
 } from './features/tree-library/TreeLibraryActionDialog';
@@ -100,6 +96,7 @@ export default function App() {
   const queryClient = useQueryClient();
   const { session, sessionPending } = useIdentity();
   const [currentAddress, setCurrentAddress] = useState(() => readCurrentAddress());
+  const [guideRequested, setGuideRequested] = useState(() => new URLSearchParams(window.location.search).get('guide') === '1');
   const currentPath = new URL(currentAddress, window.location.origin).pathname;
   const walletOrigin = useRef('/console');
   const modelsOrigin = useRef('/console');
@@ -117,12 +114,13 @@ export default function App() {
   useEffect(() => {
     const playerId = session?.account.playerId ?? null;
     const previousPlayerId = previousSessionPlayerIdRef.current;
-    if (previousPlayerId && !playerId) {
+    if (previousPlayerId && previousPlayerId !== playerId) {
       queryClient.removeQueries({
         predicate: (query) => query.queryKey[0] !== 'identity',
       });
       queryClient.removeQueries({ queryKey: ['identity', 'capabilities'] });
       removeStoredConsoleState(previousPlayerId);
+      clearAccountNoteDrafts(previousPlayerId);
     }
     previousSessionPlayerIdRef.current = playerId;
   }, [queryClient, session]);
@@ -135,7 +133,9 @@ export default function App() {
   const navigatePage = (path: string) => {
     window.history.pushState({}, '', path);
     setCurrentAddress(readCurrentAddress());
+    if (new URL(path, window.location.origin).searchParams.get('guide') === '1') setGuideRequested(true);
   };
+  const guideConsumed = useCallback(() => { setGuideRequested(false); setCurrentAddress(readCurrentAddress()); }, []);
   const navigateView = (view: PersistedAppView) => navigatePage(view === 'public' ? '/library' : view === 'personal' ? '/maps' : '/learning');
   const requestedView = currentPath === '/library' ? 'public' : currentPath === '/maps' ? 'personal' : currentPath === '/learning' ? 'learning' : undefined;
 
@@ -178,40 +178,39 @@ export default function App() {
     window.history.pushState({}, '', '/models');
     setCurrentAddress('/models');
   };
-  if (currentPath === '/wallet') {
-    return <WalletPage key={session.account.playerId} accountId={session.account.playerId} csrfToken={session.csrfToken}
-      onBack={() => navigatePage(walletOrigin.current)}
-      onNavigateModels={navigateToModels} />;
+  if (currentPath === '/' && marketingRequested && !generationRouteRequested) {
+    return <LandingPage session={session} onEnterConsole={() => navigateToConsole()} onLogin={() => navigateToConsole()} />;
   }
-  if (currentPath === '/models') {
-    return <ModelPricingPage accountId={session.account.playerId} onNavigateWallet={navigateToWallet} onBack={() => navigatePage(modelsOrigin.current)}
-      onNavigateTavern={navigateToTavern} />;
-  }
-  if (currentPath === '/tavern') {
-    return <TavernPage onNavigateConsole={() => navigateToConsole()} onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />;
-  }
-
-  const rootRoute = currentPath === '/' && !generationRouteRequested;
-  if (rootRoute) {
-    if (marketingRequested) {
-      return (
-        <LandingPage
-          session={session}
-          onEnterConsole={() => navigateToConsole()}
-          onLogin={() => navigateToConsole()}
-        />
-      );
-    }
-    return <ConsoleApp requestedView={requestedView} onNavigateView={navigateView} onNavigateLearning={(area, node) => navigatePage(`/learning?area=${encodeURIComponent(area)}${node ? `&node=${encodeURIComponent(node.id)}&title=${encodeURIComponent(node.title)}` : ''}`)} onNavigateTavern={navigateToTavern} onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />;
-  }
-
-  return <ConsoleApp requestedView={requestedView} onNavigateView={navigateView} onNavigateLearning={(area, node) => navigatePage(`/learning?area=${encodeURIComponent(area)}${node ? `&node=${encodeURIComponent(node.id)}&title=${encodeURIComponent(node.title)}` : ''}`)} onNavigateTavern={navigateToTavern} onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />;
+  const consolePage = <ConsoleApp requestedView={requestedView} guideRequested={guideRequested} onGuideConsumed={guideConsumed} onNavigateView={navigateView}
+    onNavigateLearning={(area, node) => navigatePage(`/learning?area=${encodeURIComponent(area)}${node ? `&node=${encodeURIComponent(node.id)}&title=${encodeURIComponent(node.title)}` : ''}`)}
+    onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />;
+  const page = currentPath === '/wallet'
+    ? <WalletPage accountId={session.account.playerId} csrfToken={session.csrfToken} onBack={() => navigatePage(walletOrigin.current)} onNavigateModels={navigateToModels} />
+    : currentPath === '/models'
+    ? <ModelPricingPage accountId={session.account.playerId} onNavigateWallet={navigateToWallet} onBack={() => navigatePage(modelsOrigin.current)} onNavigateTavern={navigateToTavern} />
+    : currentPath === '/tavern'
+    ? <TavernPage onNavigateConsole={() => navigateView('learning')} onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />
+    : currentPath === '/admin' && session.account.isAdmin
+    ? <AdminPanel onBack={() => navigateView('personal')} csrfToken={session.csrfToken} accountId={session.account.playerId} />
+    : consolePage;
+  const rememberedView = readStoredConsoleState(session.account.playerId)?.view;
+  const activePath = currentPath === '/console' || currentPath === '/'
+    ? rememberedView === 'personal' ? '/maps' : rememberedView === 'learning' ? '/learning' : '/library'
+    : currentPath;
+  return <ModelSelectionProvider key={session.account.playerId} accountId={session.account.playerId}>
+    <ApplicationShell activePath={activePath} onNavigate={path => {
+      if (path === '/wallet') navigateToWallet();
+      else if (path === '/models') navigateToModels();
+      else navigatePage(path);
+    }}>{page}</ApplicationShell>
+  </ModelSelectionProvider>;
 }
 
-function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavigateTavern, onNavigateWallet, onNavigateModels }: {
+function ConsoleApp({ requestedView, guideRequested, onGuideConsumed, onNavigateView, onNavigateLearning, onNavigateWallet, onNavigateModels }: {
+  guideRequested: boolean; onGuideConsumed: () => void;
   requestedView?: PersistedAppView; onNavigateView: (view: PersistedAppView) => void;
   onNavigateLearning: (area: string, node?: { id: string; title: string }) => void;
-  onNavigateTavern: () => void; onNavigateWallet: () => void; onNavigateModels: () => void;
+  onNavigateWallet: () => void; onNavigateModels: () => void;
 }) {
   const queryClient = useQueryClient();
   const {
@@ -222,9 +221,6 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
     session,
     sessionPending,
     openIdentityDialog,
-    logout,
-    logoutPending,
-    logoutError,
   } = useIdentity();
   const [view, setView] = useState<AppView>(requestedView ?? 'public');
   const [areaEntryPending, setAreaEntryPending] = useState(false);
@@ -255,16 +251,12 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
   const isMobile = useIsMobile();
   const [chatOpen, setChatOpen] = useState(false);
   const [learningMapOpen, setLearningMapOpen] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [announcementsOpen, setAnnouncementsOpen] = useState(false);
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [personalSidebarOpen, setPersonalSidebarOpen] = useState(() =>
     readBooleanPreference('mapflow.layout.personal-sidebar-open', true),
   );
   const [nodeDetailOpen, setNodeDetailOpen] = useState(() =>
     readBooleanPreference('mapflow.layout.node-detail-open', true),
   );
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [treeActionTarget, setTreeActionTarget] = useState<TreeActionTarget | null>(null);
   const [publicationTarget, setPublicationTarget] = useState<{
     libraryEntryId: string;
@@ -411,7 +403,7 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
     );
   }, [accountPlayerId, publicGuideOpen, sessionPending]);
   useEffect(() => {
-    if (requestedView) { setView(requestedView); setChatOpen(false); setDrawerOpen(false); }
+    if (requestedView) { setView(requestedView); setChatOpen(false); }
   }, [requestedView]);
 
   useEffect(() => {
@@ -475,8 +467,6 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
 
   useEffect(() => {
     if (!session && !sessionPending) {
-      setAnnouncementsOpen(false);
-      setFeedbackOpen(false);
       setGenerationDialogOpen(false);
       setGenerationSessionId(null);
       writeGenerationSessionId(null);
@@ -566,6 +556,7 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
       setSelectedNodeId(null);
       setCompletion(null);
       setView('personal');
+      onNavigateView('personal');
       await queryClient.invalidateQueries({ queryKey: personalTreeLibraryQueryKey });
     },
   });
@@ -750,6 +741,15 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
     setPersonalSidebarOpen(true);
     setPublicGuideOpen(true);
   };
+  useEffect(() => {
+    if (!guideRequested) return;
+    const url = new URL(window.location.href);
+    replayPublicGuide();
+    url.searchParams.delete('guide');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    onGuideConsumed();
+  }, [guideRequested, onGuideConsumed]);
+
   const advancePublicGuide = () => {
     if (publicGuideStep === 'map') {
       setPublicGuideStep('library');
@@ -927,17 +927,6 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
     setChatOpen(false);
     setMobileView('detail');
   };
-  const requestLogout = () => {
-    if (session) setLogoutConfirmOpen(true);
-  };
-  const confirmLogout = async () => {
-    try {
-      await logout();
-      setLogoutConfirmOpen(false);
-    } catch {
-      // IdentityContext exposes the safe error inside the confirmation dialog.
-    }
-  };
   const goBackOnMobile = () => {
     if (mobileView === 'chat') {
       closeKnowledgeChat();
@@ -954,7 +943,7 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
   // 放在公共树库加载分支之前，避免树库重试失败时把管理员踢出面板。
   if (view === 'admin' && session) {
     return (
-      <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-slate-950 text-slate-100">
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-slate-950 text-slate-100">
         <AdminPanel
           onBack={() => {
             setView('personal');
@@ -1014,41 +1003,11 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
   // 所以整条不渲染，把额度和账号入口原样挂到对话工具栏的“操作”菜单里，功能一个不少。
   const mobileChatActive =
     isMobile && view === 'learning';
-  const headerWallet = session && (
-    <WalletBalance accountId={session.account.playerId} onClick={onNavigateWallet} />
-  );
-  const headerMenuItems = <>
-    {(['public', 'personal', 'learning'] as const).map(destination => <button key={destination} type="button" className={headerMenuItem}
-      onClick={() => onNavigateView(destination)}>{destination === 'public' ? '公共书库' : destination === 'personal' ? '我的地图' : '学习聊天'}</button>)}
-    <button type="button" className={headerMenuItem} onClick={onNavigateTavern}>独立酒馆</button>
-    <button type="button" className={headerMenuItem} onClick={onNavigateModels}>模型价格</button>
-    {session?.account.isAdmin && <button type="button" className={headerMenuItem} onClick={() => setView('admin')}>管理面板</button>}
-    <a href="/?marketing=1" aria-label="查看产品首页" className={headerMenuItem}>产品首页</a>
-    <button type="button" aria-label="如何在自己的 Agent 里连接 MapFlow" onClick={() => openMcpGuide()} className={headerMenuItem}>Agent 接入教程</button>
-    <button type="button" aria-label="查看引导" onClick={replayPublicGuide} className={headerMenuItem}>查看引导</button>
-    <button type="button" onClick={() => setAnnouncementsOpen(true)} className={headerMenuItem}>公告</button>
-    <button type="button" aria-label="意见反馈" onClick={() => setFeedbackOpen(true)} className={headerMenuItem}>意见反馈</button>
-    <div data-keep-menu-open className="space-y-3 border-t border-slate-800 px-2 py-3">
-      <ThemeSwitcher />
-      {session && generationCapabilities?.platformFundedEnabled === true && <div><p className="mb-2 text-xs text-slate-500">学习积分</p><CreditPill credit={creditQuery.data ?? null} onSignedIn={() => { void creditQuery.refetch(); void platformEntitlements.refetch(); }} /></div>}
-    </div>
-    <IdentityAccess onRequestLogout={requestLogout} />
-  </>;
 
   return (
-    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-slate-950 text-slate-100">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-slate-950 text-slate-100">
       {!mobileChatActive && <header className="relative z-30 flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-800 bg-slate-950/95 px-3 py-2 sm:gap-3 sm:px-5 max-lg:pt-[max(0.5rem,env(safe-area-inset-top))]">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          {mobileView === 'list' && (
-            <button
-              type="button"
-              aria-label="打开功能菜单"
-              onClick={() => setDrawerOpen(true)}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-slate-300 lg:hidden"
-            >
-              ☰
-            </button>
-          )}
           {mobileView !== 'list' && mobileView !== 'chat' && (
             <button
               type="button"
@@ -1070,28 +1029,6 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
             </p>
           </div>
         </div>
-        <nav className="hidden shrink-0 items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/80 p-1 text-xs lg:flex">
-          <ViewButton
-            active={view === 'public'}
-            onClick={() => {
-              setView('public');
-              onNavigateView('public');
-              setSelectedPublicTreeId(null);
-              setSelectedNodeId(null);
-              setCompletion(null);
-              setChatOpen(false);
-              setLayoutMode('relationship');
-              setMobileView('list');
-            }}
-          >
-            公共书库
-          </ViewButton>
-          <ViewButton active={view === 'personal'} onClick={showPersonalLibrary}>
-            我的地图
-          </ViewButton>
-          <ViewButton active={view === 'learning'} onClick={() => onNavigateView('learning')}>学习聊天</ViewButton>
-          <ViewButton active={false} onClick={onNavigateTavern}>独立酒馆</ViewButton>
-        </nav>
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {(identityEnabled || session) && (
             <button
@@ -1125,8 +1062,6 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
               </span>
             </button>
           )}
-          {headerWallet}
-          <HeaderMoreMenu>{headerMenuItems}</HeaderMoreMenu>
         </div>
       </header>}
 
@@ -1135,7 +1070,7 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
         requestedAreaId={new URLSearchParams(window.location.search).get('area')}
         requestedNode={readStagedNodeReference()} onSelectArea={area => area ? onNavigateLearning(area) : onNavigateView('learning')}
         onOpenMaps={showPersonalLibrary} onNavigateWallet={onNavigateWallet} onNavigateModels={onNavigateModels}
-        mobileHeaderActions={<><div className="border-t border-slate-800 pt-1">{headerWallet}</div>{headerMenuItems}</>} />
+        />
         : <main className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
         {!personalSidebarOpen && (view === 'personal' || !selectedPublicTree) && (
           <button
@@ -1406,6 +1341,11 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
           >
             {nodeDetailOpen ? (
               <div className="flex min-h-0 flex-1 flex-col">
+              {selectedLibraryEntryId && session && <div className="flex flex-wrap items-center gap-2 p-3 text-sm">
+                <TreeRestoreControl key={`${session.account.playerId}.${selectedLibraryEntryId}`}
+                  accountId={session.account.playerId} libraryEntryId={selectedLibraryEntryId} csrfToken={session.csrfToken}
+                  onRestored={() => setNoteNodeId(null)} />
+              </div>}
               {view === 'personal' && selectedNodeId && selectedLibraryEntryId && session && (
                 <button type="button" onClick={()=>setNoteNodeId(selectedNodeId)} className="mx-3 mt-3 rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20">
                   {(personalTree.data?.noted_node_ids??[]).includes(selectedNodeId)?'查看 / 编辑笔记':'写下我的总结'}
@@ -1537,146 +1477,6 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
         />
       )}
 
-      <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        {(identityEnabled || session) && (
-          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2.5">
-            {session ? (
-              <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-slate-100">
-                  {session.account.username}
-                </div>
-                <div className="font-mono text-[10px] text-cyan-300">
-                  {session.account.playerId}
-                </div>
-              </div>
-            ) : (
-              <span className="text-sm text-slate-500">未登录</span>
-            )}
-            {session ? (
-              <button
-                type="button"
-                aria-label="退出登录"
-                disabled={logoutPending}
-                onClick={() => {
-                  setDrawerOpen(false);
-                  requestLogout();
-                }}
-                className="shrink-0 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 transition hover:border-rose-400/60 hover:text-rose-300 disabled:opacity-50"
-              >
-                退出
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  openIdentityDialog();
-                  setDrawerOpen(false);
-                }}
-                className="shrink-0 rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/20"
-              >
-                登录 / 激活账号
-              </button>
-            )}
-            {logoutError && (
-              <span className="sr-only" role="alert">
-                {logoutError instanceof Error ? logoutError.message : '退出失败'}
-              </span>
-            )}
-          </div>
-        )}
-
-        <nav className="flex flex-col gap-1">
-          <a
-            href="/?marketing=1"
-            className="rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-cyan-100"
-          >
-            产品首页
-          </a>
-          <DrawerItem
-            onClick={() => {
-              openMcpGuide();
-              setDrawerOpen(false);
-            }}
-          >
-            Agent 接入教程
-          </DrawerItem>
-          <DrawerItem
-            onClick={() => {
-              replayPublicGuide();
-              setDrawerOpen(false);
-            }}
-          >
-            查看引导
-          </DrawerItem>
-          <DrawerItem
-            active={view === 'public'}
-            onClick={() => {
-              setView('public');
-              onNavigateView('public');
-              setSelectedNodeId(null);
-              setCompletion(null);
-              setMobileView('list');
-              setDrawerOpen(false);
-            }}
-          >
-            公共书库
-          </DrawerItem>
-          <DrawerItem
-            active={view === 'personal'}
-            onClick={() => {
-              showPersonalLibrary();
-              setMobileView('list');
-              setDrawerOpen(false);
-            }}
-          >
-            我的地图
-          </DrawerItem>
-          <DrawerItem active={view === 'learning'} onClick={() => onNavigateView('learning')}>学习聊天</DrawerItem>
-          {session?.account.isAdmin && (
-            <DrawerItem
-              active={view === 'admin'}
-              onClick={() => {
-                setView('admin');
-                setDrawerOpen(false);
-              }}
-            >
-              管理面板
-            </DrawerItem>
-          )}
-          <DrawerItem onClick={onNavigateTavern}>独立酒馆</DrawerItem>
-          <DrawerItem onClick={onNavigateWallet}>额度</DrawerItem>
-          <DrawerItem onClick={onNavigateModels}>模型价格</DrawerItem>
-        </nav>
-
-        {session && (
-          <div className="mt-4 flex flex-col gap-1 border-t border-slate-800 pt-4">
-            <DrawerItem
-              onClick={() => {
-                setAnnouncementsOpen(true);
-                setDrawerOpen(false);
-              }}
-            >
-              公告
-            </DrawerItem>
-            <DrawerItem
-              onClick={() => {
-                setFeedbackOpen(true);
-                setDrawerOpen(false);
-              }}
-            >
-              意见反馈
-            </DrawerItem>
-          </div>
-        )}
-      </MobileDrawer>
-
-      {announcementsOpen && session && (
-        <AnnouncementsDialog onClose={() => setAnnouncementsOpen(false)} />
-      )}
-      {feedbackOpen && session && (
-        <FeedbackDialog onClose={() => setFeedbackOpen(false)} />
-      )}
-
       {mcpGuideOpen && (
         <McpGuideDialog
           initialSectionId={mcpGuideInitialSection}
@@ -1685,6 +1485,7 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
       )}
       {noteNodeId && selectedLibraryEntryId && session && snapshot && (
         <NodeNoteDialog
+          accountId={session.account.playerId}
           libraryEntryId={selectedLibraryEntryId}
           nodeId={noteNodeId}
           nodeTitle={snapshot.nodes.find(node=>node.id===noteNodeId)?.title??'节点'}
@@ -1692,14 +1493,6 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
           onClose={()=>setNoteNodeId(null)}
         />
       )}
-
-      <LogoutConfirmDialog
-        open={logoutConfirmOpen}
-        pending={logoutPending}
-        error={logoutError ? readableError(logoutError) : null}
-        onCancel={() => setLogoutConfirmOpen(false)}
-        onConfirm={() => void confirmLogout()}
-      />
 
       <TreeLibraryActionDialog
         action={treeActionTarget?.action ?? null}
@@ -1751,31 +1544,6 @@ function writeGenerationSessionId(sessionId: string | null) {
   );
 }
 
-function ViewButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-current={active ? 'page' : undefined}
-      onClick={onClick}
-      className={`rounded-lg px-3 py-1.5 font-semibold transition ${
-        active
-          ? 'bg-cyan-300 text-slate-950'
-          : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 function LayoutButton({
   active,
   disabled,
@@ -1801,30 +1569,6 @@ function LayoutButton({
           ? 'bg-cyan-300 text-slate-950'
           : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
       } disabled:cursor-not-allowed disabled:opacity-40`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function DrawerItem({
-  active,
-  onClick,
-  children,
-}: {
-  active?: boolean;
-  onClick: () => void;
-  children: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
-        active
-          ? 'bg-cyan-300 text-slate-950'
-          : 'text-slate-300 hover:bg-slate-900 hover:text-white'
-      }`}
     >
       {children}
     </button>
@@ -2041,7 +1785,7 @@ function SidebarMessage({ children }: { children: string }) {
 function MutationError({ error }: { error: Error }) {
   return (
     <p role="alert" className="mt-3 text-xs leading-5 text-rose-300">
-      {error.message}
+      {describePublicError(error)}
     </p>
   );
 }
@@ -2101,7 +1845,7 @@ function EntryLoading() {
 }
 
 function readableError(error: unknown): string {
-  return error instanceof Error ? error.message : '技能树服务暂时不可用，请稍后重试。';
+  return describePublicError(error);
 }
 
 function readStagedNodeReference(): { id: string; title: string } | undefined {

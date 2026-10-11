@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchPersonalTree, setNodeCompletion, setNodeProgress } from '../tree-library/treeLibraryClient';
 import SkillTreeCanvas from '../skill-tree/SkillTreeCanvas';
 import NodeDetailPanel from '../skill-tree/NodeDetailPanel';
+import TreeRestoreControl from '../tree-library/TreeRestoreControl';
 import NodeNoteDialog from '../node-notes/NodeNoteDialog';
 import { snapshotFromGraph } from '../skill-tree/snapshotFromGraph';
 import { buttonClass, ErrorNotice } from '../tavern/TavernUi';
@@ -35,6 +36,7 @@ export default function LearningMapPanel({ accountId, libraryEntryId, csrfToken,
       <p className="truncate text-sm font-semibold">{snapshot?.tree.title ?? '学习地图'}</p>
       <button type="button" className={buttonClass} onClick={onClose}>收起地图</button>
     </div>
+    <TreeRestoreControl key={`${accountId}.${libraryEntryId}`} accountId={accountId} libraryEntryId={libraryEntryId} csrfToken={csrfToken} onRestored={() => setNoteNodeId(null)} />
     {tree.isPending && <p role="status" className="p-6 text-sm text-slate-400">正在读取地图…</p>}
     <ErrorNotice error={tree.error} onRetry={() => void tree.refetch()} />
     {snapshot && <div className="relative min-h-0 flex-1"><SkillTreeCanvas snapshot={snapshot} displayMode="personal" layoutMode="relationship"
@@ -53,7 +55,7 @@ export default function LearningMapPanel({ accountId, libraryEntryId, csrfToken,
           onSetProgress={(nodeId, percent) => progress.mutate({ nodeId, percent })} />
       </section>}
     </div>}
-    {noteNodeId && <NodeNoteDialog libraryEntryId={libraryEntryId} nodeId={noteNodeId}
+    {noteNodeId && <NodeNoteDialog accountId={accountId} libraryEntryId={libraryEntryId} nodeId={noteNodeId}
       nodeTitle={snapshot?.nodes.find(node => node.id === noteNodeId)?.title ?? '节点'} csrfToken={csrfToken} onClose={() => setNoteNodeId(null)} />}
   </>;
 }

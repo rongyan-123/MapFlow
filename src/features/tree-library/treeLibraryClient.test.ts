@@ -1,3 +1,4 @@
+import { publicHttpErrorMessage } from '../../lib/publicErrors';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   TreeLibraryApiError,
@@ -232,7 +233,7 @@ describe('treeLibraryClient', () => {
     expect(error).toMatchObject({
       status,
       code,
-      message: '安全错误信息',
+      message: publicHttpErrorMessage(code, status),
       traceId: `trace-${status}`,
     });
   });

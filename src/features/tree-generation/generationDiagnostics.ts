@@ -1,3 +1,4 @@
+import { describePublicError } from '../../lib/publicErrors';
 import type {
   TreeGenerationApiError,
   TreeGenerationErrorDetails,
@@ -152,7 +153,7 @@ export function createGenerationDiagnostic({
 
 export function readableGenerationError(error: unknown): string | null {
   if (!isTreeGenerationApiError(error)) {
-    return error instanceof Error ? error.message : null;
+    return error ? describePublicError(error) : null;
   }
   const detailedMessage = readableGenerationValidationError(error);
   if (detailedMessage) return detailedMessage;

@@ -1,3 +1,5 @@
+import { publicHttpErrorMessage } from '../../lib/publicErrors';
+import { PublicUiError } from '../../lib/publicErrors';
 import type {
   IdentityCapabilities,
   IdentitySession,
@@ -10,7 +12,7 @@ const JSON_HEADERS = {
   'Content-Type': 'application/json',
 } as const;
 
-export class IdentityApiError extends Error {
+export class IdentityApiError extends PublicUiError {
   readonly status: number;
   readonly code: string;
   readonly traceId?: string;
@@ -186,7 +188,7 @@ async function parseError(response: Response): Promise<IdentityApiError> {
       return new IdentityApiError(
         response.status,
         body.error.code,
-        body.error.message,
+        publicHttpErrorMessage(body.error.code, response.status),
         typeof body.error.traceId === 'string' ? body.error.traceId : undefined,
       );
     }

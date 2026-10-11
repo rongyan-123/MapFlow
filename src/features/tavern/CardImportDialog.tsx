@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { PublicUiError } from '../../lib/publicErrors';
 import { readCardImport } from './cardImport';
 import { importCharacter } from './tavernClient';
 import { downloadOfficialCard, fetchOfficialCards, type OfficialCard } from './officialCards';
@@ -80,7 +81,7 @@ export default function CardImportDialog({ csrfToken, onImported, onClose }: {
       downloadController.current?.abort(); downloadController.current = null; setDownloadingId(null);
       setReading(false);
       setPreview(null);
-      setError(new Error('一次只能导入一张角色卡，请只拖入一个 PNG 或 JSON 文件。'));
+      setError(new PublicUiError('一次只能导入一张角色卡，请只拖入一个 PNG 或 JSON 文件。'));
       return;
     }
     void choose(files[0]);

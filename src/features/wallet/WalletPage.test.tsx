@@ -116,7 +116,7 @@ it('keeps request id on failed creation retry and prevents duplicate clicks', as
   fireEvent.click(screen.getByRole('button', { name: /创建充值申请|创建中/ }));
   expect(api.createTopup).toHaveBeenCalledTimes(1);
   rejectFirst(new Error('网络错误'));
-  expect(await screen.findByText('网络错误')).toBeInTheDocument();
+  expect(await screen.findByText('请求暂时失败，请稍后重试。')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '创建充值申请' }));
   await waitFor(() => expect(api.createTopup).toHaveBeenCalledTimes(2));
   expect(api.createTopup.mock.calls[0][0].requestId).toBe(api.createTopup.mock.calls[1][0].requestId);
@@ -125,7 +125,7 @@ it('keeps request id on failed creation retry and prevents duplicate clicks', as
 it('reports wallet request errors with retry', async () => {
   api.readWallet.mockRejectedValueOnce(new Error('服务不可用'));
   mount();
-  expect(await screen.findByText('服务不可用')).toBeInTheDocument();
+  expect(await screen.findByText('请求暂时失败，请稍后重试。')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '重试读取额度' }));
   expect(await screen.findByText("0.1 额度")).toBeInTheDocument();
 });
@@ -139,7 +139,7 @@ it('refreshes a pending order after external approval without navigation and hid
   mount();
   await screen.findByText(/待核实/);
   await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
-  expect(await screen.findByText('刷新失败')).toBeInTheDocument();
+  expect(await screen.findByText('请求暂时失败，请稍后重试。')).toBeInTheDocument();
   expect(screen.queryByText('0.1 额度')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '重试读取额度' }));
   expect(await screen.findByText('1.1 额度')).toBeInTheDocument();
@@ -195,7 +195,7 @@ it('retries failed declaration and blocks repeated clicks during the pending req
   fireEvent.click(screen.getByRole('button', { name: '我已付款' }));
   expect(api.declarePaid).toHaveBeenCalledTimes(1);
   rejectFirst(new Error('声明失败'));
-  expect(await screen.findByText('声明失败')).toBeInTheDocument();
+  expect(await screen.findByText('请求暂时失败，请稍后重试。')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '我已付款' }));
   await waitFor(() => expect(api.declarePaid).toHaveBeenCalledTimes(2));
   expect(api.declareUnpaid).not.toHaveBeenCalled();

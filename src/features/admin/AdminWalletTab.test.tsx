@@ -114,7 +114,7 @@ it('clears file selection so the same QR image can be retried after an error', a
   const file = new File(['png'], 'pay.png', { type: 'image/png' });
   const picker = screen.getByLabelText('替换微信收款码');
   await user.upload(picker, file);
-  expect(await screen.findByText('图片无效')).toBeInTheDocument();
+  expect(await screen.findByText('图片无效，请重新选择 PNG 或 JPEG 图片。')).toBeInTheDocument();
   expect(picker).toHaveValue('');
   await user.upload(picker, file);
   await waitFor(() => expect(writes('/payment-channels/wechat')).toHaveLength(2));
@@ -164,7 +164,7 @@ it('selects a concrete user and retries a signed adjustment with the same reques
   expect(payload('/adjust').requestId).toMatch(/^[0-9a-f-]{36}$/);
   expect(writes('/adjust')[0][0]).toBe('/api/admin/wallet/accounts/account-a/adjust');
   await act(async () => failFirst(respond({ error: { code: 'wallet.network_unavailable', message: '连接中断，请重试' } }, 503)));
-  expect(await within(dialog).findByText('连接中断，请重试')).toBeInTheDocument();
+  expect(await within(dialog).findByText('服务器网络异常，请稍后重试。')).toBeInTheDocument();
   expect(within(dialog).getByLabelText('管理员登录密码')).toHaveValue('');
   fireEvent.change(within(dialog).getByLabelText('管理员登录密码'), { target: { value: 'second-password' } });
   fireEvent.click(within(dialog).getByRole('button', { name: '扣减 2 额度' }));

@@ -1,3 +1,4 @@
+import { publicHttpErrorMessage } from '../../lib/publicErrors';
 import { IdentityApiError } from '../identity/identityClient';
 
 export interface Announcement {
@@ -83,7 +84,7 @@ async function parseError(response: Response): Promise<IdentityApiError> {
       return new IdentityApiError(
         response.status,
         body.error.code,
-        body.error.message,
+        publicHttpErrorMessage(body.error.code, response.status),
         typeof body.error.traceId === 'string' ? body.error.traceId : undefined,
       );
     }

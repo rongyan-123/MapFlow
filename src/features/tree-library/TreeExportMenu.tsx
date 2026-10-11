@@ -1,3 +1,4 @@
+import { describePublicError } from '../../lib/publicErrors';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { PersonalTreeDetail } from './types';
@@ -60,7 +61,7 @@ export default function TreeExportMenu({
       setLoadedDetail(nextDetail);
       setOpen(true);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : '读取技能树详情失败。');
+      setLoadError(describePublicError(error));
     } finally {
       setLoading(false);
     }

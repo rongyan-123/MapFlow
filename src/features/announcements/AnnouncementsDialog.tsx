@@ -1,3 +1,4 @@
+import { describePublicError } from '../../lib/publicErrors';
 import { useQuery } from '@tanstack/react-query';
 import { useIdentity } from '../identity/IdentityContext';
 import { getAnnouncements } from './announcementsClient';
@@ -46,7 +47,7 @@ export default function AnnouncementsDialog({ onClose }: { onClose: () => void }
             <p className="py-8 text-center text-sm text-slate-500">正在读取公告…</p>
           ) : query.isError ? (
             <p role="alert" className="py-8 text-center text-sm text-rose-300">
-              {query.error.message}
+              {describePublicError(query.error)}
             </p>
           ) : query.data?.items.length === 0 ? (
             <p className="py-8 text-center text-sm text-slate-500">暂无公告。</p>

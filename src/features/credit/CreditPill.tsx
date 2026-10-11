@@ -1,3 +1,4 @@
+import { describePublicError } from '../../lib/publicErrors';
 import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useIdentity } from '../identity/IdentityContext';
@@ -45,7 +46,7 @@ export default function CreditPill({ credit, onSignedIn }: CreditPillProps) {
       {notice && <p className="absolute right-0 top-full z-40 mt-1 whitespace-nowrap rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-emerald-300">{notice}</p>}
       {signin.error && (
         <p role="alert" className="absolute right-0 top-full z-40 mt-1 whitespace-nowrap rounded-lg border border-rose-700 bg-slate-900 px-3 py-1.5 text-xs text-rose-300">
-          {signin.error.message}
+          {describePublicError(signin.error)}
         </p>
       )}
     </div>

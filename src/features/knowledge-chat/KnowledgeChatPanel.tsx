@@ -1,3 +1,4 @@
+import { describePublicError } from '../../lib/publicErrors';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   fetchKnowledgeChatHistory,
@@ -268,11 +269,10 @@ export default function KnowledgeChatPanel({
 function ChatErrorNotice({ error }: { error: KnowledgeChatApiError | string }) {
   return (
     <div role="alert" className="mx-4 mb-2 rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-xs leading-5 text-rose-200">
-      <p>{error instanceof Error ? error.message : error}</p>
-      {error instanceof KnowledgeChatApiError && (
+      <p>{describePublicError(error)}</p>
+      {error instanceof KnowledgeChatApiError && error.traceId && (
         <p className="mt-1 text-[10px] text-rose-200/70">
-          错误代码：{error.code}
-          {error.traceId ? ` · 诊断编号：${error.traceId}` : ''}
+          诊断编号：{error.traceId}
         </p>
       )}
     </div>

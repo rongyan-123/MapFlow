@@ -65,11 +65,11 @@ it('reads account search and signed ledger pages and authenticates adjustment an
 });
 it('sends raw multipart data for QR replacement and relays server error details', async () => {
   const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ channel: 'wechat', label: '微信', qrCodeId: 'qr-2', imageUrl: '/api/wallet/qrcodes/qr-2' })))
-    .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'wallet.storage_unavailable', message: '存储不可用' } }), { status: 503 }));
+    .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'wallet.storage_unavailable', message: '额度服务暂时不可用，请稍后重试。' } }), { status: 503 }));
   vi.stubGlobal('fetch', fetchMock);
   const file = new File(['image'], 'wechat.png', { type: 'image/png' });
   await uploadChannel('wechat', file, 'csrf');
   expect(fetchMock.mock.calls[0][1].body.get('file')).toBe(file);
   expect(fetchMock.mock.calls[0][1].headers['Content-Type']).toBeUndefined();
-  await expect(readWallet()).rejects.toMatchObject({ status: 503, code: 'wallet.storage_unavailable', message: '存储不可用' });
+  await expect(readWallet()).rejects.toMatchObject({ status: 503, code: 'wallet.storage_unavailable', message: '额度服务暂时不可用，请稍后重试。' });
 });

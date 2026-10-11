@@ -314,7 +314,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         </div>
         </section>,
       }]} />}
-    <nav aria-label="学习工作区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-1.5 text-xs sm:py-2">
+    <nav aria-label="学习区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-1.5 text-xs sm:py-2">
       <button type="button" aria-expanded={canvas.open} aria-controls={`tavern-canvas-${detail.conversation.conversationId}`} disabled={canvas.saving}
         className={`${buttonClass} ${canvas.open ? 'border-cyan-500 text-cyan-200' : ''}`} onClick={() => canvas.open ? canvas.setOpen(false) : void openTeachingCanvas()}>
         <span aria-hidden="true" className="mr-1.5">▧</span>{canvas.open ? '收起画布' : canvas.document ? '展开画布' : '绘图讲解'}</button>

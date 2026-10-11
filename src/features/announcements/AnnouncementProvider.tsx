@@ -1,3 +1,4 @@
+import { describePublicError } from '../../lib/publicErrors';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIdentity } from '../identity/IdentityContext';
@@ -89,7 +90,7 @@ export function AnnouncementProvider({ children }: { children: ReactNode }) {
           remaining={unreadIds.length}
           pending={mutationPending}
           bulkPending={markAllRead.isPending}
-          error={markAllRead.error instanceof Error ? markAllRead.error.message : null}
+          error={markAllRead.error ? describePublicError(markAllRead.error) : null}
           onDismiss={handleDismiss}
           onDismissAll={handleDismissAll}
           onClose={handleClose}

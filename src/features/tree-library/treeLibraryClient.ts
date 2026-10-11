@@ -1,3 +1,5 @@
+import { publicHttpErrorMessage } from '../../lib/publicErrors';
+import { PublicUiError } from '../../lib/publicErrors';
 import type {
   AddedTree,
   NodeProgress,
@@ -27,7 +29,7 @@ const JSON_GET: RequestInit = {
   headers: { Accept: 'application/json' },
 };
 
-export class TreeLibraryApiError extends Error {
+export class TreeLibraryApiError extends PublicUiError {
   readonly status: number;
   readonly code: string;
   readonly traceId?: string;
@@ -261,7 +263,7 @@ async function parseError(response: Response): Promise<TreeLibraryApiError> {
       return new TreeLibraryApiError(
         response.status,
         body.error.code,
-        body.error.message,
+        publicHttpErrorMessage(body.error.code, response.status),
         typeof body.error.traceId === 'string' ? body.error.traceId : undefined,
       );
     }

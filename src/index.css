@@ -188,7 +188,7 @@ select {
   position: fixed;
   top: 50%;
   left: 0;
-  z-index: 10000;
+  z-index: 40;
   width: 8rem;
   pointer-events: none;
   opacity: 0;

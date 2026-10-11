@@ -6,6 +6,7 @@ import ModelReferencePrices, { ReferencePriceNote } from '../wallet/ModelReferen
 import type { TavernModelSelection } from './types';
 import { fetchPlatformModels, testModelConnection } from './tavernClient';
 import { inputClass } from './TavernUi';
+import { describePublicError } from '../../lib/publicErrors';
 
 export default function ModelAccessPanel({ modelSelection, onModelSelectionChange, accountId, onNavigateWallet, csrfToken }: {
   modelSelection: TavernModelSelection;
@@ -38,14 +39,14 @@ export default function ModelAccessPanel({ modelSelection, onModelSelectionChang
       const result = await testModelConnection(draft.apiKey.trim(), draft.baseUrl.trim(), csrfToken, controller.signal);
       if (!controller.signal.aborted) setConnection(result);
     } catch (failure) {
-      if (!controller.signal.aborted) setConnection({ ok: false, models: [], message: failure instanceof Error ? failure.message : '连接测试失败，请重试。' });
+      if (!controller.signal.aborted) setConnection({ ok: false, models: [], message: describePublicError(failure) });
     } finally { if (!controller.signal.aborted) { setTesting(false); probe.current = null; } }
   }
   function saveDraft() {
     const cleaned = { ...draft, apiKey: draft.apiKey.trim(), baseUrl: draft.baseUrl.trim(), model: draft.model.trim() };
     const message = !cleaned.apiKey ? '尚未填写 API Key。' : !cleaned.baseUrl ? '尚未填写 API URL。'
       : !/^https:\/\/[^\s]+\/v1\/?$/u.test(cleaned.baseUrl) ? 'API URL 必须是公开 HTTPS 地址，并以 /v1 结尾。'
-      : !cleaned.model ? '尚未填写上游模型。' : '';
+      : !cleaned.model ? '尚未填写模型。' : '';
     if (message) { setValidationError(message); return; }
     onModelSelectionChange(cleaned); setSaved(true); setValidationError('');
   }
@@ -73,20 +74,20 @@ export default function ModelAccessPanel({ modelSelection, onModelSelectionChang
         {platformCatalog.isPending ? <p role="status">正在读取平台模型…</p>
           : platformCatalog.error ? <p role="alert">平台模型列表读取失败，请关闭配置后重试。</p>
           : !platformCatalog.data?.enabled || !platformCatalog.data.models.length
-            ? <p role="status">平台模型暂不可用：服务器尚未配置爱你 AI API Key，或尚未开启平台试用，请联系管理员。</p>
+            ? <p role="status">平台模型暂时不可用，请稍后重试或联系管理员。</p>
             : <ModelChoices label="平台模型" value={modelSelection.model} searchable
               options={platformCatalog.data.models.map(model => ({ value: model.id,
                 label: <><span className="block font-medium">{prices.data?.models.find(item => item.id === model.id)?.displayName ?? model.id} · {model.provider}</span>
                   <span className="mt-1 block text-xs text-slate-400">上下文 {model.contextWindow.toLocaleString()} Token</span>
                   <span className="mt-3 block">{prices.isPending ? '价格读取中…' : <ModelReferencePrices compact channels={prices.data?.models.find(item => item.id === model.id)?.pricing?.channels.filter(channel => channel.enabled) ?? []} />}</span></> }))}
               onChange={model => onModelSelectionChange({ ...modelSelection, model, apiKey: '', baseUrl: '', settings: {},billingPolicy:platformCatalog.data?.policyVersion })} />}
-        {platformCatalog.data?.billingMode !== 'wallet' && <p className="text-xs leading-5 text-amber-200">当前为平台模型试用，测试期间暂不扣费，不扣额度或积分。</p>}
+        {platformCatalog.isSuccess && platformCatalog.data.billingMode === 'trial' && <p className="text-xs leading-5 text-amber-200">当前为平台模型试用，测试期间暂不扣费，不扣额度或积分。</p>}
         {platformCatalog.data?.billingMode === 'wallet' && <>
           <ReferencePriceNote />
           <p className="text-xs leading-5 text-slate-500">缓存命中参考价按输入参考价的 10% 换算；若有单独报价，优先显示单独报价。输入包括角色设定和历史消息，输出包括回复和模型返回的思考用量。</p>
         </>}
       </section> : <div className="mt-4 space-y-3 rounded-xl border border-cyan-900 p-3">
-        <p className="text-xs leading-5 text-slate-400">使用自己的上游额度；MapFlow 不扣现金额度或积分。Key 只保存在当前页面内存中，刷新后需重新填写；发送时经本站服务器转发给你填写的上游，请只使用可信服务。</p>
+        <p className="text-xs leading-5 text-slate-400">使用你自己的模型账户，MapFlow 不扣现金额度或积分。Key 只保存在当前页面内存中，刷新后需重新填写；发送内容和 Key 会经本站服务器转发给你选择的模型服务，请只使用可信服务。</p>
         <ModelChoices label="服务预设" value={presetId} options={modelPresets.map(preset => ({ value: preset.id, label: preset.label }))}
           onChange={id => { const preset = modelPresets.find(item => item.id === id)!; setPresetId(id);
             updateDraft({ ...draft, apiKey: '', baseUrl: preset.baseUrl, model: preset.models[0] ?? '' }); }} />
@@ -101,7 +102,7 @@ export default function ModelAccessPanel({ modelSelection, onModelSelectionChang
             placeholder="https://gateway.example.com/v1"
             onChange={event => updateDraft({ ...draft, baseUrl: event.target.value })} />
         </label>
-        <label className="block text-xs text-slate-400">上游模型
+        <label className="block text-xs text-slate-400">模型
           <input className={`${inputClass} mt-1`} value={draft.model}
             maxLength={256} placeholder="模型 ID"
             onChange={event => updateDraft({ ...draft, model: event.target.value }, false)} />

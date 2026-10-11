@@ -1,9 +1,22 @@
+import { publicHttpErrorMessage } from '../../lib/publicErrors';
 import { prepareConversationInput, validateId, validateMessage } from './conversationInput';
 import { TavernApiError, type Character, type CompletedTurn, type Conversation, type ConversationDetail, type ConversationGraph, type CreateConversationInput, type GenerationAction, type GenerationRecord, type GenerationSettings, type GenerationSettingsState, type GraphMutation, type NormalizedCharacterCard, type TavernUserModelAccess, type Turn } from './types';
 import { isRecord, NORMALIZED_CARD_BYTES, RAW_FILE_BYTES, tooLarge, utf8Bytes } from './validation';
 import type {CashCharge,CashQuote} from './types';
 
 const ROOT = '/api/me/tavern';
+export interface MapGenerationDraft { draftId: string; input: import('../tree-generation/types').GenerationInput }
+export async function fetchMapGenerationDraft(conversationId: string, signal?: AbortSignal): Promise<MapGenerationDraft | null> {
+  const value = await getJson(`${ROOT}/conversations/${pathId(conversationId)}/map-generation-draft`, signal);
+  if (!isRecord(value)) throw invalidResponse();
+  if (value.draft === null) return null;
+  const draft = value.draft;
+  if (!isRecord(draft) || typeof draft.draftId !== 'string' || !draft.draftId.trim() || !isRecord(draft.input)) throw invalidResponse();
+  const fields = ['topic','role','goalDescription','learnerContextSummary'] as const;
+  const input = draft.input;
+  if (fields.some(field => typeof input[field] !== 'string' || !input[field].trim() || Array.from(input[field]).length > 10000)) throw invalidResponse();
+  return { draftId: draft.draftId, input: Object.fromEntries(fields.map(field => [field,input[field]])) as unknown as MapGenerationDraft['input'] };
+}
 export async function openManagementConversation(input: import('./types').OpenManagementConversationInput, csrfToken: string, signal?: AbortSignal): Promise<ConversationDetail> {
   const detail = parseConversationDetail(await readJson(await request(`${ROOT}/management-conversations`, {
     method: 'POST', headers: mutationHeaders(csrfToken, true), body: JSON.stringify(input), signal,
@@ -60,7 +73,11 @@ export async function testModelConnection(apiKey: string, baseUrl: string, csrfT
   if (!isRecord(result) || typeof result.ok !== 'boolean' || typeof result.message !== 'string'
     || !Array.isArray(result.models) || result.models.length > 1000
     || !result.models.every(model => typeof model === 'string' && model.trim() && model.length <= 256)) throw invalidResponse();
-  return result as { ok: boolean; models: string[]; message: string };
+  return {
+    ok: result.ok, models: result.models as string[],
+    message: result.ok ? '连接与 Key 验证成功，已获取模型列表；具体模型是否支持聊天以实际调用为准。'
+      : publicHttpErrorMessage(typeof result.code === 'string' ? result.code : 'model_access.connection_failed', 400),
+  };
 }
 export async function fetchPlatformModels(signal?: AbortSignal): Promise<{ enabled: boolean; billingMode: 'trial'|'wallet'; policyVersion?:string; models: { id: string; provider: string; contextWindow: number }[] }> {
   const body = await getJson(`${ROOT}/platform-models`, signal);
@@ -300,28 +317,10 @@ function parseErrorBody(body: unknown, status: number, generationFailed = false)
   if (isRecord(body) && typeof body.code === 'string' && typeof body.message === 'string') {
     const httpStatus = typeof body.httpStatus === 'number' && body.httpStatus >= 400 && body.httpStatus <= 599 ? body.httpStatus : status;
     return new TavernApiError(httpStatus,
-      body.code, publicErrorMessage(body.code, httpStatus, body.message), typeof body.traceId === 'string' ? body.traceId : undefined,
+      body.code, publicHttpErrorMessage(body.code, httpStatus), typeof body.traceId === 'string' ? body.traceId : undefined,
       generationFailed && !['tavern.turn_conflict', 'tavern.persistence_failed'].includes(body.code));
   }
   return new TavernApiError(status, 'tavern.request_failed', '酒馆请求失败，请稍后重试。');
-}
-function publicErrorMessage(code: string, status: number, message: string): string {
-  const safeMessages: Record<string, string> = {
-    'server.network_unavailable': '服务器网络异常，请稍后重试。',
-    'generation.model_access_invalid': '模型配置无效，请重新配置。',
-    'tavern.user_model_authentication': '模型配置不可用，请重新配置后重试。',
-    'tavern.user_model_balance': '服务暂时不可用，请稍后重试。',
-    'tavern.user_model_rate_limited': '请求较多，请稍后重试。',
-    'tavern.user_model_timeout': '响应超时，请稍后重试。',
-    'tavern.user_model_unavailable': '服务暂时不可用，请稍后重试。',
-    'tavern.user_model_output_limit': '本次生成达到输出上限，请调整参数后重试。',
-    'tavern.user_model_invalid_response': '本次生成未完成，请重试。',
-    'tavern.user_model_rejected': '本次生成失败，请稍后重试。',
-    'tavern.platform_trial_rejected': '本次生成失败，请稍后重试。',
-    'tavern.platform_trial_unavailable': '服务暂时不可用，请稍后重试。',
-    'tavern.cash_billing_unavailable': '本次生成未完成，请重试。',
-  };
-  return Object.prototype.hasOwnProperty.call(safeMessages, code) ? safeMessages[code] : status >= 500 ? '请求暂时失败，请稍后重试。' : message;
 }
 async function readJson(response: Response): Promise<unknown> {
   try { return await response.json() as unknown; } catch { throw invalidResponse(); }

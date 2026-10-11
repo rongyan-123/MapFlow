@@ -1,3 +1,4 @@
+import { describePublicError } from '../../lib/publicErrors';
 import { useIdentity } from './IdentityContext';
 
 interface IdentityAccessProps {
@@ -49,7 +50,7 @@ export default function IdentityAccess({ onRequestLogout }: IdentityAccessProps)
         </button>
         {logoutError && (
           <span className="sr-only" role="alert">
-            {logoutError instanceof Error ? logoutError.message : '退出失败'}
+            {describePublicError(logoutError)}
           </span>
         )}
       </div>

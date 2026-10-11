@@ -1,3 +1,4 @@
+import { PublicUiError, publicHttpErrorMessage } from '../../lib/publicErrors';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -112,7 +113,7 @@ it.each([
   async (_status, code, message) => {
     const user = userEvent.setup();
     mockIdentityEndpoints();
-    api.registerIdentity.mockRejectedValueOnce(new Error(message));
+    api.registerIdentity.mockRejectedValueOnce(new PublicUiError(publicHttpErrorMessage(code, _status)));
 
     renderIdentityProbe();
     await screen.findByText('anonymous');
@@ -120,7 +121,7 @@ it.each([
     await user.click(screen.getByRole('button', { name: '注册激活' }));
     await fillValidRegistration(user);
 
-    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(await screen.findByText(publicHttpErrorMessage(code, _status))).toBeInTheDocument();
     expect(api.registerIdentity).toHaveBeenCalledWith(
       expect.objectContaining({ username: 'firstuser' }),
     );
@@ -208,7 +209,7 @@ it('keeps a rejected login anonymous and does not refresh permissions after auth
   await user.type(screen.getByLabelText('用户名'), 'firstuser');
   await user.type(screen.getByLabelText('密码'), 'safe-password-2026');
   await user.click(screen.getAllByRole('button', { name: '登录' })[1]);
-  expect(await screen.findByText('账号或密码不正确。')).toBeInTheDocument();
+  expect(await screen.findByText('请求暂时失败，请稍后重试。')).toBeInTheDocument();
   expect(screen.getByText('anonymous')).toBeInTheDocument();
   expect(api.fetchCurrentSession).toHaveBeenCalledTimes(1);
 });

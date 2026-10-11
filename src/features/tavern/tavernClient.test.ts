@@ -10,6 +10,14 @@ function reply(body: unknown) {
 }
 
 describe('Tavern HTTP contract', () => {
+  it('keeps a feedback number without exposing an unknown client error response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: {
+      code: 'internal.unknown_failure', message: 'revision=42 host=private.example sk-private-secret', traceId: 'safe-request-1',
+    } }), { status: 409 })));
+    await expect(fetchCharacters()).rejects.toMatchObject({
+      code: 'internal.unknown_failure', traceId: 'safe-request-1', message: '请求暂时失败，请稍后重试。',
+    });
+  });
   it('retains role-change anchors and rejects malformed role-change records', async () => {
     const event = { changeId: 'change-1', afterMessageId: 'message-assistant-1', characterId: 'character-2', characterName: '导师', createdAt: turn.createdAt };
     reply({ ...detail, roleChanges: [event] });
