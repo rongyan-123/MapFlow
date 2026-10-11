@@ -26,7 +26,7 @@
 - [x] Role filtering/import hints and scene-aware histories.
 - [x] Management directory/tutorial tools and strict learning/tavern tool isolation.
 - [x] Map/canvas views, viewport/notes recovery and generation ownership during navigation.
-- [ ] Full checks, real request/UI acceptance and independent review.
+- [x] Full checks, real request/UI acceptance and independent review.
 - [ ] Concrete main integration/release candidate; deployment approval.
 
 ## Evidence
@@ -67,3 +67,7 @@ New implementation tests and request measurements are appended as they are run. 
 - Production snapshot migration preflight reproduced one unlinked legacy conversation with an enabled tool preference failing migration 0040. Regression RED → GREEN preserves the preference; server scene authorization still denies private tools. Ruling: a historical preference is not an authorization grant. Migration 0040 is unpublished; migrations already applied in production remain byte-identical.
 - Actual SQLx admin migrations replayed twice against the private production snapshot clone through version 43. Row counts and complete original-field fingerprints matched for all 54 existing tables; 66 conversations classified as 56 learning / 10 tavern, 45 areas, zero invalid scopes. Production source was read-only; clone/dump are temporary acceptance artifacts.
 - Actual 390 × 844 browser acceptance covered the selection layer, active learning chat and independent tavern: menu bottom is within the viewport, logout confirmation opens/cancels, and model-price navigation works. Navigation generated no model turns and no browser errors. Fresh whole-branch review, final backend repeat and release candidate remain outstanding.
+
+- Final review reproduced and fixed: library edits silently changing current stories, response-loss creation after refresh, archived content writes, nonfunctional archive branch browsing and incomplete learning return URLs. Business changes used observed RED → GREEN tests. Follow-up rename/regenerate/continuation checks now preserve each message's actual name and place charges under the correct bubble; unknown legacy authors stay unknown.
+- Final gates: frontend **678 passed / 1 skipped**, types/build green; backend **807 passed / 3 manual opt-in ignored** across 100 suites, fmt/configured Clippy green with baseline warnings; unchanged worker **97 passed / 1 skipped**, types/build green. The whole-branch reviewer closed all findings with no remaining Critical/Important issues. Both repositories fetched origin again; mobile main commits `183a744` and `13e3bba` remain included.
+- Migration 0044 additionally stores new assistant author snapshots without rewriting legacy messages. Actual SQLx migration replay through 44 preserved all original fields/counts across 54 private-clone tables, 66 conversations, 45 areas and zero invalid scopes. Disposable paid fixtures, both private clones and dumps were cleaned. Final candidate packaging is in progress; main and production remain unchanged.

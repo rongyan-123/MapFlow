@@ -32,3 +32,28 @@ it('preserves the outgoing conversation snapshot for messages before the first r
   expect(authors.get('first')).toBe('原来的导师');
   expect(authors.get('second')).toBe('第二位导师');
 });
+
+it('keeps unknown legacy authors unknown when a later switch supplies an outgoing snapshot', () => {
+  const later = { ...change('third', 'role-3', '第三位导师'), previousCharacterId: 'role-1', previousCharacterName: '后来的名称' };
+  const authors = messageAuthors([message('first', 'role-1'), message('second', 'role-2'), message('third', 'role-1')],
+    [change('first', 'role-2', '角色二'), change('second', 'role-1', '后来的名称'), later], 'role-3', '第三位导师');
+  expect(authors.get('first')).toBe('历史角色');
+  expect(authors.get('second')).toBe('角色二');
+  expect(authors.get('third')).toBe('后来的名称');
+});
+
+it('retains old names when the same character receives a new snapshot', () => {
+  const edited = { ...change('first', 'role-1', '新名称'), previousCharacterId: 'role-1', previousCharacterName: '旧名称' };
+  const authors = messageAuthors([message('first', 'role-1'), message('second', 'role-1')], [edited], 'role-1', '新名称');
+  expect(authors.get('first')).toBe('旧名称');
+  expect(authors.get('second')).toBe('新名称');
+});
+
+it('uses each generated message snapshot across regenerated alternatives and sibling branches', () => {
+  const edited = { ...change('original-answer', 'role-1', '新名称'), previousCharacterId: 'role-1', previousCharacterName: '旧名称' };
+  const original = { ...message('original-answer', 'role-1'), characterName: '旧名称' };
+  const regenerated = { ...message('regenerated-answer', 'role-1'), characterName: '新名称' };
+  const siblingReply = { ...message('sibling-reply', 'role-1'), characterName: '新名称' };
+  expect(messageAuthors([regenerated, siblingReply], [edited], 'role-1', '新名称').get(regenerated.messageId)).toBe('新名称');
+  expect(messageAuthors([original], [edited], 'role-1', '新名称').get(original.messageId)).toBe('旧名称');
+});

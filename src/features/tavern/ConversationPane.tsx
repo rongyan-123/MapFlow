@@ -236,7 +236,21 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const activeAlternativeIndex = alternatives.findIndex(item => item.messageId === activeLeaf?.messageId);
 
   async function applyGraphMutation(action: GraphMutation): Promise<boolean> {
-    if (readOnly) return false;
+    if (readOnly) {
+      const branch = action.type === 'select_branch' ? detail.graph.branches.find(item => item.branchId === action.branchId) : undefined;
+      const leaf = branch ? branch.leafMessageId : action.type === 'select_alternative' ? action.assistantMessageId : undefined;
+      if (leaf === undefined) return false;
+      const byId = new Map(detail.graph.messages.map(item => [item.messageId, item]));
+      const reversePath: string[] = [];
+      let current = leaf;
+      while (current) {
+        if (reversePath.includes(current) || !byId.has(current)) return false;
+        reversePath.push(current); current = byId.get(current)!.parentMessageId;
+      }
+      onGraphChanged({ ...detail.graph, activeBranchId: branch?.branchId ?? detail.graph.activeBranchId,
+        activePath: reversePath.reverse() });
+      return true;
+    }
     if (graphBusy) return false;
     try {
       setGraphBusy(true); setError(null);
@@ -269,7 +283,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
             </select>
           </label>
           <label className="block text-xs text-slate-400">分支起点
-            <select aria-label="分支起点" className={`${inputClass} mt-1`} value={selectedBranchAnchorId} disabled={graphBusy || branchAnchors.length === 0}
+            <select aria-label="分支起点" className={`${inputClass} mt-1`} value={selectedBranchAnchorId} disabled={readOnly || graphBusy || branchAnchors.length === 0}
               onChange={event => setBranchAnchorId(event.target.value)}>
               {branchAnchors.map((message, index) => <option key={message.messageId} value={message.messageId}>
                 {index + 1}. {message.content.trim().slice(0, 48) || '空白开场'}
@@ -277,14 +291,14 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
             </select>
           </label>
           <label className="block text-xs text-slate-400">分支或检查点名称
-            <input aria-label="分支或检查点名称" className={`${inputClass} mt-1`} maxLength={200} value={branchName} disabled={graphBusy}
+            <input aria-label="分支或检查点名称" className={`${inputClass} mt-1`} maxLength={200} value={branchName} disabled={readOnly || graphBusy}
               onChange={event => setBranchName(event.target.value)} />
           </label>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={buttonClass} disabled={!selectedBranchAnchorId || graphBusy || !branchName.trim()} onClick={() => {
+            <button type="button" className={buttonClass} disabled={readOnly || !selectedBranchAnchorId || graphBusy || !branchName.trim()} onClick={() => {
               if (selectedBranchAnchorId) void applyGraphMutation({ type: 'create_branch', anchorMessageId: selectedBranchAnchorId, name: branchName.trim(), activate: true });
             }}>创建分支</button>
-            <button type="button" className={buttonClass} disabled={!selectedBranchAnchorId || graphBusy || !branchName.trim()} onClick={() => {
+            <button type="button" className={buttonClass} disabled={readOnly || !selectedBranchAnchorId || graphBusy || !branchName.trim()} onClick={() => {
               if (selectedBranchAnchorId) void applyGraphMutation({ type: 'create_checkpoint', anchorMessageId: selectedBranchAnchorId, name: branchName.trim() });
             }}>保存检查点</button>
           </div>
@@ -292,7 +306,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
             <p className="font-semibold text-slate-300">检查点</p>
             <ul className="mt-1 space-y-1">{detail.graph.branches.filter(branch => branch.kind === 'checkpoint').map(branch => <li key={branch.branchId} className="flex items-center justify-between gap-2">
               <span className="min-w-0 break-words">{branch.name}</span>
-              <button type="button" className={buttonClass} aria-label={`从${branch.name}回档`} disabled={graphBusy || !branch.leafMessageId}
+              <button type="button" className={buttonClass} aria-label={`从${branch.name}回档`} disabled={readOnly || graphBusy || !branch.leafMessageId}
                 onClick={() => { if (branch.leafMessageId) void applyGraphMutation({ type: 'create_branch', anchorMessageId: branch.leafMessageId,
                   name: `${branch.name.slice(0, 190)} · 回档`, activate: true }); }}>回档</button>
             </li>)}</ul>
@@ -307,7 +321,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       <span className="hidden text-slate-500 sm:inline">让 AI 用图形讲解，也可以自己绘制</span>
       {canvas.open && <div className="ml-auto flex gap-2 md:hidden">
         <button type="button" className={buttonClass} onClick={() => canvas.setOpen(false)}>聊天</button>
-        <button type="button" className={buttonClass} onClick={onOpenParameters ?? onOpenModelConfiguration}>模型参数</button>
+        <button type="button" className={buttonClass} disabled={readOnly} onClick={onOpenParameters ?? onOpenModelConfiguration}>模型参数</button>
       </div>}
     </nav>
     <div className="tavern-workspace">
@@ -425,7 +439,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         <div className="flex items-center justify-between gap-2 px-2 pb-0 sm:pb-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
             {isMobile && modelChipButton}
-            <button type="button" className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-300 hover:border-cyan-400" onClick={onOpenParameters ?? onOpenModelConfiguration}>参数</button>
+            <button type="button" className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-300 hover:border-cyan-400 disabled:opacity-30" disabled={readOnly} onClick={onOpenParameters ?? onOpenModelConfiguration}>参数</button>
             <span className={`hidden text-[11px] sm:inline ${inputTooLarge ? 'text-rose-300' : 'text-slate-500'}`}>{inputTooLarge ? '消息过长（上限 8,192 字节）' : 'Enter 发送 · Shift+Enter 换行'}</span>
           </div>
           {busy ? <button key="stop" type="button" className={primaryClass} onClick={stopGeneration}>停止生成</button>
@@ -448,11 +462,17 @@ function Message({ author, text, user = false, character }: { author: string; te
 function mergeContinuationMessages(messages: GraphMessage[], boundaries: Set<string>): GraphMessage[] {
   return messages.reduce<GraphMessage[]>((display, message) => {
     const previous = display[display.length - 1];
-    if (message.role === 'assistant' && message.origin === 'continue' && previous?.role === 'assistant' && !boundaries.has(message.parentMessageId ?? '')) {
+    if (previous && continuesSameAuthor(message, previous, boundaries)) {
       return [...display.slice(0, -1), { ...previous, content: `${previous.content}\n${message.content}` }];
     }
     return [...display, message];
   }, []);
+}
+
+function continuesSameAuthor(message: GraphMessage, parent: GraphMessage, boundaries: Set<string>): boolean {
+  return message.role === 'assistant' && message.origin === 'continue' && parent.role === 'assistant'
+    && !boundaries.has(message.parentMessageId ?? '') && message.characterId === parent.characterId
+    && (message.characterName ?? null) === (parent.characterName ?? null);
 }
 
 function orderAlternatives(messages: GraphMessage[], generations: GenerationRecord[]): GraphMessage[] {
@@ -506,7 +526,7 @@ function readPending(key: string, currentRevision: number): PendingGeneration | 
 function continuationRoot(message:GraphMessage,messages:Map<string,GraphMessage>,boundaries:Set<string>):string {
   let root=message;
   for (let count=0;count<messages.size && root.origin==='continue' && root.parentMessageId;count++) {
-    const parent=messages.get(root.parentMessageId);if (!parent || boundaries.has(parent.messageId)) break;root=parent;
+    const parent=messages.get(root.parentMessageId);if (!parent || !continuesSameAuthor(root,parent,boundaries)) break;root=parent;
   }
   return root.messageId;
 }

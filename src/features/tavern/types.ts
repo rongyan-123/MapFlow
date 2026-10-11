@@ -67,7 +67,7 @@ export interface GenerationRecord {
 export interface GraphMessage {
   messageId: string; parentMessageId: string | null; role: 'user' | 'assistant' | 'system';
   origin: 'opening' | 'user' | 'model' | 'continue' | 'edit' | 'migration';
-  characterId: string | null; content: string;
+  characterId: string | null; characterName?: string | null; content: string;
 }
 export interface GraphBranch {
   branchId: string; name: string; kind: 'main' | 'branch' | 'checkpoint'; leafMessageId: string | null;

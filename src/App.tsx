@@ -99,7 +99,8 @@ const DEMO_PUBLIC_TREES = DEMO_PUBLIC_SNAPSHOTS.map((snapshot) => snapshot.tree)
 export default function App() {
   const queryClient = useQueryClient();
   const { session, sessionPending } = useIdentity();
-  const [currentPath, setCurrentPath] = useState(() => readCurrentPath());
+  const [currentAddress, setCurrentAddress] = useState(() => readCurrentAddress());
+  const currentPath = new URL(currentAddress, window.location.origin).pathname;
   const walletOrigin = useRef('/console');
   const modelsOrigin = useRef('/console');
   const previousSessionPlayerIdRef = useRef<string | null>(null);
@@ -108,7 +109,7 @@ export default function App() {
     new URLSearchParams(window.location.search).get('marketing') === '1';
   const generationRouteRequested = readGenerationSessionId() !== null;
   useEffect(() => {
-    const handlePopState = () => setCurrentPath(readCurrentPath());
+    const handlePopState = () => setCurrentAddress(readCurrentAddress());
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
@@ -129,11 +130,11 @@ export default function App() {
   const navigateToConsole = useCallback((replace = false) => {
     const method = replace ? 'replaceState' : 'pushState';
     window.history[method]({}, '', '/console');
-    setCurrentPath('/console');
+    setCurrentAddress('/console');
   }, []);
   const navigatePage = (path: string) => {
     window.history.pushState({}, '', path);
-    setCurrentPath(new URL(path, window.location.origin).pathname);
+    setCurrentAddress(readCurrentAddress());
   };
   const navigateView = (view: PersistedAppView) => navigatePage(view === 'public' ? '/library' : view === 'personal' ? '/maps' : '/learning');
   const requestedView = currentPath === '/library' ? 'public' : currentPath === '/maps' ? 'personal' : currentPath === '/learning' ? 'learning' : undefined;
@@ -164,17 +165,18 @@ export default function App() {
 
   const navigateToTavern = () => {
     window.history.pushState({}, '', '/tavern');
-    setCurrentPath('/tavern');
+    setCurrentAddress('/tavern');
   };
   const navigateToWallet = () => {
-    if (currentPath !== '/models') walletOrigin.current = currentPath;
+    if (currentPath !== '/models') walletOrigin.current = readCurrentAddress();
+    else if (modelsOrigin.current !== '/wallet') walletOrigin.current = modelsOrigin.current;
     window.history.pushState({}, '', '/wallet');
-    setCurrentPath('/wallet');
+    setCurrentAddress('/wallet');
   };
   const navigateToModels = () => {
-    modelsOrigin.current = currentPath;
+    modelsOrigin.current = readCurrentAddress();
     window.history.pushState({}, '', '/models');
-    setCurrentPath('/models');
+    setCurrentAddress('/models');
   };
   if (currentPath === '/wallet') {
     return <WalletPage key={session.account.playerId} accountId={session.account.playerId} csrfToken={session.csrfToken}
@@ -1733,9 +1735,9 @@ function readGenerationSessionId(): string | null {
   return sessionId;
 }
 
-function readCurrentPath(): string {
+function readCurrentAddress(): string {
   const path = window.location.pathname.replace(/\/+$/, '');
-  return path || '/';
+  return `${path || '/'}${window.location.search}${window.location.hash}`;
 }
 
 function writeGenerationSessionId(sessionId: string | null) {

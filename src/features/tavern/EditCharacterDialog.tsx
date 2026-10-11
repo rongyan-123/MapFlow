@@ -12,6 +12,7 @@ export default function EditCharacterDialog({ character, conversation, renameOnl
   const [draft, setDraft] = useState(character.card);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [applyToConversation, setApplyToConversation] = useState(false);
   const saving = useRef(false);
   async function save() {
     if (saving.current) return;
@@ -21,7 +22,7 @@ export default function EditCharacterDialog({ character, conversation, renameOnl
       if (!card.name || Array.from(card.name).length > 200 || hasControls(card.name)) throw new TavernApiError(400, 'tavern.card_invalid', '角色名称需为 1–200 字，不能包含不可见控制字符。');
       if (utf8Bytes(JSON.stringify(card)) > 512 * 1024) throw new TavernApiError(400, 'tavern.input_too_large', '角色卡内容不能超过 512 KiB。');
       onSaved(await updateCharacter(character.characterId, character.normalizedHash, card, csrfToken,
-        conversation ? { conversationId: conversation.conversation.conversationId, expectedRevision: conversation.graph.revision } : undefined));
+        applyToConversation && conversation ? { conversationId: conversation.conversation.conversationId, expectedRevision: conversation.graph.revision } : undefined));
     } catch (failure) {
       setError(failure instanceof TavernApiError && failure.status === 409
         ? new Error('角色或会话已更新，或正在生成回复。草稿仍在此窗口中，请保留修改内容，稍后重新打开窗口读取最新设定。') : failure);
@@ -34,7 +35,8 @@ export default function EditCharacterDialog({ character, conversation, renameOnl
   }
   return <TavernDialog title={renameOnly ? '重命名角色卡' : '编辑角色卡'} onClose={onClose} busy={busy}>
     <form className="space-y-4" noValidate onSubmit={event => { event.preventDefault(); void save(); }}>
-      <p className="text-sm leading-6 text-slate-400">保存到角色库，供新会话使用。{conversation ? '当前会话从下一轮使用新设定，已有消息和开场白保持。' : '其他已有会话保持原设定。'}编辑角色卡不扣费。</p>
+      <p className="text-sm leading-6 text-slate-400">保存到角色库，供新会话使用。已有会话保持原设定。编辑角色卡不扣费。</p>
+      {conversation && <label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" disabled={busy} checked={applyToConversation} onChange={event => setApplyToConversation(event.target.checked)} />同时应用到当前会话（从下一轮生效）</label>}
       <label className="block text-sm text-slate-300">角色名称<input className={`${inputClass} mt-2`} disabled={busy} value={draft.name} onChange={event => setDraft(previous => ({ ...previous, name: event.target.value }))} /></label>
       {!renameOnly && <>
         {textField('description', '角色设定（提示词）', 6)}

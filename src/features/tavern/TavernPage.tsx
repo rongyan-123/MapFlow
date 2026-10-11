@@ -1,6 +1,7 @@
 import ModelAccessPanel from './ModelAccessPanel';
 import { readModelSelection, saveModelSelection } from './modelPreferences';
 import useRoleNotices from './useRoleNotices';
+import { creationStorageKey, persistPendingCreation, readPendingCreation } from './pendingCreation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import TreeToolsPanel from './TreeToolsPanel';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -78,7 +79,8 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const openingLock = useRef(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [generationBusy, setGenerationBusy] = useState(false);
-  const pendingCreation = useRef<CreateLearningConversationInput | null>(null);
+  const pendingCreationKey = creationStorageKey(accountId, treeContext?.libraryEntryId, management);
+  const pendingCreation = useRef<CreateLearningConversationInput | null>(readPendingCreation(pendingCreationKey));
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [drawer, setDrawer] = useState<'library' | 'details' | 'history' | null>(null);
   const [deleting, setDeleting] = useState<Character | null>(null);
@@ -188,17 +190,20 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
       };
       if (treeContext) {
         const request = pendingCreation.current ?? { ...input, clientRequestId: crypto.randomUUID(), toolsEnabled: previous?.treeToolsEnabled === true };
+        persistPendingCreation(pendingCreationKey, request);
         pendingCreation.current = request;
         const created = await createLearningConversation(treeContext.libraryEntryId, request, session.csrfToken);
         queryClient.setQueryData(['me', accountId, 'tavern', 'conversation', created.conversation.conversationId], created);
         pendingCreation.current = null;
+        persistPendingCreation(pendingCreationKey, null);
         onCreated(created.conversation);
       } else if (management) {
         const request = pendingCreation.current ?? { ...input, clientRequestId: crypto.randomUUID() };
+        persistPendingCreation(pendingCreationKey, request);
         pendingCreation.current = request;
         const created = await openManagementConversation({ ...request, newConversation: true }, session.csrfToken);
         queryClient.setQueryData(['me', accountId, 'tavern', 'conversation', created.conversation.conversationId], created);
-        pendingCreation.current = null; onCreated(created.conversation);
+        pendingCreation.current = null; persistPendingCreation(pendingCreationKey, null); onCreated(created.conversation);
       } else onCreated(await createConversation(input, session.csrfToken));
     } catch (failure) { setOpenError(failure); }
     finally { openingLock.current = false; setCreatingConversation(false); }
@@ -290,7 +295,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   }
   function editCharacter(character: Character, renameOnly: boolean) {
     setDrawer(null);
-    setEditing({ character, renameOnly, ...(currentDetail?.conversation.characterId === character.characterId
+    setEditing({ character, renameOnly, ...(treeContext?.available !== false && currentDetail?.conversation.characterId === character.characterId
       ? { conversation: currentDetail } : {}) });
   }
 
@@ -353,8 +358,8 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     ...(currentDetail && conversationId ? [
       ...(treeContext && treeContext.available !== false ? [{ id: 'tools', label: '技能树与工具', content: <TreeToolsPanel key={`${conversationId}.${currentDetail.graph.revision}`} detail={currentDetail} csrfToken={session.csrfToken}
         accountId={accountId} onUpdated={onProfileUpdated} onConflict={async () => { await conversationQuery.refetch(); }} /> }] : []),
-      { id: 'profile', label: '会话设定', content: <ConversationProfilePanel detail={currentDetail} csrfToken={session.csrfToken}
-        onUpdated={onProfileUpdated} onConflict={async () => { await conversationQuery.refetch(); }} /> },
+      ...(treeContext?.available !== false ? [{ id: 'profile', label: '会话设定', content: <ConversationProfilePanel detail={currentDetail} csrfToken={session.csrfToken}
+        onUpdated={onProfileUpdated} onConflict={async () => { await conversationQuery.refetch(); }} /> }] : []),
     ] : []),
   ];
   // 手机端顶栏整条让位：额度与下面这份菜单原样落进对话工具栏的「操作」菜单，
@@ -429,7 +434,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
           onBusyChange={setGenerationBusy}
           configurationOpen={configurationOpen} configurationSection={configurationSection}
           onOpenModelConfiguration={() => { setConfigurationSection('model'); setConfigurationOpen(true); }}
-          onOpenParameters={() => setParametersOpen(true)}
+          onOpenParameters={treeContext?.available === false ? undefined : () => setParametersOpen(true)}
           onNavigateWallet={onNavigateWallet} onCloseConfiguration={() => setConfigurationOpen(false)} configuration={configurationSections} />
           : <div className="p-6">{conversationQuery.isPending ? <p role="status" className="text-sm text-slate-400">正在恢复会话与历史…</p> : <ErrorNotice error={conversationQuery.error} onRetry={() => void conversationQuery.refetch()} />}</div>
           : <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto p-8 text-center">
@@ -443,7 +448,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
       {drawer === 'library' ? <><IdentityAccess onRequestLogout={() => { setDrawer(null); setLogoutOpen(true); }} /><div className="mt-5">{library}</div></> : drawer==='history'?history:summary}
     </MobileDrawer>
     {configurationOpen && !currentDetail && <TavernDialog title="配置" initialSection={configurationSection} onClose={() => setConfigurationOpen(false)} sections={configurationSections} />}
-    {parametersOpen && currentDetail && conversationId && <TavernDialog title="模型参数" busy={parametersBusy} onClose={() => setParametersOpen(false)}>
+    {parametersOpen && treeContext?.available !== false && currentDetail && conversationId && <TavernDialog title="模型参数" busy={parametersBusy} onClose={() => setParametersOpen(false)}>
       <GenerationSettingsPanel conversationId={conversationId} settings={currentDetail.conversation.generationSettings}
         version={currentDetail.conversation.generationSettingsVersion} csrfToken={session.csrfToken}
         onBusyChange={setParametersBusy} onUpdated={onGenerationSettingsUpdated} onConflict={async () => { await conversationQuery.refetch(); }} />

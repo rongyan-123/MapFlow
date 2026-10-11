@@ -438,6 +438,60 @@ describe('Four canonical pages', () => {
 });
 
 describe('Cash quota and compact navigation', () => {
+  it('preserves the learning origin when moving between model pricing and wallet', async () => {
+    const address = `/learning?area=${personalEntry.library_entry_id}&node=node-1&title=Original`;
+    tavernApi.fetchLearningAreas.mockResolvedValue([{ areaId: personalEntry.library_entry_id, libraryEntryId: personalEntry.library_entry_id,
+      title: 'NestJS', available: true, createdAt: '2026-10-11T00:00:00Z' }]);
+    const user = userEvent.setup(); renderApp(address);
+    await screen.findByText('节点参考：Original');
+    await user.click(screen.getByRole('button', { name: '更多' }));
+    await user.click(screen.getByRole('button', { name: '模型价格' }));
+    await screen.findByRole('heading', { name: '模型价格' });
+    await user.click(await screen.findByRole('button', { name: /现金额度.*前往充值/ }));
+    await screen.findByRole('heading', { name: '我的额度' });
+    await user.click(screen.getByRole('button', { name: '模型价格' }));
+    await screen.findByRole('heading', { name: '模型价格' });
+    await user.click(await screen.findByRole('button', { name: /现金额度.*前往充值/ }));
+    await screen.findByRole('heading', { name: '我的额度' });
+    await user.click(screen.getByRole('button', { name: '返回' }));
+    expect(`${window.location.pathname}${window.location.search}`).toBe(address);
+    expect(await screen.findByText('节点参考：Original')).toBeInTheDocument();
+    expect(tavernApi.generateStream).not.toHaveBeenCalled();
+  });
+
+  it('returns from wallet and model pricing to the full learning area and staged node URL', async () => {
+    const address = `/learning?area=${personalEntry.library_entry_id}&node=node-1&title=${encodeURIComponent('基础节点')}`;
+    tavernApi.fetchLearningAreas.mockResolvedValue([{ areaId: personalEntry.library_entry_id, libraryEntryId: personalEntry.library_entry_id,
+      title: 'NestJS', available: true, createdAt: '2026-10-11T00:00:00Z' }]);
+    const user = userEvent.setup(); renderApp(address);
+    await screen.findByText('节点参考：基础节点');
+    await user.click(await screen.findByRole('button', { name: /现金额度.*前往充值/ }));
+    await screen.findByRole('heading', { name: '我的额度' });
+    await user.click(screen.getByRole('button', { name: '返回' }));
+    expect(`${window.location.pathname}${window.location.search}`).toBe(address);
+    await screen.findByText('节点参考：基础节点');
+    await user.click(screen.getByRole('button', { name: '更多' }));
+    await user.click(screen.getByRole('button', { name: '模型价格' }));
+    await screen.findByRole('heading', { name: '模型价格' });
+    await user.click(screen.getByRole('button', { name: '返回' }));
+    expect(`${window.location.pathname}${window.location.search}`).toBe(address);
+    expect(await screen.findByText('节点参考：基础节点')).toBeInTheDocument();
+    expect(tavernApi.generateStream).not.toHaveBeenCalled();
+  });
+
+  it('updates staged node references on query-only browser navigation', async () => {
+    const address = `/learning?area=${personalEntry.library_entry_id}&node=node-1&title=First`;
+    tavernApi.fetchLearningAreas.mockResolvedValue([{ areaId: personalEntry.library_entry_id, libraryEntryId: personalEntry.library_entry_id,
+      title: 'NestJS', available: true, createdAt: '2026-10-11T00:00:00Z' }]);
+    renderApp(address);
+    await screen.findByText('节点参考：First');
+    window.history.pushState({}, '', `/learning?area=${personalEntry.library_entry_id}&node=node-2&title=Second`);
+    fireEvent.popState(window);
+    expect(await screen.findByText('节点参考：Second')).toBeInTheDocument();
+    expect(screen.queryByText('节点参考：First')).not.toBeInTheDocument();
+    expect(tavernApi.generateStream).not.toHaveBeenCalled();
+  });
+
   it('keeps cash quota available and opens secondary navigation from More without losing tools', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(adminAccount);

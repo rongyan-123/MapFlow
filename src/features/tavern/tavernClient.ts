@@ -398,6 +398,7 @@ function parseGraph(value: unknown): ConversationGraph {
   const messages = value.messages;
   if (!messages.every(message => isRecord(message) && strings(message, ['messageId', 'role', 'origin', 'content']) &&
     nullableString(message.parentMessageId) && nullableString(message.characterId) &&
+    (message.characterName === undefined || nullableString(message.characterName)) &&
     ['user', 'assistant', 'system'].includes(message.role as string) &&
     ['opening', 'user', 'model', 'continue', 'edit', 'migration'].includes(message.origin as string))) throw invalidResponse();
   const branches = value.branches;

@@ -61,7 +61,10 @@ beforeEach(() => {
       const updated = { ...previous, card, normalizedHash: 'e'.repeat(64) };
       characters = characters.map(item => item.characterId === updated.characterId ? updated : item);
       if (selected) savedDetail = { ...savedDetail, character: updated,
-        conversation: { ...savedDetail.conversation, title: card.name }, graph: { ...savedDetail.graph, revision: selected.expectedRevision + 1 } };
+        roleChanges: [...(savedDetail.roleChanges ?? []), { changeId: 'edit-snapshot', afterMessageId: savedDetail.graph.activePath[savedDetail.graph.activePath.length - 1] ?? null,
+          characterId: updated.characterId, characterName: card.name, previousCharacterId: savedDetail.character.characterId,
+          previousCharacterName: savedDetail.character.card.name, createdAt: '2026-10-11T00:00:00Z' }],
+        graph: { ...savedDetail.graph, revision: selected.expectedRevision + 1 } };
       return json({ character: updated, conversation: selected ? savedDetail : null });
     }
     if (url === '/api/me/tavern/characters/character-1' && init?.method === 'DELETE') {
@@ -146,7 +149,7 @@ beforeEach(() => {
         const userMessage = { messageId: `message-user-${input.clientActionId}`, parentMessageId: previousLeaf,
           role: 'user' as const, origin: 'user' as const, characterId: null, content: action.message };
         const assistantMessage = { messageId: `message-assistant-${input.clientActionId}`, parentMessageId: userMessage.messageId,
-          role: 'assistant' as const, origin: 'model' as const, characterId: character.characterId, content: assistantText };
+          role: 'assistant' as const, origin: 'model' as const, characterId: character.characterId, characterName: savedDetail.character.card.name, content: assistantText };
         graph = { ...graph, activePath: [...graph.activePath, userMessage.messageId, assistantMessage.messageId],
           messages: [...graph.messages, userMessage, assistantMessage], branches: graph.branches.map(branch => branch.branchId === graph.activeBranchId
             ? { ...branch, leafMessageId: assistantMessage.messageId } : branch) };
@@ -154,7 +157,7 @@ beforeEach(() => {
         const assistantMessage = { messageId: `message-assistant-${input.clientActionId}`,
           parentMessageId: action.type === 'regenerate' ? target!.parentMessageId : target!.messageId,
           role: 'assistant' as const, origin: action.type === 'continue' ? 'continue' as const : 'model' as const,
-          characterId: character.characterId, content: assistantText };
+          characterId: character.characterId, characterName: savedDetail.character.card.name, content: assistantText };
         graph = setActiveLeaf({ ...graph, messages: [...graph.messages, assistantMessage] }, assistantMessage.messageId);
       }
       graph = { ...graph, revision: graph.revision + 1 };
@@ -451,6 +454,33 @@ it('keeps a role-change marker between the original reply and its continuation',
   expect(log.textContent!.indexOf('已切换角色：耐心导师')).toBeLessThan(log.textContent!.indexOf('新角色接着解释'));
 });
 
+it('keeps continuation authors and receipts separate after a rename on another branch', async () => {
+  restoreConversation();
+  const oldReply = { ...detail.graph.messages[2], characterName: '旅人' };
+  const otherBranchReply = { ...oldReply, messageId: 'other-branch-answer', content: '另一条路线' };
+  const continued = { ...oldReply, messageId: 'new-continuation', parentMessageId: oldReply.messageId,
+    origin: 'continue' as const, characterName: '新导师', content: '新导师接着讲解' };
+  savedDetail = { ...savedDetail, character: { ...character, card: { ...character.card, name: '新导师' } },
+    roleChanges: [{ changeId: 'rename-on-other-branch', afterMessageId: otherBranchReply.messageId,
+      characterId: character.characterId, characterName: '新导师', previousCharacterId: character.characterId,
+      previousCharacterName: '旅人', createdAt: turn.createdAt }],
+    graph: { ...detail.graph, messages: [...detail.graph.messages.slice(0, 2), oldReply, otherBranchReply, continued],
+      activePath: [...detail.graph.activePath, continued.messageId],
+      branches: [{ ...detail.graph.branches[0], leafMessageId: continued.messageId },
+        { branchId: 'other-branch', name: '其他分支', kind: 'branch', leafMessageId: otherBranchReply.messageId }] },
+    cashCharges: [{ generationId: 'continued-generation', outputMessageId: continued.messageId,
+      amountMicros: 12_345, balanceAfterMicros: 787_655, capped: false, createdAt: turn.createdAt }],
+  };
+  renderPage(); const log = await screen.findByRole('log');
+  const oldBubble = within(log).getByText('请用茶。').closest('article')!;
+  const continuedBubble = within(log).getByText('新导师接着讲解').closest('article')!;
+  expect(oldBubble).not.toBe(continuedBubble);
+  expect(within(oldBubble).getByRole('heading')).toHaveTextContent('旅人');
+  expect(within(continuedBubble).getByRole('heading')).toHaveTextContent('新导师');
+  expect(continuedBubble.parentElement).toHaveTextContent('本次费用 ¥0.012345');
+  expect(oldBubble.parentElement).not.toHaveTextContent('本次费用 ¥0.012345');
+});
+
 it('does not allow generation from an archived learning area while keeping its history', async () => {
   savedDetail = { ...savedDetail, conversation: { ...conversation, scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: 'entry-1' } };
   conversations = [savedDetail.conversation]; localStorage.setItem('mapflow.tavern.selection.v1.player-1.tree.entry-1', 'conversation-1');
@@ -459,6 +489,42 @@ it('does not allow generation from an archived learning area while keeping its h
   expect(screen.getByRole('textbox', { name: '消息' })).toBeDisabled();
   expect(screen.getByRole('button', { name: '重新生成' })).toBeDisabled();
   expect(attempts).toHaveLength(0);
+});
+
+it('keeps archived story settings read-only while allowing library-only role edits', async () => {
+  savedDetail = { ...savedDetail, conversation: { ...conversation, scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: null } };
+  conversations = [savedDetail.conversation]; localStorage.setItem('mapflow.tavern.selection.v1.player-1.tree.entry-1', 'conversation-1');
+  const user = userEvent.setup(); renderPage({ libraryEntryId: 'entry-1', title: '归档', available: false });
+  await screen.findByRole('log');
+  await user.click(screen.getByRole('button', { name: '配置' }));
+  const configuration = screen.getByRole('dialog', { name: '配置' });
+  expect(within(configuration).queryByRole('button', { name: '会话设定' })).not.toBeInTheDocument();
+  await user.keyboard('{Escape}');
+  await user.click(screen.getByRole('button', { name: '打开角色列表' }));
+  await user.click(screen.getByRole('button', { name: `角色操作 ${character.card.name}` }));
+  await user.click(screen.getByRole('menuitem', { name: '编辑角色卡' }));
+  expect(screen.queryByRole('checkbox', { name: '同时应用到当前会话（从下一轮生效）' })).not.toBeInTheDocument();
+});
+
+it('browses archived branches and alternatives locally without changing the saved graph', async () => {
+  const alternate = { ...detail.graph.messages[2], messageId: 'alternate-answer', content: '另一个历史回答' };
+  savedDetail = { ...savedDetail, conversation: { ...conversation, scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: null },
+    graph: { ...savedDetail.graph, messages: [...savedDetail.graph.messages, alternate], branches: [...savedDetail.graph.branches,
+      { branchId: 'old-branch', name: '历史分支', kind: 'branch', leafMessageId: alternate.messageId }] } };
+  const originalGraph = structuredClone(savedDetail.graph);
+  conversations = [savedDetail.conversation]; localStorage.setItem('mapflow.tavern.selection.v1.player-1.tree.entry-1', 'conversation-1');
+  const user = userEvent.setup(); renderPage({ libraryEntryId: 'entry-1', title: '归档', available: false });
+  await screen.findByText('请用茶。');
+  await user.click(screen.getByRole('button', { name: '配置' }));
+  await user.click(screen.getByRole('button', { name: '历史与分支' }));
+  await user.selectOptions(screen.getByRole('combobox', { name: '当前分支' }), 'old-branch');
+  await user.keyboard('{Escape}');
+  expect(await screen.findByRole('log')).toHaveTextContent('另一个历史回答');
+  expect(screen.queryByText('请用茶。')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '上一个回复' }));
+  expect(await screen.findByRole('log')).toHaveTextContent('请用茶。');
+  expect(savedDetail.graph).toEqual(originalGraph);
+  expect(fetchMock.mock.calls.some(([url, init]) => url.endsWith('/actions') && init?.method === 'POST')).toBe(false);
 });
 
 it('starts a learning chat with its canvas collapsed even when drawing permission is saved', async () => {
@@ -724,14 +790,69 @@ describe('Tavern page', () => {
       if (url === '/api/me/tavern/conversations/new-story') return json(fresh);
       return normalFetch(url, init);
     });
-    const user = userEvent.setup(); renderPage({ libraryEntryId: 'entry-1', title: '学习树' });
+    const user = userEvent.setup(); const originalPage = renderPage({ libraryEntryId: 'entry-1', title: '学习树' });
     await screen.findByText('请用茶。');
     await user.click(await screen.findByRole('button', { name: '新建会话' }));
+    await screen.findByRole('button', { name: '重试新建会话' });
+    originalPage.unmount();
+    renderPage({ libraryEntryId: 'entry-1', title: '学习树' });
+    await screen.findByText('请用茶。');
+    expect(requests).toHaveLength(1);
     await user.click(await screen.findByRole('button', { name: '重试新建会话' }));
     await waitFor(() => expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1.tree.entry-1')).toBe('new-story'));
     expect(requests[1]).toEqual(requests[0]);
     expect(requests[0].clientRequestId).toEqual(expect.any(String));
     expect(conversations).toHaveLength(2);
+  });
+
+  it('restores a pending management creation after remount without automatically resending it', async () => {
+    savedDetail = { ...savedDetail, conversation: { ...conversation, scene: 'management', libraryEntryId: null, learningAreaId: null } };
+    conversations = [savedDetail.conversation];
+    localStorage.setItem('mapflow.tavern.selection.v1.player-1.management', 'conversation-1');
+    const normalFetch = fetchMock.getMockImplementation()!;
+    const requests: Record<string, unknown>[] = [];
+    const fresh = { ...structuredClone(savedDetail), conversation: { ...savedDetail.conversation, conversationId: 'new-management' } };
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/me/tavern/management-conversations' && init?.method === 'POST') {
+        requests.push(JSON.parse(init.body as string));
+        if (requests.length === 1) { conversations.push(fresh.conversation); throw new Error('响应丢失'); }
+        return json(fresh);
+      }
+      if (url === '/api/me/tavern/conversations/new-management') return json(fresh);
+      return normalFetch(url, init);
+    });
+    const user = userEvent.setup(); const mounted = renderPage(undefined, undefined, true);
+    await screen.findByText('请用茶。');
+    await user.click(screen.getByRole('button', { name: '新建会话' }));
+    await screen.findByRole('button', { name: '重试新建会话' });
+    mounted.unmount(); renderPage(undefined, undefined, true);
+    const retry = await screen.findByRole('button', { name: '重试新建会话' });
+    await waitFor(() => expect(retry).toBeEnabled());
+    expect(requests).toHaveLength(1);
+    await user.click(retry);
+    await waitFor(() => expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1.management')).toBe('new-management'));
+    expect(requests[1]).toEqual(requests[0]);
+    expect(requests[1].newConversation).toBe(true);
+    expect(localStorage.getItem('mapflow.tavern.creation.v1.player-1.management')).toBeNull();
+  });
+
+  it.each(['account', 'area'] as const)('does not restore another %s pending creation', async changed => {
+    savedDetail = { ...savedDetail, conversation: { ...conversation, scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: 'entry-1' } };
+    conversations = [savedDetail.conversation];
+    localStorage.setItem('mapflow.tavern.creation.v1.player-1.learning.entry-1', JSON.stringify({ characterId: 'character-1', userName: '小明', clientRequestId: crypto.randomUUID(), greetingIndex: 0 }));
+    if (changed === 'account') identityAccountId = 'player-2';
+    const area = changed === 'area' ? 'entry-2' : 'entry-1';
+    savedDetail = { ...savedDetail, conversation: { ...savedDetail.conversation, learningAreaId: area, libraryEntryId: area } };
+    conversations = [savedDetail.conversation];
+    localStorage.setItem(`mapflow.tavern.selection.v1.${identityAccountId}.tree.${area}`, 'conversation-1');
+    const normalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => url === `/api/me/learning-areas/${area}/conversations`
+      ? Promise.resolve(json({ conversations })) : normalFetch(url, init));
+    renderPage({ libraryEntryId: area, title: '学习树' });
+    await screen.findByText('请用茶。');
+    expect(screen.queryByRole('button', { name: '重试新建会话' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新建会话' })).toBeEnabled();
+    expect(attempts).toHaveLength(0);
   });
 
   it('releases the collapsed canvas editor and restores its document outside the composer', async () => {
@@ -1117,8 +1238,10 @@ describe('Tavern page', () => {
     await user.click(screen.getByRole('button', { name: '角色操作 旅人' }));
     await user.click(screen.getByRole('menuitem', { name: '编辑角色卡' }));
     const dialog = screen.getByRole('dialog', { name: '编辑角色卡' });
+    await user.click(within(dialog).getByRole('checkbox', { name: '同时应用到当前会话（从下一轮生效）' }));
     expect(within(dialog).getByLabelText('角色设定（提示词）')).toHaveValue(character.card.description);
     fireEvent.change(within(dialog).getByLabelText('角色设定（提示词）'), { target: { value: '你是灯塔守望者，讲述海边的故事。' } });
+    fireEvent.change(within(dialog).getByLabelText('角色名称'), { target: { value: '灯塔守望者' } });
     fireEvent.change(within(dialog).getByLabelText('开场白（用于新会话）'), { target: { value: '新的开场' } });
     await user.click(within(dialog).getByRole('button', { name: '保存修改' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '编辑角色卡' })).not.toBeInTheDocument());
@@ -1128,9 +1251,35 @@ describe('Tavern page', () => {
     expect(current.character.card.description).toBe('你是灯塔守望者，讲述海边的故事。');
     expect(current.graph.messages).toEqual(detail.graph.messages);
     expect(current.graph.revision).toBe(detail.graph.revision + 1);
+    expect(current.conversation.title).toBe(detail.conversation.title);
+    expect(within(screen.getByRole('log')).getAllByRole('heading', { name: character.card.name })).toHaveLength(2);
     expect(current.character.card.lorebook).toEqual(character.card.lorebook);
     const [, request] = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')!;
     expect(JSON.parse(request!.body as string).conversation).toEqual({ conversationId: 'conversation-1', expectedRevision: detail.graph.revision });
+    await configureSelfKey(user);
+    await user.click(screen.getByRole('button', { name: '重新生成' }));
+    await screen.findByText('重新斟茶。');
+    expect(within(screen.getByRole('log')).getAllByRole('heading', { name: '灯塔守望者' })).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: '上一个回复' }));
+    await screen.findByText('请用茶。');
+    expect(within(screen.getByRole('log')).getAllByRole('heading', { name: character.card.name })).toHaveLength(2);
+    expect(within(screen.getByRole('log')).queryByRole('heading', { name: '灯塔守望者' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the current story snapshot when a library edit is saved without explicit application', async () => {
+    restoreConversation(); const user = userEvent.setup(); const { client } = renderPage();
+    await screen.findByText('请用茶。');
+    await user.click(screen.getByRole('button', { name: '角色操作 旅人' }));
+    await user.click(screen.getByRole('menuitem', { name: '重命名' }));
+    const dialog = screen.getByRole('dialog', { name: '重命名角色卡' });
+    fireEvent.change(within(dialog).getByLabelText('角色名称'), { target: { value: '改名后的旅人' } });
+    await user.click(within(dialog).getByRole('button', { name: '保存名称' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '重命名角色卡' })).not.toBeInTheDocument());
+    const [, request] = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')!;
+    expect(JSON.parse(request!.body as string).conversation).toBeUndefined();
+    const current = client.getQueryData<ConversationDetail>(['me', 'player-1', 'tavern', 'conversation', 'conversation-1'])!;
+    expect(current.character.card.name).toBe(character.card.name);
+    expect(current.conversation.title).toBe(detail.conversation.title);
   });
 
   it('cancels card edits without sending an update or changing the library', async () => {
