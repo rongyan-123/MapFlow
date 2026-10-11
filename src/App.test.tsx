@@ -38,7 +38,7 @@ const legacyApi = vi.hoisted(() => ({ fetchLearningTree: vi.fn() }));
 const walletApi = vi.hoisted(() => ({ readWallet: vi.fn(), readModelPricing: vi.fn(), readAdminTopups: vi.fn() }));
 vi.mock('./features/wallet/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('./features/wallet/walletClient')>(), ...walletApi }));
 
-const tavernApi = vi.hoisted(() => ({ fetchCharacters: vi.fn(), fetchConversations: vi.fn(), openTreeConversation: vi.fn(), fetchConversation: vi.fn(),
+const tavernApi = vi.hoisted(() => ({ fetchCharacters: vi.fn(), fetchConversations: vi.fn(), fetchLearningAreaConversations: vi.fn(), openTreeConversation: vi.fn(), fetchConversation: vi.fn(),
   generateStream: vi.fn(),fetchPlatformModels: vi.fn(),requestCashQuote:vi.fn(),resolveTavernToolApproval:vi.fn() }));
 vi.mock('./features/tavern/tavernClient', () => tavernApi);
 
@@ -297,9 +297,11 @@ beforeEach(() => {
   window.localStorage.clear();
   tavernApi.fetchCharacters.mockReset().mockResolvedValue([]);
   tavernApi.fetchConversations.mockReset().mockResolvedValue([]);
+  tavernApi.fetchLearningAreaConversations.mockReset().mockResolvedValue([]);
   tavernApi.openTreeConversation.mockReset().mockImplementation(async (entry: string) => ({ ...tavernDetail,
-    conversation: { ...tavernDetail.conversation, libraryEntryId: entry, treeToolsEnabled: true } }));
-  tavernApi.fetchConversation.mockReset().mockResolvedValue(tavernDetail);
+    conversation: { ...tavernDetail.conversation, scene: 'learning', learningAreaId: entry, libraryEntryId: entry, treeToolsEnabled: true } }));
+  tavernApi.fetchConversation.mockReset().mockResolvedValue({ ...tavernDetail,
+    conversation: { ...tavernDetail.conversation, scene: 'learning', learningAreaId: personalEntry.library_entry_id, libraryEntryId: personalEntry.library_entry_id, treeToolsEnabled: true } });
   tavernApi.fetchPlatformModels.mockReset().mockResolvedValue({ enabled:true,billingMode:'trial',models:[{id:'learning-model',provider:'AnyAI',contextWindow:32768}] });
   tavernApi.requestCashQuote.mockReset(); tavernApi.resolveTavernToolApproval.mockReset();
   tavernApi.generateStream.mockReset().mockImplementation(async (_id:string, clientActionId:string,_revision:number,action:{message:string}) => {

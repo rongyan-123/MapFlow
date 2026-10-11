@@ -22,13 +22,13 @@ import CharacterLibraryItem from './CharacterLibraryItem';
 import ConversationPane from './ConversationPane';
 import ConversationProfilePanel from './ConversationProfilePanel';
 import GenerationSettingsPanel from './GenerationSettingsPanel';
-import { createConversation, deleteCharacter, fetchCharacters, fetchConversation, fetchConversations, fetchPlatformModels, openTreeConversation, switchConversationCharacter, updateTreeConnection } from './tavernClient';
-import type { Character, CompletedTurn, Conversation, ConversationDetail, ConversationGraph, GenerationSettingsState, TavernModelSelection } from './types';
+import { createConversation, createLearningConversation, deleteCharacter, fetchCharacters, fetchConversation, fetchConversations, fetchLearningAreaConversations, fetchPlatformModels, openTreeConversation, switchConversationCharacter } from './tavernClient';
+import type { Character, CompletedTurn, Conversation, ConversationDetail, ConversationGraph, CreateLearningConversationInput, GenerationSettingsState, TavernModelSelection } from './types';
 import { CharacterAvatar, CompatibilityReport, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass } from './TavernUi';
 
 interface TavernPageProps {
   onNavigateConsole: () => void; onNavigateWallet?: () => void; onNavigateModels?: () => void;
-  treeContext?: { libraryEntryId: string; title: string; nodeTitle?: string }; onClose?: () => void; onTreeChanged?: () => void; onShowMap?: () => void;
+  treeContext?: { libraryEntryId: string; title: string; nodeTitle?: string; available?: boolean }; onClose?: () => void; onTreeChanged?: () => void; onShowMap?: () => void;
   // 手机端聊天会隐藏控制台顶栏，原本挂在顶栏上的额度与账号入口改由这里落到对话工具栏的“操作”菜单里。
   mobileHeaderActions?: ReactNode;
 }
@@ -69,7 +69,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const openingLock = useRef(false);
   const [creatingConversation, setCreatingConversation] = useState(false);
   const [generationBusy, setGenerationBusy] = useState(false);
-  const pendingNewConversation = useRef<{ conversation: Conversation; libraryEntryId: string | null; toolsEnabled: boolean } | null>(null);
+  const pendingCreation = useRef<CreateLearningConversationInput | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [drawer, setDrawer] = useState<'library' | 'details' | null>(null);
   const [deleting, setDeleting] = useState<Character | null>(null);
@@ -86,12 +86,25 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     setModelSelection(selection);
   }
   const charactersKey = ['me', accountId, 'tavern', 'characters'] as const;
-  const conversationsKey = ['me', accountId, 'tavern', 'conversations'] as const;
+  const conversationsKey = treeContext
+    ? ['me', accountId, 'learning', treeContext.libraryEntryId, 'conversations'] as const
+    : ['me', accountId, 'tavern', 'conversations'] as const;
   const detailKey = ['me', accountId, 'tavern', 'conversation', conversationId] as const;
   const creditKey = ['me', accountId, 'credit'] as const;
   const characters = useQuery({ queryKey: charactersKey, queryFn: ({ signal }) => fetchCharacters(signal), retry: false });
-  const conversations = useQuery({ queryKey: conversationsKey, queryFn: ({ signal }) => fetchConversations(signal), retry: false });
-  const conversationQuery = useQuery({ queryKey: detailKey, queryFn: ({ signal }) => fetchConversation(conversationId!, signal), enabled: !!conversationId, retry: false });
+  const conversations = useQuery({ queryKey: conversationsKey, queryFn: ({ signal }) => treeContext
+    ? fetchLearningAreaConversations(treeContext.libraryEntryId, signal) : fetchConversations(signal), retry: false });
+  const belongsToCurrentScene = (item: Conversation) => treeContext
+    ? item.scene === 'learning' && item.learningAreaId === treeContext.libraryEntryId
+    : (item.scene === undefined || item.scene === 'tavern') && !item.learningAreaId && !item.libraryEntryId;
+  const scopedConversations = conversations.data?.filter(belongsToCurrentScene);
+  const conversationInScene = scopedConversations?.some(item => item.conversationId === conversationId) === true;
+  const conversationQuery = useQuery({ queryKey: detailKey, queryFn: ({ signal }) => fetchConversation(conversationId!, signal), enabled: !!conversationId && conversationInScene, retry: false });
+  const currentDetail = conversationInScene && conversationQuery.data && belongsToCurrentScene(conversationQuery.data.conversation)
+    ? conversationQuery.data : undefined;
+  useEffect(() => {
+    if (!treeContext && conversationId && conversations.isSuccess && !conversations.isFetching && !conversationInScene) selectConversation(null);
+  }, [conversationId, conversations.isSuccess, conversations.isFetching, conversationInScene]);
   const credit = useQuery({ queryKey: creditKey, queryFn: readCreditSummary, staleTime: 30_000, retry: false });
   const platformCatalog = useQuery({ queryKey: ['me', accountId, 'tavern', 'platform-models'],
     queryFn: ({ signal }) => fetchPlatformModels(signal), enabled: modelSelection.provider === 'platform', retry: false });
@@ -101,15 +114,16 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     : platformCatalog.error ? '平台模型列表读取失败，请打开模型配置重试。'
     : !platformCatalog.data?.enabled || !platformCatalog.data.models.some(model => model.id === modelSelection.model)
       ? '上次选择的平台模型暂不可用，请打开模型配置重新选择。' : undefined;
-  const rememberedTreeStory = conversations.data?.find(item => item.conversationId === rememberedTreeConversation
-    && item.libraryEntryId === treeContext?.libraryEntryId);
+  const rememberedTreeStory = scopedConversations?.find(item => item.conversationId === rememberedTreeConversation
+    && item.learningAreaId === treeContext?.libraryEntryId);
   const treeStory = useQuery({ queryKey: ['me', accountId, 'tavern', 'tree-conversation', treeContext?.libraryEntryId],
     queryFn: ({ signal }) => openTreeConversation(treeContext!.libraryEntryId, session.csrfToken, signal),
-    enabled: !!treeContext && conversations.isSuccess && !conversations.isFetching && !rememberedTreeStory, retry: false });
+    enabled: !!treeContext && treeContext.available !== false && conversations.isSuccess && !conversations.isFetching && !rememberedTreeStory, retry: false });
   useEffect(() => {
     if (!treeContext || !conversations.isSuccess || conversations.isFetching || treeSelectionRestored.current) return;
     treeSelectionRestored.current = true;
-    if (rememberedTreeStory) { treeOpeningApplied.current = true; selectConversation(rememberedTreeStory.conversationId); }
+    const restored = rememberedTreeStory ?? (treeContext.available === false ? scopedConversations?.[0] : undefined);
+    if (restored) { treeOpeningApplied.current = true; selectConversation(restored.conversationId); }
   }, [conversations.isSuccess, conversations.isFetching, rememberedTreeStory]);
   useEffect(() => {
     if (!treeStory.data || !treeContext || rememberedTreeStory || conversations.isFetching || treeStory.isFetching || treeOpeningApplied.current) return;
@@ -119,8 +133,8 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     onCreated(treeStory.data.conversation);
     void characters.refetch();
   }, [treeStory.data, treeStory.isFetching, conversations.isFetching, rememberedTreeStory]);
-  const selectedCharacter = conversationId ? conversationQuery.data?.character : characters.data?.find(item => item.characterId === characterId) ?? characters.data?.[0];
-  const treeReady = !treeContext || conversationQuery.data?.conversation.libraryEntryId === treeContext.libraryEntryId;
+  const selectedCharacter = conversationId ? currentDetail?.character : characters.data?.find(item => item.characterId === characterId) ?? characters.data?.[0];
+  const treeReady = !treeContext || (treeContext.available !== false && currentDetail?.conversation.learningAreaId === treeContext.libraryEntryId);
   const canCreate = treeReady && selectedCharacter && characters.data?.some(item => item.characterId === selectedCharacter.characterId);
   const removing = useMutation({ mutationFn: (id: string) => deleteCharacter(id, session.csrfToken), onSuccess: (_, id) => {
     void queryClient.cancelQueries({ queryKey: charactersKey, exact: true });
@@ -133,34 +147,28 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     setConversationId(id); setDeleting(null); setDrawer(null);
     try {
       if (id) {
-        window.localStorage.setItem(selectionKey, id);
-        if (treeSelectionKey) window.localStorage.setItem(treeSelectionKey, id);
-      } else window.localStorage.removeItem(selectionKey);
+        window.localStorage.setItem(treeSelectionKey ?? selectionKey, id);
+      } else window.localStorage.removeItem(treeSelectionKey ?? selectionKey);
     } catch { /* Server history remains available without local storage. */ }
   }
   async function createNewConversation() {
-    if (openingLock.current || !canCreate || !selectedCharacter || generationBusy || (conversationId && !conversationQuery.data)) return;
+    if (openingLock.current || !canCreate || !selectedCharacter || generationBusy || (conversationId && !currentDetail)) return;
     openingLock.current = true; setCreatingConversation(true); setOpenError(null);
-    const previous = conversationQuery.data?.conversation;
+    const previous = currentDetail?.conversation;
     try {
-      const retry = pendingNewConversation.current;
-      const created = retry?.conversation ?? await createConversation({
+      const input = {
         characterId: selectedCharacter.characterId, userName: previous?.userName ?? session.account.username,
         ...(previous?.persona ? { persona: previous.persona } : {}),
         ...(previous?.vocabulary ? { vocabulary: previous.vocabulary } : {}), greetingIndex: 0,
-      }, session.csrfToken);
-      // Retain the created ID if linking fails so retry cannot create a second story.
-      const libraryEntryId = retry ? retry.libraryEntryId : treeContext?.libraryEntryId ?? previous?.libraryEntryId ?? null;
-      const toolsEnabled = retry ? retry.toolsEnabled : previous?.treeToolsEnabled === true;
-      pendingNewConversation.current = { conversation: created, libraryEntryId, toolsEnabled };
-      if (libraryEntryId) {
-        const recovered = retry ? await fetchConversation(created.conversationId) : null;
-        const linked = recovered?.conversation.libraryEntryId === libraryEntryId && recovered.conversation.treeToolsEnabled === toolsEnabled
-          ? recovered : await updateTreeConnection(created.conversationId, recovered?.graph.revision ?? 0, libraryEntryId, toolsEnabled, session.csrfToken);
-        queryClient.setQueryData(['me', accountId, 'tavern', 'conversation', created.conversationId], linked);
-        onCreated(linked.conversation);
-      } else onCreated(created);
-      pendingNewConversation.current = null;
+      };
+      if (treeContext) {
+        const request = pendingCreation.current ?? { ...input, clientRequestId: crypto.randomUUID(), toolsEnabled: previous?.treeToolsEnabled === true };
+        pendingCreation.current = request;
+        const created = await createLearningConversation(treeContext.libraryEntryId, request, session.csrfToken);
+        queryClient.setQueryData(['me', accountId, 'tavern', 'conversation', created.conversation.conversationId], created);
+        pendingCreation.current = null;
+        onCreated(created.conversation);
+      } else onCreated(await createConversation(input, session.csrfToken));
     } catch (failure) { setOpenError(failure); }
     finally { openingLock.current = false; setCreatingConversation(false); }
   }
@@ -168,17 +176,17 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     if (openingLock.current || !conversations.isSuccess || !treeReady) return;
     setCharacterId(character.characterId);
     setOpenError(null);
-    if ((treeContext || conversationQuery.data?.conversation.libraryEntryId) && conversationId) {
-      if (!conversationQuery.data) return;
+    if ((treeContext || currentDetail?.conversation.libraryEntryId) && conversationId) {
+      if (!currentDetail) return;
       openingLock.current=true; setOpeningCharacter(character.characterId);
       try {
-        const updated=await switchConversationCharacter(conversationId,conversationQuery.data.graph.revision,character.characterId,session.csrfToken);
+        const updated=await switchConversationCharacter(conversationId,currentDetail.graph.revision,character.characterId,session.csrfToken);
         onProfileUpdated(updated); setDrawer(null);
       } catch(failure) { setOpenError(failure); await conversationQuery.refetch(); }
       finally { openingLock.current=false; setOpeningCharacter(null); }
       return;
     }
-    const available = queryClient.getQueryData<Conversation[]>(conversationsKey) ?? [];
+    const available = (queryClient.getQueryData<Conversation[]>(conversationsKey) ?? []).filter(belongsToCurrentScene);
     let remembered: string | null = null;
     try { remembered = window.localStorage.getItem(`${selectionKey}.${character.characterId}`); } catch { /* Optional preference. */ }
     const existing = available.find(item => item.characterId === character.characterId && item.conversationId === (remembered ?? conversationId))
@@ -216,7 +224,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     void queryClient.cancelQueries({ queryKey: charactersKey, exact: true });
     queryClient.setQueryData<Character[]>(charactersKey, previous => [...(previous ?? []), imported]);
     setImportOpen(false); setCreateOpen(false); setCharacterId(imported.characterId);
-    if (treeContext || conversationQuery.data?.conversation.libraryEntryId) void openCharacter(imported);
+    if (treeContext || currentDetail?.conversation.libraryEntryId) void openCharacter(imported);
     else selectConversation(null);
   }
   function onCreated(created: Conversation) {
@@ -256,8 +264,8 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   }
   function editCharacter(character: Character, renameOnly: boolean) {
     setDrawer(null);
-    setEditing({ character, renameOnly, ...(conversationQuery.data?.conversation.characterId === character.characterId
-      ? { conversation: conversationQuery.data } : {}) });
+    setEditing({ character, renameOnly, ...(currentDetail?.conversation.characterId === character.characterId
+      ? { conversation: currentDetail } : {}) });
   }
 
   const library = <div className="space-y-4">
@@ -269,21 +277,21 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     {characters.data?.length === 0 && <p className="text-sm leading-6 text-slate-400">导入一张 PNG 或 JSON 角色卡，开始你的第一个故事。</p>}
     <div className="space-y-2">{characters.data?.map(item => <CharacterLibraryItem key={item.characterId} character={item}
       selected={selectedCharacter?.characterId === item.characterId} opening={openingCharacter === item.characterId}
-      disabled={openingCharacter !== null || creatingConversation || generationBusy || !!pendingNewConversation.current || !treeReady || !conversations.isSuccess} onSelect={() => void openCharacter(item)}
+      disabled={openingCharacter !== null || creatingConversation || generationBusy || !!pendingCreation.current || !treeReady || !conversations.isSuccess} onSelect={() => void openCharacter(item)}
       actionsDisabled={openingCharacter !== null || (!!conversationId && !conversationQuery.isSuccess)}
       onRename={() => editCharacter(item, true)} onEdit={() => editCharacter(item, false)}
       onDelete={() => { setDrawer(null); removing.reset(); setDeleting(item); }} />)}</div>
   </div>;
   const historyCharacterId = selectedCharacter?.characterId
-    ?? conversations.data?.find(item => item.conversationId === conversationId)?.characterId;
+    ?? scopedConversations?.find(item => item.conversationId === conversationId)?.characterId;
   // Without an active character, retain access to archived cards' saved history.
   // While an active conversation loads, never briefly expose other characters.
-  const characterConversations = (conversations.data ?? []).filter(item =>
-    (!treeContext || item.libraryEntryId === treeContext.libraryEntryId) &&
+  const characterConversations = (scopedConversations ?? []).filter(item =>
+    (!treeContext || item.learningAreaId === treeContext.libraryEntryId) &&
     (historyCharacterId ? item.characterId === historyCharacterId : !conversationId));
   const summary = <div className="space-y-4">
     <label className="block text-xs text-slate-400">历史会话
-      <select aria-label="选择会话" className={`${inputClass} mt-2`} value={conversationId ?? ''} disabled={creatingConversation || generationBusy || !!pendingNewConversation.current} onChange={event => {
+      <select aria-label="选择会话" className={`${inputClass} mt-2`} value={conversationId ?? ''} disabled={creatingConversation || generationBusy || !!pendingCreation.current} onChange={event => {
         const selected = characterConversations.find(item => item.conversationId === event.target.value);
         if (selected) {
           try { window.localStorage.setItem(`${selectionKey}.${selected.characterId}`, selected.conversationId); } catch { /* Optional preference. */ }
@@ -306,10 +314,10 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const configurationSections = [
     { id: 'overview', label: '角色与会话', content: summary },
     { id: 'model', label: '模型接入', content: <ModelAccessPanel modelSelection={modelSelection} onModelSelectionChange={changeModelSelection} csrfToken={session.csrfToken} accountId={accountId} onNavigateWallet={onNavigateWallet} /> },
-    ...(conversationQuery.data && conversationId ? [
-      { id: 'tools', label: '技能树与工具', content: <TreeToolsPanel key={`${conversationId}.${conversationQuery.data.graph.revision}`} detail={conversationQuery.data} csrfToken={session.csrfToken}
-        accountId={accountId} onUpdated={onProfileUpdated} onConflict={async () => { await conversationQuery.refetch(); }} /> },
-      { id: 'profile', label: '会话设定', content: <ConversationProfilePanel detail={conversationQuery.data} csrfToken={session.csrfToken}
+    ...(currentDetail && conversationId ? [
+      ...(treeContext && treeContext.available !== false ? [{ id: 'tools', label: '技能树与工具', content: <TreeToolsPanel key={`${conversationId}.${currentDetail.graph.revision}`} detail={currentDetail} csrfToken={session.csrfToken}
+        accountId={accountId} onUpdated={onProfileUpdated} onConflict={async () => { await conversationQuery.refetch(); }} /> }] : []),
+      { id: 'profile', label: '会话设定', content: <ConversationProfilePanel detail={currentDetail} csrfToken={session.csrfToken}
         onUpdated={onProfileUpdated} onConflict={async () => { await conversationQuery.refetch(); }} /> },
     ] : []),
   ];
@@ -341,13 +349,13 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
           <button type="button" className={`${buttonClass} ${treeContext ? '' : 'lg:hidden'}`} aria-label="打开角色列表" onClick={() => setDrawer('library')}>☰</button>
           <div className={`flex ${isMobile ? 'min-w-0' : 'min-w-[100px]'} flex-1 items-center gap-2`}><CharacterAvatar character={selectedCharacter} /><div className="min-w-0"><h2 className="truncate text-sm font-semibold">{selectedCharacter?.card.name ?? '欢迎来到酒馆'}</h2><p className="mt-0.5 truncate text-xs text-slate-500">{treeContext ? treeContext.nodeTitle ?? treeContext.title : conversationId ? '故事正在继续' : '选择角色，开启故事'}</p></div></div>
           {!isMobile && onShowMap && <button type="button" className={`${buttonClass} shrink-0`} onClick={onShowMap}>查看地图</button>}
-          {!isMobile && canCreate && <button type="button" className={`${buttonClass} shrink-0`} disabled={creatingConversation || generationBusy || openingCharacter !== null || !conversations.isSuccess || (!!conversationId && !conversationQuery.data)}
-            onClick={() => void createNewConversation()}>{creatingConversation ? '创建中…' : pendingNewConversation.current ? '重试新建会话' : '新建会话'}</button>}
+          {!isMobile && canCreate && <button type="button" className={`${buttonClass} shrink-0`} disabled={creatingConversation || generationBusy || openingCharacter !== null || !conversations.isSuccess || (!!conversationId && !currentDetail)}
+            onClick={() => void createNewConversation()}>{creatingConversation ? '创建中…' : pendingCreation.current ? '重试新建会话' : '新建会话'}</button>}
           <button type="button" className={`${buttonClass} shrink-0`} onClick={() => { setConfigurationSection('overview'); setConfigurationOpen(true); }}>配置</button>
           {isMobile && <HeaderMoreMenu label="操作" menuLabel={treeContext ? '会话操作' : '操作菜单'}>
             {onShowMap && <button type="button" className={headerMenuItem} onClick={onShowMap}>查看地图</button>}
-            {canCreate && <button type="button" className={headerMenuItem} disabled={creatingConversation || generationBusy || openingCharacter !== null || !conversations.isSuccess || (!!conversationId && !conversationQuery.data)}
-              onClick={() => void createNewConversation()}>{creatingConversation ? '创建中…' : pendingNewConversation.current ? '重试新建会话' : '新建会话'}</button>}
+            {canCreate && <button type="button" className={headerMenuItem} disabled={creatingConversation || generationBusy || openingCharacter !== null || !conversations.isSuccess || (!!conversationId && !currentDetail)}
+              onClick={() => void createNewConversation()}>{creatingConversation ? '创建中…' : pendingCreation.current ? '重试新建会话' : '新建会话'}</button>}
             {mobileHeaderActions}
             {!treeContext && <>
               <div data-keep-menu-open className="border-t border-slate-800 px-2 py-3">{onNavigateWallet && <WalletBalance accountId={accountId} onClick={onNavigateWallet} />}</div>
@@ -355,11 +363,11 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
             </>}
           </HeaderMoreMenu>}
         </div>
-        {treeContext && conversationQuery.data?.conversation.libraryEntryId === treeContext.libraryEntryId && <span className="sr-only">已关联：{treeContext.title}</span>}
+        {treeContext && currentDetail?.conversation.libraryEntryId === treeContext.libraryEntryId && <span className="sr-only">已关联：{treeContext.title}</span>}
         {treeStory.error && <ErrorNotice error={treeStory.error} onRetry={() => void treeStory.refetch()} />}
         {openError != null && <div className="p-4"><ErrorNotice error={openError} /></div>}
         {conversations.error && <div className="p-4"><ErrorNotice error={conversations.error} onRetry={() => void conversations.refetch()} /></div>}
-        {conversationId ? conversationQuery.data ? <ConversationPane key={`${accountId}.${conversationId}`} detail={conversationQuery.data} accountId={accountId} csrfToken={session.csrfToken} onCompleted={onCompleted} onRecovered={onRecovered} onGraphChanged={onGraphChanged}
+        {conversationId ? currentDetail ? <ConversationPane key={`${accountId}.${conversationId}`} detail={currentDetail} accountId={accountId} csrfToken={session.csrfToken} onCompleted={onCompleted} onRecovered={onRecovered} onGraphChanged={onGraphChanged}
           modelSelection={{ ...modelSelection, billingPolicy: platformCatalog.data?.policyVersion }} platformModelError={platformModelError}
           onBusyChange={setGenerationBusy}
           configurationOpen={configurationOpen} configurationSection={configurationSection}
@@ -377,10 +385,10 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
       <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">{drawer === 'library' ? '角色与账号' : '会话详情'}</h2><button type="button" className={buttonClass} onClick={() => setDrawer(null)}>关闭</button></div>
       {drawer === 'library' ? <><IdentityAccess onRequestLogout={() => { setDrawer(null); setLogoutOpen(true); }} /><div className="mt-5">{library}</div></> : summary}
     </MobileDrawer>
-    {configurationOpen && !conversationQuery.data && <TavernDialog title="配置" initialSection={configurationSection} onClose={() => setConfigurationOpen(false)} sections={configurationSections} />}
-    {parametersOpen && conversationQuery.data && conversationId && <TavernDialog title="模型参数" busy={parametersBusy} onClose={() => setParametersOpen(false)}>
-      <GenerationSettingsPanel conversationId={conversationId} settings={conversationQuery.data.conversation.generationSettings}
-        version={conversationQuery.data.conversation.generationSettingsVersion} csrfToken={session.csrfToken}
+    {configurationOpen && !currentDetail && <TavernDialog title="配置" initialSection={configurationSection} onClose={() => setConfigurationOpen(false)} sections={configurationSections} />}
+    {parametersOpen && currentDetail && conversationId && <TavernDialog title="模型参数" busy={parametersBusy} onClose={() => setParametersOpen(false)}>
+      <GenerationSettingsPanel conversationId={conversationId} settings={currentDetail.conversation.generationSettings}
+        version={currentDetail.conversation.generationSettingsVersion} csrfToken={session.csrfToken}
         onBusyChange={setParametersBusy} onUpdated={onGenerationSettingsUpdated} onConflict={async () => { await conversationQuery.refetch(); }} />
     </TavernDialog>}
     {importOpen && <CardImportDialog csrfToken={session.csrfToken} onImported={onImported} onClose={() => setImportOpen(false)} />}

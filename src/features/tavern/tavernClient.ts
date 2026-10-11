@@ -17,7 +17,7 @@ export async function fetchLearningAreaConversations(areaId: string, signal?: Ab
   if (conversations.some(item => item.scene !== 'learning' || item.learningAreaId !== areaId)) throw invalidResponse();
   return conversations;
 }
-export async function createLearningConversation(areaId: string, input: Partial<CreateConversationInput>, csrfToken: string): Promise<ConversationDetail> {
+export async function createLearningConversation(areaId: string, input: import('./types').CreateLearningConversationInput, csrfToken: string): Promise<ConversationDetail> {
   const detail = parseConversationDetail(await readJson(await request(`/api/me/learning-areas/${pathId(areaId)}/conversations`, {
     method: 'POST', headers: mutationHeaders(csrfToken, true), body: JSON.stringify(input),
   })));

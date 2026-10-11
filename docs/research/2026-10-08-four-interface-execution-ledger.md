@@ -21,7 +21,7 @@
 - [x] Approved design reviewed; isolated frontend/backend worktrees verified.
 - [x] Existing Rust/SQLx integration test fixtures and isolated Linux test database located; Windows does not have cargo in PATH.
 - [x] Learning-area API: RED → GREEN and compatibility tests; 777 backend tests and configured checks passed.
-- [ ] Scene/conversation binding and legacy migration.
+- [x] Scene/conversation binding and legacy migration: backend `8d84f06`, 782 full regression tests passed.
 - [ ] Four page navigation and learning-area selection.
 - [ ] Role filtering/import hints and scene-aware histories.
 - [ ] Management directory/tutorial tools and strict learning/tavern tool isolation.
@@ -45,3 +45,7 @@ New implementation tests and request measurements are appended as they are run. 
 - Backend scene RED: new conversation endpoint 404; explicit tavern-to-map binding 200 where forbidden was required; role switch replaced the topic title. Focused GREEN: area histories/default tutor/scenes, permission rejection and anchored role-change records. Five legacy billing fixtures now open actual learning conversations; all 28 paid-service regression tests passed.
 - Ruling: role-change positions are persisted as separate anchored events rather than synthetic system messages. Existing graph leaves must be assistant messages; this preserves history invariants and avoids adding UI metadata to model context.
 - Frontend selection/client checkpoint gate: complete suite 592 passed / 1 skipped, TypeScript and production build passed. Vite retains existing large-chunk warnings; navigation/lazy-render work is still required. No publish action was performed.
+- 2026-10-11 resumed on the user's request. Reviewed main commits `183a744` and `13e3bba` and fetched origin. Both mobile chat-height improvements merged into this isolated frontend branch. Stashed scene work restored; toolbar conflicts resolved by retaining mobile compact menus plus scene-aware creation. Shared main and production were not modified.
+- Scene UI RED → GREEN: three real-client UI tests for area history/atomic creation, archived history without creation and rejecting a remembered ID outside independent scene history. Tool settings RED: old personal map picker remained in learning/tavern. Current task: preserve fixed area toggle and verify superseded linking tests against the atomic protocol.
+- Ruling: new conversation retries require a persisted client request ID and matching request hash. A lost response must restore the same ID, not guess from recent history or create another story. Add this to the area protocol and preserve the current tool opt-out on new chat. Cost: one additive migration and replay tests.
+- Scene-aware UI gate: complete frontend 609 passed / 1 skipped; typecheck and build passed. New RED → GREEN cache tests prevent learning history from flashing in independent tavern, including a mixed old cached catalogue. User mobile commits preserved. Backend creation replay focused GREEN; complete backend gate pending. Continue actual page navigation.

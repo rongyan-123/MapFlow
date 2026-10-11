@@ -78,7 +78,8 @@ beforeEach(() => {
         branches: [{ branchId: 'branch-main-created', name: 'Main', kind: 'main' as const, leafMessageId: opening.messageId }] };
       conversations = [created]; savedDetail = { character, conversation: created, turns: [], generations: [], graph }; return json(created);
     }
-    if (url === '/api/me/tavern/conversations') return json({ conversations });
+    if (url === '/api/me/learning-areas/entry-1/conversations' && init?.method !== 'POST') return json({ conversations: conversations.filter(item => item.learningAreaId === 'entry-1') });
+    if (url === '/api/me/tavern/conversations') return json({ conversations: conversations.filter(item => !item.libraryEntryId) });
     if (url === '/api/me/tavern/conversations/conversation-1/profile' && init?.method === 'PATCH') {
       const { expectedRevision, userName, persona, vocabulary } = JSON.parse(init.body as string);
       if (expectedRevision !== savedDetail.graph.revision) return new Response(JSON.stringify({ error: { code: 'tavern.turn_conflict', message: '会话已变化' } }), { status: 409 });
@@ -278,24 +279,19 @@ describe('Tavern page', () => {
     expect(screen.getByRole('button', { name: /选择模型 · 自填 Key/ })).toBeVisible();
   });
 
-  it.each([true, false])('creates a fresh tree conversation and retains the current tool permission (%s)', async treeToolsEnabled => {
-    const original = { ...structuredClone(detail), conversation: { ...conversation, libraryEntryId: 'entry-1', treeToolsEnabled } };
-    const fresh: ConversationDetail = { ...structuredClone(detail), turns: [], generations: [],
-      conversation: { ...conversation, conversationId: 'new-story', libraryEntryId: null, treeToolsEnabled: false },
+  it.each([true, false])('creates a new area conversation atomically and preserves tool permission (%s)', async treeToolsEnabled => {
+    const original: ConversationDetail = { ...structuredClone(detail), conversation: { ...conversation,
+      scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: 'entry-1', treeToolsEnabled } };
+    const fresh: ConversationDetail = { ...structuredClone(original), turns: [], generations: [],
+      conversation: { ...original.conversation, conversationId: 'new-story' },
       graph: { ...detail.graph, revision: 0, messages: [{ ...detail.graph.messages[0], content: '新的开场' }], activePath: [detail.graph.messages[0].messageId] } };
     conversations = [original.conversation]; savedDetail = original;
     const normalFetch = fetchMock.getMockImplementation()!;
-    let linking: unknown;
+    let creation: unknown;
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/me/tavern/tree-conversations/entry-1') return json(original);
-      if (url === '/api/me/tavern/conversations' && init?.method === 'POST') {
-        conversations = [...conversations, fresh.conversation]; return json(fresh.conversation);
-      }
-      if (url === '/api/me/tavern/conversations/new-story/tree-connection' && init?.method === 'PATCH') {
-        linking = JSON.parse(init.body as string);
-        fresh.conversation = { ...fresh.conversation, libraryEntryId: 'entry-1', treeToolsEnabled };
-        conversations = conversations.map(item => item.conversationId === 'new-story' ? fresh.conversation : item);
-        return json(fresh);
+      if (url === '/api/me/learning-areas/entry-1/conversations' && init?.method === 'POST') {
+        creation = JSON.parse(init.body as string); conversations.push(fresh.conversation); return json(fresh);
       }
       if (url === '/api/me/tavern/conversations/new-story') return json(fresh);
       return normalFetch(url, init);
@@ -304,51 +300,50 @@ describe('Tavern page', () => {
     await screen.findByText('请用茶。');
     await user.click(await screen.findByRole('button', { name: '新建会话' }));
     await screen.findByText('新的开场');
-    expect(linking).toEqual({ expectedRevision: 0, libraryEntryId: 'entry-1', toolsEnabled: treeToolsEnabled });
-    expect(fetchMock.mock.calls.filter(([url, init]) => url === '/api/me/tavern/conversations' && init?.method === 'POST')).toHaveLength(1);
+    expect(creation).toMatchObject({ characterId: character.characterId, toolsEnabled: treeToolsEnabled, clientRequestId: expect.any(String) });
+    expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/tree-connection'))).toBe(false);
     await user.click(screen.getByRole('button', { name: '配置' }));
     await user.selectOptions(screen.getByLabelText('选择会话'), conversation.conversationId);
     await user.keyboard('{Escape}');
     expect(screen.getByRole('log', { name: '对话消息' })).toHaveTextContent('请用茶。');
     embedded.unmount();
-    const reopenedTree = renderPage({ libraryEntryId: 'entry-1', title: '学习树' });
+    const reopened = renderPage({ libraryEntryId: 'entry-1', title: '学习树' });
     await screen.findByText('请用茶。');
     expect(fetchMock.mock.calls.filter(([url]) => url === '/api/me/tavern/tree-conversations/entry-1')).toHaveLength(1);
-    reopenedTree.unmount(); renderPage();
-    await screen.findByText('请用茶。');
-    expect(screen.getByLabelText('消息')).toBeVisible();
+    expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBeNull();
+    reopened.unmount();
   });
 
-  it('prevents duplicate new stories while creation is in flight and can retry a failed tree link', async () => {
-    savedDetail = { ...savedDetail, conversation: { ...conversation, libraryEntryId: 'entry-1', treeToolsEnabled: false } };
+  it('prevents duplicate new area requests while busy and retries the same payload after failure', async () => {
+    savedDetail = { ...savedDetail, conversation: { ...conversation, scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: 'entry-1', treeToolsEnabled: false } };
     conversations = [savedDetail.conversation];
-    const fresh: ConversationDetail = { ...structuredClone(savedDetail), conversation: { ...conversation, conversationId: 'new-story', libraryEntryId: null, treeToolsEnabled: false }, graph: { ...detail.graph, revision: 0 } };
+    const fresh: ConversationDetail = { ...structuredClone(savedDetail), conversation: { ...savedDetail.conversation, conversationId: 'new-story' }, graph: { ...detail.graph, revision: 0 } };
     const normalFetch = fetchMock.getMockImplementation()!;
-    let releaseCreate: (response: Response) => void = () => {};
+    let releaseCreate!: (response: Response) => void;
     const creating = new Promise<Response>(resolve => { releaseCreate = resolve; });
-    let linkAttempts = 0;
+    const bodies: unknown[] = [];
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/me/tavern/tree-conversations/entry-1') return json(savedDetail);
-      if (url === '/api/me/tavern/conversations' && init?.method === 'POST') return creating;
-      if (url === '/api/me/tavern/conversations/new-story') return json(fresh);
-      if (url === '/api/me/tavern/conversations/new-story/tree-connection') {
-        if (++linkAttempts === 1) return new Response(JSON.stringify({ error: { code: 'tavern.unavailable', message: '关联失败，请重试' } }), { status: 503 });
-        fresh.conversation = { ...fresh.conversation, libraryEntryId: 'entry-1' }; return json(fresh);
+      if (url === '/api/me/learning-areas/entry-1/conversations' && init?.method === 'POST') {
+        bodies.push(JSON.parse(init.body as string));
+        if (bodies.length === 1) return creating;
+        conversations.push(fresh.conversation); return json(fresh);
       }
+      if (url === '/api/me/tavern/conversations/new-story') return json(fresh);
       return normalFetch(url, init);
     });
     const user = userEvent.setup(); renderPage({ libraryEntryId: 'entry-1', title: '学习树' });
     await screen.findByText('请用茶。');
     await waitFor(() => expect(screen.getByRole('button', { name: '新建会话' })).toBeEnabled());
-    const newStory = screen.getByRole('button', { name: '新建会话' });
-    fireEvent.click(newStory); fireEvent.click(newStory);
-    await waitFor(() => expect(fetchMock.mock.calls.filter(([url, init]) => url === '/api/me/tavern/conversations' && init?.method === 'POST')).toHaveLength(1));
+    const button = screen.getByRole('button', { name: '新建会话' });
+    fireEvent.click(button); fireEvent.click(button);
+    await waitFor(() => expect(bodies).toHaveLength(1));
     expect(screen.getByRole('button', { name: '创建中…' })).toBeDisabled();
-    await act(async () => releaseCreate(json(fresh.conversation)));
-    await screen.findByText('请求暂时失败，请稍后重试。');
+    await act(async () => releaseCreate(new Response(JSON.stringify({ error: { code: 'tavern.unavailable' } }), { status: 503 })));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/失败.*重试/);
     await user.click(screen.getByRole('button', { name: '重试新建会话' }));
-    await waitFor(() => expect(window.localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe('new-story'));
-    expect(fetchMock.mock.calls.filter(([url, init]) => url === '/api/me/tavern/conversations' && init?.method === 'POST')).toHaveLength(1);
+    await waitFor(() => expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1.tree.entry-1')).toBe('new-story'));
+    expect(bodies).toHaveLength(2); expect(bodies[1]).toEqual(bodies[0]);
   });
 
   it('opens the model parameters directly, saves a slider value, and uses the saved settings on the next reply', async () => {
@@ -374,30 +369,30 @@ describe('Tavern page', () => {
     expect(screen.queryByRole('button', { name: '生成参数' })).not.toBeInTheDocument();
   });
 
-  it('recovers a new story when the server linked it but its response was lost', async () => {
-    savedDetail = { ...savedDetail, conversation: { ...conversation, libraryEntryId: 'entry-1', treeToolsEnabled: false } };
+  it('recovers a committed area conversation after a lost response with the same creation key', async () => {
+    savedDetail = { ...savedDetail, conversation: { ...conversation, scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: 'entry-1', treeToolsEnabled: false } };
     conversations = [savedDetail.conversation];
-    const fresh: ConversationDetail = { ...structuredClone(savedDetail), conversation: { ...conversation, conversationId: 'new-story', libraryEntryId: null, treeToolsEnabled: false }, graph: { ...detail.graph, revision: 0 } };
+    const fresh = { ...structuredClone(savedDetail), conversation: { ...savedDetail.conversation, conversationId: 'new-story' } };
     const normalFetch = fetchMock.getMockImplementation()!;
-    let linkAttempts = 0;
+    const requests: Record<string, unknown>[] = [];
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/me/tavern/tree-conversations/entry-1') return json(savedDetail);
-      if (url === '/api/me/tavern/conversations' && init?.method === 'POST') return json(fresh.conversation);
-      if (url === '/api/me/tavern/conversations/new-story') return json(fresh);
-      if (url === '/api/me/tavern/conversations/new-story/tree-connection') {
-        if (++linkAttempts > 1) return new Response(JSON.stringify({ error: { code: 'tavern.turn_conflict', message: '版本已经改变' } }), { status: 409 });
-        fresh.conversation = { ...fresh.conversation, libraryEntryId: 'entry-1' }; fresh.graph.revision = 1;
-        throw new Error('连接中断');
+      if (url === '/api/me/learning-areas/entry-1/conversations' && init?.method === 'POST') {
+        requests.push(JSON.parse(init.body as string));
+        if (requests.length === 1) { conversations.push(fresh.conversation); throw new Error('连接中断'); }
+        return json(fresh);
       }
+      if (url === '/api/me/tavern/conversations/new-story') return json(fresh);
       return normalFetch(url, init);
     });
     const user = userEvent.setup(); renderPage({ libraryEntryId: 'entry-1', title: '学习树' });
     await screen.findByText('请用茶。');
-    await waitFor(() => expect(screen.getByRole('button', { name: '新建会话' })).toBeEnabled());
-    await user.click(screen.getByRole('button', { name: '新建会话' }));
+    await user.click(await screen.findByRole('button', { name: '新建会话' }));
     await user.click(await screen.findByRole('button', { name: '重试新建会话' }));
-    await waitFor(() => expect(window.localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe('new-story'));
-    expect(linkAttempts).toBe(1);
+    await waitFor(() => expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1.tree.entry-1')).toBe('new-story'));
+    expect(requests[1]).toEqual(requests[0]);
+    expect(requests[0].clientRequestId).toEqual(expect.any(String));
+    expect(conversations).toHaveLength(2);
   });
 
   it('keeps the editor mounted when collapsing the canvas and offers its toggle outside the composer', async () => {
@@ -418,13 +413,13 @@ describe('Tavern page', () => {
   });
 
   it('restores the chosen tree story even when a cached tree opener contains another story', async () => {
-    const chosen = { ...structuredClone(detail), conversation: { ...conversation, libraryEntryId: 'entry-1', treeToolsEnabled: true } };
+    const chosen: ConversationDetail = { ...structuredClone(detail), conversation: { ...conversation, scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: 'entry-1', treeToolsEnabled: true } };
     const latest = { ...structuredClone(chosen), conversation: { ...chosen.conversation, conversationId: 'latest-story', title: '最近创建的会话' },
       graph: { ...chosen.graph, messages: chosen.graph.messages.map(message => ({ ...message, content: '不应自动跳到这段聊天' })) } };
     savedDetail = chosen; conversations = [chosen.conversation, latest.conversation];
     window.localStorage.setItem('mapflow.tavern.selection.v1.player-1.tree.entry-1', conversation.conversationId);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-    client.setQueryData(['me', 'player-1', 'tavern', 'conversations'], conversations);
+    client.setQueryData(['me', 'player-1', 'learning', 'entry-1', 'conversations'], conversations);
     client.setQueryData(['me', 'player-1', 'tavern', 'tree-conversation', 'entry-1'], latest);
     client.setQueryData(['me', 'player-1', 'tavern', 'conversation', conversation.conversationId], chosen);
     client.setQueryData(['me', 'player-1', 'tavern', 'conversation', 'latest-story'], latest);
@@ -437,7 +432,7 @@ describe('Tavern page', () => {
 
   it('ignores a remembered story that belongs to a different tree', async () => {
     const other = { ...conversation, libraryEntryId: 'entry-2', treeToolsEnabled: true };
-    savedDetail = { ...savedDetail, conversation: { ...conversation, conversationId: 'current-tree-story', libraryEntryId: 'entry-1', treeToolsEnabled: false } };
+    savedDetail = { ...savedDetail, conversation: { ...conversation, conversationId: 'current-tree-story', scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: 'entry-1', treeToolsEnabled: false } };
     conversations = [other, savedDetail.conversation];
     window.localStorage.setItem('mapflow.tavern.selection.v1.player-1.tree.entry-1', conversation.conversationId);
     const normalFetch = fetchMock.getMockImplementation()!;
@@ -667,7 +662,7 @@ describe('Tavern page', () => {
   it('switches the tutor inside a connected story while retaining its existing messages', async () => {
     const tutor={...character,characterId:'tutor-2',card:{...character.card,name:'耐心导师'}};
     characters=[character,tutor];
-    savedDetail={...savedDetail,conversation:{...savedDetail.conversation,libraryEntryId:'entry-1',treeToolsEnabled:true}};
+    savedDetail={...savedDetail,conversation:{...savedDetail.conversation,scene:'learning',learningAreaId:'entry-1',libraryEntryId:'entry-1',treeToolsEnabled:true}};
     const normalFetch=fetchMock.getMockImplementation()!;
     let switched: unknown;
     fetchMock.mockImplementation(async (url:string,init?:RequestInit)=>{
@@ -708,8 +703,8 @@ describe('Tavern page', () => {
     confirm.mockRestore();
   });
   it('shows only the connected tree stories when selecting history in the learning panel', async () => {
-    savedDetail={...savedDetail,conversation:{...savedDetail.conversation,libraryEntryId:'entry-1',treeToolsEnabled:true}};
-    conversations=[savedDetail.conversation,{...savedDetail.conversation,conversationId:'other-tree-story',libraryEntryId:'entry-2',title:'另一棵树的故事'}];
+    savedDetail={...savedDetail,conversation:{...savedDetail.conversation,scene:'learning',learningAreaId:'entry-1',libraryEntryId:'entry-1',treeToolsEnabled:true}};
+    conversations=[savedDetail.conversation,{...savedDetail.conversation,conversationId:'other-tree-story',learningAreaId:'entry-2',libraryEntryId:'entry-2',title:'另一棵树的故事'}];
     const normalFetch=fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation(async (url:string,init?:RequestInit)=>url==='/api/me/tavern/tree-conversations/entry-1'?json(savedDetail):normalFetch(url,init));
     const user=userEvent.setup();renderPage({libraryEntryId:'entry-1',title:'Python 学习'});
@@ -717,11 +712,11 @@ describe('Tavern page', () => {
     await user.click(screen.getByRole('button',{name:'配置'}));
     expect(screen.queryByRole('option',{name:/另一棵树的故事/})).not.toBeInTheDocument();
   });
-  it('restores the same server conversation in the tree panel and independent tavern', async () => {
+  it('restores the area conversation without exposing it in independent tavern history', async () => {
     const normalFetch = fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === '/api/me/tavern/tree-conversations/entry-1') {
-        savedDetail = { ...savedDetail, conversation: { ...savedDetail.conversation, libraryEntryId: 'entry-1', treeToolsEnabled: true } };
+        savedDetail = { ...savedDetail, conversation: { ...savedDetail.conversation, scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: 'entry-1', treeToolsEnabled: true } };
         conversations = [savedDetail.conversation]; return json(savedDetail);
       }
       return normalFetch(url, init);
@@ -729,13 +724,14 @@ describe('Tavern page', () => {
     const embedded = renderPage({ libraryEntryId: 'entry-1', title: 'Python 学习' });
     await screen.findByText('已关联：Python 学习');
     expect(screen.getByRole('textbox', { name: '消息' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '返回学习控制台' })).not.toBeInTheDocument();
-    expect(window.localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe(conversation.conversationId);
-    embedded.unmount();
-    renderPage();
-    await screen.findByRole('textbox', { name: '消息' });
-    expect(fetchMock.mock.calls.some(([url]) => url === '/api/me/tavern/conversations/conversation-1')).toBe(true);
+    expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBeNull();
+    expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1.tree.entry-1')).toBe(conversation.conversationId);
+    embedded.unmount(); renderPage();
+    await screen.findByText(/与旅人相遇/);
+    expect(screen.queryByText('请用茶。')).not.toBeInTheDocument();
+    expect(attempts).toHaveLength(0);
   });
+
   it('renames a library card from its own action menu without opening a new story', async () => {
     const user = userEvent.setup(); renderPage();
     await user.click(await screen.findByRole('button', { name: '角色操作 旅人' }));

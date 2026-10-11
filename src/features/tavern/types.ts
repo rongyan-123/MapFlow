@@ -24,6 +24,9 @@ export interface CreateConversationInput {
   characterId: string; userName: string; persona?: string;
   vocabulary?: VocabularyEntry[]; greetingIndex?: number;
 }
+export type CreateLearningConversationInput = Partial<CreateConversationInput> & {
+  clientRequestId?: string; toolsEnabled?: boolean;
+};
 export interface GenerationSettings {
   temperature?: number; maxOutputTokens: number | null; stopSequences: string[];
 }
