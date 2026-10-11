@@ -8,6 +8,7 @@ import {
   IdentityProvider,
   SESSION_QUERY_KEY,
 } from './features/identity/IdentityContext';
+let savedLearningChat: typeof tavernDetail;
 
 const identityApi = vi.hoisted(() => ({
   fetchCapabilities: vi.fn(),
@@ -38,7 +39,7 @@ const legacyApi = vi.hoisted(() => ({ fetchLearningTree: vi.fn() }));
 const walletApi = vi.hoisted(() => ({ readWallet: vi.fn(), readModelPricing: vi.fn(), readAdminTopups: vi.fn() }));
 vi.mock('./features/wallet/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('./features/wallet/walletClient')>(), ...walletApi }));
 
-const tavernApi = vi.hoisted(() => ({ fetchCharacters: vi.fn(), fetchConversations: vi.fn(), fetchLearningAreaConversations: vi.fn(), openTreeConversation: vi.fn(), fetchConversation: vi.fn(),
+const tavernApi = vi.hoisted(() => ({ fetchCharacters: vi.fn(), fetchConversations: vi.fn(), fetchLearningAreas: vi.fn(), createLearningArea: vi.fn(), fetchLearningAreaConversations: vi.fn(), openTreeConversation: vi.fn(), fetchConversation: vi.fn(),
   generateStream: vi.fn(),fetchPlatformModels: vi.fn(),requestCashQuote:vi.fn(),resolveTavernToolApproval:vi.fn() }));
 vi.mock('./features/tavern/tavernClient', () => tavernApi);
 
@@ -298,15 +299,21 @@ beforeEach(() => {
   tavernApi.fetchCharacters.mockReset().mockResolvedValue([]);
   tavernApi.fetchConversations.mockReset().mockResolvedValue([]);
   tavernApi.fetchLearningAreaConversations.mockReset().mockResolvedValue([]);
-  tavernApi.openTreeConversation.mockReset().mockImplementation(async (entry: string) => ({ ...tavernDetail,
-    conversation: { ...tavernDetail.conversation, scene: 'learning', learningAreaId: entry, libraryEntryId: entry, treeToolsEnabled: true } }));
-  tavernApi.fetchConversation.mockReset().mockResolvedValue({ ...tavernDetail,
-    conversation: { ...tavernDetail.conversation, scene: 'learning', learningAreaId: personalEntry.library_entry_id, libraryEntryId: personalEntry.library_entry_id, treeToolsEnabled: true } });
+  savedLearningChat = structuredClone(tavernDetail);
+  tavernApi.fetchLearningAreas.mockReset().mockResolvedValue([]);
+  tavernApi.createLearningArea.mockReset().mockImplementation(async (entry: string) => ({ areaId: entry, libraryEntryId: entry,
+    title: personalEntry.tree.title, available: true, createdAt: '2026-10-11T00:00:00Z' }));
+  tavernApi.openTreeConversation.mockReset().mockImplementation(async (entry: string) => ({ ...savedLearningChat,
+    conversation: { ...savedLearningChat.conversation, scene: 'learning', learningAreaId: entry, libraryEntryId: entry, treeToolsEnabled: true } }));
+  tavernApi.fetchConversation.mockReset().mockImplementation(async () => ({ ...savedLearningChat,
+    conversation: { ...savedLearningChat.conversation, scene: 'learning', learningAreaId: personalEntry.library_entry_id, libraryEntryId: personalEntry.library_entry_id, treeToolsEnabled: true } }));
   tavernApi.fetchPlatformModels.mockReset().mockResolvedValue({ enabled:true,billingMode:'trial',models:[{id:'learning-model',provider:'AnyAI',contextWindow:32768}] });
   tavernApi.requestCashQuote.mockReset(); tavernApi.resolveTavernToolApproval.mockReset();
   tavernApi.generateStream.mockReset().mockImplementation(async (_id:string, clientActionId:string,_revision:number,action:{message:string}) => {
     const user={messageId:'chat-user',parentMessageId:'message-assistant-1',role:'user' as const,origin:'user' as const,characterId:null,content:action.message};
     const assistant={messageId:'chat-answer',parentMessageId:user.messageId,role:'assistant' as const,origin:'model' as const,characterId:tavernCharacter.characterId,content:'测试回答'};
+    savedLearningChat = { ...savedLearningChat, graph: { ...tavernDetail.graph, revision: 2,
+      messages: [...tavernDetail.graph.messages, user, assistant], activePath: [...tavernDetail.graph.activePath, user.messageId, assistant.messageId] } };
     return { turn:{turnId:'chat-turn',clientTurnId:clientActionId,userMessage:action.message,assistantMessage:'测试回答',usage:{inputTokens:1,outputTokens:1,cacheHitInputTokens:0,cacheMissInputTokens:0},chargedCreditUnits:0,createdAt:'2026-10-07T00:00:00Z'},
       graph:{...tavernDetail.graph,revision:2,messages:[...tavernDetail.graph.messages,user,assistant],activePath:[...tavernDetail.graph.activePath,user.messageId,assistant.messageId]},creditBalance:10,chargedCredits:0,idempotencyHit:false };
   });
@@ -316,6 +323,74 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+});
+
+describe('Four canonical pages', () => {
+  it('restores the learning page through the legacy console entry', async () => {
+    localStorage.setItem(`mapflow.console.state.v1.${authenticated.account.playerId}`, JSON.stringify({
+      version: 1, view: 'learning', selectedPublicTreeId: null, selectedLibraryEntryId: null,
+      selectedNodeId: null, layoutMode: 'relationship', mobileView: 'list', chatOpen: false,
+    }));
+    renderApp('/console');
+    expect(await screen.findByRole('region', { name: '学习区选择' })).toBeInTheDocument();
+    expect(treeApi.fetchPersonalTree).not.toHaveBeenCalled();
+  });
+  it('keeps canonical navigation consistent after returning from administration', async () => {
+    identityApi.fetchCurrentSession.mockResolvedValue(adminAccount);
+    const user = userEvent.setup(); renderApp('/learning');
+    await screen.findByRole('region', { name: '学习区选择' });
+    await user.click(screen.getByRole('button', { name: '更多' }));
+    await user.click(screen.getByRole('button', { name: '管理面板' }));
+    await screen.findByRole('heading', { name: '管理面板' });
+    await user.click(screen.getByRole('button', { name: '返回' }));
+    expect(window.location.pathname).toBe('/maps');
+    expect(await screen.findByRole('button', { name: '我的地图' })).toHaveAttribute('aria-current', 'page');
+  });
+  it('opens the learning selection page without reading full maps or starting a conversation', async () => {
+    renderApp('/learning');
+    expect(await screen.findByRole('region', { name: '学习区选择' })).toBeInTheDocument();
+    expect(treeApi.fetchPersonalTree).not.toHaveBeenCalled();
+    expect(treeApi.fetchPublicTree).not.toHaveBeenCalled();
+    expect(tavernApi.openTreeConversation).not.toHaveBeenCalled();
+    expect(tavernApi.generateStream).not.toHaveBeenCalled();
+  });
+  it('opens maps as a dedicated page and offers all four destinations', async () => {
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    const user = userEvent.setup(); renderApp('/maps');
+    expect(await screen.findByRole('button', { name: '查看 NestJS 完整学习树' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '我的地图' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: '公共书库' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '学习聊天' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '独立酒馆' })).toBeInTheDocument();
+    expect(tavernApi.openTreeConversation).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: '学习聊天' }));
+    expect(window.location.pathname).toBe('/learning');
+    expect(await screen.findByRole('region', { name: '学习区选择' })).toBeInTheDocument();
+  });
+  it('keeps public search and filters on the canonical library page', async () => {
+    renderApp('/library');
+    expect(await screen.findByRole('textbox', { name: '搜索公共地图' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '来源' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '公共书库' })).toHaveAttribute('aria-current', 'page');
+    expect(tavernApi.openTreeConversation).not.toHaveBeenCalled();
+  });
+  it('joins the selected node area before navigation and never sends its staged question', async () => {
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    tavernApi.fetchLearningAreas.mockResolvedValue([{ areaId: personalEntry.library_entry_id,
+      libraryEntryId: personalEntry.library_entry_id, title: personalEntry.tree.title, available: true, createdAt: '2026-10-11T00:00:00Z' }]);
+    const user = userEvent.setup(); renderApp('/maps');
+    await user.click(await screen.findByRole('button', { name: '查看节点 基础节点' }));
+    await user.click(screen.getByRole('button', { name: '进入学习区，向 AI 提问' }));
+    await waitFor(() => expect(tavernApi.createLearningArea).toHaveBeenCalledWith(personalEntry.library_entry_id, authenticated.csrfToken));
+    expect(window.location.pathname).toBe('/learning');
+    expect(await screen.findByRole('navigation', { name: '当前学习区' })).toHaveTextContent('NestJS');
+    expect(await screen.findByText('节点参考：基础节点')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('');
+    expect(tavernApi.generateStream).not.toHaveBeenCalled();
+    expect(chatApi.sendKnowledgeChatMessageStream).not.toHaveBeenCalled();
+  });
 });
 
 describe('Cash quota and compact navigation', () => {
@@ -761,7 +836,7 @@ describe('MapFlow tree library', () => {
       screen.getByRole('button', { name: '重新读取公共树库' }),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
     expect((await screen.findAllByText('NestJS 完整学习树')).length).toBeGreaterThan(0);
   });
 
@@ -864,7 +939,7 @@ describe('MapFlow tree library', () => {
       ),
     );
     expect(await screen.findByText('总进度 0%')).toBeInTheDocument();
-    expect(screen.getByText('我的学习')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: '我的地图' })).toHaveAttribute('aria-current', 'page');
 
     await user.click(screen.getByRole('button', { name: '标记为已完成' }));
     await waitFor(() =>
@@ -959,7 +1034,7 @@ describe('MapFlow tree library', () => {
     renderApp();
 
     expect(await screen.findByText('MF-7K3P-9D2Q-X8CW')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
 
     expect(
       await screen.findByText('从公共树池加入一棵技能树后，就可以从零记录进度。'),
@@ -978,7 +1053,7 @@ describe('MapFlow tree library', () => {
     renderApp();
 
     expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
     expect(await screen.findByText('0/2 已完成')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '更多' }));
@@ -1000,7 +1075,7 @@ describe('MapFlow tree library', () => {
     await user.click(loginButtons[loginButtons.length - 1]);
 
     expect(await screen.findByText(secondAccount.account.playerId)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
 
     expect(
       await screen.findByText('从公共树池加入一棵技能树后，就可以从零记录进度。'),
@@ -1022,7 +1097,7 @@ describe('MapFlow tree library', () => {
     expect(
       screen.queryByRole('button', { name: '生成新技能树' }),
     ).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
     await user.click(screen.getByRole('button', { name: '生成新技能树' }));
     expect(screen.getByRole('dialog', { name: 'mock tree generator' })).toBeInTheDocument();
 
@@ -1073,7 +1148,7 @@ describe('MapFlow tree library', () => {
     renderApp();
 
     expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
 
     const button = await screen.findByRole('button', { name: '生成新技能树' });
     expect(button).toBeDisabled();
@@ -1089,7 +1164,7 @@ describe('MapFlow tree library', () => {
     renderApp();
 
     expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
 
     const button = await screen.findByRole('button', { name: '生成新技能树' });
     expect(button).toBeDisabled();
@@ -1120,7 +1195,7 @@ describe('MapFlow tree library', () => {
     renderApp();
 
     expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
     await user.click(screen.getByRole('button', { name: '生成新技能树' }));
     await user.click(screen.getByRole('button', { name: '保存生成会话' }));
     await user.click(screen.getByRole('button', { name: '关闭生成器' }));
@@ -1269,7 +1344,7 @@ describe('管理面板入口', () => {
     );
 
     await user.click(screen.getByRole('button', { name: '返回' }));
-    expect(screen.getByRole('button', { name: '我的学习' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: '我的地图' })).toHaveAttribute(
       'aria-current',
       'page',
     );
@@ -1341,7 +1416,7 @@ describe('手机端视图栈', () => {
     renderApp('/console');
 
     await screen.findByText(authenticated.account.playerId);
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
     await user.click(
       await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
     );
@@ -1415,7 +1490,7 @@ describe('手机端视图栈', () => {
       await screen.findByRole('button', { name: '查看节点 基础节点' }),
     );
 
-    expect(screen.queryByRole('button', { name: '与这棵树聊天' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '进入学习区，向 AI 提问' })).not.toBeInTheDocument();
     expect(chatApi.sendKnowledgeChatMessageStream).not.toHaveBeenCalled();
   });
 
@@ -1431,7 +1506,7 @@ describe('手机端视图栈', () => {
       renderApp();
 
       await screen.findByText(authenticated.account.playerId);
-      await user.click(screen.getByRole('button', { name: '我的学习' }));
+      await user.click(screen.getByRole('button', { name: '我的地图' }));
       await user.click(
         await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
       );
@@ -1474,7 +1549,7 @@ describe('手机端视图栈', () => {
     renderApp();
 
     await screen.findByText(authenticated.account.playerId);
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
     await user.click(
       await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
     );
@@ -1551,7 +1626,7 @@ describe('手机端视图栈', () => {
     renderApp();
 
     await screen.findByText(authenticated.account.playerId);
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
     await user.click(
       await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
     );
@@ -1599,23 +1674,23 @@ describe('手机端视图栈', () => {
     renderApp();
 
     await screen.findByText(authenticated.account.playerId);
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
     await user.click(
       await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
     );
-    await waitFor(() => expect(tavernApi.openTreeConversation).toHaveBeenCalledWith(personalEntry.library_entry_id, authenticated.csrfToken, expect.any(AbortSignal)));
-    expect(screen.getByTestId('knowledge-chat-panel').className.split(' ')).toContain('hidden');
+    expect(tavernApi.openTreeConversation).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('knowledge-chat-panel')).not.toBeInTheDocument();
     await user.click(
       await screen.findByRole('button', { name: '查看节点 基础节点' }),
     );
-    await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
+    await user.click(screen.getByRole('button', { name: '进入学习区，向 AI 提问' }));
 
-    expect(screen.getByTestId('knowledge-chat-panel')).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: '角色对话' })).toBeInTheDocument();
     await waitFor(() => expect(tavernApi.openTreeConversation).toHaveBeenCalled());
-    expect(screen.getByTestId('mobile-detail').className).toContain('hidden');
+    expect(screen.queryByTestId('mobile-detail')).not.toBeInTheDocument();
     expect(chatApi.sendKnowledgeChatMessageStream).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole('button', { name: '返回节点详情' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
     expect(screen.getByTestId('mobile-detail').className).not.toContain('hidden');
     expect(screen.getByRole('heading', { name: '基础节点' })).toBeInTheDocument();
   });
@@ -1631,16 +1706,16 @@ describe('手机端视图栈', () => {
       renderApp();
 
       await screen.findByText(authenticated.account.playerId);
-      await user.click(screen.getByRole('button', { name: '我的学习' }));
+      await user.click(screen.getByRole('button', { name: '我的地图' }));
       await user.click(
         await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
       );
       await user.click(
         await screen.findByRole('button', { name: '查看节点 基础节点' }),
       );
-      await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
+      await user.click(screen.getByRole('button', { name: '进入学习区，向 AI 提问' }));
 
-      expect(screen.getByTestId('knowledge-chat-panel')).toBeInTheDocument();
+      expect(await screen.findByRole('region', { name: '角色对话' })).toBeInTheDocument();
       // 顶栏在聊天模式下只重复显示标题，却要占掉 64px 以上，整条不再渲染。
       expect(screen.queryByRole('button', { name: '更多' })).not.toBeInTheDocument();
       // 顶栏上的额度必须是转移而不是消失，否则等于删功能。
@@ -1664,16 +1739,16 @@ describe('手机端视图栈', () => {
     renderApp();
 
     await screen.findByText(authenticated.account.playerId);
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
     await user.click(
       await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
     );
     await user.click(
       await screen.findByRole('button', { name: '查看节点 基础节点' }),
     );
-    await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
+    await user.click(screen.getByRole('button', { name: '进入学习区，向 AI 提问' }));
 
-    expect(screen.getByTestId('knowledge-chat-panel')).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: '角色对话' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '更多' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /现金额度/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '操作' })).not.toBeInTheDocument();
@@ -1687,21 +1762,21 @@ describe('手机端视图栈', () => {
     renderApp();
 
     await screen.findByText(authenticated.account.playerId);
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
     await user.click(
       await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
     );
     await user.click(
       await screen.findByRole('button', { name: '查看节点 基础节点' }),
     );
-    await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
+    await user.click(screen.getByRole('button', { name: '进入学习区，向 AI 提问' }));
 
-    expect(screen.getByTestId('knowledge-chat-panel')).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: '角色对话' })).toBeInTheDocument();
     expect(screen.queryByRole('separator',{name:'调整聊天面板宽度'})).not.toBeInTheDocument();
     expect(screen.queryByRole('button',{name:'查看节点 基础节点'})).not.toBeInTheDocument();
     await user.click(screen.getByRole('button',{name:'查看地图'}));
     expect(await screen.findByRole('button',{name:'查看节点 基础节点'})).toBeInTheDocument();
-    await user.click(screen.getByRole('button',{name:'返回聊天'}));
+    await user.click(screen.getByRole('button',{name:'收起地图'}));
     expect(screen.queryByRole('button',{name:'查看节点 基础节点'})).not.toBeInTheDocument();
     expect(screen.getByRole('textbox',{name:'消息'})).toBeVisible();
   });
@@ -1714,14 +1789,14 @@ describe('手机端视图栈', () => {
     renderApp();
 
     await screen.findByText(authenticated.account.playerId);
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
     await user.click(
       await screen.findByRole('button', { name: '查看 NestJS 完整学习树' }),
     );
     await user.click(
       await screen.findByRole('button', { name: '查看节点 基础节点' }),
     );
-    await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
+    await user.click(screen.getByRole('button', { name: '进入学习区，向 AI 提问' }));
 
     await user.click(screen.getByRole('button', { name: '配置' }));
     await user.click(screen.getByRole('button', { name: '模型接入' }));
@@ -1732,11 +1807,11 @@ describe('手机端视图栈', () => {
     await user.click(screen.getByRole('button', { name: '发送' }));
     expect(await screen.findByText('测试回答')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '返回节点详情' }));
-    await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
+    await user.click(screen.getByRole('button', { name: '进入学习区，向 AI 提问' }));
 
-    expect(screen.getByText('保留这条消息')).toBeInTheDocument();
-    expect(screen.getByText('测试回答')).toBeInTheDocument();
+    expect(await screen.findByText(/保留这条消息/)).toBeInTheDocument();
+    expect(await screen.findByText('测试回答')).toBeInTheDocument();
   });
 });
 
@@ -1749,7 +1824,7 @@ describe('手机端抽屉', () => {
 
     await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
     const drawer = screen.getByRole('dialog', { name: '功能菜单' });
-    await user.click(within(drawer).getByRole('button', { name: '我的学习' }));
+    await user.click(within(drawer).getByRole('button', { name: '我的地图' }));
 
     expect(
       screen.queryByRole('dialog', { name: '功能菜单' }),
@@ -1906,7 +1981,7 @@ describe('登录门禁', () => {
     expect(await screen.findByTestId('identity-gate')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/console');
     expect(screen.queryByTestId('mobile-list')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '我的学习' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '我的地图' })).not.toBeInTheDocument();
   });
 
   it('session 加载期间不闪现主应用内容', async () => {
@@ -2007,7 +2082,7 @@ describe('登录门禁', () => {
       'mapflow.console.state.v1.MF-7K3P-9D2Q-X8CW',
       'stale-user-state',
     );
-    await user.click(screen.getByRole('button', { name: '我的学习' }));
+    await user.click(screen.getByRole('button', { name: '我的地图' }));
     await screen.findByText('0/2 已完成');
     await user.click(screen.getByRole('button', { name: '更多' }));
     await user.click(screen.getByRole('button', { name: '退出登录' }));

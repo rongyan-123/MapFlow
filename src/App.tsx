@@ -10,6 +10,9 @@ import CompletionFlash from './features/skill-tree/CompletionFlash';
 import NodeDetailPanel from './features/skill-tree/NodeDetailPanel';
 import ProgressOverview from './features/skill-tree/ProgressOverview';
 import SkillTreeCanvas from './features/skill-tree/SkillTreeCanvas';
+import { snapshotFromGraph } from './features/skill-tree/snapshotFromGraph';
+import LearningChatWorkspace from './features/learning/LearningChatWorkspace';
+import { createLearningArea } from './features/tavern/tavernClient';
 import IdentityAccess from './features/identity/IdentityAccess';
 import { useIdentity } from './features/identity/IdentityContext';
 import LogoutConfirmDialog from './features/identity/LogoutConfirmDialog';
@@ -43,10 +46,8 @@ import {
   setNodeProgress,
 } from './features/tree-library/treeLibraryClient';
 import type {
-  NodeProgress,
   PersonalLibrary,
   PublicTreeCatalog,
-  TreeGraph,
 } from './features/tree-library/types';
 import TreeExportMenu from './features/tree-library/TreeExportMenu';
 import TreeLibraryActionDialog, {
@@ -69,12 +70,8 @@ import type {
   TreeLayoutMode,
   TreeDisplayMode,
 } from './types/learning';
-import {
-  learningStatusFromProgressPercent,
-  normalizeProgressPercent,
-} from './types/learning';
 
-type AppView = 'public' | 'personal' | 'admin';
+type AppView = 'public' | 'personal' | 'learning' | 'admin';
 type MobileView = 'list' | 'graph' | 'detail' | 'chat';
 type PersistedAppView = Exclude<AppView, 'admin'>;
 
@@ -134,6 +131,12 @@ export default function App() {
     window.history[method]({}, '', '/console');
     setCurrentPath('/console');
   }, []);
+  const navigatePage = (path: string) => {
+    window.history.pushState({}, '', path);
+    setCurrentPath(new URL(path, window.location.origin).pathname);
+  };
+  const navigateView = (view: PersistedAppView) => navigatePage(view === 'public' ? '/library' : view === 'personal' ? '/maps' : '/learning');
+  const requestedView = currentPath === '/library' ? 'public' : currentPath === '/maps' ? 'personal' : currentPath === '/learning' ? 'learning' : undefined;
 
   useEffect(() => {
     if (
@@ -155,7 +158,7 @@ export default function App() {
   if (sessionPending) return <EntryLoading />;
   if (!session) {
     return <IdentityGate onAuthenticated={() => {
-      if (!['/tavern', '/wallet', '/models'].includes(currentPath)) navigateToConsole(true);
+      if (!['/tavern', '/wallet', '/models', '/library', '/maps', '/learning'].includes(currentPath)) navigateToConsole(true);
     }} />;
   }
 
@@ -175,11 +178,11 @@ export default function App() {
   };
   if (currentPath === '/wallet') {
     return <WalletPage key={session.account.playerId} accountId={session.account.playerId} csrfToken={session.csrfToken}
-      onBack={() => walletOrigin.current === '/tavern' ? navigateToTavern() : navigateToConsole()}
+      onBack={() => navigatePage(walletOrigin.current)}
       onNavigateModels={navigateToModels} />;
   }
   if (currentPath === '/models') {
-    return <ModelPricingPage accountId={session.account.playerId} onNavigateWallet={navigateToWallet} onBack={() => modelsOrigin.current === '/wallet' ? navigateToWallet() : modelsOrigin.current === '/tavern' ? navigateToTavern() : navigateToConsole()}
+    return <ModelPricingPage accountId={session.account.playerId} onNavigateWallet={navigateToWallet} onBack={() => navigatePage(modelsOrigin.current)}
       onNavigateTavern={navigateToTavern} />;
   }
   if (currentPath === '/tavern') {
@@ -197,13 +200,17 @@ export default function App() {
         />
       );
     }
-    return <ConsoleApp onNavigateTavern={navigateToTavern} onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />;
+    return <ConsoleApp requestedView={requestedView} onNavigateView={navigateView} onNavigateLearning={(area, node) => navigatePage(`/learning?area=${encodeURIComponent(area)}${node ? `&node=${encodeURIComponent(node.id)}&title=${encodeURIComponent(node.title)}` : ''}`)} onNavigateTavern={navigateToTavern} onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />;
   }
 
-  return <ConsoleApp onNavigateTavern={navigateToTavern} onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />;
+  return <ConsoleApp requestedView={requestedView} onNavigateView={navigateView} onNavigateLearning={(area, node) => navigatePage(`/learning?area=${encodeURIComponent(area)}${node ? `&node=${encodeURIComponent(node.id)}&title=${encodeURIComponent(node.title)}` : ''}`)} onNavigateTavern={navigateToTavern} onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />;
 }
 
-function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { onNavigateTavern: () => void; onNavigateWallet: () => void; onNavigateModels: () => void }) {
+function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavigateTavern, onNavigateWallet, onNavigateModels }: {
+  requestedView?: PersistedAppView; onNavigateView: (view: PersistedAppView) => void;
+  onNavigateLearning: (area: string, node?: { id: string; title: string }) => void;
+  onNavigateTavern: () => void; onNavigateWallet: () => void; onNavigateModels: () => void;
+}) {
   const queryClient = useQueryClient();
   const {
     identityEnabled,
@@ -217,7 +224,9 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
     logoutPending,
     logoutError,
   } = useIdentity();
-  const [view, setView] = useState<AppView>('public');
+  const [view, setView] = useState<AppView>(requestedView ?? 'public');
+  const [areaEntryPending, setAreaEntryPending] = useState(false);
+  const [areaEntryError, setAreaEntryError] = useState<unknown>(null);
   const [selectedPublicTreeId, setSelectedPublicTreeId] = useState<string | null>(null);
   const [selectedLibraryEntryId, setSelectedLibraryEntryId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -367,7 +376,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
     previousAccountPlayerIdRef.current = accountPlayerId;
     const stored = readStoredConsoleState(accountPlayerId);
     if (!stored) {
-      if (publicGuideOpen) {
+      if (publicGuideOpen && !requestedView) {
         setView('public');
         setLayoutMode('relationship');
         setMobileView('graph');
@@ -375,23 +384,26 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
       return;
     }
 
-    const restoredView: PersistedAppView = publicGuideOpen
+    const restoredView: PersistedAppView = requestedView ?? (publicGuideOpen
       ? 'public'
       : accountPlayerId
         ? stored.view
-        : 'public';
+        : 'public');
     setView(restoredView);
     setSelectedPublicTreeId(null);
     setSelectedLibraryEntryId(
-      restoredView === 'personal' ? stored.selectedLibraryEntryId : null,
+      stored.selectedLibraryEntryId,
     );
     setSelectedNodeId(stored.selectedNodeId);
     setLayoutMode(restoredView === 'public' ? 'relationship' : stored.layoutMode);
     setMobileView(publicGuideOpen ? 'graph' : stored.mobileView);
     setChatOpen(
-      restoredView === 'personal' && accountPlayerId ? stored.chatOpen : false,
+      false,
     );
   }, [accountPlayerId, publicGuideOpen, sessionPending]);
+  useEffect(() => {
+    if (requestedView) { setView(requestedView); setChatOpen(false); setDrawerOpen(false); }
+  }, [requestedView]);
 
   useEffect(() => {
     if (!consoleStateHydratedRef.current) return;
@@ -510,7 +522,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
   const activeGraph =
     view === 'public'
       ? publicTree.data?.graph ?? demoPublicSnapshot
-      : personalTree.data?.graph;
+      : view === 'personal' ? personalTree.data?.graph : undefined;
   const completedNodeIds =
     view === 'personal' ? personalTree.data?.completed_node_ids ?? [] : [];
   const nodeProgress =
@@ -706,7 +718,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
       return;
     }
     setView('personal');
-    setSelectedNodeId(null);
+    onNavigateView('personal');
     setCompletion(null);
     setChatOpen(false);
   };
@@ -878,15 +890,23 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
     });
   };
 
-  const openKnowledgeChat = () => {
+  const openKnowledgeChat = async () => {
     if (!session) {
       openIdentityDialog();
       return;
     }
     if (view !== 'personal' || !selectedLibraryEntryId) return;
-    setChatOpen(true);
-    setLearningMapOpen(false);
-    setMobileView('chat');
+    if (areaEntryPending) return;
+    setAreaEntryPending(true); setAreaEntryError(null);
+    try {
+      const area = await createLearningArea(selectedLibraryEntryId, session.csrfToken);
+      await queryClient.cancelQueries({ queryKey: ['me', accountPlayerId, 'learning', 'areas'], exact: true });
+      queryClient.setQueryData<import('./features/tavern/types').LearningArea[]>(['me', accountPlayerId, 'learning', 'areas'], previous =>
+        [area, ...(previous ?? []).filter(item => item.areaId !== area.areaId)]);
+      const node = snapshot?.nodes.find(item => item.id === selectedNodeId);
+      onNavigateLearning(area.areaId, node ? { id: node.id, title: node.title } : undefined);
+    } catch (error) { setAreaEntryError(error); }
+    finally { setAreaEntryPending(false); }
   };
   const closeKnowledgeChat = () => {
     setChatOpen(false);
@@ -923,6 +943,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
         <AdminPanel
           onBack={() => {
             setView('personal');
+            onNavigateView('personal');
             setMobileView('list');
           }}
           csrfToken={session.csrfToken}
@@ -977,11 +998,14 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
   // 手机端聊天独占整屏：顶栏只重复下方的角色名与节点名，却要占掉 64px 以上，
   // 所以整条不渲染，把额度和账号入口原样挂到对话工具栏的“操作”菜单里，功能一个不少。
   const mobileChatActive =
-    isMobile && view === 'personal' && chatOpen && !learningMapOpen;
+    isMobile && view === 'learning';
   const headerWallet = session && (
     <WalletBalance accountId={session.account.playerId} onClick={onNavigateWallet} />
   );
   const headerMenuItems = <>
+    {(['public', 'personal', 'learning'] as const).map(destination => <button key={destination} type="button" className={headerMenuItem}
+      onClick={() => onNavigateView(destination)}>{destination === 'public' ? '公共书库' : destination === 'personal' ? '我的地图' : '学习聊天'}</button>)}
+    <button type="button" className={headerMenuItem} onClick={onNavigateTavern}>独立酒馆</button>
     <button type="button" className={headerMenuItem} onClick={onNavigateModels}>模型价格</button>
     {session?.account.isAdmin && <button type="button" className={headerMenuItem} onClick={() => setView('admin')}>管理面板</button>}
     <a href="/?marketing=1" aria-label="查看产品首页" className={headerMenuItem}>产品首页</a>
@@ -1022,7 +1046,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
           )}
           <div className="min-w-0">
             <h1 className="truncate text-base font-bold tracking-tight sm:text-lg">
-              {activeTitle}
+              {view === 'learning' ? '学习聊天' : activeTitle}
             </h1>
             <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">
               {view === 'public'
@@ -1036,6 +1060,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
             active={view === 'public'}
             onClick={() => {
               setView('public');
+              onNavigateView('public');
               setSelectedPublicTreeId(null);
               setSelectedNodeId(null);
               setCompletion(null);
@@ -1044,11 +1069,12 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
               setMobileView('list');
             }}
           >
-            公共树库
+            公共书库
           </ViewButton>
           <ViewButton active={view === 'personal'} onClick={showPersonalLibrary}>
-            我的学习
+            我的地图
           </ViewButton>
+          <ViewButton active={view === 'learning'} onClick={() => onNavigateView('learning')}>学习聊天</ViewButton>
           <ViewButton active={false} onClick={onNavigateTavern}>独立酒馆</ViewButton>
         </nav>
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
@@ -1089,7 +1115,13 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
         </div>
       </header>}
 
-      <main className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
+      {areaEntryError != null && <p role="alert" className="px-5 py-3 text-sm text-rose-300">学习区暂时无法打开，请重试。</p>}
+      {view === 'learning' ? <LearningChatWorkspace key={session.account.playerId} accountId={session.account.playerId} csrfToken={session.csrfToken}
+        requestedAreaId={new URLSearchParams(window.location.search).get('area')}
+        requestedNode={readStagedNodeReference()} onSelectArea={area => area ? onNavigateLearning(area) : onNavigateView('learning')}
+        onOpenMaps={showPersonalLibrary} onNavigateWallet={onNavigateWallet} onNavigateModels={onNavigateModels}
+        mobileHeaderActions={<><div className="border-t border-slate-800 pt-1">{headerWallet}</div>{headerMenuItems}</>} />
+        : <main className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
         {!personalSidebarOpen && (view === 'personal' || !selectedPublicTree) && (
           <button
             type="button"
@@ -1299,6 +1331,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
               <div className={`h-full ${view === 'public' ? 'pt-20' : ''}`}>
                 <SkillTreeCanvas
                   snapshot={snapshot}
+                  viewportStorageKey={view === 'personal' && selectedLibraryEntryId ? `mapflow.map.viewport.v1.${accountPlayerId}.${selectedLibraryEntryId}` : undefined}
                   displayMode={displayMode}
                   layoutMode={layoutMode}
                   selectedNodeId={selectedNodeId}
@@ -1422,35 +1455,7 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
           </button>
         )}
 
-        {snapshot && view === 'personal' && session && selectedLibraryEntryId && (
-          <div
-            data-testid="knowledge-chat-panel"
-            hidden={!chatOpen || learningMapOpen}
-            className={`${chatOpen && !learningMapOpen ? 'flex lg:flex' : 'hidden lg:hidden'} min-h-0 w-full flex-1 flex-col overflow-hidden`}
-          >
-            <TavernPage
-              treeContext={{ title: activeTitle, libraryEntryId: selectedLibraryEntryId,
-                nodeTitle: selectedNodeId ? snapshot.nodes.find(node => node.id === selectedNodeId)?.title : activeTitle }}
-              onShowMap={() => { setLearningMapOpen(true); setMobileView('graph'); }}
-              onNavigateConsole={closeKnowledgeChat}
-              onNavigateWallet={onNavigateWallet}
-              onNavigateModels={onNavigateModels}
-              mobileHeaderActions={<>
-                <div className="border-t border-slate-800 pt-1">{headerWallet}</div>
-                {headerMenuItems}
-              </>}
-              onClose={closeKnowledgeChat}
-              onTreeChanged={() => {
-                void creditQuery.refetch();
-                void queryClient.invalidateQueries({
-                  queryKey: personalTreeLibraryQueryKey,
-                });
-                void personalTree.refetch();
-              }}
-            />
-          </div>
-        )}
-      </main>
+      </main>}
 
       {snapshot && !(view === 'personal' && chatOpen && !learningMapOpen) && (
         <ProgressOverview
@@ -1590,13 +1595,14 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
             active={view === 'public'}
             onClick={() => {
               setView('public');
+              onNavigateView('public');
               setSelectedNodeId(null);
               setCompletion(null);
               setMobileView('list');
               setDrawerOpen(false);
             }}
           >
-            公共树库
+            公共书库
           </DrawerItem>
           <DrawerItem
             active={view === 'personal'}
@@ -1606,8 +1612,9 @@ function ConsoleApp({ onNavigateTavern, onNavigateWallet, onNavigateModels }: { 
               setDrawerOpen(false);
             }}
           >
-            我的学习
+            我的地图
           </DrawerItem>
+          <DrawerItem active={view === 'learning'} onClick={() => onNavigateView('learning')}>学习聊天</DrawerItem>
           {session?.account.isAdmin && (
             <DrawerItem
               active={view === 'admin'}
@@ -1725,42 +1732,6 @@ function writeGenerationSessionId(sessionId: string | null) {
     '',
     `${url.pathname}${url.search}${url.hash}`,
   );
-}
-
-function snapshotFromGraph(
-  graph: TreeGraph,
-  completedNodeIds: readonly string[],
-  nodeProgress?: readonly NodeProgress[],
-): LearningTreeSnapshot {
-  const progressByNodeId = new Map(
-    (nodeProgress ?? []).map((item) => [
-      item.node_id,
-      normalizeProgressPercent(item.progress_percent),
-    ]),
-  );
-  for (const nodeId of completedNodeIds) {
-    if (!progressByNodeId.has(nodeId)) {
-      progressByNodeId.set(nodeId, 100);
-    }
-  }
-  return {
-    tree: graph.tree,
-    nodes: graph.nodes,
-    edges: graph.edges,
-    current_node_id: null,
-    progress: [...progressByNodeId.entries()]
-      .filter(([nodeId, progressPercent]) =>
-        graph.nodes.some((node) => node.id === nodeId) && progressPercent > 0,
-      )
-      .map(([nodeId, progressPercent]) => ({
-        node_id: nodeId,
-        status: learningStatusFromProgressPercent(progressPercent),
-        evidence: '',
-        progress_percent: progressPercent,
-      })),
-    blocks: graph.blocks ?? [],
-    node_block_assignments: graph.node_block_assignments ?? [],
-  };
 }
 
 function ViewButton({
@@ -2116,6 +2087,13 @@ function readableError(error: unknown): string {
   return error instanceof Error ? error.message : '技能树服务暂时不可用，请稍后重试。';
 }
 
+function readStagedNodeReference(): { id: string; title: string } | undefined {
+  const parameters = new URLSearchParams(window.location.search);
+  const id = parameters.get('node');
+  const title = parameters.get('title');
+  return id && id.length <= 128 && title?.trim() && title.length <= 200 ? { id, title: title.trim() } : undefined;
+}
+
 function mergePublicCatalogPages(pages: PublicTreeCatalog[]): PublicTreeCatalog {
   const treesById = new Map<string, PublicTreeCatalog['trees'][number]>();
   const attributions: PublicTreeCatalog['attributions'] = {};
@@ -2140,7 +2118,7 @@ function readStoredConsoleState(accountPlayerId: string | null): PersistedConsol
     const value: unknown = JSON.parse(raw);
     if (!isRecord(value) || value.version !== 1) return null;
 
-    const view = readOneOf(value.view, ['public', 'personal'] as const);
+    const view = readOneOf(value.view, ['public', 'personal', 'learning'] as const);
     const layoutMode = readOneOf(value.layoutMode, ['relationship', 'blocks'] as const);
     const mobileView = readOneOf(value.mobileView, ['list', 'graph', 'detail', 'chat'] as const);
     if (!view || !layoutMode || !mobileView || typeof value.chatOpen !== 'boolean') {

@@ -4,6 +4,13 @@ import { isRecord, NORMALIZED_CARD_BYTES, RAW_FILE_BYTES, tooLarge, utf8Bytes } 
 import type {CashCharge,CashQuote} from './types';
 
 const ROOT = '/api/me/tavern';
+export async function openManagementConversation(input: import('./types').OpenManagementConversationInput, csrfToken: string, signal?: AbortSignal): Promise<ConversationDetail> {
+  const detail = parseConversationDetail(await readJson(await request(`${ROOT}/management-conversations`, {
+    method: 'POST', headers: mutationHeaders(csrfToken, true), body: JSON.stringify(input), signal,
+  })));
+  if (detail.conversation.scene !== 'management' || detail.conversation.learningAreaId || detail.conversation.libraryEntryId) throw invalidResponse();
+  return detail;
+}
 export async function fetchLearningAreas(signal?: AbortSignal): Promise<import('./types').LearningArea[]> {
   return parseList(await getJson('/api/me/learning-areas', signal), 'areas', parseLearningArea);
 }

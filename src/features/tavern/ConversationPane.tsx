@@ -22,7 +22,7 @@ interface PendingGeneration { clientActionId: string; expectedRevision: number; 
   platformBinding?: { model: string; historyBytes: 8192 | 16384 | 32768 };
   modelBinding?: { model: string; baseUrl: string; historyBytes: 8192 | 16384 | 32768 } }
 
-export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, platformModelError, onBusyChange, onCompleted, onRecovered, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onOpenParameters, onNavigateWallet, onCloseConfiguration, configuration }: {
+export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, platformModelError, onBusyChange, onCompleted, onRecovered, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onOpenParameters, onNavigateWallet, onCloseConfiguration, configuration, nodeReference, mapVisible, onOpenCanvas }: {
   detail: ConversationDetail; accountId: string; csrfToken: string;
   modelSelection: TavernModelSelection;
   platformModelError?: string;
@@ -32,6 +32,8 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   configurationOpen: boolean; onCloseConfiguration: () => void; configuration: TavernDialogSection[];
   configurationSection?: string; onOpenModelConfiguration: () => void; onNavigateWallet?: () => void;
   onOpenParameters?: () => void;
+  nodeReference?: { id: string; title: string };
+  mapVisible?: boolean; onOpenCanvas?: () => void;
 }) {
   const storageKey = `mapflow.tavern.pending.v1.${accountId}.${detail.conversation.conversationId}`;
   const [pendingGeneration, setPendingGeneration] = useState<PendingGeneration | null>(() => {
@@ -41,11 +43,20 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   });
   const restoredPending = useRef(pendingGeneration);
   const [message, setMessage] = useState('');
+  const [referenceActive, setReferenceActive] = useState(!!nodeReference);
+  useEffect(() => { setReferenceActive(!!nodeReference); }, [nodeReference?.id, nodeReference?.title]);
   const [draft, setDraft] = useState('');
   const [process, setProcess] = useState<GenerationProcessEvent[]>([]);
   const [stopped, setStopped] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const canvas = useTeachingCanvas(detail.conversation.conversationId, csrfToken, detail.graph.revision, detail.canvas);
+  const mapVisibleRef = useRef(mapVisible); mapVisibleRef.current = mapVisible;
+  useEffect(() => { if (mapVisible) canvas.setOpen(false); }, [mapVisible]);
+  async function openTeachingCanvas() {
+    onOpenCanvas?.();
+    await canvas.show();
+    if (mapVisibleRef.current) canvas.setOpen(false);
+  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [editing, setEditing] = useState(false);
@@ -112,6 +123,9 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
 
   async function runGeneration(action: GenerationAction, retry?: PendingGeneration) {
     if (activeRequest.current || graphBusy || editing || (pendingGeneration && !retry)) return;
+    if (!retry && action.type === 'reply' && referenceActive && nodeReference) {
+      action = { ...action, message: `${action.message}\n\n[学习节点参考：${nodeReference.title}；节点 ID：${nodeReference.id}]` };
+    }
     let outgoing: PendingGeneration;
     let platformModel: string | undefined;
     let modelAccess: TavernUserModelAccess | undefined;
@@ -171,6 +185,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       await presentation.drain();
       if (controller.signal.aborted) return;
       storePending(storageKey, null);
+      if (outgoing.action.type === 'reply') setReferenceActive(false);
       setPendingGeneration(null); setDraft(''); setProcess([]); canvas.setPreview(null); onCompleted(completed);
     } catch (failure) { if (!controller.signal.aborted) {
       presentation.flush();
@@ -275,7 +290,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       }]} />}
     <nav aria-label="学习工作区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-1.5 text-xs sm:py-2">
       <button type="button" aria-expanded={canvas.open} aria-controls={`tavern-canvas-${detail.conversation.conversationId}`} disabled={canvas.saving}
-        className={`${buttonClass} ${canvas.open ? 'border-cyan-500 text-cyan-200' : ''}`} onClick={() => canvas.open ? canvas.setOpen(false) : void canvas.show()}>
+        className={`${buttonClass} ${canvas.open ? 'border-cyan-500 text-cyan-200' : ''}`} onClick={() => canvas.open ? canvas.setOpen(false) : void openTeachingCanvas()}>
         <span aria-hidden="true" className="mr-1.5">▧</span>{canvas.open ? '收起画布' : canvas.document ? '展开画布' : '绘图讲解'}</button>
       <span className="hidden text-slate-500 sm:inline">让 AI 用图形讲解，也可以自己绘制</span>
       {canvas.open && <div className="ml-auto flex gap-2 md:hidden">
@@ -286,7 +301,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     <div className="tavern-workspace">
     <div id={`tavern-canvas-${detail.conversation.conversationId}`} className="tavern-canvas" data-open={canvas.open} data-wide={canvas.wide}
       aria-hidden={!canvas.open} {...(!canvas.open ? { inert: '' } : {})}>
-    {canvas.document && <Suspense fallback={<section aria-label="教学画布" className="flex-1 p-6" role="status">正在打开教学画布…</section>}>
+    {canvas.open && canvas.document && <Suspense fallback={<section aria-label="教学画布" className="flex-1 p-6" role="status">正在打开教学画布…</section>}>
       <TeachingCanvasPanel accountId={accountId} document={canvas.document} busy={busy} saving={canvas.saving} wide={canvas.wide}
         onSave={canvas.save} onChange={canvas.queue} onClose={() => canvas.setOpen(false)} onWidth={() => canvas.setWide(previous => !previous)} />
     </Suspense>}
@@ -375,6 +390,10 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         }}>取消本次重试</button>
       </div>}
       <form onSubmit={event => { event.preventDefault(); void runGeneration({ type: 'reply', message }); }} className="rounded-3xl border border-slate-700 bg-slate-900 p-2 shadow-lg transition focus-within:border-cyan-500/70 sm:p-3">
+        {referenceActive && nodeReference && <div className="mb-2 flex items-center gap-2 px-2 text-xs text-cyan-200">
+          <span>节点参考：{nodeReference.title}</span><button type="button" className="rounded-full px-2 py-1 text-slate-400 hover:text-slate-200" aria-label="移除节点参考"
+            disabled={busy || pendingGeneration !== null} onClick={() => setReferenceActive(false)}>×</button>
+        </div>}
         {!isMobile && <div className="mb-2 flex flex-wrap items-center gap-2 px-2 text-[11px] text-slate-400">
           {modelChipButton}
           <span>历史 {modelSelection.historyBytes / 1024} KiB · 最大输出 {detail.conversation.generationSettings.maxOutputTokens === null ? '模型默认' : `${detail.conversation.generationSettings.maxOutputTokens} Token`}</span>

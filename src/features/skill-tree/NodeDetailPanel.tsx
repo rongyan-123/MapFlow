@@ -137,7 +137,7 @@ export default function NodeDetailPanel({
           className="mb-5 flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/45 bg-cyan-400/10 px-3 py-2.5 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/15"
         >
           <span aria-hidden="true">💬</span>
-          与这棵树聊天
+          进入学习区，向 AI 提问
         </button>
       )}
 

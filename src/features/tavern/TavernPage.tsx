@@ -22,30 +22,32 @@ import CharacterLibraryItem from './CharacterLibraryItem';
 import ConversationPane from './ConversationPane';
 import ConversationProfilePanel from './ConversationProfilePanel';
 import GenerationSettingsPanel from './GenerationSettingsPanel';
-import { createConversation, createLearningConversation, deleteCharacter, fetchCharacters, fetchConversation, fetchConversations, fetchLearningAreaConversations, fetchPlatformModels, openTreeConversation, switchConversationCharacter } from './tavernClient';
+import { createConversation, createLearningConversation, deleteCharacter, fetchCharacters, fetchConversation, fetchConversations, fetchLearningAreaConversations, fetchPlatformModels, openManagementConversation, openTreeConversation, switchConversationCharacter } from './tavernClient';
 import type { Character, CompletedTurn, Conversation, ConversationDetail, ConversationGraph, CreateLearningConversationInput, GenerationSettingsState, TavernModelSelection } from './types';
 import { CharacterAvatar, CompatibilityReport, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass } from './TavernUi';
 
 interface TavernPageProps {
+  management?: boolean;
+  mapVisible?: boolean; onOpenCanvas?: () => void;
   onNavigateConsole: () => void; onNavigateWallet?: () => void; onNavigateModels?: () => void;
-  treeContext?: { libraryEntryId: string; title: string; nodeTitle?: string; available?: boolean }; onClose?: () => void; onTreeChanged?: () => void; onShowMap?: () => void;
+  treeContext?: { libraryEntryId: string; title: string; nodeId?: string; nodeTitle?: string; available?: boolean }; onClose?: () => void; onTreeChanged?: () => void; onShowMap?: () => void;
   // 手机端聊天会隐藏控制台顶栏，原本挂在顶栏上的额度与账号入口改由这里落到对话工具栏的“操作”菜单里。
   mobileHeaderActions?: ReactNode;
 }
 export default function TavernPage(props: TavernPageProps) {
   const { session } = useIdentity();
   if (!session) return null;
-  return <AuthenticatedTavernPage key={`${session.account.playerId}.${props.treeContext?.libraryEntryId ?? 'independent'}`} session={session} {...props} />;
+  return <AuthenticatedTavernPage key={`${session.account.playerId}.${props.treeContext?.libraryEntryId ?? (props.management ? 'management' : 'independent')}`} session={session} {...props} />;
 }
 
-function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet, onNavigateModels, treeContext, onClose, onTreeChanged, onShowMap, mobileHeaderActions }: TavernPageProps & { session: IdentitySession }) {
+function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet, onNavigateModels, treeContext, management, mapVisible, onOpenCanvas, onClose, onTreeChanged, onShowMap, mobileHeaderActions }: TavernPageProps & { session: IdentitySession }) {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   // 手机端对话独占整屏，工具栏必须压成一行、次要动作收进「操作」菜单，否则消息区被挤得只剩几百像素。
   // 独立酒馆（/tavern）与从知识点进入的对话走同一条紧凑路径，桌面端逐区域不变。
   const { logout, logoutPending, logoutError } = useIdentity();
   const accountId = session.account.playerId;
-  const selectionKey = `mapflow.tavern.selection.v1.${accountId}`;
+  const selectionKey = `mapflow.tavern.selection.v1.${accountId}${management ? '.management' : ''}`;
   const treeSelectionKey = treeContext ? `${selectionKey}.tree.${treeContext.libraryEntryId}` : null;
   const [rememberedTreeConversation] = useState(() => {
     try { return treeSelectionKey ? window.localStorage.getItem(treeSelectionKey) : null; } catch { return null; }
@@ -88,20 +90,36 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const charactersKey = ['me', accountId, 'tavern', 'characters'] as const;
   const conversationsKey = treeContext
     ? ['me', accountId, 'learning', treeContext.libraryEntryId, 'conversations'] as const
-    : ['me', accountId, 'tavern', 'conversations'] as const;
+    : ['me', accountId, management ? 'management' : 'tavern', 'conversations'] as const;
   const detailKey = ['me', accountId, 'tavern', 'conversation', conversationId] as const;
   const creditKey = ['me', accountId, 'credit'] as const;
   const characters = useQuery({ queryKey: charactersKey, queryFn: ({ signal }) => fetchCharacters(signal), retry: false });
   const conversations = useQuery({ queryKey: conversationsKey, queryFn: ({ signal }) => treeContext
-    ? fetchLearningAreaConversations(treeContext.libraryEntryId, signal) : fetchConversations(signal), retry: false });
+    ? fetchLearningAreaConversations(treeContext.libraryEntryId, signal) : management ? fetchConversations(signal, 'management') : fetchConversations(signal), retry: false });
   const belongsToCurrentScene = (item: Conversation) => treeContext
     ? item.scene === 'learning' && item.learningAreaId === treeContext.libraryEntryId
-    : (item.scene === undefined || item.scene === 'tavern') && !item.learningAreaId && !item.libraryEntryId;
+    : (management ? item.scene === 'management' : item.scene === undefined || item.scene === 'tavern') && !item.learningAreaId && !item.libraryEntryId;
   const scopedConversations = conversations.data?.filter(belongsToCurrentScene);
   const conversationInScene = scopedConversations?.some(item => item.conversationId === conversationId) === true;
   const conversationQuery = useQuery({ queryKey: detailKey, queryFn: ({ signal }) => fetchConversation(conversationId!, signal), enabled: !!conversationId && conversationInScene, retry: false });
   const currentDetail = conversationInScene && conversationQuery.data && belongsToCurrentScene(conversationQuery.data.conversation)
     ? conversationQuery.data : undefined;
+  const managementRestored = useRef(false);
+  const managementOpening = useQuery({ queryKey: ['me', accountId, 'management', 'default-conversation'],
+    queryFn: ({ signal }) => openManagementConversation({}, session.csrfToken, signal),
+    enabled: !!management && conversations.isSuccess && !conversations.isFetching && scopedConversations?.length === 0, retry: false });
+  useEffect(() => {
+    if (!management || !conversations.isSuccess || conversations.isFetching || managementRestored.current) return;
+    const restored = scopedConversations?.find(item => item.conversationId === conversationId) ?? scopedConversations?.[0];
+    if (restored) { managementRestored.current = true; selectConversation(restored.conversationId); }
+  }, [management, conversations.isSuccess, conversations.isFetching, scopedConversations, conversationId]);
+  useEffect(() => {
+    if (!managementOpening.data || managementRestored.current || !management) return;
+    managementRestored.current = true;
+    const saved = managementOpening.data;
+    queryClient.setQueryData(['me', accountId, 'tavern', 'conversation', saved.conversation.conversationId], saved);
+    onCreated(saved.conversation); void characters.refetch();
+  }, [managementOpening.data]);
   useEffect(() => {
     if (!treeContext && conversationId && conversations.isSuccess && !conversations.isFetching && !conversationInScene) selectConversation(null);
   }, [conversationId, conversations.isSuccess, conversations.isFetching, conversationInScene]);
@@ -168,6 +186,12 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         queryClient.setQueryData(['me', accountId, 'tavern', 'conversation', created.conversation.conversationId], created);
         pendingCreation.current = null;
         onCreated(created.conversation);
+      } else if (management) {
+        const request = pendingCreation.current ?? { ...input, clientRequestId: crypto.randomUUID() };
+        pendingCreation.current = request;
+        const created = await openManagementConversation({ ...request, newConversation: true }, session.csrfToken);
+        queryClient.setQueryData(['me', accountId, 'tavern', 'conversation', created.conversation.conversationId], created);
+        pendingCreation.current = null; onCreated(created.conversation);
       } else onCreated(await createConversation(input, session.csrfToken));
     } catch (failure) { setOpenError(failure); }
     finally { openingLock.current = false; setCreatingConversation(false); }
@@ -176,7 +200,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     if (openingLock.current || !conversations.isSuccess || !treeReady) return;
     setCharacterId(character.characterId);
     setOpenError(null);
-    if ((treeContext || currentDetail?.conversation.libraryEntryId) && conversationId) {
+    if ((treeContext || management || currentDetail?.conversation.libraryEntryId) && conversationId) {
       if (!currentDetail) return;
       openingLock.current=true; setOpeningCharacter(character.characterId);
       try {
@@ -330,8 +354,8 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     <IdentityAccess onRequestLogout={() => setLogoutOpen(true)} />
   </>;
 
-  return <div className={`flex ${treeContext ? 'h-full flex-1' : 'h-dvh'} min-h-0 flex-col overflow-hidden bg-slate-950 text-slate-100`}>
-    {!treeContext && !isMobile && <header className="relative z-30 flex shrink-0 items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-3 sm:px-5">
+  return <div className={`flex ${treeContext || management ? 'h-full flex-1' : 'h-dvh'} min-h-0 flex-col overflow-hidden bg-slate-950 text-slate-100`}>
+    {!treeContext && !management && !isMobile && <header className="relative z-30 flex shrink-0 items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-3 sm:px-5">
       <div className="flex min-w-0 items-center gap-2 sm:gap-3"><button type="button" className={buttonClass} aria-label="返回学习控制台" onClick={onNavigateConsole}>← <span className="hidden sm:inline">学习控制台</span></button>
         <div><h1 className="text-lg font-bold">独立酒馆</h1><p className="hidden text-xs text-slate-500 sm:block">一个角色，一段属于你的故事</p></div></div>
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
@@ -340,13 +364,13 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
       </div>
     </header>}
     <main className="flex min-h-0 flex-1">
-      {!treeContext && <aside aria-label="角色库" className="hidden w-60 shrink-0 overflow-y-auto border-r border-slate-800 p-4 lg:block">{library}</aside>}
+      {!treeContext && !management && <aside aria-label="角色库" className="hidden w-60 shrink-0 overflow-y-auto border-r border-slate-800 p-4 lg:block">{library}</aside>}
       <section aria-label="角色对话" className="flex min-w-0 flex-1 flex-col">
         <div className={isMobile
           ? 'flex shrink-0 flex-nowrap items-center gap-2 border-b border-slate-800 px-3 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]'
           : 'flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-2 sm:px-5'}>
-          {treeContext && onClose && <button type="button" className={buttonClass} aria-label="返回节点详情" onClick={onClose}>←</button>}
-          <button type="button" className={`${buttonClass} ${treeContext ? '' : 'lg:hidden'}`} aria-label="打开角色列表" onClick={() => setDrawer('library')}>☰</button>
+          {(treeContext || management) && onClose && <button type="button" className={buttonClass} aria-label="返回学习区列表" onClick={onClose}>←</button>}
+          <button type="button" className={`${buttonClass} ${treeContext || management ? '' : 'lg:hidden'}`} aria-label="打开角色列表" onClick={() => setDrawer('library')}>☰</button>
           <div className={`flex ${isMobile ? 'min-w-0' : 'min-w-[100px]'} flex-1 items-center gap-2`}><CharacterAvatar character={selectedCharacter} /><div className="min-w-0"><h2 className="truncate text-sm font-semibold">{selectedCharacter?.card.name ?? '欢迎来到酒馆'}</h2><p className="mt-0.5 truncate text-xs text-slate-500">{treeContext ? treeContext.nodeTitle ?? treeContext.title : conversationId ? '故事正在继续' : '选择角色，开启故事'}</p></div></div>
           {!isMobile && onShowMap && <button type="button" className={`${buttonClass} shrink-0`} onClick={onShowMap}>查看地图</button>}
           {!isMobile && canCreate && <button type="button" className={`${buttonClass} shrink-0`} disabled={creatingConversation || generationBusy || openingCharacter !== null || !conversations.isSuccess || (!!conversationId && !currentDetail)}
@@ -365,9 +389,12 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         </div>
         {treeContext && currentDetail?.conversation.libraryEntryId === treeContext.libraryEntryId && <span className="sr-only">已关联：{treeContext.title}</span>}
         {treeStory.error && <ErrorNotice error={treeStory.error} onRetry={() => void treeStory.refetch()} />}
+        {managementOpening.error && <ErrorNotice error={managementOpening.error} onRetry={() => void managementOpening.refetch()} />}
         {openError != null && <div className="p-4"><ErrorNotice error={openError} /></div>}
         {conversations.error && <div className="p-4"><ErrorNotice error={conversations.error} onRetry={() => void conversations.refetch()} /></div>}
         {conversationId ? currentDetail ? <ConversationPane key={`${accountId}.${conversationId}`} detail={currentDetail} accountId={accountId} csrfToken={session.csrfToken} onCompleted={onCompleted} onRecovered={onRecovered} onGraphChanged={onGraphChanged}
+          nodeReference={treeContext?.nodeId && treeContext.nodeTitle ? { id: treeContext.nodeId, title: treeContext.nodeTitle } : undefined}
+          mapVisible={mapVisible} onOpenCanvas={onOpenCanvas}
           modelSelection={{ ...modelSelection, billingPolicy: platformCatalog.data?.policyVersion }} platformModelError={platformModelError}
           onBusyChange={setGenerationBusy}
           configurationOpen={configurationOpen} configurationSection={configurationSection}
@@ -381,7 +408,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
           </div>}
       </section>
     </main>
-    <MobileDrawer open={drawer !== null} desktopVisible={!!treeContext} onClose={() => setDrawer(null)}>
+    <MobileDrawer open={drawer !== null} desktopVisible={!!treeContext || !!management} onClose={() => setDrawer(null)}>
       <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">{drawer === 'library' ? '角色与账号' : '会话详情'}</h2><button type="button" className={buttonClass} onClick={() => setDrawer(null)}>关闭</button></div>
       {drawer === 'library' ? <><IdentityAccess onRequestLogout={() => { setDrawer(null); setLogoutOpen(true); }} /><div className="mt-5">{library}</div></> : summary}
     </MobileDrawer>

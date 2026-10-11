@@ -11,6 +11,7 @@ import {
   type Node,
   type NodeProps,
   type ReactFlowInstance,
+  type Viewport,
 } from '@xyflow/react';
 import type {
   LearningTreeSnapshot,
@@ -99,6 +100,7 @@ interface SkillTreeCanvasProps {
   selectedNodeId: string | null;
   isGraphVisible: boolean;
   onSelectNode: (nodeId: string) => void;
+  viewportStorageKey?: string;
 }
 
 export default function SkillTreeCanvas({
@@ -108,6 +110,7 @@ export default function SkillTreeCanvas({
   selectedNodeId,
   isGraphVisible,
   onSelectNode,
+  viewportStorageKey,
 }: SkillTreeCanvasProps) {
   const progressMap = useMemo(
     () => new Map(snapshot.progress.map((item) => [item.node_id, item])),
@@ -258,7 +261,8 @@ export default function SkillTreeCanvas({
     null,
   );
   const layoutKey = `${snapshot.tree.id}:${snapshot.tree.revision ?? 0}:${layoutMode}`;
-  const fitViewKey = `${layoutKey}:${snapshot.current_node_id ?? ''}`;
+  const fitViewKey = `${viewportStorageKey ?? ''}:${layoutKey}:${snapshot.current_node_id ?? ''}`;
+  const viewportKey = viewportStorageKey ? `${viewportStorageKey}.${layoutMode}` : undefined;
   const previousLayoutKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -284,6 +288,8 @@ export default function SkillTreeCanvas({
   const fitGraphView = useCallback(() => {
     const flow = flowRef.current;
     if (!flow || generatedNodes.length === 0) return;
+    const remembered = readMapViewport(viewportKey, layoutKey);
+    if (remembered) { void flow.setViewport(remembered, { duration: 0 }); return; }
 
     void flow
       .fitView({
@@ -303,7 +309,7 @@ export default function SkillTreeCanvas({
           void flow.zoomTo(readableZoom, { duration: 180 });
         }
       });
-  }, [generatedNodes.length, layoutMode, snapshot.current_node_id]);
+  }, [generatedNodes.length, layoutMode, snapshot.current_node_id, viewportKey, layoutKey]);
 
   return (
     <ReactFlow
@@ -314,6 +320,11 @@ export default function SkillTreeCanvas({
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onNodeClick={(_, node) => onSelectNode(node.id)}
+      onMoveEnd={(_, viewport) => {
+        if (!viewportKey) return;
+        try { localStorage.setItem(viewportKey, JSON.stringify({ layoutKey, viewport })); }
+        catch { /* Viewport preferences are optional and never affect server-owned map data. */ }
+      }}
       onInit={(instance) => {
         flowRef.current = instance;
       }}
@@ -356,6 +367,18 @@ export default function SkillTreeCanvas({
       />
     </ReactFlow>
   );
+}
+
+function readMapViewport(storageKey: string | undefined, layoutKey: string): Viewport | null {
+  if (!storageKey) return null;
+  try {
+    const serialized = localStorage.getItem(storageKey);
+    if (!serialized) return null;
+    const saved = JSON.parse(serialized) as { layoutKey?: unknown; viewport?: Partial<Viewport> } | null;
+    const viewport = saved?.viewport;
+    return saved?.layoutKey === layoutKey && viewport && Number.isFinite(viewport.x) && Number.isFinite(viewport.y)
+      && typeof viewport.zoom === 'number' && viewport.zoom >= 0.1 && viewport.zoom <= 2.5 ? viewport as Viewport : null;
+  } catch { return null; }
 }
 
 interface FitViewWhenReadyProps {

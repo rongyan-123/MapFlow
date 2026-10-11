@@ -20,6 +20,8 @@ let independentListPending: boolean;
 const areaConversation = { ...conversation, scene: 'learning' as const, learningAreaId: 'entry-1', libraryEntryId: 'entry-1', treeToolsEnabled: true };
 const areaDetail = { ...detail, conversation: areaConversation };
 const freshDetail = { ...detail, conversation: { ...areaConversation, conversationId: 'fresh', title: '新学习会话' } };
+const managerConversation = { ...conversation, scene: 'management' as const, learningAreaId: null, libraryEntryId: null, treeToolsEnabled: false, title: '管理学习地图' };
+const managerDetail = { ...detail, conversation: managerConversation };
 const json = (body: unknown) => new Response(JSON.stringify(body));
 
 beforeEach(() => {
@@ -29,13 +31,33 @@ beforeEach(() => {
     if (url === '/api/me/tavern/characters') return json({ characters: [character] });
     if (url === '/api/credit/me') return json({ balance: 1, signedInToday: true, freeRemaining: 0, pricePerTree: 1 });
     if (url === '/api/me/tavern/conversations') return independentListPending ? new Promise<Response>(() => {}) : json({ conversations: [] });
+    if (url === '/api/me/tavern/conversations?scene=management') return json({ conversations: [managerConversation] });
+    if (url === '/api/me/tavern/management-conversations') return json({ ...managerDetail, conversation: { ...managerConversation, conversationId: 'manager-new', title: '新管理会话' } });
+    if (url === '/api/me/tavern/conversations/manager-new') return json({ ...managerDetail, conversation: { ...managerConversation, conversationId: 'manager-new', title: '新管理会话' } });
     if (url === '/api/me/learning-areas/entry-1/conversations') return json(init?.method === 'POST'
       ? freshDetail : { conversations: [{ ...areaConversation, libraryEntryId: archived ? null : 'entry-1' }] });
     if (url === '/api/me/tavern/tree-conversations/entry-1') return json(areaDetail);
-    if (url === '/api/me/tavern/conversations/conversation-1') return json({ ...areaDetail, conversation: { ...areaConversation, libraryEntryId: archived ? null : 'entry-1' } });
+    if (url === '/api/me/tavern/conversations/conversation-1') return json(localStorage.getItem('mapflow.tavern.selection.v1.player-1.management') ? managerDetail
+      : { ...areaDetail, conversation: { ...areaConversation, libraryEntryId: archived ? null : 'entry-1' } });
     if (url === '/api/me/tavern/conversations/fresh') return json(freshDetail);
     throw new Error(`Unexpected endpoint ${url}`);
   }));
+});
+
+it('restores management history separately and creates another management conversation without binding a map', async () => {
+  localStorage.setItem('mapflow.tavern.selection.v1.player-1.management', 'conversation-1');
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <IdentityProvider><TavernPage management onNavigateConsole={() => {}} /></IdentityProvider>
+  </QueryClientProvider>);
+  await screen.findByText('管理学习地图');
+  expect(requests.some(item => item.url === '/api/me/tavern/conversations?scene=management')).toBe(true);
+  expect(requests.some(item => item.url === '/api/me/tavern/conversations')).toBe(false);
+  await userEvent.setup().click(screen.getByRole('button', { name: '新建会话' }));
+  await screen.findByText('新管理会话');
+  expect(requests.filter(item => item.method === 'POST')).toEqual([
+    expect.objectContaining({ url: '/api/me/tavern/management-conversations', body: expect.objectContaining({ newConversation: true, clientRequestId: expect.any(String) }) }),
+  ]);
+  expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBeNull();
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 

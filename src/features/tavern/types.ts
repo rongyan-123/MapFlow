@@ -94,6 +94,7 @@ export interface ConversationDetail {
   cashCharges?: CashCharge[];
 }
 export interface CashCharge { generationId:string; outputMessageId:string; amountMicros:number; balanceAfterMicros:number; capped:boolean; createdAt:string }
+export type OpenManagementConversationInput = Partial<CreateConversationInput> & { newConversation?: boolean; clientRequestId?: string };
 export interface CashQuote { quoteId:string; maximumChargeMicros:number; policyVersion:string; expiresInSeconds:number }
 export interface CompletedTurn { turn: Turn; graph: ConversationGraph; creditBalance: number; chargedCredits: number; idempotencyHit: boolean; cashCharge?:CashCharge; walletBalanceMicros?:number; process?: GenerationProcessEvent[]; canvas?:TeachingCanvasState; generation?: GenerationRecord }
 export type GenerationProcessEvent = { type: 'reasoning'; text: string } | { type: 'tool'; name: string; state: 'started' | 'completed' | 'failed' };

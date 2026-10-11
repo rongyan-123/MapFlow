@@ -84,6 +84,7 @@
  html[data-mapflow-resizing='true'] .tavern-canvas {transition:none;}
 }
 @media(min-width:1024px) {
+ .learning-workspace>.panel-resize-handle {display:block;}
  .mapflow-tree-sidebar+.panel-resize-handle {display:block;}
  .mapflow-tree-sidebar:has(+.panel-resize-handle) {width:var(--panel-width,256px);}
 }

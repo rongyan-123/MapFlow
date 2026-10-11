@@ -14,11 +14,12 @@ interface LearningAreaSelectorProps {
 export default function LearningAreaSelector({ accountId, csrfToken, onEnterArea, onOpenMaps, onOpenManager }: LearningAreaSelectorProps) {
   const queryClient = useQueryClient();
   const areasKey = ['me', accountId, 'learning', 'areas'] as const;
-  const areas = useQuery({ queryKey: areasKey, queryFn: ({ signal }) => fetchLearningAreas(signal) });
+  const areas = useQuery({ queryKey: areasKey, queryFn: ({ signal }) => fetchLearningAreas(signal), staleTime: 30_000 });
   const library = useQuery({ queryKey: ['me', accountId, 'tree-library'], queryFn: fetchPersonalLibrary });
   const [search, setSearch] = useState('');
   const [selectedMap, setSelectedMap] = useState('');
-  const creation = useMutation({ mutationFn: (entry: string) => createLearningArea(entry, csrfToken), onSuccess: area => {
+  const creation = useMutation({ mutationFn: (entry: string) => createLearningArea(entry, csrfToken), onSuccess: async area => {
+    await queryClient.cancelQueries({ queryKey: areasKey, exact: true });
     queryClient.setQueryData<LearningArea[]>(areasKey, previous => [area, ...(previous ?? []).filter(item => item.areaId !== area.areaId)]);
     onEnterArea(area);
   } });

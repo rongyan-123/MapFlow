@@ -175,11 +175,42 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-function renderPage(treeContext?: { libraryEntryId: string; title: string }, sharedClient?: QueryClient) {
+function renderPage(treeContext?: { libraryEntryId: string; title: string; available?: boolean; nodeId?: string; nodeTitle?: string }, sharedClient?: QueryClient) {
   const client = sharedClient ?? new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
   const rendered = render(<QueryClientProvider client={client}><IdentityProvider><TavernPage onNavigateConsole={() => {}} treeContext={treeContext} /></IdentityProvider></QueryClientProvider>);
   return { ...rendered, client };
 }
+
+it('stages a node reference without sending or replacing the user draft, and includes it only on explicit send', async () => {
+  const user = userEvent.setup();
+  savedDetail = { ...savedDetail, conversation: { ...savedDetail.conversation, scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: 'entry-1', treeToolsEnabled: true } };
+  conversations = [savedDetail.conversation];
+  localStorage.setItem('mapflow.tavern.selection.v1.player-1.tree.entry-1', 'conversation-1');
+  renderPage({ libraryEntryId: 'entry-1', title: 'Python', nodeId: 'node-1', nodeTitle: '基础节点' });
+  await screen.findByText('节点参考：基础节点');
+  expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('');
+  expect(attempts).toHaveLength(0);
+  await user.click(screen.getByRole('button', { name: '配置' }));
+  await user.click(screen.getByRole('button', { name: '模型接入' }));
+  await user.click(screen.getByRole('button', { name: '使用平台模型（需要充值）' }));
+  await user.click(await screen.findByRole('button', { name: /trial-model/ }));
+  await user.click(screen.getByRole('button', { name: '关闭配置' }));
+  await user.type(screen.getByRole('textbox', { name: '消息' }), '讲解一下');
+  await user.click(screen.getByRole('button', { name: '发送' }));
+  await waitFor(() => expect(attempts).toHaveLength(1));
+  expect(attempts[0].action).toMatchObject({ type: 'reply', message: expect.stringContaining('node-1') });
+});
+
+it('collapses an enabled teaching canvas when the learning map takes the visual slot', async () => {
+  savedDetail = { ...savedDetail, canvas: { revision: 1, enabled: true, elements: [] },
+    conversation: { ...savedDetail.conversation, scene: 'learning', learningAreaId: 'entry-1', libraryEntryId: 'entry-1', treeToolsEnabled: true } };
+  conversations = [savedDetail.conversation];
+  localStorage.setItem('mapflow.tavern.selection.v1.player-1.tree.entry-1', 'conversation-1');
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><IdentityProvider><TavernPage mapVisible onNavigateConsole={() => {}}
+    treeContext={{ libraryEntryId: 'entry-1', title: 'Python' }} /></IdentityProvider></QueryClientProvider>);
+  expect(await screen.findByRole('button', { name: '展开画布' })).toHaveAttribute('aria-expanded', 'false');
+});
 function restoreConversation() {
   conversations = [conversation];
   window.localStorage.setItem('mapflow.tavern.selection.v1.player-1', conversation.conversationId);
@@ -395,7 +426,7 @@ describe('Tavern page', () => {
     expect(conversations).toHaveLength(2);
   });
 
-  it('keeps the editor mounted when collapsing the canvas and offers its toggle outside the composer', async () => {
+  it('releases the collapsed canvas editor and restores its document outside the composer', async () => {
     restoreConversation();
     savedDetail = { ...savedDetail, canvas: { revision: 1, enabled: true, elements: [] } };
     const normalFetch = fetchMock.getMockImplementation()!;
@@ -403,12 +434,13 @@ describe('Tavern page', () => {
     const user = userEvent.setup(); renderPage();
     const editor = await screen.findByLabelText('白板编辑器');
     await user.click(within(screen.getByRole('region', { name: '教学画布' })).getByRole('button', { name: '收起画布' }));
-    expect(editor).toBeInTheDocument();
+    expect(editor).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: '教学画布' })).not.toBeInTheDocument();
     const toolbar = screen.getByRole('navigation', { name: '学习工作区' });
     await user.click(within(toolbar).getByRole('button', { name: '展开画布' }));
-    expect(screen.getByLabelText('白板编辑器')).toBe(editor);
-    expect(editor.closest('form')).toBeNull();
+    const reopened = await screen.findByLabelText('白板编辑器');
+    expect(reopened).not.toBe(editor);
+    expect(reopened.closest('form')).toBeNull();
     expect(screen.getByRole('button', { name: '参数' }).closest('form')?.textContent).not.toContain('展开画布');
   });
 

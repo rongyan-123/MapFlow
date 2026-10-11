@@ -52,7 +52,7 @@ describe('NodeDetailPanel 知识聊天入口', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: '与这棵树聊天' }));
+    await user.click(screen.getByRole('button', { name: '进入学习区，向 AI 提问' }));
 
     expect(onOpenChat).toHaveBeenCalledOnce();
   });
@@ -66,7 +66,7 @@ describe('NodeDetailPanel 知识聊天入口', () => {
         onOpenChat={vi.fn()}
       />,
     );
-    expect(screen.queryByRole('button', { name: '与这棵树聊天' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '进入学习区，向 AI 提问' })).not.toBeInTheDocument();
 
     rerender(
       <NodeDetailPanel
@@ -76,7 +76,7 @@ describe('NodeDetailPanel 知识聊天入口', () => {
         onOpenChat={vi.fn()}
       />,
     );
-    expect(screen.queryByRole('button', { name: '与这棵树聊天' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '进入学习区，向 AI 提问' })).not.toBeInTheDocument();
   });
 
   it('允许编辑部分完成百分比并拒绝空输入', async () => {
