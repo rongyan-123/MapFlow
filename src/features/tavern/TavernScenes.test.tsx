@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { IdentityProvider } from '../identity/IdentityContext';
@@ -49,11 +49,11 @@ it('restores management history separately and creates another management conver
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
     <IdentityProvider><TavernPage management onNavigateConsole={() => {}} /></IdentityProvider>
   </QueryClientProvider>);
-  await screen.findByText('管理学习地图');
+  await within(await screen.findByRole('region',{name:'角色对话'})).findByText('管理学习地图');
   expect(requests.some(item => item.url === '/api/me/tavern/conversations?scene=management')).toBe(true);
   expect(requests.some(item => item.url === '/api/me/tavern/conversations')).toBe(false);
   await userEvent.setup().click(screen.getByRole('button', { name: '新建会话' }));
-  await screen.findByText('新管理会话');
+  await within(screen.getByRole('region',{name:'角色对话'})).findByText('新管理会话');
   expect(requests.filter(item => item.method === 'POST')).toEqual([
     expect.objectContaining({ url: '/api/me/tavern/management-conversations', body: expect.objectContaining({ newConversation: true, clientRequestId: expect.any(String) }) }),
   ]);
@@ -69,11 +69,11 @@ function renderChat(learning = true, client = new QueryClient({ defaultOptions: 
 
 it('reads the current area history and creates a learning conversation atomically', async () => {
   renderChat();
-  await screen.findByText(conversation.title);
+  await within(await screen.findByRole('region',{name:'角色对话'})).findByText(conversation.title);
   expect(requests.some(item => item.url === '/api/me/learning-areas/entry-1/conversations' && item.method === 'GET')).toBe(true);
   expect(requests.some(item => item.url === '/api/me/tavern/conversations')).toBe(false);
   await userEvent.setup().click(screen.getByRole('button', { name: '新建会话' }));
-  await screen.findByText('新学习会话');
+  await within(screen.getByRole('region',{name:'角色对话'})).findByText('新学习会话');
   expect(requests.filter(item => item.method === 'POST' && item.url.endsWith('/conversations'))).toEqual([
     expect.objectContaining({ url: '/api/me/learning-areas/entry-1/conversations', body: expect.objectContaining({ characterId: character.characterId }) }),
   ]);
@@ -97,7 +97,7 @@ it.each([false, true])('does not display cached learning history before the inde
 it('opens archived area history without opening or creating a map conversation', async () => {
   archived = true;
   renderChat();
-  await screen.findByText(conversation.title);
+  await within(await screen.findByRole('region',{name:'角色对话'})).findByText(conversation.title);
   expect(screen.queryByRole('button', { name: '新建会话' })).not.toBeInTheDocument();
   expect(requests.some(item => item.method === 'POST')).toBe(false);
 });

@@ -88,3 +88,6 @@
  .mapflow-tree-sidebar+.panel-resize-handle {display:block;}
  .mapflow-tree-sidebar:has(+.panel-resize-handle) {width:var(--panel-width,256px);}
 }
+@media (min-width: 1024px) {
+  .conversation-workspace > .panel-resize-handle { display: block; }
+}

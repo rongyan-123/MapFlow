@@ -21,6 +21,7 @@ import CreateCharacterDialog from './CreateCharacterDialog';
 import EditCharacterDialog from './EditCharacterDialog';
 import CharacterLibraryItem from './CharacterLibraryItem';
 import ConversationPane from './ConversationPane';
+import PanelResizeHandle from './PanelResizeHandle';
 import ConversationProfilePanel from './ConversationProfilePanel';
 import GenerationSettingsPanel from './GenerationSettingsPanel';
 import { createConversation, createLearningConversation, deleteCharacter, fetchCharacters, fetchConversation, fetchConversations, fetchLearningAreaConversations, fetchPlatformModels, openManagementConversation, openTreeConversation, switchConversationCharacter } from './tavernClient';
@@ -51,6 +52,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const roleNotices = useRoleNotices(accountId);
   const [importedRole, setImportedRole] = useState<Character | null>(null);
   const [historyRole, setHistoryRole] = useState('all');
+  const [historyOpen,setHistoryOpen]=useState(true);
   const selectionKey = `mapflow.tavern.selection.v1.${accountId}${management ? '.management' : ''}`;
   const treeSelectionKey = treeContext ? `${selectionKey}.tree.${treeContext.libraryEntryId}` : null;
   const [rememberedTreeConversation] = useState(() => {
@@ -77,7 +79,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const [generationBusy, setGenerationBusy] = useState(false);
   const pendingCreation = useRef<CreateLearningConversationInput | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
-  const [drawer, setDrawer] = useState<'library' | 'details' | null>(null);
+  const [drawer, setDrawer] = useState<'library' | 'details' | 'history' | null>(null);
   const [deleting, setDeleting] = useState<Character | null>(null);
   const [modelSelection, setModelSelection] = useState<TavernModelSelection>(() => readModelSelection(accountId));
   const savedCustomSelection = useRef(readModelSelection(accountId, 'custom'));
@@ -300,12 +302,21 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const characterConversations = (scopedConversations ?? []).filter(item =>
     historyRole === 'all' || item.characterId === historyRole || item.conversationId === conversationId);
   const historyRoles = [...new Set((scopedConversations ?? []).map(item => item.characterId))];
-  const summary = <div className="space-y-4">
+  const history = <nav aria-label="会话历史" className="space-y-4">
     <label className="block text-xs text-slate-400">历史角色
       <select aria-label="筛选历史角色" className={`${inputClass} mt-2`} value={historyRole} onChange={event => setHistoryRole(event.target.value)}>
         <option value="all">全部角色</option>{historyRoles.map(id => <option key={id} value={id}>{characters.data?.find(item => item.characterId === id)?.card.name ?? '已隐藏角色'}</option>)}
       </select>
     </label>
+    <div className="space-y-1">{characterConversations.filter(item=>historyRole==='all'||item.characterId===historyRole).map(item=><button type="button" key={item.conversationId}
+      aria-label={`打开会话 ${item.title}`} aria-current={item.conversationId===conversationId?'page':undefined}
+      className={`w-full rounded-xl px-3 py-2.5 text-left text-sm transition ${item.conversationId===conversationId?'bg-cyan-400/15 text-cyan-200':'text-slate-300 hover:bg-slate-800'}`}
+      disabled={creatingConversation||generationBusy||!!pendingCreation.current} onClick={()=>{selectConversation(item.conversationId);setDrawer(null);}}>
+      <span className="block truncate">{item.title}</span><span className="mt-1 block truncate text-xs text-slate-500">{characters.data?.find(role=>role.characterId===item.characterId)?.card.name??'已隐藏角色'}</span>
+    </button>)}</div>
+    {conversations.isSuccess&&scopedConversations?.length===0&&<p className="text-xs leading-6 text-slate-500">当前还没有会话。选择角色后新建会话即可开始。</p>}
+  </nav>;
+  const summary = <div className="space-y-4">
     <label className="block text-xs text-slate-400">历史会话
       <select aria-label="选择会话" className={`${inputClass} mt-2`} value={conversationId ?? ''} disabled={creatingConversation || generationBusy || !!pendingCreation.current} onChange={event => {
         const selected = characterConversations.find(item => item.conversationId === event.target.value);
@@ -355,17 +366,28 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         <HeaderMoreMenu>{tavernMenuItems}</HeaderMoreMenu>
       </div>
     </header>}
-    <main className="flex min-h-0 flex-1">
-      {!treeContext && !management && <aside aria-label="角色库" className="hidden w-60 shrink-0 overflow-y-auto border-r border-slate-800 p-4 lg:block">{library}</aside>}
+    <main className="conversation-workspace flex min-h-0 flex-1">
+      {!isMobile&&historyOpen&&!mapVisible&&<>
+        <aside aria-label="当前场景会话列表" className="shrink-0 overflow-y-auto border-r border-slate-800 p-3" style={{width:'var(--panel-width, 240px)'}}>
+          <div className="mb-4 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">{treeContext?'学习区会话':management?'管理会话':'酒馆会话'}</h2>
+            <button className="text-xs text-slate-400 hover:text-cyan-200" aria-label="收起会话列表" onClick={()=>setHistoryOpen(false)}>收起</button></div>
+          {canCreate&&<button type="button" className={`${primaryClass} mb-4 w-full`} disabled={creatingConversation||generationBusy||openingCharacter!==null||!conversations.isSuccess||(!!conversationId&&!currentDetail)}
+            onClick={()=>void createNewConversation()}>{creatingConversation?'创建中…':pendingCreation.current?'重试新建会话':'新建会话'}</button>}
+          {history}
+          {!treeContext&&!management&&<section aria-label="角色库" className="mt-5 border-t border-slate-800 pt-4">{library}</section>}
+        </aside>
+        <PanelResizeHandle label="调整会话列表与聊天宽度" storageKey={`mapflow.chat.history-width.v1.${accountId}`} minWidth={180} remainingWidth={360}/>
+      </>}
       <section aria-label="角色对话" className="flex min-w-0 flex-1 flex-col">
         <div className={isMobile
           ? 'flex shrink-0 flex-nowrap items-center gap-2 border-b border-slate-800 px-3 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]'
           : 'flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-2 sm:px-5'}>
           {(treeContext || management) && onClose && <button type="button" className={buttonClass} aria-label="返回学习区列表" onClick={onClose}>←</button>}
+          <button type="button" className={buttonClass} aria-label="打开会话列表" onClick={()=>{if(isMobile||mapVisible)setDrawer('history');else setHistoryOpen(open=>!open);}}>◫</button>
           <button type="button" className={buttonClass} aria-label="打开角色列表" onClick={() => { roleNotices.clear(); setDrawer('library'); }}>☰{roleNotices.count > 0 && <span className="ml-1 text-xs text-cyan-200">新增 {roleNotices.count}</span>}</button>
           <div className={`flex ${isMobile ? 'min-w-0' : 'min-w-[100px]'} flex-1 items-center gap-2`}><CharacterAvatar character={selectedCharacter} /><div className="min-w-0"><h2 className="truncate text-sm font-semibold">{selectedCharacter?.card.name ?? '欢迎来到酒馆'}</h2><p className="mt-0.5 truncate text-xs text-slate-500">{treeContext ? treeContext.nodeTitle ?? treeContext.title : conversationId ? '故事正在继续' : '选择角色，开启故事'}</p></div></div>
           {!isMobile && onShowMap && <button type="button" className={`${buttonClass} shrink-0`} onClick={onShowMap}>查看地图</button>}
-          {!isMobile && canCreate && <button type="button" className={`${buttonClass} shrink-0`} disabled={creatingConversation || generationBusy || openingCharacter !== null || !conversations.isSuccess || (!!conversationId && !currentDetail)}
+          {!isMobile && (!historyOpen||mapVisible) && canCreate && <button type="button" className={`${buttonClass} shrink-0`} disabled={creatingConversation || generationBusy || openingCharacter !== null || !conversations.isSuccess || (!!conversationId && !currentDetail)}
             onClick={() => void createNewConversation()}>{creatingConversation ? '创建中…' : pendingCreation.current ? '重试新建会话' : '新建会话'}</button>}
           <button type="button" className={`${buttonClass} shrink-0`} onClick={() => { setConfigurationSection('overview'); setConfigurationOpen(true); }}>配置</button>
           {isMobile && <HeaderMoreMenu label="操作" menuLabel={treeContext ? '会话操作' : '操作菜单'}>
@@ -402,13 +424,13 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
           : <div className="p-6">{conversationQuery.isPending ? <p role="status" className="text-sm text-slate-400">正在恢复会话与历史…</p> : <ErrorNotice error={conversationQuery.error} onRetry={() => void conversationQuery.refetch()} />}</div>
           : <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto p-8 text-center">
             <CharacterAvatar character={selectedCharacter} large /><h2 className="text-xl font-bold">{selectedCharacter ? `与${selectedCharacter.card.name}相遇` : '你的故事，从这里开始'}</h2>
-            <p className="max-w-sm text-sm leading-7 text-slate-400">{selectedCharacter ? '点击左侧角色，即可开始或继续故事。你的聊天记录会自动保存。' : '打开角色库，导入你喜欢的角色卡。会话和聊天历史保存在当前账号。'}</p>
+            <p className="max-w-sm text-sm leading-7 text-slate-400">{selectedCharacter ? '选择角色后点击新建会话，即可开始故事。你的聊天记录会自动保存。' : '打开角色库，导入你喜欢的角色卡。会话和聊天历史保存在当前账号。'}</p>
           </div>}
       </section>
     </main>
     <MobileDrawer open={drawer !== null} desktopVisible onClose={() => setDrawer(null)}>
-      <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">{drawer === 'library' ? '角色与账号' : '会话详情'}</h2><button type="button" className={buttonClass} onClick={() => setDrawer(null)}>关闭</button></div>
-      {drawer === 'library' ? <><IdentityAccess onRequestLogout={() => { setDrawer(null); setLogoutOpen(true); }} /><div className="mt-5">{library}</div></> : summary}
+      <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">{drawer === 'library' ? '角色与账号' : drawer==='history'?'会话列表':'会话详情'}</h2><button type="button" className={buttonClass} onClick={() => setDrawer(null)}>关闭</button></div>
+      {drawer === 'library' ? <><IdentityAccess onRequestLogout={() => { setDrawer(null); setLogoutOpen(true); }} /><div className="mt-5">{library}</div></> : drawer==='history'?history:summary}
     </MobileDrawer>
     {configurationOpen && !currentDetail && <TavernDialog title="配置" initialSection={configurationSection} onClose={() => setConfigurationOpen(false)} sections={configurationSections} />}
     {parametersOpen && currentDetail && conversationId && <TavernDialog title="模型参数" busy={parametersBusy} onClose={() => setParametersOpen(false)}>

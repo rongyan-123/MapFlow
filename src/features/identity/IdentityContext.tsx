@@ -2,6 +2,8 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -12,6 +14,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import IdentityDialog from './IdentityDialog';
+import { clearConversationRuns } from '../tavern/conversationRuns';
 import {
   claimInvitation,
   fetchCapabilities,
@@ -59,6 +62,7 @@ interface IdentityContextValue {
 const IdentityContext = createContext<IdentityContextValue | null>(null);
 
 async function clearApplicationQueries(queryClient: QueryClient) {
+  clearConversationRuns(queryClient);
   await queryClient.cancelQueries({
     predicate: (query) => query.queryKey[0] !== 'identity',
   });
@@ -79,6 +83,15 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     retry: false,
   });
   const session = sessionQuery.data ?? null;
+  const priorAccount = useRef<string | null>(null);
+  useEffect(() => {
+    if (sessionQuery.isPending) return;
+    const account = session?.account.playerId ?? null;
+    if (priorAccount.current !== null && priorAccount.current !== account) {
+      clearConversationRuns(queryClient);
+    }
+    priorAccount.current = account;
+  }, [queryClient, session?.account.playerId, sessionQuery.isPending]);
   const capabilities = useQuery({
     queryKey: CAPABILITIES_QUERY_KEY,
     queryFn: fetchCapabilities,

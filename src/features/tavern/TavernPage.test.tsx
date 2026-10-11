@@ -216,6 +216,119 @@ function restoreConversation() {
   window.localStorage.setItem('mapflow.tavern.selection.v1.player-1', conversation.conversationId);
 }
 
+it('shows the scene history directly in the sidebar and filters it without switching the active role', async () => {
+  restoreConversation();
+  const tutor={...character,characterId:'tutor-2',card:{...character.card,name:'耐心导师'}};
+  characters.push(tutor);
+  conversations.push({...conversation,conversationId:'other-role-story',characterId:tutor.characterId,title:'导师的另一段课'});
+  const user=userEvent.setup();renderPage();
+  await screen.findByRole('textbox',{name:'消息'});
+  const history=screen.getByRole('navigation',{name:'会话历史'});
+  expect(within(history).getByRole('button',{name:'打开会话 导师的另一段课'})).toBeInTheDocument();
+  await user.selectOptions(within(history).getByRole('combobox',{name:'筛选历史角色'}),tutor.characterId);
+  expect(within(history).queryByRole('button',{name:'打开会话 旅人的茶馆'})).not.toBeInTheDocument();
+  expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe('conversation-1');
+  expect(fetchMock.mock.calls.some(([url,init])=>url.endsWith('/character')&&init?.method==='PATCH')).toBe(false);
+});
+
+it('opens the selected sidebar history without generating or creating another conversation', async () => {
+  restoreConversation();
+  const other={...savedDetail,conversation:{...conversation,conversationId:'other-story',title:'已有的第二段会话'}};
+  conversations.push(other.conversation);
+  const normalFetch=fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation(async(url:string,init?:RequestInit)=>url==='/api/me/tavern/conversations/other-story'?json(other):normalFetch(url,init));
+  const user=userEvent.setup();renderPage();await screen.findByRole('textbox',{name:'消息'});
+  await user.click(within(screen.getByRole('navigation',{name:'会话历史'})).getByRole('button',{name:'打开会话 已有的第二段会话'}));
+  await waitFor(()=>expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe('other-story'));
+  expect(attempts).toHaveLength(0);
+  expect(fetchMock.mock.calls.some(([url,init])=>url==='/api/me/tavern/conversations'&&init?.method==='POST')).toBe(false);
+});
+
+it('keeps the owned stream running across leaving and reopening the chat without a duplicate request', async () => {
+  restoreConversation();
+  const normalFetch=fetchMock.getMockImplementation()!;
+  let stream:ReadableStreamDefaultController<Uint8Array>|undefined;
+  let signal:AbortSignal|undefined;
+  let input:{clientActionId:string;action:{message:string}}|undefined;
+  let posts=0;
+  const encoder=new TextEncoder();
+  fetchMock.mockImplementation(async(url:string,init?:RequestInit)=>{
+    if(url.endsWith('/turns')&&init?.method==='POST') {
+      posts++;signal=init.signal as AbortSignal;input=JSON.parse(init.body as string);
+      return new Response(new ReadableStream<Uint8Array>({start(controller){stream=controller;}}),{headers:{'content-type':'text/event-stream'}});
+    }
+    return normalFetch(url,init);
+  });
+  const user=userEvent.setup();const client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
+  const first=renderPage(undefined,client);await configureSelfKey(user);
+  await user.type(screen.getByRole('textbox',{name:'消息'}),'离开后继续处理');
+  await user.click(screen.getByRole('button',{name:'发送'}));
+  await waitFor(()=>expect(stream).toBeDefined());
+  first.unmount();
+  expect(signal?.aborted).toBe(false);
+  stream!.enqueue(encoder.encode(`event: delta\ndata: ${JSON.stringify({delta:'属于原会话的答复'})}\n\n`));
+  renderPage(undefined,client);
+  await screen.findByRole('button',{name:'停止生成'});
+  expect(posts).toBe(1);
+  const completed={...completion,turn:{...completion.turn,clientTurnId:input!.clientActionId,userMessage:input!.action.message,assistantMessage:'属于原会话的答复'},graph:{...detail.graph,revision:2,messages:[...detail.graph.messages,{messageId:'navigation-answer',parentMessageId:'message-assistant-1',role:'assistant' as const,origin:'model' as const,characterId:character.characterId,content:'属于原会话的答复'}],activePath:[...detail.graph.activePath,'navigation-answer']}};
+  stream!.enqueue(encoder.encode(`event: completed\ndata: ${JSON.stringify(completed)}\n\n`));stream!.close();
+  await waitFor(()=>expect(screen.queryByRole('button',{name:'停止生成'})).not.toBeInTheDocument());
+  expect(within(screen.getByRole('log',{name:'对话消息'})).getByText('属于原会话的答复')).toBeInTheDocument();
+  expect(posts).toBe(1);
+});
+
+it('commits a background completion only to the initiating chat while another chat is visible', async () => {
+  restoreConversation();
+  const other={...detail,conversation:{...conversation,conversationId:'second-chat',title:'第二个会话'},graph:{...detail.graph,messages:detail.graph.messages.map(item=>item.messageId==='message-assistant-1'?{...item,content:'第二个会话自己的答复'}:item)}};
+  conversations.push(other.conversation);
+  const normalFetch=fetchMock.getMockImplementation()!;
+  let stream:ReadableStreamDefaultController<Uint8Array>|undefined;
+  let input:{clientActionId:string;action:{message:string}}|undefined;
+  const encoder=new TextEncoder();
+  fetchMock.mockImplementation(async(url:string,init?:RequestInit)=>{
+    if(url==='/api/me/tavern/conversations/second-chat')return json(other);
+    if(url.endsWith('/turns')&&init?.method==='POST') {
+      input=JSON.parse(init.body as string);
+      return new Response(new ReadableStream<Uint8Array>({start(controller){stream=controller;}}),{headers:{'content-type':'text/event-stream'}});
+    }
+    return normalFetch(url,init);
+  });
+  const user=userEvent.setup();const client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}});
+  const first=renderPage(undefined,client);await configureSelfKey(user);
+  await user.type(screen.getByRole('textbox',{name:'消息'}),'原会话继续');await user.click(screen.getByRole('button',{name:'发送'}));
+  await waitFor(()=>expect(stream).toBeDefined());first.unmount();
+  localStorage.setItem('mapflow.tavern.selection.v1.player-1','second-chat');renderPage(undefined,client);
+  await screen.findByText('第二个会话自己的答复');
+  expect(screen.queryByRole('button',{name:'停止生成'})).not.toBeInTheDocument();
+  const completed={...completion,turn:{...turn,clientTurnId:input!.clientActionId,userMessage:input!.action.message},graph:{...detail.graph,revision:2}};
+  stream!.enqueue(encoder.encode(`event: completed\ndata: ${JSON.stringify(completed)}\n\n`));stream!.close();
+  await waitFor(()=>expect(client.getQueryData<ConversationDetail>(['me','player-1','tavern','conversation','conversation-1'])?.graph.revision).toBe(2));
+  expect(screen.getByRole('log',{name:'对话消息'})).toHaveTextContent('第二个会话自己的答复');
+  expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBe('second-chat');
+  expect(client.getQueryData<ConversationDetail>(['me','player-1','tavern','conversation','second-chat'])?.graph.revision).toBe(1);
+});
+
+it('cancels the old owned run when the authenticated account changes', async () => {
+  restoreConversation();const normalFetch=fetchMock.getMockImplementation()!;
+  let signal:AbortSignal|undefined;
+  fetchMock.mockImplementation(async(url:string,init?:RequestInit)=>{
+    if(url.endsWith('/turns')&&init?.method==='POST') {
+      signal=init.signal as AbortSignal;
+      return new Response(new ReadableStream<Uint8Array>({start(){}}),{headers:{'content-type':'text/event-stream'}});
+    }
+    if(identityAccountId==='player-2'&&url==='/api/me/tavern/characters')return json({characters:[]});
+    if(identityAccountId==='player-2'&&url==='/api/me/tavern/conversations')return json({conversations:[]});
+    return normalFetch(url,init);
+  });
+  const user=userEvent.setup();const mounted=renderPage();await configureSelfKey(user);
+  await user.type(screen.getByRole('textbox',{name:'消息'}),'切账号前的请求');await user.click(screen.getByRole('button',{name:'发送'}));
+  await waitFor(()=>expect(signal).toBeDefined());
+  identityAccountId='player-2';
+  act(()=>mounted.client.setQueryData(['identity','session'],{account:{playerId:'player-2',username:'另一个账号',status:'active',isAdmin:false},csrfToken:'csrf-2'}));
+  await waitFor(()=>expect(signal?.aborted).toBe(true));
+  expect(screen.queryByRole('button',{name:'停止生成'})).not.toBeInTheDocument();
+});
+
 it('shows all scene roles by default and filters history without changing the active story or draft', async () => {
   restoreConversation();
   const tutor = { ...character, characterId: 'tutor-2', card: { ...character.card, name: '耐心导师' } };

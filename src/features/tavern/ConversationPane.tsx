@@ -1,4 +1,6 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { conversationRun, type PendingGeneration } from './conversationRuns';
 import { approvalSummary } from './approvalSummary';
 import { useTeachingCanvas } from './useTeachingCanvas';
 import './teachingWorkspace.css';
@@ -12,16 +14,11 @@ import useIsMobile from '../../lib/useIsMobile';
 import { validateId, validateMessage } from './conversationInput';
 import { fetchConversation, generateStream, mutateGraph, resolveTavernToolApproval } from './tavernClient';
 import {formatAmountMicros} from '../wallet/walletClient';
-import type {CashQuote} from './types';
+import type { CashQuote } from './types';
 import { TavernApiError, type CompletedTurn, type ConversationDetail, type ConversationGraph, type GenerationAction, type GenerationRecord, type GraphMessage, type GraphMutation, type TavernModelSelection, type TavernUserModelAccess } from './types';
 import { isRecord, utf8Bytes } from './validation';
 import { CharacterAvatar, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass, type TavernDialogSection } from './TavernUi';
 import type { Character } from './types';
-
-interface PendingGeneration { clientActionId: string; expectedRevision: number; action: GenerationAction;
-  billing?:CashQuote;
-  platformBinding?: { model: string; historyBytes: 8192 | 16384 | 32768 };
-  modelBinding?: { model: string; baseUrl: string; historyBytes: 8192 | 16384 | 32768 } }
 
 export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, platformModelError, onBusyChange, onCompleted, onRecovered, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onOpenParameters, onNavigateWallet, onCloseConfiguration, configuration, nodeReference, mapVisible, onOpenCanvas, readOnly = false }: {
   detail: ConversationDetail; accountId: string; csrfToken: string;
@@ -38,20 +35,27 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   readOnly?: boolean;
 }) {
   const storageKey = `mapflow.tavern.pending.v1.${accountId}.${detail.conversation.conversationId}`;
-  const [pendingGeneration, setPendingGeneration] = useState<PendingGeneration | null>(() => {
+  const queryClient=useQueryClient();
+  const run=useMemo(()=>conversationRun(queryClient,{accountId,scene:detail.conversation.scene??(detail.conversation.libraryEntryId?'learning':'tavern'),
+    areaId:detail.conversation.learningAreaId??null,conversationId:detail.conversation.conversationId},()=>{
     const saved = readPending(storageKey, detail.graph.revision);
     if (saved && detail.generations.some(generation => generation.clientActionId === saved.clientActionId)) { storePending(storageKey, null); return null; }
     return saved;
-  });
-  const restoredPending = useRef(pendingGeneration);
+  }),[queryClient,storageKey,detail.conversation.scene,detail.conversation.learningAreaId]);
+  const {pendingGeneration,draft,process,stopped,busy,error,canvasPreview}=useSyncExternalStore(run.subscribe,run.getSnapshot,run.getSnapshot);
+  const setPendingGeneration=(pendingGeneration:PendingGeneration|null)=>run.set({pendingGeneration});
+  const setDraft=(draft:string)=>run.set({draft});
+  const setProcess=(process:GenerationProcessEvent[])=>run.set({process});
+  const setStopped=(stopped:boolean)=>run.set({stopped});
+  const setBusy=(busy:boolean)=>run.set({busy});
+  const setError=(error:unknown)=>run.set({error});
+  const restoredPending = useRef(run.controller.current?null:pendingGeneration);
   const [message, setMessage] = useState('');
   const [referenceActive, setReferenceActive] = useState(!!nodeReference);
   useEffect(() => { setReferenceActive(!!nodeReference); }, [nodeReference?.id, nodeReference?.title]);
-  const [draft, setDraft] = useState('');
-  const [process, setProcess] = useState<GenerationProcessEvent[]>([]);
-  const [stopped, setStopped] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const canvas = useTeachingCanvas(detail.conversation.conversationId, csrfToken, detail.graph.revision, detail.canvas);
+  useEffect(()=>{canvas.setPreview(canvasPreview);},[canvasPreview,canvas.setPreview]);
   const mapVisibleRef = useRef(mapVisible); mapVisibleRef.current = mapVisible;
   useEffect(() => { if (mapVisible) canvas.setOpen(false); }, [mapVisible]);
   async function openTeachingCanvas() {
@@ -59,8 +63,6 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     await canvas.show();
     if (mapVisibleRef.current) canvas.setOpen(false);
   }
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [graphBusy, setGraphBusy] = useState(false);
@@ -68,16 +70,15 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   useEffect(() => () => { onBusyChange?.(false); }, [onBusyChange]);
   const [branchName, setBranchName] = useState('');
   const [branchAnchorId, setBranchAnchorId] = useState('');
-  const activeRequest = useRef<AbortController | null>(null);
-  const publishPreview = useRef<(() => void) | null>(null);
-  const presentationRef=useRef<StreamingPresentation|null>(null);
+  const activeRequest = run.controller;
+  const publishPreview = run.publishPreview;
+  const presentationRef=run.presentation;
   const bottom = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLDivElement>(null);
   // 手机端输入区每多一行就少一行聊天记录，模型选择并到底部按钮行，历史字节说明收起。
   const isMobile = useIsMobile();
   const modelChipButton = <button type="button" className="shrink-0 rounded-full bg-slate-800 px-3 py-1.5 text-slate-200 hover:text-cyan-200" onClick={onOpenModelConfiguration}>{modelSelection.model || '选择模型'} · {modelSelection.provider === 'platform' ? '平台额度' : '自填 Key'}</button>;
   const followLatest = useRef(true);
-  useEffect(() => () => { presentationRef.current?.dispose(); activeRequest.current?.abort(); }, []);
   useEffect(() => {
     if (followLatest.current) bottom.current?.scrollIntoView?.({ block: 'nearest' });
   }, [draft, process, detail.graph.revision, pendingGeneration]);
@@ -102,14 +103,14 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       const saved = await fetchConversation(detail.conversation.conversationId, signal);
       if (!signal?.aborted && saved.generations.some(generation => generation.clientActionId === expected.clientActionId)) {
         storePending(storageKey, null); setPendingGeneration(null); setDraft(''); setProcess([]); setError(null);
-        canvas.setPreview(null); onRecovered(saved);
+        run.set({canvasPreview:null}); onRecovered(saved);
         return true;
       }
       const latestAttempt = saved.diagnostics?.find(record=>record.actionId===expected.clientActionId&&record.payload.type==='attempt');
       if(!signal?.aborted&&latestAttempt&&['failed','cancelled','interrupted'].includes(String(latestAttempt.payload.state))) {
         storePending(storageKey,null);setPendingGeneration(null);
         if(expected.action.type==='reply')setMessage(expected.action.message);
-        canvas.setPreview(null);onRecovered(saved);return true;
+        run.set({canvasPreview:null});onRecovered(saved);return true;
       }
     } catch { /* Keep the original failure and request ID when recovery cannot confirm a saved result. */ }
     finally { setRecovering(false); }
@@ -117,9 +118,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   }
 
   function stopGeneration() {
-    publishPreview.current?.();
-    presentationRef.current?.dispose();
-    activeRequest.current?.abort(); setBusy(false); setStopped(true); canvas.setPreview(null);
+    run.cancel();
     void recoverSavedResult();
   }
 
@@ -157,7 +156,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
           historyBytes: modelSelection.historyBytes } } : {}) };
     } catch (failure) { setError(failure); return; }
     const controller = new AbortController();
-    activeRequest.current = controller;
+    run.begin(controller,detail.graph.activeBranchId,outgoing.clientActionId);
     const presentation=new StreamingPresentation((answer,events)=>{
       if(!controller.signal.aborted){setDraft(answer);setProcess(events);}
     });
@@ -176,11 +175,11 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         platformModel && modelSelection.billingPolicy ? { policyVersion: modelSelection.billingPolicy } : undefined,
         async approval => {
           const prompt=approvalSummary(approval);
-          const allowed=!controller.signal.aborted && window.confirm(prompt);
+          const allowed=!controller.signal.aborted && run.isVisible() && window.confirm(prompt);
           await resolveTavernToolApproval(detail.conversation.conversationId,approval.approvalRequestId,allowed,allowed && approval.destructive,csrfToken);
         }, event => {
           if (controller.signal.aborted) return;
-          if (event.type === 'canvas') canvas.setPreview(event.canvas);
+          if (event.type === 'canvas') run.set({canvasPreview:event.canvas});
           else if(event.type==='snapshot')presentation.restore(event.process);
           else if(event.type==='reasoning')presentation.reasoning(event.text);
           else if(event.type==='tool')presentation.tool(event);
@@ -189,7 +188,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       if (controller.signal.aborted) return;
       storePending(storageKey, null);
       if (outgoing.action.type === 'reply') setReferenceActive(false);
-      setPendingGeneration(null); setDraft(''); setProcess([]); canvas.setPreview(null); onCompleted(completed);
+      setPendingGeneration(null); setDraft(''); setProcess([]); run.set({canvasPreview:null}); onCompleted(completed);
     } catch (failure) { if (!controller.signal.aborted) {
       presentation.flush();
       if (failure instanceof TavernApiError && !failure.generationFailed && (failure.status === 0 || failure.status >= 500)
@@ -198,7 +197,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       if (failure instanceof TavernApiError && failure.code==='tavern.cash_quote_expired') {
         const renewed={...outgoing,billing:undefined};setPendingGeneration(renewed);storePending(storageKey,renewed);
       }
-      setError(failure); canvas.setPreview(null);
+      setError(failure); run.set({canvasPreview:null});
     } }
     finally { presentation.dispose(); if (activeRequest.current === controller) { activeRequest.current = null; publishPreview.current = null;presentationRef.current=null; setBusy(false); } }
   }

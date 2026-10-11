@@ -43,7 +43,7 @@ export default function LearningChatWorkspace({ accountId, csrfToken, requestedA
   const enter = (nextAreaId: string | null) => { setAreaId(nextAreaId); setMapOpen(false); setNodeReference(undefined); onSelectArea?.(nextAreaId); };
   if (managerOpen) return <section aria-label="学习区管理助手" className="flex min-h-0 flex-1 flex-col">
     <div className="shrink-0 border-b border-slate-800 px-3 py-2"><button className={buttonClass} onClick={() => setManagerOpen(false)}>返回学习区列表</button></div>
-    <TavernPage management onNavigateConsole={() => setManagerOpen(false)} onClose={() => setManagerOpen(false)}
+    <TavernPage management onNavigateConsole={() => setManagerOpen(false)}
       onNavigateWallet={onNavigateWallet} onNavigateModels={onNavigateModels} mobileHeaderActions={mobileHeaderActions} />
   </section>;
   if (areaId && areas.isPending) return <p role="status" className="p-6 text-sm text-slate-400">正在恢复学习区…</p>;
@@ -66,7 +66,7 @@ export default function LearningChatWorkspace({ accountId, csrfToken, requestedA
         ? { width: 'var(--panel-width, 55%)' } as CSSProperties : { width: '100%' }}>
         <TavernPage treeContext={{ libraryEntryId: area.libraryEntryId, title: area.title, available: area.available,
           nodeId: nodeReference?.id, nodeTitle: nodeReference?.title }}
-          onNavigateConsole={() => enter(null)} onClose={() => enter(null)} onNavigateWallet={onNavigateWallet} onNavigateModels={onNavigateModels}
+          onNavigateConsole={() => enter(null)} onNavigateWallet={onNavigateWallet} onNavigateModels={onNavigateModels}
           mobileHeaderActions={mobileHeaderActions} onShowMap={area.available ? () => setMapOpen(open => !open) : undefined}
           mapVisible={mapOpen} onOpenCanvas={() => setMapOpen(false)}
           onTreeChanged={() => void queryClient.invalidateQueries({ queryKey: ['me', accountId, 'tree-library', area.libraryEntryId] })} />
