@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IdentityApiError } from '../identity/identityClient';
 import AdminPanel from './AdminPanel';
+import {configurationFixture} from './agentModelFixture';
 import type {
   AdminAccount,
   AdminAnnouncement,
@@ -31,6 +32,8 @@ const adminApi = vi.hoisted(() => ({
 }));
 
 vi.mock('./adminClient', () => adminApi);
+const agentApi=vi.hoisted(()=>({fetchAgentModelConfiguration:vi.fn(),saveAgentModelProfile:vi.fn(),activateAgentModelProfile:vi.fn()}));
+vi.mock('./agentModelClient',()=>agentApi);
 const walletApi = vi.hoisted(() => ({ readAdminTopups: vi.fn(), readAdminChannels: vi.fn(), readUpstreamBalance: vi.fn() }));
 vi.mock('../wallet/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('../wallet/walletClient')>(), ...walletApi }));
 
@@ -185,6 +188,7 @@ beforeEach(() => {
   adminApi.fetchAdminFeedback.mockResolvedValue({ items: [], total: 0 });
   adminApi.fetchAdminAnnouncements.mockResolvedValue([]);
   adminApi.fetchAdminProviderConfiguration.mockResolvedValue(providerConfiguration());
+  agentApi.fetchAgentModelConfiguration.mockResolvedValue(configurationFixture());
 });
 
 function providerConfiguration() {
@@ -294,10 +298,10 @@ describe('AdminPanel', () => {
 
     await user.click(screen.getByRole('tab', { name: '模型' }));
     await waitFor(() =>
-      expect(adminApi.fetchAdminProviderConfiguration).toHaveBeenCalledWith('csrf-secret'),
+      expect(agentApi.fetchAgentModelConfiguration).toHaveBeenCalled(),
     );
-    expect(screen.getByRole('heading', { name: 'Qwen3-8B' })).toBeInTheDocument();
-    expect(screen.getByText('Qwen2.5-7B-Instruct')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '模型配置' })).toBeInTheDocument();
+    expect(screen.getByLabelText('当前积分模型')).toHaveTextContent('原积分模型');
 
     await user.click(screen.getByRole('button', { name: '返回' }));
     expect(props.onBack).toHaveBeenCalledTimes(1);
@@ -320,29 +324,19 @@ describe('AdminPanel', () => {
 
   it('switches the active provider from the model tab', async () => {
     const user = userEvent.setup();
-    adminApi.switchAdminProvider.mockResolvedValue({
-      ...providerConfiguration(),
-      active: providerConfiguration().options[1],
-      options: providerConfiguration().options.map((profile, index) => ({
-        ...profile,
-        active: index === 1,
-      })),
-    });
+    const config=configurationFixture();
+    agentApi.activateAgentModelProfile.mockResolvedValue({...config,activePoints:{profile:config.profiles[0],epoch:4}});
     renderAdminPanel();
 
     await user.click(screen.getByRole('tab', { name: '模型' }));
-    await screen.findByRole('heading', { name: 'Qwen3-8B' });
-    await user.click(screen.getByRole('button', { name: '切换到此模型' }));
+    await screen.findByRole('heading', { name: '模型配置' });
+    await user.click(screen.getByRole('button', { name: '启用 候选积分模型' }));
 
     await waitFor(() =>
-      expect(adminApi.switchAdminProvider).toHaveBeenCalledWith(
-        'siliconflow-qwen2.5-7b-instruct',
-        'csrf-secret',
-      ),
+      expect(agentApi.activateAgentModelProfile).toHaveBeenCalledWith(
+        {funding:'points',profileId:'points-test',profileVersion:2,expectedEpoch:3},'csrf-secret'),
     );
-    expect(
-      await screen.findByRole('heading', { name: 'Qwen2.5-7B-Instruct' }),
-    ).toBeInTheDocument();
+    await waitFor(()=>expect(screen.getByLabelText('当前积分模型')).toHaveTextContent('候选积分模型'));
   });
 
   it('overview renders the metric cards and the tallest bar of the 7-day trend', async () => {

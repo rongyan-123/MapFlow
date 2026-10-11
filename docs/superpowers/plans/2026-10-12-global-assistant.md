@@ -94,7 +94,7 @@
 
 ### Task 6: Persistent model profiles and window-aware context
 
-**Files:** Create `migrations/0048_agent_model_profiles.sql`, `src/agent_execution/{model_profiles.rs,context.rs}` and tests; modify `src/platform_model_access.rs`, `src/platform_runtime.rs`, `src/http/admin.rs`, worker `src/platform.ts`; frontend `src/features/admin/{ProviderTab.tsx,adminClient.ts,types.ts}` and tests.
+**Files:** Create `migrations/0049_agent_model_profiles.sql` (0048 is the completed execution migration), `src/agent_execution/{model_profiles.rs,context.rs}` and tests; modify `src/platform_model_access.rs`, `src/platform_runtime.rs`, `src/http/admin.rs`, worker `src/platform.ts`; frontend `src/features/admin/{ProviderTab.tsx,adminClient.ts,types.ts}` and tests.
 
 **Interfaces:** Produces versioned model/credential/capability snapshots and tested activation. Preserves cash catalogue versus points-default distinction. Context preparation returns complete current requirements, draft index and matching tool request/result groups with readable references to large stored data.
 
