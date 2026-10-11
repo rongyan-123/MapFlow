@@ -27,7 +27,8 @@
 - [x] Management directory/tutorial tools and strict learning/tavern tool isolation.
 - [x] Map/canvas views, viewport/notes recovery and generation ownership during navigation.
 - [x] Full checks, real request/UI acceptance and independent review.
-- [ ] Concrete main integration/release candidate; deployment approval.
+- [x] Concrete main integration/release candidate.
+- [ ] Final deployment approval and main/production integration.
 
 ## Evidence
 
@@ -71,3 +72,4 @@ New implementation tests and request measurements are appended as they are run. 
 - Final review reproduced and fixed: library edits silently changing current stories, response-loss creation after refresh, archived content writes, nonfunctional archive branch browsing and incomplete learning return URLs. Business changes used observed RED → GREEN tests. Follow-up rename/regenerate/continuation checks now preserve each message's actual name and place charges under the correct bubble; unknown legacy authors stay unknown.
 - Final gates: frontend **678 passed / 1 skipped**, types/build green; backend **807 passed / 3 manual opt-in ignored** across 100 suites, fmt/configured Clippy green with baseline warnings; unchanged worker **97 passed / 1 skipped**, types/build green. The whole-branch reviewer closed all findings with no remaining Critical/Important issues. Both repositories fetched origin again; mobile main commits `183a744` and `13e3bba` remain included.
 - Migration 0044 additionally stores new assistant author snapshots without rewriting legacy messages. Actual SQLx migration replay through 44 preserved all original fields/counts across 54 private-clone tables, 66 conversations, 45 areas and zero invalid scopes. Disposable paid fixtures, both private clones and dumps were cleaned. Final candidate packaging is in progress; main and production remain unchanged.
+- Fixed source candidate: frontend `42ff810`, backend `8513071`. Source archives matched the 307 actual tested backend files; 370 fixed frontend assets matched. Optimized locked release build and image worker smoke passed. Final image `mapflow-server:four-interface-candidate-20261011-8513071` has matching source labels and 381 verified internal files. The temporary browser proxy/SSH tunnel were stopped; the built packet remains for the final approved release. Main and production remain unchanged.
