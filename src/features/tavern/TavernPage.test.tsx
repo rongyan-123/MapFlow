@@ -199,7 +199,7 @@ it('sends uncapped native messages and displays a saved answer even when its fee
     if(url===`/api/me/tavern/conversations/${conversationId}/executions`){
       if(init?.method==='POST')return json({replayed:false,execution:{executionId,conversationId,state:'succeeded',funding:'cash',modelId:'cash-tutor',error:null,
         result:{executionId,conversationId,generationId:'33333333-3333-4333-8333-333333333333',messageId:'44444444-4444-4444-8444-444444444444',
-          answer:'已保存的真实回答',maps:[],usage:null,settlement:{status:'pending_evidence',cashMicros:null,pointUnits:null,balanceMicros:null}}}});
+          answer:'已保存的真实回答',maps:[{treeId:'55555555-5555-4555-8555-555555555555',libraryEntryId:'66666666-6666-4666-8666-666666666666',title:'已生成的地图'}],usage:null,settlement:{status:'pending_evidence',cashMicros:null,pointUnits:null,balanceMicros:null}}}});
       return json({execution:null});
     }
     if(url===`/api/me/tavern/conversations/${conversationId}`)return json(savedDetail);
@@ -209,6 +209,7 @@ it('sends uncapped native messages and displays a saved answer even when its fee
   const input=await screen.findByRole('textbox',{name:'消息'});fireEvent.change(input,{target:{value:'长输入'.repeat(10000)}});
   expect(screen.getByRole('button',{name:'发送'})).toBeEnabled();fireEvent.click(screen.getByRole('button',{name:'发送'}));
   expect(await screen.findByText('已保存的真实回答')).toBeInTheDocument();expect(screen.getByText(/费用待核对/)).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'查看 已生成的地图'})).toBeInTheDocument();
   expect(fetchMock.mock.calls.some(([url])=>String(url).endsWith('/generate-stream'))).toBe(false);
   expect(screen.queryByText(/本次生成失败/)).not.toBeInTheDocument();
 });

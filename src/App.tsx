@@ -183,6 +183,7 @@ export default function App() {
     return <LandingPage session={session} onEnterConsole={() => navigateToAssistant()} onLogin={() => navigateToAssistant()} />;
   }
   const consolePage = <ConsoleApp requestedView={requestedView} guideRequested={guideRequested} onGuideConsumed={guideConsumed} onNavigateView={navigateView}
+    requestedMapId={currentPath==='/maps'?new URLSearchParams(window.location.search).get('entry'):null}
     onNavigateAssistant={() => navigatePage('/assistant')}
     onNavigateLearning={(area, node) => navigatePage(`/learning?area=${encodeURIComponent(area)}${node ? `&node=${encodeURIComponent(node.id)}&title=${encodeURIComponent(node.title)}` : ''}`)}
     onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />;
@@ -210,12 +211,13 @@ export default function App() {
   </ModelSelectionProvider>;
 }
 
-function ConsoleApp({ requestedView, guideRequested, onGuideConsumed, onNavigateView, onNavigateLearning, onNavigateWallet, onNavigateModels, onNavigateAssistant }: {
+function ConsoleApp({ requestedView, requestedMapId, guideRequested, onGuideConsumed, onNavigateView, onNavigateLearning, onNavigateWallet, onNavigateModels, onNavigateAssistant }: {
   guideRequested: boolean; onGuideConsumed: () => void;
   requestedView?: PersistedAppView; onNavigateView: (view: PersistedAppView) => void;
   onNavigateLearning: (area: string, node?: { id: string; title: string }) => void;
   onNavigateWallet: () => void; onNavigateModels: () => void;
   onNavigateAssistant: () => void;
+  requestedMapId: string|null;
 }) {
   const queryClient = useQueryClient();
   const {
@@ -236,6 +238,7 @@ function ConsoleApp({ requestedView, guideRequested, onGuideConsumed, onNavigate
   const [personalMapSearch, setPersonalMapSearch] = useState('');
   const [selectedPublicTreeId, setSelectedPublicTreeId] = useState<string | null>(null);
   const [selectedLibraryEntryId, setSelectedLibraryEntryId] = useState<string | null>(null);
+  const [resolvedMapTarget,setResolvedMapTarget]=useState<string|null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [noteNodeId, setNoteNodeId] = useState<string | null>(null);
   const [completion, setCompletion] = useState<{ node: SkillNode; nonce: number } | null>(null);
@@ -277,6 +280,7 @@ function ConsoleApp({ requestedView, guideRequested, onGuideConsumed, onNavigate
   const consoleStateHydratedRef = useRef(false);
   const skipConsoleStateWriteRef = useRef(false);
   const accountPlayerId = session?.account.playerId ?? null;
+  const requestedMapTargetKey=JSON.stringify([accountPlayerId,requestedMapId]);
   const entryScopeKey = JSON.stringify([accountPlayerId, requestedView ?? view, selectedLibraryEntryId]);
   const entryScope = useRef({ key: entryScopeKey, revision: 0 });
   if (entryScope.current.key !== entryScopeKey) entryScope.current = { key: entryScopeKey, revision: entryScope.current.revision + 1 };
@@ -331,7 +335,10 @@ function ConsoleApp({ requestedView, guideRequested, onGuideConsumed, onNavigate
     enabled:
       view === 'personal' &&
       accountPlayerId !== null &&
-      selectedLibraryEntryId !== null,
+      selectedLibraryEntryId !== null &&
+      (!requestedMapId || (resolvedMapTarget===requestedMapTargetKey &&
+        personalLibrary.data?.entries.some(entry=>entry.library_entry_id===selectedLibraryEntryId)===true)),
+      // Explicit saved targets are resolved against the current account's owned index first.
     staleTime: 15 * 1000,
     retry: false,
   });
@@ -367,12 +374,13 @@ function ConsoleApp({ requestedView, guideRequested, onGuideConsumed, onNavigate
     if (
       view === 'personal' &&
       session &&
+      !requestedMapId &&
       !selectedLibraryEntryId &&
       personalLibrary.data?.entries[0]
     ) {
       setSelectedLibraryEntryId(personalLibrary.data.entries[0].library_entry_id);
     }
-  }, [personalLibrary.data, selectedLibraryEntryId, session, view]);
+  }, [personalLibrary.data, selectedLibraryEntryId, session, view, requestedMapId]);
 
   useEffect(() => {
     if (sessionPending || consoleStateHydratedRef.current) return;
@@ -425,6 +433,13 @@ function ConsoleApp({ requestedView, guideRequested, onGuideConsumed, onNavigate
     setMobileView('list');
     setLayoutMode('relationship');
   }, [accountPlayerId]);
+
+  useEffect(()=>{
+    if(!requestedMapId||!personalLibrary.data||resolvedMapTarget===requestedMapTargetKey)return;
+    const owned=personalLibrary.data.entries.find(entry=>entry.library_entry_id===requestedMapId);
+    setSelectedLibraryEntryId(owned?.library_entry_id??null);setSelectedNodeId(null);
+    setResolvedMapTarget(requestedMapTargetKey);
+  },[requestedMapId,requestedMapTargetKey,personalLibrary.data,resolvedMapTarget]);
 
   useEffect(() => {
     if (!consoleStateHydratedRef.current || skipConsoleStateWriteRef.current) {
@@ -1071,6 +1086,8 @@ function ConsoleApp({ requestedView, guideRequested, onGuideConsumed, onNavigate
       </header>}
 
       {areaEntryError != null && <p role="alert" className="px-5 py-3 text-sm text-rose-300">学习区暂时无法打开，请重试。</p>}
+      {view==='personal'&&requestedMapId&&resolvedMapTarget===requestedMapTargetKey&&!selectedLibraryEntryId&&
+        <p role="status" className="px-5 py-3 text-sm text-slate-400">指定地图暂不可用，请从我的地图重新选择。</p>}
       {view === 'learning' ? <LearningChatWorkspace key={session.account.playerId} accountId={session.account.playerId} csrfToken={session.csrfToken}
         requestedAreaId={new URLSearchParams(window.location.search).get('area')}
         requestedNode={readStagedNodeReference()} onSelectArea={area => area ? onNavigateLearning(area) : onNavigateView('learning')}

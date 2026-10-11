@@ -4,6 +4,7 @@ import { conversationRun, type PendingGeneration } from './conversationRuns';
 import {agentConversationRun} from '../assistant/agentConversationRun';
 import {AgentApiError} from '../assistant/agentExecutionClient';
 import type {AgentConversationOptions} from '../assistant/agentConversationOptions';
+import AgentMapResults from '../assistant/AgentMapResults';
 import { approvalSummary } from './approvalSummary';
 import { messageAuthors } from './messageAuthors';
 import { useTeachingCanvas } from './useTeachingCanvas';
@@ -414,6 +415,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       </div>}
       {nativeSnapshot?.completion&&!detail.graph.messages.some(message=>message.messageId===nativeSnapshot.completion?.messageId)&&
         <Message author={detail.character.card.name} character={detail.character} text={nativeSnapshot.completion.answer} />}
+      {nativeSnapshot?.completion&&<AgentMapResults completion={nativeSnapshot.completion} accountId={accountId} csrfToken={csrfToken} />}
       {!activeMessages.length && !pendingGeneration && <p className="py-12 text-center text-sm text-slate-400">故事从你的第一句话开始。</p>}
       <div ref={bottom} />
     </div>

@@ -327,6 +327,21 @@ afterEach(() => {
 });
 
 describe('Four canonical pages', () => {
+  it('opens the exact owned map requested by a saved assistant result',async()=>{
+    const other='44444444-4444-4444-8444-444444444444';
+    treeApi.fetchPersonalLibrary.mockResolvedValue({entries:[personalEntry,{...personalEntry,library_entry_id:other,tree:agentTree}]});
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp(`/maps?entry=${other}`);
+    await waitFor(()=>expect(treeApi.fetchPersonalTree).toHaveBeenCalledWith(other));
+    expect(treeApi.fetchPersonalTree).not.toHaveBeenCalledWith(personalEntry.library_entry_id);
+  });
+  it('does not read an unowned target or silently open a different map from an assistant deep link',async()=>{
+    treeApi.fetchPersonalLibrary.mockResolvedValue({entries:[personalEntry]});
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    renderApp('/maps?entry=88888888-8888-4888-8888-888888888888');
+    expect(await screen.findByText('指定地图暂不可用，请从我的地图重新选择。')).toBeInTheDocument();
+    expect(treeApi.fetchPersonalTree).not.toHaveBeenCalled();
+  });
   it('opens the global assistant for an authenticated root without replacing explicit legacy pages', async () => {
     renderApp('/');
     expect(await screen.findByRole('heading', {name:'全局助手'})).toBeInTheDocument();
