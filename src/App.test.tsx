@@ -326,6 +326,50 @@ afterEach(() => {
 });
 
 describe('Four canonical pages', () => {
+  it('searches personal maps without replacing the currently opened map', async () => {
+    const secondEntry = { ...personalEntry, library_entry_id: '44444444-4444-4444-8444-444444444444', tree: agentTree };
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry, secondEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    const user = userEvent.setup(); renderApp('/maps');
+    await screen.findByRole('button', { name: '查看 NestJS 完整学习树' });
+    const search = screen.getByRole('textbox', { name: '搜索我的地图' });
+    await user.type(search, 'Python');
+    expect(screen.queryByRole('button', { name: '查看 NestJS 完整学习树' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '查看 Python Agent 完整学习树' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '查看节点 基础节点' })).toBeInTheDocument();
+    expect(treeApi.fetchPersonalTree).toHaveBeenCalledTimes(1);
+    await user.clear(search);
+    expect(screen.getByRole('button', { name: '查看 NestJS 完整学习树' })).toBeInTheDocument();
+  });
+  it('does not redirect a newer page when a delayed map-area join completes', async () => {
+    let finish!: (value: { areaId: string; libraryEntryId: string; title: string; available: boolean; createdAt: string }) => void;
+    tavernApi.createLearningArea.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    const user = userEvent.setup(); renderApp('/maps');
+    await user.click(await screen.findByRole('button', { name: '查看节点 基础节点' }));
+    await user.click(screen.getByRole('button', { name: '进入学习区，向 AI 提问' }));
+    await user.click(screen.getByRole('button', { name: '公共书库' }));
+    await screen.findByRole('textbox', { name: '搜索公共地图' });
+    finish({ areaId: personalEntry.library_entry_id, libraryEntryId: personalEntry.library_entry_id,
+      title: personalEntry.tree.title, available: true, createdAt: '2026-10-11T00:00:00Z' });
+    await waitFor(() => expect(screen.queryByText('正在准备学习区…')).not.toBeInTheDocument());
+    expect(window.location.pathname).toBe('/library');
+    expect(tavernApi.generateStream).not.toHaveBeenCalled();
+  });
+  it('removes a staged node from the URL as well as the visible composer', async () => {
+    treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [personalEntry] });
+    treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
+    tavernApi.fetchLearningAreas.mockResolvedValue([{ areaId: personalEntry.library_entry_id,
+      libraryEntryId: personalEntry.library_entry_id, title: personalEntry.tree.title, available: true, createdAt: '2026-10-11T00:00:00Z' }]);
+    const user = userEvent.setup(); renderApp('/maps');
+    await user.click(await screen.findByRole('button', { name: '查看节点 基础节点' }));
+    await user.click(screen.getByRole('button', { name: '进入学习区，向 AI 提问' }));
+    await user.click(await screen.findByRole('button', { name: '移除节点参考' }));
+    expect(new URLSearchParams(window.location.search).has('node')).toBe(false);
+    expect(new URLSearchParams(window.location.search).get('area')).toBe(personalEntry.library_entry_id);
+    expect(tavernApi.generateStream).not.toHaveBeenCalled();
+  });
   it('restores the learning page through the legacy console entry', async () => {
     localStorage.setItem(`mapflow.console.state.v1.${authenticated.account.playerId}`, JSON.stringify({
       version: 1, view: 'learning', selectedPublicTreeId: null, selectedLibraryEntryId: null,

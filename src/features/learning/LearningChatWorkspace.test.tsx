@@ -1,26 +1,29 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import LearningChatWorkspace from './LearningChatWorkspace';
 
 const api = vi.hoisted(() => ({ fetchLearningAreas: vi.fn(), createLearningArea: vi.fn(), fetchPersonalLibrary: vi.fn(), fetchPersonalTree: vi.fn() }));
+const referenceCallbacks = vi.hoisted(() => [] as Array<() => void>);
 vi.mock('../tavern/tavernClient', () => api);
 vi.mock('../tree-library/treeLibraryClient', () => api);
-vi.mock('../tavern/TavernPage', () => ({ default: ({ treeContext, management, onShowMap, onOpenCanvas }: { treeContext?: { title: string }; management?: boolean; onShowMap?: () => void; onOpenCanvas?: () => void }) =>
-  <section aria-label="当前学习对话"><p>{management ? '管理助手' : treeContext?.title} 对话</p>{onShowMap && <button onClick={onShowMap}>查看地图</button>}<button onClick={onOpenCanvas}>打开教学画布</button></section> }));
+vi.mock('../tavern/TavernPage', () => ({ default: ({ treeContext, management, onShowMap, onOpenCanvas, onNodeReferenceConsumed }: { treeContext?: { title: string; nodeId?: string }; management?: boolean; onShowMap?: () => void; onOpenCanvas?: () => void; onNodeReferenceConsumed?: () => void }) => {
+  if (onNodeReferenceConsumed) referenceCallbacks.push(onNodeReferenceConsumed);
+  return <section aria-label="当前学习对话"><p>{management ? '管理助手' : treeContext?.title} 对话</p>{treeContext?.nodeId && <p>待发送参考：{treeContext.nodeId}</p>}{onShowMap && <button onClick={onShowMap}>查看地图</button>}<button onClick={onOpenCanvas}>打开教学画布</button></section>;
+} }));
 vi.mock('../skill-tree/SkillTreeCanvas', () => ({ default: () => <div aria-label="学习地图画面" /> }));
 const python = { areaId: 'map-1', libraryEntryId: 'map-1', title: 'Python', available: true, createdAt: '2026-10-08T00:00:00Z' };
 const rust = { ...python, areaId: 'map-2', libraryEntryId: 'map-2', title: 'Rust' };
 const callbacks = { onOpenMaps: vi.fn(), onOpenManager: vi.fn() };
 
 beforeEach(() => {
-  vi.clearAllMocks(); localStorage.clear();
+  vi.clearAllMocks(); localStorage.clear(); referenceCallbacks.length = 0;
   api.fetchLearningAreas.mockResolvedValue([python, rust]);
   api.fetchPersonalLibrary.mockResolvedValue({ entries: [] });
   api.fetchPersonalTree.mockResolvedValue({ library_entry_id: 'map-1', graph: { tree: { id: 'tree-1', title: 'Python', revision: 1 }, nodes: [], edges: [] }, completed_node_ids: [] });
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); window.history.replaceState({}, '', '/'); });
 function mount(requestedAreaId?: string | null, accountId = 'account-1') {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
     <LearningChatWorkspace accountId={accountId} csrfToken="csrf" requestedAreaId={requestedAreaId} {...callbacks} />
@@ -86,4 +89,20 @@ it('releases the heavy map renderer when the user opens the teaching canvas', as
   await screen.findByLabelText('学习地图画面');
   await user.click(screen.getByRole('button', { name: '打开教学画布' }));
   expect(screen.queryByLabelText('学习地图画面')).not.toBeInTheDocument();
+});
+
+it('does not consume another area reference when an earlier background reply finishes', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = (area: string, node: string) => <QueryClientProvider client={client}><LearningChatWorkspace accountId="account-1" csrfToken="csrf"
+    requestedAreaId={area} requestedNode={{ id: node, title: node }} {...callbacks} /></QueryClientProvider>;
+  window.history.replaceState({}, '', '/learning?area=map-1&node=node-1&title=node-1');
+  const mounted = render(view('map-1', 'node-1'));
+  await screen.findByText('待发送参考：node-1');
+  const finishOriginalReference = referenceCallbacks[referenceCallbacks.length - 1];
+  window.history.replaceState({}, '', '/learning?area=map-2&node=node-2&title=node-2');
+  mounted.rerender(view('map-2', 'node-2'));
+  await screen.findByText('待发送参考：node-2');
+  act(() => finishOriginalReference());
+  expect(screen.getByText('待发送参考：node-2')).toBeInTheDocument();
+  expect(new URLSearchParams(window.location.search).get('node')).toBe('node-2');
 });

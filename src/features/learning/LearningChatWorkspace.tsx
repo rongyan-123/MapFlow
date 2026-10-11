@@ -41,6 +41,14 @@ export default function LearningChatWorkspace({ accountId, csrfToken, requestedA
   }, [areaId, area, areas.isSuccess, storageKey]);
 
   const enter = (nextAreaId: string | null) => { setAreaId(nextAreaId); setMapOpen(false); setNodeReference(undefined); onSelectArea?.(nextAreaId); };
+  const consumeNodeReference = () => {
+    if (!nodeReference) return;
+    setNodeReference(current => current === nodeReference ? undefined : current);
+    const address = new URL(window.location.href);
+    if (address.pathname !== '/learning' || address.searchParams.get('area') !== areaId || address.searchParams.get('node') !== nodeReference.id) return;
+    address.searchParams.delete('node'); address.searchParams.delete('title');
+    window.history.replaceState(window.history.state, '', `${address.pathname}${address.search}${address.hash}`);
+  };
   if (managerOpen) return <section aria-label="学习区管理助手" className="flex min-h-0 flex-1 flex-col">
     <div className="shrink-0 border-b border-slate-800 px-3 py-2"><button className={buttonClass} onClick={() => setManagerOpen(false)}>返回学习区列表</button></div>
     <TavernPage management onNavigateConsole={() => setManagerOpen(false)}
@@ -69,13 +77,22 @@ export default function LearningChatWorkspace({ accountId, csrfToken, requestedA
           onNavigateConsole={() => enter(null)} onNavigateWallet={onNavigateWallet} onNavigateModels={onNavigateModels}
           mobileHeaderActions={mobileHeaderActions} onShowMap={area.available ? () => setMapOpen(open => !open) : undefined}
           mapVisible={mapOpen} onOpenCanvas={() => setMapOpen(false)}
+          onNodeReferenceConsumed={consumeNodeReference}
           onTreeChanged={() => void queryClient.invalidateQueries({ queryKey: ['me', accountId, 'tree-library', area.libraryEntryId] })} />
       </div>
       {mapOpen && area.available && <>
         <PanelResizeHandle label="调整聊天与地图宽度" storageKey={`mapflow.learning.chat-width.v1.${accountId}`} minWidth={340} remainingWidth={340} />
         <aside data-learning-map="true" aria-label="学习地图" className={`flex min-w-0 flex-1 flex-col border-l border-slate-800 bg-slate-950 ${isMobile ? 'absolute inset-0 z-20' : ''}`}>
           <Suspense fallback={<p role="status" className="p-6 text-sm text-slate-400">正在打开地图…</p>}>
-            <LearningMapPanel key={`${accountId}.${area.libraryEntryId}`} accountId={accountId} libraryEntryId={area.libraryEntryId} onClose={() => setMapOpen(false)} />
+            <LearningMapPanel key={`${accountId}.${area.libraryEntryId}`} accountId={accountId} libraryEntryId={area.libraryEntryId} csrfToken={csrfToken}
+              onClose={() => setMapOpen(false)} onReference={node => {
+                setNodeReference(node); setMapOpen(false);
+                const address = new URL(window.location.href);
+                if (address.pathname === '/learning') {
+                  address.searchParams.set('area', area.areaId); address.searchParams.set('node', node.id); address.searchParams.set('title', node.title);
+                  window.history.replaceState(window.history.state, '', `${address.pathname}${address.search}${address.hash}`);
+                }
+              }} />
           </Suspense>
         </aside>
       </>}

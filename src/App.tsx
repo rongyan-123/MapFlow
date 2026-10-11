@@ -227,6 +227,10 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
   const [view, setView] = useState<AppView>(requestedView ?? 'public');
   const [areaEntryPending, setAreaEntryPending] = useState(false);
   const [areaEntryError, setAreaEntryError] = useState<unknown>(null);
+  const areaEntryLock = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const [personalMapSearch, setPersonalMapSearch] = useState('');
   const [selectedPublicTreeId, setSelectedPublicTreeId] = useState<string | null>(null);
   const [selectedLibraryEntryId, setSelectedLibraryEntryId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -274,6 +278,9 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
   const consoleStateHydratedRef = useRef(false);
   const skipConsoleStateWriteRef = useRef(false);
   const accountPlayerId = session?.account.playerId ?? null;
+  const entryScopeKey = JSON.stringify([accountPlayerId, requestedView ?? view, selectedLibraryEntryId]);
+  const entryScope = useRef({ key: entryScopeKey, revision: 0 });
+  if (entryScope.current.key !== entryScopeKey) entryScope.current = { key: entryScopeKey, revision: entryScope.current.revision + 1 };
   const personalTreeLibraryQueryKey = [
     'me',
     accountPlayerId,
@@ -896,17 +903,23 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
       return;
     }
     if (view !== 'personal' || !selectedLibraryEntryId) return;
-    if (areaEntryPending) return;
+    if (areaEntryLock.current) return;
+    areaEntryLock.current = true;
+    const originScope = entryScope.current;
+    const originPath = window.location.pathname;
+    const node = snapshot?.nodes.find(item => item.id === selectedNodeId);
+    const stillAtOrigin = () => mounted.current && entryScope.current === originScope && window.location.pathname === originPath;
     setAreaEntryPending(true); setAreaEntryError(null);
     try {
       const area = await createLearningArea(selectedLibraryEntryId, session.csrfToken);
+      if (!stillAtOrigin()) return;
       await queryClient.cancelQueries({ queryKey: ['me', accountPlayerId, 'learning', 'areas'], exact: true });
+      if (!stillAtOrigin()) return;
       queryClient.setQueryData<import('./features/tavern/types').LearningArea[]>(['me', accountPlayerId, 'learning', 'areas'], previous =>
         [area, ...(previous ?? []).filter(item => item.areaId !== area.areaId)]);
-      const node = snapshot?.nodes.find(item => item.id === selectedNodeId);
       onNavigateLearning(area.areaId, node ? { id: node.id, title: node.title } : undefined);
-    } catch (error) { setAreaEntryError(error); }
-    finally { setAreaEntryPending(false); }
+    } catch (error) { if (stillAtOrigin()) setAreaEntryError(error); }
+    finally { areaEntryLock.current = false; if (mounted.current) setAreaEntryPending(false); }
   };
   const closeKnowledgeChat = () => {
     setChatOpen(false);
@@ -1183,13 +1196,15 @@ function ConsoleApp({ requestedView, onNavigateView, onNavigateLearning, onNavig
             </button>
           </div>
 
+          <input type="text" aria-label="搜索我的地图" placeholder="搜索我的地图…" value={personalMapSearch}
+            onChange={event => setPersonalMapSearch(event.target.value)} className="mb-3 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-400" />
           <div className="space-y-2">
             {personalLibrary.isPending ? (
               <SidebarMessage>正在读取个人树库…</SidebarMessage>
             ) : personalLibrary.isError ? (
               <SidebarMessage>{readableError(personalLibrary.error)}</SidebarMessage>
             ) : personalLibrary.data?.entries.length ? (
-              personalLibrary.data.entries.map((entry) => (
+              personalLibrary.data.entries.filter(entry => `${entry.tree.title} ${entry.tree.topic}`.toLocaleLowerCase().includes(personalMapSearch.trim().toLocaleLowerCase())).map((entry) => (
                 <TreeChoice
                   key={entry.library_entry_id}
                   title={entry.tree.title}

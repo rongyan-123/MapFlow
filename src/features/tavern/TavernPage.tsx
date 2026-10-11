@@ -30,6 +30,7 @@ import { CharacterAvatar, CompatibilityReport, ErrorNotice, TavernDialog, button
 
 interface TavernPageProps {
   management?: boolean;
+  onNodeReferenceConsumed?: () => void;
   mapVisible?: boolean; onOpenCanvas?: () => void;
   onNavigateConsole: () => void; onNavigateWallet?: () => void; onNavigateModels?: () => void;
   treeContext?: { libraryEntryId: string; title: string; nodeId?: string; nodeTitle?: string; available?: boolean }; onClose?: () => void; onTreeChanged?: () => void; onShowMap?: () => void;
@@ -42,7 +43,7 @@ export default function TavernPage(props: TavernPageProps) {
   return <AuthenticatedTavernPage key={`${session.account.playerId}.${props.treeContext?.libraryEntryId ?? (props.management ? 'management' : 'independent')}`} session={session} {...props} />;
 }
 
-function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet, onNavigateModels, treeContext, management, mapVisible, onOpenCanvas, onClose, onTreeChanged, onShowMap, mobileHeaderActions }: TavernPageProps & { session: IdentitySession }) {
+function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet, onNavigateModels, treeContext, management, mapVisible, onOpenCanvas, onClose, onTreeChanged, onShowMap, mobileHeaderActions, onNodeReferenceConsumed }: TavernPageProps & { session: IdentitySession }) {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   // 手机端对话独占整屏，工具栏必须压成一行、次要动作收进「操作」菜单，否则消息区被挤得只剩几百像素。
@@ -413,6 +414,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         {conversations.error && <div className="p-4"><ErrorNotice error={conversations.error} onRetry={() => void conversations.refetch()} /></div>}
         {conversationId ? currentDetail ? <ConversationPane key={`${accountId}.${conversationId}`} detail={currentDetail} accountId={accountId} csrfToken={session.csrfToken} onCompleted={onCompleted} onRecovered={onRecovered} onGraphChanged={onGraphChanged}
           nodeReference={treeContext?.nodeId && treeContext.nodeTitle ? { id: treeContext.nodeId, title: treeContext.nodeTitle } : undefined}
+          onNodeReferenceConsumed={onNodeReferenceConsumed}
           mapVisible={mapVisible} onOpenCanvas={onOpenCanvas}
           readOnly={treeContext?.available === false}
           modelSelection={{ ...modelSelection, billingPolicy: platformCatalog.data?.policyVersion }} platformModelError={platformModelError}

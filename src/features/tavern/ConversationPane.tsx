@@ -20,7 +20,7 @@ import { isRecord, utf8Bytes } from './validation';
 import { CharacterAvatar, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass, type TavernDialogSection } from './TavernUi';
 import type { Character } from './types';
 
-export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, platformModelError, onBusyChange, onCompleted, onRecovered, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onOpenParameters, onNavigateWallet, onCloseConfiguration, configuration, nodeReference, mapVisible, onOpenCanvas, readOnly = false }: {
+export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, platformModelError, onBusyChange, onCompleted, onRecovered, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onOpenParameters, onNavigateWallet, onCloseConfiguration, configuration, nodeReference, onNodeReferenceConsumed, mapVisible, onOpenCanvas, readOnly = false }: {
   detail: ConversationDetail; accountId: string; csrfToken: string;
   modelSelection: TavernModelSelection;
   platformModelError?: string;
@@ -33,6 +33,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   nodeReference?: { id: string; title: string };
   mapVisible?: boolean; onOpenCanvas?: () => void;
   readOnly?: boolean;
+  onNodeReferenceConsumed?: () => void;
 }) {
   const storageKey = `mapflow.tavern.pending.v1.${accountId}.${detail.conversation.conversationId}`;
   const queryClient=useQueryClient();
@@ -187,7 +188,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       await presentation.drain();
       if (controller.signal.aborted) return;
       storePending(storageKey, null);
-      if (outgoing.action.type === 'reply') setReferenceActive(false);
+      if (outgoing.action.type === 'reply') { setReferenceActive(false); onNodeReferenceConsumed?.(); }
       setPendingGeneration(null); setDraft(''); setProcess([]); run.set({canvasPreview:null}); onCompleted(completed);
     } catch (failure) { if (!controller.signal.aborted) {
       presentation.flush();
@@ -401,7 +402,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       <form onSubmit={event => { event.preventDefault(); void runGeneration({ type: 'reply', message }); }} className="rounded-3xl border border-slate-700 bg-slate-900 p-2 shadow-lg transition focus-within:border-cyan-500/70 sm:p-3">
         {referenceActive && nodeReference && <div className="mb-2 flex items-center gap-2 px-2 text-xs text-cyan-200">
           <span>节点参考：{nodeReference.title}</span><button type="button" className="rounded-full px-2 py-1 text-slate-400 hover:text-slate-200" aria-label="移除节点参考"
-            disabled={busy || pendingGeneration !== null} onClick={() => setReferenceActive(false)}>×</button>
+            disabled={busy || pendingGeneration !== null} onClick={() => { setReferenceActive(false); onNodeReferenceConsumed?.(); }}>×</button>
         </div>}
         {!isMobile && <div className="mb-2 flex flex-wrap items-center gap-2 px-2 text-[11px] text-slate-400">
           {modelChipButton}
