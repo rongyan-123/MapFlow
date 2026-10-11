@@ -1,6 +1,6 @@
 # Four-interface release candidate
 
-This is the continuation of the approved 2026-10-08 four-interface design and 2026-10-11 integrated acceptance plan. Both `codex/four-interface-learning-20261008` branches passed their gates and the fixed release image is built. The shared main checkouts and production service have not been changed.
+This is the continuation of the approved 2026-10-08 four-interface design and 2026-10-11 integrated acceptance plan. Both `codex/four-interface-learning-20261008` branches passed their gates. On 2026-10-11 the user explicitly approved main integration and deployment. Frontend main was fast-forwarded to `8abd0a7` and backend main to `8513071`, both pushed; the fixed image below is now live on the notebook. See `../research/2026-10-11-four-interface-production-release.md` for final release evidence.
 
 ## Fixed candidate
 
@@ -35,4 +35,4 @@ See `../research/2026-10-11-integrated-browser-and-billing.md` and the backend `
 
 The old backend is incompatible with new learning conversation constraints; an application-only rollback to that version is not a verified recovery path. Preserve new chats/payments and use a compatible corrective image rather than restoring an old database over new user activity.
 
-Deployment requires the concrete candidate confirmation specified in the approved design's implementation authorization note. This document is preparation, not a record of a production release.
+The concrete candidate received the confirmation required by the approved design's implementation authorization note. All five release steps above completed; the linked production record supersedes earlier pending-release statements in the historical acceptance notes. Later documentation commits do not change the fixed source build or image.

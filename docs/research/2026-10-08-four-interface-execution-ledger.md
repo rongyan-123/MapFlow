@@ -28,7 +28,7 @@
 - [x] Map/canvas views, viewport/notes recovery and generation ownership during navigation.
 - [x] Full checks, real request/UI acceptance and independent review.
 - [x] Concrete main integration/release candidate.
-- [ ] Final deployment approval and main/production integration.
+- [x] Final deployment approval and main/production integration.
 
 ## Evidence
 
@@ -73,3 +73,6 @@ New implementation tests and request measurements are appended as they are run. 
 - Final gates: frontend **678 passed / 1 skipped**, types/build green; backend **807 passed / 3 manual opt-in ignored** across 100 suites, fmt/configured Clippy green with baseline warnings; unchanged worker **97 passed / 1 skipped**, types/build green. The whole-branch reviewer closed all findings with no remaining Critical/Important issues. Both repositories fetched origin again; mobile main commits `183a744` and `13e3bba` remain included.
 - Migration 0044 additionally stores new assistant author snapshots without rewriting legacy messages. Actual SQLx migration replay through 44 preserved all original fields/counts across 54 private-clone tables, 66 conversations, 45 areas and zero invalid scopes. Disposable paid fixtures, both private clones and dumps were cleaned. Final candidate packaging is in progress; main and production remain unchanged.
 - Fixed source candidate: frontend `42ff810`, backend `8513071`. Source archives matched the 307 actual tested backend files; 370 fixed frontend assets matched. Optimized locked release build and image worker smoke passed. Final image `mapflow-server:four-interface-candidate-20261011-8513071` has matching source labels and 381 verified internal files. The temporary browser proxy/SSH tunnel were stopped; the built packet remains for the final approved release. Main and production remain unchanged.
+
+- **Final release supersedes the historical pending status above:** user approved “合并 main 并部署”. Frontend main `183a744 → 8abd0a7`, backend main `6547705 → 8513071`, fast-forwarded and pushed without source conflicts. The same fixed image passed a fresh packaged-runtime clone: migration replay through 44 preserved all 54 original tables, 56 learning / 10 tavern histories and 45 areas; authenticated scene/account/admin access, creation replay and one additional real billed request passed. Actual charge ¥0.000648 (640 input / 172 output), duplicate replay uncharged, production account balance untouched.
+- Packaged Docker UI passed five route/context checks at both desktop 1440×1000 and mobile 390×844: menu/logout, independent history opening and lazy map/canvas transitions; no horizontal overflow, browser errors or automatic model calls. The isolated services and local proxy/SSH helpers were removed. Production cold backup then migration/cutover preserved all original fields across 54 tables, existing wallet balances/top-ups/ledger, runtime secrets, diagnostics, ports, security/resource settings and network aliases. Four public routes and readiness passed; 381 production runtime files/source labels matched. Final record: `2026-10-11-four-interface-production-release.md`.
