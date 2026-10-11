@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { approvalSummary } from './approvalSummary';
 import { useTeachingCanvas } from './useTeachingCanvas';
 import './teachingWorkspace.css';
 import PanelResizeHandle from './PanelResizeHandle';
@@ -174,7 +175,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         modelAccess, modelAccess || platformModel ? modelSelection.historyBytes : undefined, platformModel,
         platformModel && modelSelection.billingPolicy ? { policyVersion: modelSelection.billingPolicy } : undefined,
         async approval => {
-          const prompt=approval.destructive ? `请单独确认：${approval.action}（${approval.target}）。确认后才会执行。` : `确认${approval.action}（${approval.target}）？`;
+          const prompt=approvalSummary(approval);
           const allowed=!controller.signal.aborted && window.confirm(prompt);
           await resolveTavernToolApproval(detail.conversation.conversationId,approval.approvalRequestId,allowed,allowed && approval.destructive,csrfToken);
         }, event => {

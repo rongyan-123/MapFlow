@@ -101,6 +101,11 @@ export interface CashQuote { quoteId:string; maximumChargeMicros:number; policyV
 export interface CompletedTurn { turn: Turn; graph: ConversationGraph; creditBalance: number; chargedCredits: number; idempotencyHit: boolean; cashCharge?:CashCharge; walletBalanceMicros?:number; process?: GenerationProcessEvent[]; canvas?:TeachingCanvasState; generation?: GenerationRecord }
 export type GenerationProcessEvent = { type: 'reasoning'; text: string } | { type: 'tool'; name: string; state: 'started' | 'completed' | 'failed' };
 export type TavernLiveProcessEvent = GenerationProcessEvent | { type: 'snapshot'; process: GenerationProcessEvent[] } | { type: 'canvas'; canvas: TeachingCanvasState } | { type: 'status'; state: 'generating' };
+
+export interface TavernToolApproval {
+  approvalRequestId: string; action: string; target: string; destructive: boolean;
+  mapTitle?: string; proposal?: Record<string, unknown>;
+}
 export class TavernApiError extends Error {
   constructor(public readonly status: number, public readonly code: string, message: string, public readonly traceId?: string,
     public readonly generationFailed = false) {

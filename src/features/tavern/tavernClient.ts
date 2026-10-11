@@ -181,7 +181,7 @@ export async function mutateGraph(id: string, expectedRevision: number, action: 
 export async function generateStream(id: string, clientActionId: string, expectedRevision: number, action: GenerationAction, csrfToken: string,
   onDelta: (delta: string) => void, signal?: AbortSignal, modelAccess?: TavernUserModelAccess,
   historyBytes?: 8192 | 16384 | 32768, platformModel?: string,billing?:{quoteId?:string;policyVersion:string},
-  onApproval?: (approval: { approvalRequestId: string; action: string; target: string; destructive: boolean }) => Promise<void>,
+  onApproval?: (approval: import('./types').TavernToolApproval) => Promise<void>,
   onProcess?: (event: import('./types').TavernLiveProcessEvent) => void): Promise<CompletedTurn> {
   if (modelAccess && platformModel) throw new TavernApiError(400, 'tavern.model_access_invalid', '请选择一种模型线路。');
   validateId(clientActionId);
@@ -224,7 +224,9 @@ export async function generateStream(id: string, clientActionId: string, expecte
       if (!isRecord(payload) || !isRecord(payload.approval)) throw invalidResponse();
       const approval=payload.approval;
       if (!strings(approval,['approvalRequestId','action','target']) || typeof approval.destructive !== 'boolean') throw invalidResponse();
-      if (onApproval) await onApproval(approval as { approvalRequestId: string; action: string; target: string; destructive: boolean });
+      if (approval.mapTitle !== undefined && typeof approval.mapTitle !== 'string') throw invalidResponse();
+      if (approval.proposal !== undefined && !isRecord(approval.proposal)) throw invalidResponse();
+      if (onApproval) await onApproval(approval as unknown as import('./types').TavernToolApproval);
       else await resolveTavernToolApproval(id, approval.approvalRequestId as string, false, false, csrfToken);
       return;
     }

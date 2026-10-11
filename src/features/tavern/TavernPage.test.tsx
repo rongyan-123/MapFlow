@@ -846,6 +846,31 @@ describe('Tavern page', () => {
     await user.click(screen.getByRole('button',{name:'配置'}));
     expect(screen.queryByRole('option',{name:/另一棵树的故事/})).not.toBeInTheDocument();
   });
+  it('shows the exact map and proposed changes before allowing a management edit', async () => {
+    restoreConversation();
+    const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
+    const normalFetch=fetchMock.getMockImplementation()!;
+    let decision:unknown;
+    fetchMock.mockImplementation(async(url:string,init?:RequestInit)=>{
+      if(url.endsWith('/tool-approvals/map-change')) { decision=JSON.parse(init!.body as string);return new Response(null,{status:204}); }
+      if(url.endsWith('/turns')&&init?.method==='POST') {
+        const input=JSON.parse(init.body as string);
+        const completed={...completion,turn:{...completion.turn,clientTurnId:input.clientActionId,userMessage:input.action.message}};
+        const approval={approvalRequestId:'map-change',action:'修改树信息',target:'当前个人树',destructive:false,mapTitle:'我的 Python 地图',proposal:{operation:'update_tree',revision:3,patch:{title:'新的地图名称'}}};
+        return new Response(`event: approval_required\ndata: ${JSON.stringify({approval})}\n\nevent: completed\ndata: ${JSON.stringify(completed)}\n\n`,{headers:{'content-type':'text/event-stream'}});
+      }
+      return normalFetch(url,init);
+    });
+    const user=userEvent.setup();renderPage();await configureSelfKey(user);
+    await user.type(screen.getByRole('textbox',{name:'消息'}),'修改地图名字');
+    await user.click(screen.getByRole('button',{name:'发送'}));
+    await waitFor(()=>expect(confirm).toHaveBeenCalled());
+    expect(confirm.mock.calls[0][0]).toContain('我的 Python 地图');
+    expect(confirm.mock.calls[0][0]).toContain('新的地图名称');
+    expect(confirm.mock.calls[0][0]).toContain('3');
+    expect(decision).toEqual({allowed:false,destructiveConfirmed:false});
+    confirm.mockRestore();
+  });
   it('restores the area conversation without exposing it in independent tavern history', async () => {
     const normalFetch = fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
