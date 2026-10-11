@@ -1,5 +1,6 @@
 import { clearAccountNoteDrafts } from './features/node-notes/noteDrafts';
 import ApplicationShell from './features/navigation/ApplicationShell';
+import GlobalAssistantPage from './features/assistant/GlobalAssistantPage';
 import { ModelSelectionProvider } from './features/tavern/ModelSelectionContext';
 import { describePublicError } from './lib/publicErrors';
 import PanelResizeHandle from './features/tavern/PanelResizeHandle';
@@ -125,10 +126,10 @@ export default function App() {
     previousSessionPlayerIdRef.current = playerId;
   }, [queryClient, session]);
 
-  const navigateToConsole = useCallback((replace = false) => {
+  const navigateToAssistant = useCallback((replace = false) => {
     const method = replace ? 'replaceState' : 'pushState';
-    window.history[method]({}, '', '/console');
-    setCurrentAddress('/console');
+    window.history[method]({}, '', '/assistant');
+    setCurrentAddress('/assistant');
   }, []);
   const navigatePage = (path: string) => {
     window.history.pushState({}, '', path);
@@ -146,20 +147,20 @@ export default function App() {
       !marketingRequested &&
       !generationRouteRequested
     ) {
-      navigateToConsole(true);
+      navigateToAssistant(true);
     }
   }, [
     currentPath,
     generationRouteRequested,
     marketingRequested,
-    navigateToConsole,
+    navigateToAssistant,
     session,
   ]);
 
   if (sessionPending) return <EntryLoading />;
   if (!session) {
     return <IdentityGate onAuthenticated={() => {
-      if (!['/tavern', '/wallet', '/models', '/library', '/maps', '/learning'].includes(currentPath)) navigateToConsole(true);
+      if (!['/assistant', '/console', '/tavern', '/wallet', '/models', '/library', '/maps', '/learning'].includes(currentPath)) navigateToAssistant(true);
     }} />;
   }
 
@@ -179,12 +180,15 @@ export default function App() {
     setCurrentAddress('/models');
   };
   if (currentPath === '/' && marketingRequested && !generationRouteRequested) {
-    return <LandingPage session={session} onEnterConsole={() => navigateToConsole()} onLogin={() => navigateToConsole()} />;
+    return <LandingPage session={session} onEnterConsole={() => navigateToAssistant()} onLogin={() => navigateToAssistant()} />;
   }
   const consolePage = <ConsoleApp requestedView={requestedView} guideRequested={guideRequested} onGuideConsumed={guideConsumed} onNavigateView={navigateView}
+    onNavigateAssistant={() => navigatePage('/assistant')}
     onNavigateLearning={(area, node) => navigatePage(`/learning?area=${encodeURIComponent(area)}${node ? `&node=${encodeURIComponent(node.id)}&title=${encodeURIComponent(node.title)}` : ''}`)}
     onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />;
-  const page = currentPath === '/wallet'
+  const page = currentPath === '/assistant'
+    ? <GlobalAssistantPage onNavigateLearning={() => navigateView('learning')} onNavigateWallet={navigateToWallet} onNavigateModels={navigateToModels} />
+    : currentPath === '/wallet'
     ? <WalletPage accountId={session.account.playerId} csrfToken={session.csrfToken} onBack={() => navigatePage(walletOrigin.current)} onNavigateModels={navigateToModels} />
     : currentPath === '/models'
     ? <ModelPricingPage accountId={session.account.playerId} onNavigateWallet={navigateToWallet} onBack={() => navigatePage(modelsOrigin.current)} onNavigateTavern={navigateToTavern} />
@@ -206,11 +210,12 @@ export default function App() {
   </ModelSelectionProvider>;
 }
 
-function ConsoleApp({ requestedView, guideRequested, onGuideConsumed, onNavigateView, onNavigateLearning, onNavigateWallet, onNavigateModels }: {
+function ConsoleApp({ requestedView, guideRequested, onGuideConsumed, onNavigateView, onNavigateLearning, onNavigateWallet, onNavigateModels, onNavigateAssistant }: {
   guideRequested: boolean; onGuideConsumed: () => void;
   requestedView?: PersistedAppView; onNavigateView: (view: PersistedAppView) => void;
   onNavigateLearning: (area: string, node?: { id: string; title: string }) => void;
   onNavigateWallet: () => void; onNavigateModels: () => void;
+  onNavigateAssistant: () => void;
 }) {
   const queryClient = useQueryClient();
   const {
@@ -1070,6 +1075,7 @@ function ConsoleApp({ requestedView, guideRequested, onGuideConsumed, onNavigate
         requestedAreaId={new URLSearchParams(window.location.search).get('area')}
         requestedNode={readStagedNodeReference()} onSelectArea={area => area ? onNavigateLearning(area) : onNavigateView('learning')}
         onOpenMaps={showPersonalLibrary} onNavigateWallet={onNavigateWallet} onNavigateModels={onNavigateModels}
+        onOpenManager={onNavigateAssistant}
         />
         : <main className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
         {!personalSidebarOpen && (view === 'personal' || !selectedPublicTree) && (

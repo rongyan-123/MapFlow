@@ -34,6 +34,7 @@ import type { Character, CompletedTurn, Conversation, ConversationDetail, Conver
 import { CharacterAvatar, CompatibilityReport, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass } from './TavernUi';
 
 interface TavernPageProps {
+  agentOptions?: import('../assistant/agentConversationOptions').AgentConversationOptions;
   management?: boolean;
   onMapGenerated?: (libraryEntryId: string) => void;
   onNodeReferenceConsumed?: () => void;
@@ -49,7 +50,7 @@ export default function TavernPage(props: TavernPageProps) {
   return <AuthenticatedTavernPage key={`${session.account.playerId}.${props.treeContext?.libraryEntryId ?? (props.management ? 'management' : 'independent')}`} session={session} {...props} />;
 }
 
-function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet, onNavigateModels, onMapGenerated, treeContext, management, mapVisible, onOpenCanvas, onClose, onTreeChanged, onShowMap, mobileHeaderActions, onNodeReferenceConsumed }: TavernPageProps & { session: IdentitySession }) {
+function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet, onNavigateModels, onMapGenerated, treeContext, management, mapVisible, onOpenCanvas, onClose, onTreeChanged, onShowMap, mobileHeaderActions, onNodeReferenceConsumed, agentOptions }: TavernPageProps & { session: IdentitySession }) {
   const queryClient = useQueryClient();
   const inApplicationShell = useApplicationShell();
   const sharedModel = useSharedModelSelection();
@@ -449,13 +450,14 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         </div>}
         {openError != null && <div className="p-4"><ErrorNotice error={openError} /></div>}
         {conversations.error && <div className="p-4"><ErrorNotice error={conversations.error} onRetry={() => void conversations.refetch()} /></div>}
-        {management && conversationId && currentDetail && generationCapabilities && <ManagementMapGeneration
+        {!agentOptions && management && conversationId && currentDetail && generationCapabilities && <ManagementMapGeneration
           key={`${accountId}.${conversationId}`} accountId={accountId} conversationId={conversationId} csrfToken={session.csrfToken}
           capabilities={generationCapabilities} credit={credit.data ?? null} onComplete={libraryEntryId => {
             void queryClient.invalidateQueries({ queryKey: ['me', accountId, 'tree-library'] });
             if (onMapGenerated) onMapGenerated(libraryEntryId); else onNavigateConsole();
           }} />}
         {conversationId ? currentDetail ? <ConversationPane key={`${accountId}.${conversationId}`} detail={currentDetail} accountId={accountId} csrfToken={session.csrfToken} onCompleted={onCompleted} onRecovered={onRecovered} onGraphChanged={onGraphChanged}
+          agentOptions={agentOptions}
           nodeReference={treeContext?.nodeId && treeContext.nodeTitle ? { id: treeContext.nodeId, title: treeContext.nodeTitle } : undefined}
           onNodeReferenceConsumed={onNodeReferenceConsumed}
           mapVisible={mapVisible} onOpenCanvas={onOpenCanvas}

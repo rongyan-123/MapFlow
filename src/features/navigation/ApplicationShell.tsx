@@ -20,6 +20,7 @@ import { describePublicError } from '../../lib/publicErrors';
 const ShellContext = createContext(false);
 export function useApplicationShell() { return useContext(ShellContext); }
 const destinations = [
+  { path: '/assistant', label: '全局助手' },
   { path: '/library', label: '公共书库' }, { path: '/maps', label: '我的地图' },
   { path: '/learning', label: '学习聊天' }, { path: '/tavern', label: '独立酒馆' },
 ] as const;

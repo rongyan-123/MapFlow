@@ -1,6 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { conversationRun, type PendingGeneration } from './conversationRuns';
+import {agentConversationRun} from '../assistant/agentConversationRun';
+import {AgentApiError} from '../assistant/agentExecutionClient';
+import type {AgentConversationOptions} from '../assistant/agentConversationOptions';
 import { approvalSummary } from './approvalSummary';
 import { messageAuthors } from './messageAuthors';
 import { useTeachingCanvas } from './useTeachingCanvas';
@@ -21,9 +24,10 @@ import { isRecord, utf8Bytes } from './validation';
 import { CharacterAvatar, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass, type TavernDialogSection } from './TavernUi';
 import type { Character } from './types';
 
-export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, platformModelError, onBusyChange, onCompleted, onRecovered, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onOpenParameters, onNavigateWallet, onCloseConfiguration, configuration, nodeReference, onNodeReferenceConsumed, mapVisible, onOpenCanvas, readOnly = false }: {
+export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, platformModelError, onBusyChange, onCompleted, onRecovered, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onOpenParameters, onNavigateWallet, onCloseConfiguration, configuration, nodeReference, onNodeReferenceConsumed, mapVisible, onOpenCanvas, readOnly = false, agentOptions }: {
   detail: ConversationDetail; accountId: string; csrfToken: string;
   modelSelection: TavernModelSelection;
+  agentOptions?: AgentConversationOptions;
   platformModelError?: string;
   onBusyChange?: (busy: boolean) => void;
   onCompleted: (completed: CompletedTurn) => void; onGraphChanged: (graph: ConversationGraph) => void;
@@ -40,11 +44,15 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const queryClient=useQueryClient();
   const run=useMemo(()=>conversationRun(queryClient,{accountId,scene:detail.conversation.scene??(detail.conversation.libraryEntryId?'learning':'tavern'),
     areaId:detail.conversation.learningAreaId??null,conversationId:detail.conversation.conversationId},()=>{
-    const saved = readPending(storageKey, detail.graph.revision);
+    const saved = agentOptions ? null : readPending(storageKey, detail.graph.revision);
     if (saved && detail.generations.some(generation => generation.clientActionId === saved.clientActionId)) { storePending(storageKey, null); return null; }
     return saved;
   }),[queryClient,storageKey,detail.conversation.scene,detail.conversation.learningAreaId]);
-  const {pendingGeneration,draft,process,stopped,busy,error,canvasPreview}=useSyncExternalStore(run.subscribe,run.getSnapshot,run.getSnapshot);
+  const legacySnapshot=useSyncExternalStore(run.subscribe,run.getSnapshot,run.getSnapshot);
+  const nativeRun=useMemo(()=>agentConversationRun(queryClient,accountId,detail.conversation.conversationId),[queryClient,accountId,detail.conversation.conversationId]);
+  const nativeSnapshot=useSyncExternalStore<ReturnType<typeof nativeRun.getSnapshot>|null>(agentOptions?nativeRun.subscribe:noSubscription,agentOptions?nativeRun.getSnapshot:noSnapshot,noSnapshot);
+  const {pendingGeneration,draft,process,stopped,busy,error}=nativeSnapshot??legacySnapshot;
+  const canvasPreview=agentOptions?null:legacySnapshot.canvasPreview;
   const setPendingGeneration=(pendingGeneration:PendingGeneration|null)=>run.set({pendingGeneration});
   const setDraft=(draft:string)=>run.set({draft});
   const setProcess=(process:GenerationProcessEvent[])=>run.set({process});
@@ -80,7 +88,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const pane = useRef<HTMLDivElement>(null);
   // 手机端输入区每多一行就少一行聊天记录，模型选择并到底部按钮行，历史字节说明收起。
   const isMobile = useIsMobile();
-  const modelChipButton = <button type="button" className="shrink-0 rounded-full bg-slate-800 px-3 py-1.5 text-slate-200 hover:text-cyan-200" onClick={onOpenModelConfiguration}>{modelSelection.model || '选择模型'} · {modelSelection.provider === 'platform' ? '平台额度' : '自填 Key'}</button>;
+  const modelChipButton = <button type="button" className="shrink-0 rounded-full bg-slate-800 px-3 py-1.5 text-slate-200 hover:text-cyan-200" onClick={onOpenModelConfiguration}>{agentOptions?.modelLabel||modelSelection.model || '选择模型'} · {agentOptions?agentOptions.funding==='cash'?'现金额度':agentOptions.funding==='points'?'平台积分':'自填 Key':modelSelection.provider === 'platform' ? '平台额度' : '自填 Key'}</button>;
   const followLatest = useRef(true);
   useEffect(() => {
     if (followLatest.current) bottom.current?.scrollIntoView?.({ block: 'nearest' });
@@ -92,12 +100,23 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     }
   }, [busy, detail.generations, pendingGeneration, storageKey]);
   useEffect(() => {
+    if (agentOptions) return;
     const saved = restoredPending.current;
     if (!saved) return;
     const controller = new AbortController();
     void recoverSavedResult(saved, controller.signal);
     return () => controller.abort();
   }, []);
+  const completedIdentity=useRef<string|null>(null);
+  useEffect(()=>{
+    const completed=nativeSnapshot?.completion;if(!completed||completedIdentity.current===completed.executionId)return;
+    completedIdentity.current=completed.executionId;
+    const controller=new AbortController();
+    void fetchConversation(detail.conversation.conversationId,controller.signal).then(saved=>{
+      if(!controller.signal.aborted)onRecovered(saved);
+    }).catch(()=>{ /* The trusted completion remains usable if subsequent history delivery fails. */ });
+    return()=>controller.abort();
+  },[nativeSnapshot?.completion?.executionId,detail.conversation.conversationId]);
 
   async function recoverSavedResult(expected = pendingGeneration, signal?: AbortSignal): Promise<boolean> {
     if (!expected || recovering) return false;
@@ -125,6 +144,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   }
 
   function stopGeneration() {
+    if(agentOptions){void nativeRun.stop(csrfToken);return;}
     run.cancel();
     void recoverSavedResult();
   }
@@ -134,6 +154,25 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     if (activeRequest.current || graphBusy || editing || (pendingGeneration && !retry)) return;
     if (!retry && action.type === 'reply' && referenceActive && nodeReference) {
       action = { ...action, message: `${action.message}\n\n[学习节点参考：${nodeReference.title}；节点 ID：${nodeReference.id}]` };
+    }
+    if(agentOptions){
+      if(retry&&nativeSnapshot?.state!=='failed'&&nativeSnapshot?.state!=='stopped'){
+        await nativeRun.retry(csrfToken,modelSelection.apiKey);return;
+      }
+      if(retry)nativeRun.dismiss();
+      try{
+        if(action.type!=='reply')validateId(action.assistantMessageId);
+        const access=agentOptions.funding==='byok'?selectedUserAccess(modelSelection):undefined;
+        if(agentOptions.funding==='byok'&&(!access||!Number.isSafeInteger(agentOptions.contextWindow)||!agentOptions.contextWindow||agentOptions.contextWindow<1))
+          throw new TavernApiError(400,'tavern.model_access_required','请填写 API Key、模型和实际上下文窗口。');
+        await canvas.flush();
+        await nativeRun.send(action,detail.graph.revision,{funding:agentOptions.funding,
+          ...(agentOptions.profileId?{profileId:agentOptions.profileId,profileVersion:agentOptions.profileVersion}:{}),
+          ...(access?{modelAccess:{apiKey:access.apiKey,baseUrl:access.baseUrl,model:access.model,contextWindow:agentOptions.contextWindow!,
+            maxOutputTokens:agentOptions.maxOutputTokens,reasoningProtocol:agentOptions.reasoningProtocol??'none',reasoningSupported:agentOptions.reasoningSupported??false}}:{})},csrfToken);
+        if(action.type==='reply')setMessage('');
+      }catch(failure){nativeRun.rejectPreflight(failure);}
+      return;
     }
     let outgoing: PendingGeneration;
     let platformModel: string | undefined;
@@ -208,7 +247,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     } }
     finally { presentation.dispose(); if (activeRequest.current === controller) { activeRequest.current = null; publishPreview.current = null;presentationRef.current=null; setBusy(false); } }
   }
-  const inputTooLarge = Array.from(message).length > 8000 || utf8Bytes(message) > 8192;
+  const inputTooLarge = !agentOptions && (Array.from(message).length > 8000 || utf8Bytes(message) > 8192);
   const mayEdit = error instanceof TavernApiError && error.status === 400;
   const pendingReply = pendingGeneration?.action.type === 'reply' ? pendingGeneration.action : null;
   const generationFailed = error instanceof TavernApiError && error.generationFailed;
@@ -373,11 +412,21 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         {draft && <Message author={detail.character.card.name} character={detail.character} text={draft} />}
         <p role="status" className="mx-auto max-w-3xl text-xs text-slate-400">{stopped ? '已停止生成。可核对结果或取消本次重试。' : busy ? '正在生成，完成后保存…' : generationFailed ? '本次生成失败，未扣除本站额度。可重试或返回编辑。' : '这条消息尚未确认完成，请重试以核对结果。'}</p>
       </div>}
+      {nativeSnapshot?.completion&&!detail.graph.messages.some(message=>message.messageId===nativeSnapshot.completion?.messageId)&&
+        <Message author={detail.character.card.name} character={detail.character} text={nativeSnapshot.completion.answer} />}
       {!activeMessages.length && !pendingGeneration && <p className="py-12 text-center text-sm text-slate-400">故事从你的第一句话开始。</p>}
       <div ref={bottom} />
     </div>
     <div className="mx-auto w-full max-w-4xl shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-1 sm:px-8 sm:pt-2">
       <ErrorNotice error={error} />
+      {nativeSnapshot?.completion&&<p role="status" className="text-xs text-slate-400">
+        {nativeSnapshot.completion.usage?`输入 ${nativeSnapshot.completion.usage.inputTokens} · 输出 ${nativeSnapshot.completion.usage.outputTokens} Token · `:'用量待核对 · '}
+        {['pending_evidence','pending_posting'].includes(nativeSnapshot.completion.settlement.status)?'结果已保存，费用待核对。':
+          nativeSnapshot.completion.settlement.cashMicros!==null?`本次费用 ¥${formatAmountMicros(nativeSnapshot.completion.settlement.cashMicros)}${nativeSnapshot.completion.settlement.balanceMicros!==null?` · 现金余额 ¥${formatAmountMicros(nativeSnapshot.completion.settlement.balanceMicros)}`:''}`:
+          nativeSnapshot.completion.settlement.pointUnits!==null?`本次消耗 ${nativeSnapshot.completion.settlement.pointUnits} 积分`:'未扣本站额度。'}
+      </p>}
+      {agentOptions&&error instanceof AgentApiError&&['credential_required','request_failed'].includes(error.code)&&<button className={buttonClass} onClick={onOpenModelConfiguration}>填写 API Key 或选择平台额度</button>}
+      {agentOptions&&error instanceof AgentApiError&&error.code==='cash_non_positive'&&onNavigateWallet&&<button className={buttonClass} onClick={onNavigateWallet}>充值平台额度</button>}
       <ErrorNotice error={canvas.error} />
       {error instanceof TavernApiError && ['tavern.model_access_required', 'tavern.model_access_invalid',
         'tavern.platform_model_required', 'tavern.runtime_unavailable', 'generation.model_access_invalid',
@@ -409,7 +458,13 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
           <button type="button" className={primaryClass} disabled={graphBusy || !editContent.trim()} onClick={() => void saveEdit()}>{graphBusy ? '保存中…' : '保存编辑'}</button>
         </div>
       </div>}
-      {pendingGeneration && !busy && <div className="flex flex-wrap gap-2">
+      {agentOptions&&pendingGeneration&&!busy&&<div className="flex flex-wrap gap-2">
+        <button className={buttonClass} onClick={()=>void runGeneration(pendingGeneration.action,pendingGeneration)}>{stopped||nativeSnapshot?.state==='failed'?'重新发送':'核对并继续原请求'}</button>
+        {nativeSnapshot?.state!=='awaiting_reconciliation'&&<button className={buttonClass} onClick={()=>{
+          if(pendingReply)setMessage(pendingReply.message);nativeRun.dismiss();
+        }}>返回编辑</button>}
+      </div>}
+      {!agentOptions&&pendingGeneration && !busy && <div className="flex flex-wrap gap-2">
         <button type="button" className={buttonClass} disabled={recovering} onClick={() => void recoverSavedResult()}>{recovering ? '正在核对结果…' : '核对已保存结果'}</button>
         <button type="button" className={primaryClass} disabled={recovering} onClick={() => void runGeneration(pendingGeneration.action, pendingGeneration)}>重试这条消息</button>
         {mayEdit && pendingReply && <button type="button" className={buttonClass} onClick={() => {
@@ -427,7 +482,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         </div>}
         {!isMobile && <div className="mb-2 flex flex-wrap items-center gap-2 px-2 text-[11px] text-slate-400">
           {modelChipButton}
-          <span>历史 {modelSelection.historyBytes / 1024} KiB · 最大输出 {detail.conversation.generationSettings.maxOutputTokens === null ? '模型默认' : `${detail.conversation.generationSettings.maxOutputTokens} Token`}</span>
+          <span>{agentOptions?'按模型窗口整理历史':`历史 ${modelSelection.historyBytes / 1024} KiB`} · 最大输出 {detail.conversation.generationSettings.maxOutputTokens === null ? '模型默认' : `${detail.conversation.generationSettings.maxOutputTokens} Token`}</span>
         </div>}
         <label htmlFor={`tavern-message-${detail.conversation.conversationId}`} className="sr-only">消息</label>
         <textarea id={`tavern-message-${detail.conversation.conversationId}`} className="max-h-48 min-h-14 w-full resize-y border-0 bg-transparent px-3 py-2 text-[15px] leading-6 text-slate-100 outline-none placeholder:text-slate-500 disabled:opacity-50 sm:min-h-20" rows={2} placeholder="输入你的问题，或让 AI 画图讲解…" value={message} disabled={readOnly || busy || graphBusy || pendingGeneration !== null || editing}
@@ -451,6 +506,8 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     </div>
   </div>;
 }
+const noSubscription=()=>()=>{};
+const noSnapshot=()=>null;
 
 function Message({ author, text, user = false, character }: { author: string; text: string; user?: boolean; character?: Character }) {
   return <article className={`mx-auto mb-7 flex max-w-3xl gap-3 ${user ? 'justify-end py-2' : 'py-3 sm:gap-4'}`}>

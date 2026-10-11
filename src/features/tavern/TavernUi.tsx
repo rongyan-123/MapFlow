@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { TavernApiError, type Character, type CompatibilityWarning } from './types';
 import { describePublicError } from '../../lib/publicErrors';
+import {AgentApiError} from '../assistant/agentExecutionClient';
 
 export const buttonClass = 'rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-not-allowed disabled:opacity-50';
 export const primaryClass = 'rounded-xl border border-cyan-200 bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-not-allowed disabled:opacity-50';
@@ -11,6 +12,7 @@ export function ErrorNotice({ error, onRetry }: { error: unknown; onRetry?: () =
   return <div role="alert" className="rounded-xl border border-rose-400/30 bg-slate-900 p-3 text-sm text-rose-300">
     <p>{describePublicError(error)}</p>
     {error instanceof TavernApiError && error.traceId && <p className="mt-1 break-all text-xs">请求编号：{error.traceId}</p>}
+    {error instanceof AgentApiError && error.requestId && <p className="mt-1 break-all text-xs">请求编号：{error.requestId}</p>}
     {onRetry && <button type="button" className={`${buttonClass} mt-2`} onClick={onRetry}>重新加载</button>}
   </div>;
 }

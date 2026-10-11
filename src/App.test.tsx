@@ -327,6 +327,19 @@ afterEach(() => {
 });
 
 describe('Four canonical pages', () => {
+  it('opens the global assistant for an authenticated root without replacing explicit legacy pages', async () => {
+    renderApp('/');
+    expect(await screen.findByRole('heading', {name:'全局助手'})).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/assistant');
+    expect(screen.getByRole('button', {name:'全局助手',current:'page'})).toBeInTheDocument();
+    expect(screen.queryByTestId('react-flow-boundary')).not.toBeInTheDocument();
+  });
+  it('opens the shared global assistant from learning management without opening an old generator', async () => {
+    renderApp('/learning');
+    fireEvent.click(await screen.findByRole('button',{name:'打开管理助手'}));
+    await waitFor(()=>expect(window.location.pathname).toBe('/assistant'));
+    expect(await screen.findByRole('heading',{name:'全局助手'})).toBeInTheDocument();
+  });
   it('replays the guide on every explicit click from the shared navigation', async () => {
     const user=userEvent.setup(); renderApp('/maps');
     for (let replay=0;replay<2;replay++) {
@@ -340,7 +353,7 @@ describe('Four canonical pages', () => {
     const user = userEvent.setup(); renderApp('/maps');
     const navigation = await screen.findByRole('navigation', { name: '业务导航' });
     expect(within(navigation).getAllByRole('button').map(button => button.textContent)).toEqual([
-      '公共书库', '我的地图', '学习聊天', '独立酒馆',
+      '全局助手', '公共书库', '我的地图', '学习聊天', '独立酒馆',
     ]);
     expect(screen.getByRole('navigation', { name: '辅助功能' })).toBeInTheDocument();
     await user.click(within(navigation).getByRole('button', { name: '独立酒馆' }));
@@ -666,8 +679,8 @@ describe('MapFlow tree library', () => {
 
     await user.click(screen.getAllByRole('button', { name: '进入控制台' })[0]);
 
-    expect(window.location.pathname).toBe('/console');
-    expect(await screen.findByText('公共树池')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/assistant');
+    expect(await screen.findByRole('heading',{name:'全局助手'})).toBeInTheDocument();
   });
 
   it('公共树默认使用关系布局，不向游客展示块布局切换', async () => {
@@ -974,7 +987,7 @@ describe('MapFlow tree library', () => {
     renderApp('/');
 
     expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/console');
+    expect(window.location.pathname).toBe('/assistant');
     expect(
       screen.queryByRole('heading', {
         name: '学习——什么时候变得如此困难？',
@@ -1022,7 +1035,7 @@ describe('MapFlow tree library', () => {
     await user.click(loginButtons[loginButtons.length - 1]);
 
     expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/console');
+    expect(window.location.pathname).toBe('/assistant');
   });
 
   it('未登录时不能浏览公共树池或加入技能树', async () => {

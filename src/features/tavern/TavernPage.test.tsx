@@ -183,11 +183,47 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-function renderPage(treeContext?: { libraryEntryId: string; title: string; available?: boolean; nodeId?: string; nodeTitle?: string }, sharedClient?: QueryClient, management = false) {
+function renderPage(treeContext?: { libraryEntryId: string; title: string; available?: boolean; nodeId?: string; nodeTitle?: string }, sharedClient?: QueryClient, management = false,
+  agentOptions?: import('../assistant/agentConversationOptions').AgentConversationOptions) {
   const client = sharedClient ?? new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
-  const rendered = render(<QueryClientProvider client={client}><IdentityProvider><TavernPage onNavigateConsole={() => {}} treeContext={treeContext} management={management} /></IdentityProvider></QueryClientProvider>);
+  const rendered = render(<QueryClientProvider client={client}><IdentityProvider><TavernPage onNavigateConsole={() => {}} treeContext={treeContext} management={management} agentOptions={agentOptions} /></IdentityProvider></QueryClientProvider>);
   return { ...rendered, client };
 }
+
+it('sends uncapped native messages and displays a saved answer even when its fees remain unknown', async () => {
+  const conversationId='11111111-1111-4111-8111-111111111111',executionId='22222222-2222-4222-8222-222222222222';
+  savedDetail={...savedDetail,conversation:{...savedDetail.conversation,conversationId,scene:'management',learningAreaId:null,libraryEntryId:null}};
+  conversations=[savedDetail.conversation];localStorage.setItem('mapflow.tavern.selection.v1.player-1.management',conversationId);
+  const existing=fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation(async(url:string,init?:RequestInit)=>{
+    if(url===`/api/me/tavern/conversations/${conversationId}/executions`){
+      if(init?.method==='POST')return json({replayed:false,execution:{executionId,conversationId,state:'succeeded',funding:'cash',modelId:'cash-tutor',error:null,
+        result:{executionId,conversationId,generationId:'33333333-3333-4333-8333-333333333333',messageId:'44444444-4444-4444-8444-444444444444',
+          answer:'已保存的真实回答',maps:[],usage:null,settlement:{status:'pending_evidence',cashMicros:null,pointUnits:null,balanceMicros:null}}}});
+      return json({execution:null});
+    }
+    if(url===`/api/me/tavern/conversations/${conversationId}`)return json(savedDetail);
+    return existing(url,init);
+  });
+  renderPage(undefined,undefined,true,{funding:'cash',modelLabel:'现金导师'});
+  const input=await screen.findByRole('textbox',{name:'消息'});fireEvent.change(input,{target:{value:'长输入'.repeat(10000)}});
+  expect(screen.getByRole('button',{name:'发送'})).toBeEnabled();fireEvent.click(screen.getByRole('button',{name:'发送'}));
+  expect(await screen.findByText('已保存的真实回答')).toBeInTheDocument();expect(screen.getByText(/费用待核对/)).toBeInTheDocument();
+  expect(fetchMock.mock.calls.some(([url])=>String(url).endsWith('/generate-stream'))).toBe(false);
+  expect(screen.queryByText(/本次生成失败/)).not.toBeInTheDocument();
+});
+it('guides missing native user-key configuration without accepting an execution',async()=>{
+  const conversationId='11111111-1111-4111-8111-111111111111';
+  savedDetail={...savedDetail,conversation:{...savedDetail.conversation,conversationId,scene:'management',learningAreaId:null,libraryEntryId:null}};
+  conversations=[savedDetail.conversation];localStorage.setItem('mapflow.tavern.selection.v1.player-1.management',conversationId);
+  const existing=fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation(async(url:string,init?:RequestInit)=>url.endsWith('/executions')?json({execution:null}):
+    url===`/api/me/tavern/conversations/${conversationId}`?json(savedDetail):existing(url,init));
+  renderPage(undefined,undefined,true,{funding:'byok'});const input=await screen.findByRole('textbox',{name:'消息'});
+  fireEvent.change(input,{target:{value:'Question'}});fireEvent.click(screen.getByRole('button',{name:'发送'}));
+  expect(await screen.findByRole('button',{name:'填写 API Key 或使用平台额度'})).toBeInTheDocument();
+  expect(fetchMock.mock.calls.some(([url,init])=>String(url).endsWith('/executions')&&init?.method==='POST')).toBe(false);
+});
 
 it('stages a node reference without sending or replacing the user draft, and includes it only on explicit send', async () => {
   const user = userEvent.setup();

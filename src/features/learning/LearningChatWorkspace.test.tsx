@@ -106,12 +106,24 @@ it('shows the current area label and manages areas from the switcher without loa
   await user.selectOptions(switcher, 'manage');
   expect(await screen.findByRole('region', { name: '学习区选择' })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: '打开管理助手' }));
-  expect(await screen.findByRole('region', { name: '学习区管理助手' })).toBeInTheDocument();
+  expect(callbacks.onOpenManager).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('region', { name: '学习区管理助手' })).not.toBeInTheDocument();
   expect(api.fetchPersonalTree).not.toHaveBeenCalled();
 });
 
-it('opens management within the selection layer without loading a map', async () => {
+it('opens the global assistant from selection without loading a map', async () => {
   const user = userEvent.setup(); mount();
+  await user.click(await screen.findByRole('button', { name: '打开管理助手' }));
+  expect(callbacks.onOpenManager).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('region', { name: '学习区管理助手' })).not.toBeInTheDocument();
+  expect(api.fetchPersonalTree).not.toHaveBeenCalled();
+});
+
+it('preserves the embedded manager for callers without the global navigation callback', async () => {
+  const user = userEvent.setup();
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <LearningChatWorkspace accountId="account-1" csrfToken="csrf" onOpenMaps={callbacks.onOpenMaps} />
+  </QueryClientProvider>);
   await user.click(await screen.findByRole('button', { name: '打开管理助手' }));
   expect(await screen.findByRole('region', { name: '学习区管理助手' })).toHaveTextContent('管理助手 对话');
   expect(api.fetchPersonalTree).not.toHaveBeenCalled();

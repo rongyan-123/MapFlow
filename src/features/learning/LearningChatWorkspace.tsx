@@ -73,7 +73,9 @@ export default function LearningChatWorkspace({ accountId, csrfToken, requestedA
   if (!area || (!area.available && !viewingHistory)) return <>{selectionNavigation}
     {unavailableNotice && <p role="status" className="border-b border-slate-800 px-5 py-3 text-sm text-amber-200">{unavailableNotice}</p>}
     <LearningAreaSelector accountId={accountId} csrfToken={csrfToken}
-    onEnterArea={selected => enter(selected.areaId, !selected.available)} onOpenMaps={onOpenMaps} onOpenManager={() => { enter(null); setManagerOpen(true); onOpenManager?.(); }} /></>;
+    onEnterArea={selected => enter(selected.areaId, !selected.available)} onOpenMaps={onOpenMaps} onOpenManager={() => {
+      if(onOpenManager)onOpenManager();else {enter(null);setManagerOpen(true);}
+    }} /></>;
 
   return <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
     <nav aria-label="当前学习区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2">
