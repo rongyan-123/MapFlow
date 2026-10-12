@@ -17,6 +17,7 @@ export default function AgentModelProfiles({csrfToken}:{csrfToken:string}) {
     <header className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-bold">模型配置</h2>
       <button type="button" className="rounded-lg bg-cyan-300 px-3 py-2 text-sm font-bold text-slate-950" onClick={()=>setEditing(true)}>新增模型配置</button></header>
     <p className="text-sm text-slate-400">现金额度与平台积分分别设置默认模型。配置保存后先测试再启用，重启后保留选择。</p>
+    <p className="text-xs text-slate-400">启用时会实际调用模型，验证工具、流式输出和计费能力。测试消耗接入账号额度，不扣用户钱包。</p>
     <div className="grid gap-3 sm:grid-cols-2">{(['cash','points'] as const).map(funding=>{
       const active=funding==='cash'?configuration.activeCash:configuration.activePoints;
       return <div key={funding} aria-label={`当前${funding==='cash'?'现金':'积分'}模型`} className="rounded-lg border border-slate-700 p-3">
