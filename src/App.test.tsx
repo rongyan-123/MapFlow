@@ -1978,6 +1978,28 @@ describe('手机端视图栈', () => {
 describe('手机端抽屉', () => {
   beforeEach(() => { window.innerWidth = 390; });
   afterEach(() => { window.innerWidth = 1024; });
+  it('手机名称搜索不会隐藏切换到桌面后的会话', async () => {
+    const user = userEvent.setup();
+    const chat = { ...tavernDetail, conversation: { ...tavernDetail.conversation, scene: 'tavern' as const } };
+    tavernApi.fetchCharacters.mockResolvedValue([tavernCharacter]);
+    tavernApi.fetchConversations.mockResolvedValue([chat.conversation]);
+    tavernApi.fetchConversation.mockResolvedValue(chat);
+    localStorage.setItem(`mapflow.tavern.selection.v1.${authenticated.account.playerId}`, chat.conversation.conversationId);
+    renderApp('/tavern');
+    await screen.findByRole('textbox', { name: '消息' });
+    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    const drawer = screen.getByRole('dialog', { name: '功能菜单' });
+    await user.type(within(drawer).getByRole('searchbox', { name: '搜索会话' }), '不匹配的名称');
+    expect(within(drawer).queryByRole('button', { name: `打开会话 ${chat.conversation.title}` })).not.toBeInTheDocument();
+    await user.click(within(drawer).getByRole('button', { name: '关闭功能菜单' }));
+    window.innerWidth = 1440; fireEvent(window, new Event('resize'));
+    expect(await screen.findByRole('button', { name: `打开会话 ${chat.conversation.title}` })).toBeInTheDocument();
+    window.innerWidth = 390; fireEvent(window, new Event('resize'));
+    await user.click(screen.getByRole('button', { name: '打开功能菜单' }));
+    expect(screen.getByRole('searchbox', { name: '搜索会话' })).toHaveValue('不匹配的名称');
+    expect(screen.queryByRole('button', { name: `打开会话 ${chat.conversation.title}` })).not.toBeInTheDocument();
+    expect(nativeApi.acceptAgentExecution).not.toHaveBeenCalled();
+  });
   it('统一手机聊天：键盘缩小可视窗口后外壳跟随并清理监听', async () => {
     const viewport = Object.assign(new EventTarget(), { height: 650, offsetTop: 0 });
     const removeListener = vi.spyOn(viewport, 'removeEventListener');

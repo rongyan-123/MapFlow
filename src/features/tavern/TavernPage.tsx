@@ -347,7 +347,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         <option value="all">全部角色</option>{historyRoles.map(id => <option key={id} value={id}>{characters.data?.find(item => item.characterId === id)?.card.name ?? '已隐藏角色'}</option>)}
       </select>
     </div>
-    <div className="space-y-1">{characterConversations.filter(item=>(historyRole==='all'||item.characterId===historyRole) && item.title.toLocaleLowerCase().includes(historySearch.trim().toLocaleLowerCase())).map(item=><button type="button" key={item.conversationId}
+    <div className="space-y-1">{characterConversations.filter(item=>(historyRole==='all'||item.characterId===historyRole) && (!mobileChrome || item.title.toLocaleLowerCase().includes(historySearch.trim().toLocaleLowerCase()))).map(item=><button type="button" key={item.conversationId}
       aria-label={`打开会话 ${item.title}`} aria-current={item.conversationId===conversationId?'page':undefined}
       className={`w-full rounded-xl px-3 py-2.5 text-left text-sm transition ${item.conversationId===conversationId?'bg-cyan-400/15 text-cyan-200':'text-slate-300 hover:bg-slate-800'}`}
       disabled={creatingConversation||!!pendingCreation.current} onClick={()=>{mobileChrome?.closeDrawer();selectConversation(item.conversationId);setDrawer(null);}}>

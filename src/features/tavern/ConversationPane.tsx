@@ -110,7 +110,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const presentationRef=run.presentation;
   const bottom = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLDivElement>(null);
-  // 手机端输入区每多一行就少一行聊天记录，模型选择并到底部按钮行，历史字节说明收起。
+  // 手机端输入区保持紧凑，模型选择和参数从统一抽屉进入。
   const isMobile = useIsMobile();
   const mobileChrome = useMobileChatChrome();
   const composer = useRef<HTMLTextAreaElement>(null);
