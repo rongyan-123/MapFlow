@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createConversation, deleteCharacter, fetchCharacters, fetchConversation, fetchConversations, fetchTurns, generateStream, importCharacter, mutateGraph, updateGenerationSettings } from './tavernClient';
+import { createConversation, deleteCharacter, fetchCharacters, fetchConversation, fetchConversations, fetchTurns, generateStream, importCharacter, mutateGraph, updateGenerationSettings,parseTeachingCanvas } from './tavernClient';
 import { character, completion, conversation, detail, sseResponse, turn } from './testFixtures';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -10,6 +10,11 @@ function reply(body: unknown) {
 }
 
 describe('Tavern HTTP contract', () => {
+  it('reads a saved canvas above the former aggregate shape cap without accepting malformed elements',()=>{
+    const canvas={revision:12,enabled:true,elements:Array.from({length:600},(_,id)=>({id:`shape-${id}`,type:'rectangle'}))};
+    expect(parseTeachingCanvas(canvas).elements).toHaveLength(600);
+    expect(()=>parseTeachingCanvas({...canvas,elements:[null]})).toThrow();
+  });
   it('keeps a feedback number without exposing an unknown client error response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: {
       code: 'internal.unknown_failure', message: 'revision=42 host=private.example sk-private-secret', traceId: 'safe-request-1',

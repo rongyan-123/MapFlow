@@ -6,6 +6,22 @@ import type { TavernModelSelection } from './types';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const selection: TavernModelSelection = { provider: 'custom', apiKey: '', baseUrl: '', model: '', settings: {}, historyBytes: 32768 };
+it.each(['cash','points'] as const)('uses the shared native %s controls without the old provider switch or history cap',async funding=>{
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response('{}')));
+  render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><ModelAccessPanel accountId="player" csrfToken="csrf" modelSelection={selection} onModelSelectionChange={()=>{}}
+    nativeFunding={funding} nativeControls={<div>真实资金通路控件</div>} /></QueryClientProvider>);
+  expect(screen.getByText('真实资金通路控件')).toBeInTheDocument();
+  expect(screen.queryByLabelText('API Key')).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'最近 32 KiB'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'使用平台模型（需要充值）'})).not.toBeInTheDocument();
+});
+it('saves a native user key as a user-defined binding even when the old preference was platform',()=>{
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response('{}')));const saved=vi.fn();
+  render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><ModelAccessPanel accountId="player" csrfToken="csrf" modelSelection={{...selection,provider:'platform'}} onModelSelectionChange={saved}
+    nativeFunding="byok" nativeControls={<div>真实资金通路控件</div>} /></QueryClientProvider>);
+  fireEvent.change(screen.getByLabelText('API Key'),{target:{value:'own-key'}});fireEvent.change(screen.getByLabelText('API URL'),{target:{value:'https://model.example/v1'}});
+  fireEvent.change(screen.getByLabelText('模型',{selector:'input'}),{target:{value:'own-model'}});fireEvent.click(screen.getByRole('button',{name:'保存并使用'}));
+  expect(saved).toHaveBeenCalledWith(expect.objectContaining({provider:'custom',apiKey:'own-key',model:'own-model'}));
+});
 it('does not promise a free trial before the platform billing mode has been verified', () => {
   setup({ ...selection, provider: 'platform' }, () => new Promise<Response>(() => {}));
   expect(screen.getByText('正在读取平台模型…')).toBeVisible();

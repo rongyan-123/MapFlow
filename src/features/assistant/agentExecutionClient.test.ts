@@ -1,5 +1,5 @@
 import {afterEach,expect,it,vi} from 'vitest';
-import {acceptAgentExecution,attachAgentExecution,fetchActiveAgentExecution,fetchAgentExecution,fetchAgentModelCatalogue,stopAgentExecution} from './agentExecutionClient';
+import {acceptAgentExecution,attachAgentExecution,fetchActiveAgentExecution,fetchAgentExecution,fetchAgentModelCatalogue,stopAgentExecution,resolveAgentToolApproval} from './agentExecutionClient';
 
 const executionId='11111111-1111-4111-8111-111111111111';
 const conversationId='22222222-2222-4222-8222-222222222222';
@@ -8,6 +8,20 @@ const status={executionId,conversationId,state:'running',funding:'cash',modelId:
 afterEach(()=>vi.unstubAllGlobals());
 function json(value:unknown,code=200){return new Response(JSON.stringify(value),{status:code,headers:{'Content-Type':'application/json'}});}
 function stream(pages:unknown[]){return new Response(pages.map(page=>`event: progress\ndata: ${JSON.stringify(page)}\n\n`).join(''),{headers:{'Content-Type':'text/event-stream'}});}
+it('receives durable confirmations and a large canvas preview without interpreting them as model-generated navigation',async()=>{
+ const approval={approvalRequestId:eventId,toolName:'personal_tree_mutation',action:'修改树信息',target:'当前个人树',destructive:false,proposal:{operation:'update_tree',revision:1,patch:{title:'Updated'}},mapTitle:'Owned map'};
+ const canvas={revision:1,enabled:true,elements:Array.from({length:600},(_,id)=>({id:`box-${id}`,type:'rectangle',x:id,y:0,width:10,height:10}))};
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue(stream([{events:[{executionId,eventId,sequence:1,payload:{type:'approval_required',approval,libraryEntryId:eventId,callId:'change'}},
+  {executionId,eventId:conversationId,sequence:2,payload:{type:'canvas',canvas}}],nextSequence:2,state:'running'}])));
+ const received:unknown[]=[];await attachAgentExecution(executionId,conversationId,0,event=>received.push(event.payload),new AbortController().signal);
+ expect(received).toEqual([{type:'approval_required',approval,libraryEntryId:eventId,callId:'change'},{type:'canvas',canvas}]);
+});
+it('resolves the original scoped confirmation with CSRF and without creating a new execution',async()=>{
+ const fetch=vi.fn().mockResolvedValue(new Response(null,{status:204}));vi.stubGlobal('fetch',fetch);
+ await resolveAgentToolApproval(executionId,eventId,true,false,'csrf-fixture');
+ expect(fetch).toHaveBeenCalledWith(`/api/me/agent-executions/${executionId}/approvals/${eventId}`,expect.objectContaining({method:'POST',body:JSON.stringify({allowed:true,destructiveConfirmed:false}),headers:expect.objectContaining({'X-CSRF-Token':'csrf-fixture'})}));
+ expect(fetch).toHaveBeenCalledOnce();
+});
 
 it('accepts one explicitly identified operation without keeping a user key in browser storage',async()=>{
   const fetch=vi.fn().mockResolvedValue(json({execution:{...status,funding:'byok'},replayed:false}));vi.stubGlobal('fetch',fetch);

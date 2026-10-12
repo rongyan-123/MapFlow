@@ -7,15 +7,17 @@ import type { TavernModelSelection } from './types';
 import { fetchPlatformModels, testModelConnection } from './tavernClient';
 import { inputClass } from './TavernUi';
 import { describePublicError } from '../../lib/publicErrors';
+import type {AgentFunding} from '../assistant/agentExecutionClient';
 
-export default function ModelAccessPanel({ modelSelection, onModelSelectionChange, accountId, onNavigateWallet, csrfToken }: {
+export default function ModelAccessPanel({ modelSelection, onModelSelectionChange, accountId, onNavigateWallet, csrfToken, nativeFunding, nativeControls, nativeModelId }: {
+  nativeFunding?:AgentFunding;nativeControls?:ReactNode;nativeModelId?:string;
   modelSelection: TavernModelSelection;
   onModelSelectionChange: (selection: TavernModelSelection) => void;
   accountId: string;
   csrfToken: string;
   onNavigateWallet?: () => void;
 }) {
-  const [draft, setDraft] = useState(modelSelection);
+  const [draft, setDraft] = useState<TavernModelSelection>(()=>nativeFunding==='byok'?{...modelSelection,provider:'custom'}:modelSelection);
   const [saved, setSaved] = useState(false);
   const [presetId, setPresetId] = useState(() => modelPresets.find(preset => preset.baseUrl === modelSelection.baseUrl)?.id ?? 'custom');
   const [validationError, setValidationError] = useState('');
@@ -23,7 +25,7 @@ export default function ModelAccessPanel({ modelSelection, onModelSelectionChang
   const [testing, setTesting] = useState(false);
   const probe = useRef<AbortController | null>(null);
   useEffect(() => () => { probe.current?.abort(); }, []);
-  useEffect(() => { setDraft(modelSelection); setPresetId(modelPresets.find(preset => preset.baseUrl === modelSelection.baseUrl)?.id ?? 'custom'); }, [modelSelection]);
+  useEffect(() => { setDraft(nativeFunding==='byok'?{...modelSelection,provider:'custom'}:modelSelection); setPresetId(modelPresets.find(preset => preset.baseUrl === modelSelection.baseUrl)?.id ?? 'custom'); }, [modelSelection,nativeFunding]);
   function updateDraft(updated: TavernModelSelection, invalidateConnection = true) {
     setDraft(updated); setSaved(false); setValidationError('');
     if (invalidateConnection) { probe.current?.abort(); probe.current = null; setTesting(false); setConnection(null); }
@@ -51,21 +53,31 @@ export default function ModelAccessPanel({ modelSelection, onModelSelectionChang
     onModelSelectionChange(cleaned); setSaved(true); setValidationError('');
   }
   const wallet = useQuery({ queryKey: ['me', accountId, 'wallet'], queryFn: readWallet,
-    enabled: modelSelection.provider === 'platform', retry: false, staleTime: 15_000 });
+    enabled: nativeFunding==='cash'||(nativeFunding===undefined&&modelSelection.provider === 'platform'), retry: false, staleTime: 15_000 });
   const platformCatalog = useQuery({ queryKey: ['me', accountId, 'tavern', 'platform-models'],
-    queryFn: ({ signal }) => fetchPlatformModels(signal), enabled: modelSelection.provider === 'platform', retry: false });
+    queryFn: ({ signal }) => fetchPlatformModels(signal), enabled: nativeFunding===undefined&&modelSelection.provider === 'platform', retry: false });
   const prices = useQuery({ queryKey: ['model-catalog', 'pricing'], queryFn: readModelPricing,
-    enabled: modelSelection.provider === 'platform', retry: false, staleTime: 60_000 });
+    enabled: nativeFunding==='cash'||(nativeFunding===undefined&&modelSelection.provider === 'platform'), retry: false, staleTime: 60_000 });
+  if(nativeFunding==='cash'||nativeFunding==='points')return <>
+    {nativeControls}
+    {nativeFunding==='cash'?<section className="space-y-3 rounded-xl border border-cyan-900 bg-slate-950 p-4">
+      <p className="text-sm text-slate-200">现金额度 {wallet.data?formatAmountMicros(wallet.data.balanceMicros):'读取中…'}</p>
+      {onNavigateWallet&&<button type="button" className="rounded-xl border border-slate-700 px-3 py-2 text-sm" onClick={onNavigateWallet}>查看额度</button>}
+      {nativeModelId&&<ModelReferencePrices compact channels={prices.data?.models.find(model=>model.id===nativeModelId)?.pricing?.channels.filter(channel=>channel.enabled)??[]} />}
+      <ReferencePriceNote /><p className="text-xs text-slate-400">完成后显示本次用量、实际费用和余额。</p>
+    </section>:<p className="text-sm text-slate-300">使用平台积分模型，完成后显示本次积分消耗。现金额度独立保存。</p>}
+  </>;
   return (
     <>
-      <ModelChoices label="模型线路" value={modelSelection.provider} options={[
+      {nativeControls}
+      {nativeFunding===undefined&&<ModelChoices label="模型线路" value={modelSelection.provider} options={[
         { value: 'custom', label: '自填 API Key' },
         { value: 'platform', label: '使用平台模型（需要充值）' },
       ]} onChange={provider => { probe.current?.abort(); probe.current = null; setTesting(false); setConnection(null); setValidationError(''); setSaved(false); onModelSelectionChange({
         provider: provider as TavernModelSelection['provider'], apiKey: '', model: '', baseUrl: '',
         settings: {}, historyBytes: modelSelection.historyBytes,
-      }); }} />
-      {modelSelection.provider === 'platform' ? <section aria-label="平台模型与额度" className="mt-4 space-y-4 rounded-xl border border-cyan-900 bg-slate-950/50 p-4">
+      }); }} />}
+      {nativeFunding===undefined&&modelSelection.provider === 'platform' ? <section aria-label="平台模型与额度" className="mt-4 space-y-4 rounded-xl border border-cyan-900 bg-slate-950/50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h3 className="text-sm font-semibold text-slate-100">我的额度</h3>
             <p className="mt-1 text-lg font-semibold text-cyan-200">{wallet.data ? `${formatAmountMicros(wallet.data.balanceMicros)} 额度` : wallet.error ? '暂时无法读取' : '读取中…'}</p></div>
@@ -125,14 +137,14 @@ export default function ModelAccessPanel({ modelSelection, onModelSelectionChang
         <p role="status" className="text-xs text-slate-400">{saved ? '已保存，当前页面内有效。' : '修改后请保存并使用；未保存的修改不会影响发送。'}</p>
         {validationError && <p role="alert" className="text-sm text-rose-300">{validationError}</p>}
       </div>}
-        <ModelChoices label="发送的历史上下文" value={String(modelSelection.provider === 'custom' ? draft.historyBytes : modelSelection.historyBytes)} options={[
+        {nativeFunding===undefined&&<ModelChoices label="发送的历史上下文" value={String(modelSelection.provider === 'custom' ? draft.historyBytes : modelSelection.historyBytes)} options={[
           { value: '8192', label: '最近 8 KiB' }, { value: '16384', label: '最近 16 KiB' },
           { value: '32768', label: '最近 32 KiB' },
         ]} onChange={value => {
           const historyBytes = Number(value) as TavernModelSelection['historyBytes'];
           if (modelSelection.provider === 'custom') updateDraft({ ...draft, historyBytes }, false);
           else onModelSelectionChange({ ...modelSelection, historyBytes });
-        }} />
+        }} />}
     </>
   );
 }

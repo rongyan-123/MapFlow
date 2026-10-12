@@ -1,4 +1,5 @@
 import type {GenerationAction} from '../tavern/types';
+import type {TavernToolApproval,TeachingCanvasState} from '../tavern/types';
 import {PublicUiError} from '../../lib/publicErrors';
 
 export type AgentFunding='cash'|'points'|'byok';
@@ -15,7 +16,8 @@ export interface AgentExecutionCommand {clientActionId:string;expectedRevision:n
   modelAccess?:{apiKey:string;baseUrl:string;model:string;contextWindow:number;maxOutputTokens?:number|null;
     reasoningProtocol:'none'|'deepseek'|'siliconflow'|'openai_reasoning';reasoningSupported:boolean}}
 export type AgentPayload={type:'text_delta'|'reasoning_delta';text:string}|{type:'completed';result:AgentCompletion}
-  |{type:'settlement';settlement:AgentSettlement;usage:AgentUsage|null}|{type:'tool_process';toolName:string;state:string;callId:string}|{type:'stopped'};
+  |{type:'settlement';settlement:AgentSettlement;usage:AgentUsage|null}|{type:'tool_process';toolName:string;state:string;callId:string}|{type:'stopped'}
+  |{type:'approval_required';approval:TavernToolApproval;libraryEntryId:string;callId:string}|{type:'canvas';canvas:TeachingCanvasState};
 export interface AgentEvent {executionId:string;eventId:string;sequence:number;payload:AgentPayload}
 export interface AgentAttachment {nextSequence:number;state:AgentState}
 export class AgentApiError extends PublicUiError {
@@ -103,6 +105,9 @@ export async function stopAgentExecution(execution:string,conversation:string,cl
 export async function resumeAgentExecution(execution:string,conversation:string,csrf:string,apiKey?:string):Promise<AgentStatus>{
   return status(await(await request(`${root}/${pathId(execution)}/resume`,{method:'POST',headers:headers(csrf),body:JSON.stringify(apiKey?{apiKey}:{})})).json(),conversation,execution);
 }
+export async function resolveAgentToolApproval(execution:string,approval:string,allowed:boolean,destructiveConfirmed:boolean,csrf:string):Promise<void>{
+  await request(`${root}/${pathId(execution)}/approvals/${pathId(approval)}`,{method:'POST',headers:headers(csrf),body:JSON.stringify({allowed,destructiveConfirmed})});
+}
 function payload(value:unknown,execution:string,conversation:string):AgentPayload{
   if(!record(value))invalid();
   switch(value.type){
@@ -110,6 +115,18 @@ function payload(value:unknown,execution:string,conversation:string):AgentPayloa
     case 'completed':return {type:'completed',result:completion(value.result,execution,conversation)};
     case 'settlement':return {type:'settlement',settlement:settlement(value.settlement),usage:usage(value.usage)};
     case 'tool_process':if(!text(value.toolName)||!text(value.state)||!text(value.callId)||!exact(value,['type','toolName','state','callId']))invalid();return value as AgentPayload;
+    case 'approval_required':{
+      const approval=value.approval;
+      if(!uuid(value.libraryEntryId)||!text(value.callId)||!record(approval)||!uuid(approval.approvalRequestId)
+        ||!text(approval.action)||!text(approval.target)||typeof approval.destructive!=='boolean'
+        ||(approval.mapTitle!==undefined&&!text(approval.mapTitle))||(approval.proposal!==undefined&&!record(approval.proposal)))invalid();
+      return value as AgentPayload;
+    }
+    case 'canvas':{
+      const canvas=value.canvas;
+      if(!record(canvas)||!natural(canvas.revision)||typeof canvas.enabled!=='boolean'||!Array.isArray(canvas.elements)||!canvas.elements.every(record))invalid();
+      return value as AgentPayload;
+    }
     case 'stopped':return {type:'stopped'};
     default:invalid();
   }

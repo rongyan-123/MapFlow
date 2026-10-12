@@ -57,7 +57,7 @@ import {
   PublicTreePreviewHeader,
 } from './features/tree-library/PublicTreePreview';
 import IdentityGate from './features/identity/IdentityGate';
-import TavernPage from './features/tavern/TavernPage';
+import TavernPage from './features/assistant/AgentTavernPage';
 import WalletPage from './features/wallet/WalletPage';
 import ModelPricingPage from './features/wallet/ModelPricingPage';
 import { DEMO_TREES } from './lib/demoTrees';
@@ -872,6 +872,11 @@ function ConsoleApp({ requestedView, requestedMapId, guideRequested, onGuideCons
       openIdentityDialog();
       return;
     }
+    if (!generationSessionId) {
+      closePublicGuide();
+      onNavigateAssistant();
+      return;
+    }
     if (!generationCapabilities?.enabled) return;
     setView('personal');
     setGenerationDialogOpen(true);
@@ -1055,23 +1060,10 @@ function ConsoleApp({ requestedView, requestedMapId, guideRequested, onGuideCons
               type="button"
               data-testid="top-generate-tree"
               aria-label={session ? '开始生成技能树' : '登录后可使用'}
-              title={
-                !session
-                  ? '登录后可使用'
-                  : capabilitiesPending || capabilitiesError
-                  ? '正在检查生成能力，请稍候'
-                  : undefined
-              }
+              title={!session ? '登录后可使用' : '在全局助手中创建地图'}
               ref={generationButtonRef}
               onClick={openTreeGenerator}
-              disabled={
-                Boolean(
-                  session &&
-                    (capabilitiesPending ||
-                      capabilitiesError ||
-                      !generationCapabilities?.enabled),
-                )
-              }
+              disabled={Boolean(session && generationSessionId && !generationCapabilities?.enabled)}
               className="group rounded-xl border border-cyan-200/90 bg-cyan-300 px-3 py-1.5 text-xs font-bold text-slate-950 shadow-[0_0_18px_rgba(103,232,249,0.32)] transition hover:-translate-y-0.5 hover:bg-cyan-200 hover:shadow-[0_0_24px_rgba(103,232,249,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
             >
               <span aria-hidden="true" className="transition-transform group-hover:rotate-12 sm:mr-1">
@@ -1215,11 +1207,9 @@ function ConsoleApp({ requestedView, requestedMapId, guideRequested, onGuideCons
 
           {view === 'personal' &&
             session &&
-            (capabilitiesPending ||
-              capabilitiesError ||
-              generationCapabilities?.enabled === true) && (
+            (
               <div className="mt-4">
-                {generationCapabilities?.platformFundedEnabled &&
+                {generationSessionId && generationCapabilities?.platformFundedEnabled &&
                   platformEntitlements.data && (
                     <p className="mb-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-center text-[11px] font-medium text-amber-200">
                       平台免费生成剩余 {platformEntitlements.data.available} 次
@@ -1231,7 +1221,7 @@ function ConsoleApp({ requestedView, requestedMapId, guideRequested, onGuideCons
                     generationSessionId ? '查看技能树生成任务' : '生成新技能树'
                   }
                   onClick={openTreeGenerator}
-                  disabled={!generationCapabilities?.enabled}
+                  disabled={Boolean(generationSessionId && !generationCapabilities?.enabled)}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/45 bg-cyan-400/10 px-3 py-2.5 text-sm font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-400/15 disabled:cursor-wait disabled:opacity-60"
                 >
                   {generationSessionId && (
@@ -1243,10 +1233,6 @@ function ConsoleApp({ requestedView, requestedMapId, guideRequested, onGuideCons
                   )}
                   {generationSessionId
                     ? '生成任务进行中 · 点击查看'
-                    : capabilitiesPending
-                    ? '正在检查生成能力…'
-                    : capabilitiesError
-                    ? '生成能力暂不可用'
                     : '生成新技能树'}
                 </button>
               </div>

@@ -62,7 +62,7 @@ export async function saveTeachingCanvas(id: string, state: import('./types').Te
 }
 export function parseTeachingCanvas(value: unknown): import('./types').TeachingCanvasState {
   if (!isRecord(value) || !nonNegativeInteger(value.revision) || typeof value.enabled !== 'boolean'
-    || !Array.isArray(value.elements) || value.elements.length > 500 || !value.elements.every(isRecord)) throw invalidResponse();
+    || !Array.isArray(value.elements) || !value.elements.every(isRecord)) throw invalidResponse();
   return value as unknown as import('./types').TeachingCanvasState;
 }
 export async function testModelConnection(apiKey: string, baseUrl: string, csrfToken: string, signal?: AbortSignal): Promise<{ ok: boolean; models: string[]; message: string }> {

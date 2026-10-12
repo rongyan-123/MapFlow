@@ -33,7 +33,8 @@ import { createConversation, createLearningConversation, deleteCharacter, fetchC
 import type { Character, CompletedTurn, Conversation, ConversationDetail, ConversationGraph, CreateLearningConversationInput, GenerationSettingsState, TavernModelSelection } from './types';
 import { CharacterAvatar, CompatibilityReport, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass } from './TavernUi';
 
-interface TavernPageProps {
+export interface TavernPageProps {
+  agentConfigurationControls?: ReactNode;
   agentOptions?: import('../assistant/agentConversationOptions').AgentConversationOptions;
   management?: boolean;
   onMapGenerated?: (libraryEntryId: string) => void;
@@ -50,7 +51,7 @@ export default function TavernPage(props: TavernPageProps) {
   return <AuthenticatedTavernPage key={`${session.account.playerId}.${props.treeContext?.libraryEntryId ?? (props.management ? 'management' : 'independent')}`} session={session} {...props} />;
 }
 
-function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet, onNavigateModels, onMapGenerated, treeContext, management, mapVisible, onOpenCanvas, onClose, onTreeChanged, onShowMap, mobileHeaderActions, onNodeReferenceConsumed, agentOptions }: TavernPageProps & { session: IdentitySession }) {
+function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet, onNavigateModels, onMapGenerated, treeContext, management, mapVisible, onOpenCanvas, onClose, onTreeChanged, onShowMap, mobileHeaderActions, onNodeReferenceConsumed, agentOptions, agentConfigurationControls }: TavernPageProps & { session: IdentitySession }) {
   const queryClient = useQueryClient();
   const inApplicationShell = useApplicationShell();
   const sharedModel = useSharedModelSelection();
@@ -372,7 +373,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   </div>;
   const configurationSections = [
     { id: 'overview', label: '角色与会话', content: summary },
-    { id: 'model', label: '模型接入', content: <ModelAccessPanel modelSelection={modelSelection} onModelSelectionChange={changeModelSelection} csrfToken={session.csrfToken} accountId={accountId} onNavigateWallet={onNavigateWallet} /> },
+    { id: 'model', label: '模型接入', content: <ModelAccessPanel modelSelection={modelSelection} onModelSelectionChange={changeModelSelection} csrfToken={session.csrfToken} accountId={accountId} onNavigateWallet={onNavigateWallet} nativeFunding={agentOptions?.funding} nativeControls={agentConfigurationControls} nativeModelId={agentOptions?.modelId} /> },
     ...(currentDetail && conversationId ? [
       ...(treeContext && treeContext.available !== false ? [{ id: 'tools', label: '技能树与工具', content: <TreeToolsPanel key={`${conversationId}.${currentDetail.graph.revision}`} detail={currentDetail} csrfToken={session.csrfToken}
         accountId={accountId} onUpdated={onProfileUpdated} onConflict={async () => { await conversationQuery.refetch(); }} /> }] : []),

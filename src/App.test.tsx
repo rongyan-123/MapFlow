@@ -9,6 +9,12 @@ import {
   SESSION_QUERY_KEY,
 } from './features/identity/IdentityContext';
 let savedLearningChat: typeof tavernDetail;
+const nativeApi=vi.hoisted(()=>({fetchAgentModelCatalogue:vi.fn(),fetchActiveAgentExecution:vi.fn(),acceptAgentExecution:vi.fn()}));
+vi.mock('./features/assistant/agentExecutionClient',async original=>({...await original<typeof import('./features/assistant/agentExecutionClient')>(),...nativeApi}));
+it('enters standalone tavern through shared native cash/points/user-key controls',async()=>{
+  renderApp('/tavern');expect(await screen.findByLabelText('资金通路')).toBeInTheDocument();
+  expect(tavernApi.generateStream).not.toHaveBeenCalled();
+});
 
 const identityApi = vi.hoisted(() => ({
   fetchCapabilities: vi.fn(),
@@ -39,7 +45,7 @@ const legacyApi = vi.hoisted(() => ({ fetchLearningTree: vi.fn() }));
 const walletApi = vi.hoisted(() => ({ readWallet: vi.fn(), readModelPricing: vi.fn(), readAdminTopups: vi.fn() }));
 vi.mock('./features/wallet/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('./features/wallet/walletClient')>(), ...walletApi }));
 
-const tavernApi = vi.hoisted(() => ({ fetchCharacters: vi.fn(), fetchConversations: vi.fn(), fetchLearningAreas: vi.fn(), createLearningArea: vi.fn(), fetchLearningAreaConversations: vi.fn(), openTreeConversation: vi.fn(), fetchConversation: vi.fn(),
+const tavernApi = vi.hoisted(() => ({ fetchCharacters: vi.fn(), fetchConversations: vi.fn(), fetchLearningAreas: vi.fn(), createLearningArea: vi.fn(), fetchLearningAreaConversations: vi.fn(), openTreeConversation: vi.fn(), openManagementConversation:vi.fn(),fetchConversation: vi.fn(),
   generateStream: vi.fn(),fetchPlatformModels: vi.fn(),requestCashQuote:vi.fn(),resolveTavernToolApproval:vi.fn() }));
 vi.mock('./features/tavern/tavernClient', () => tavernApi);
 
@@ -216,6 +222,19 @@ const adminAccount = {
 };
 
 beforeEach(() => {
+  for(const mock of Object.values(nativeApi))mock.mockReset();
+  const model={profileId:'learning-profile',profileVersion:1,modelId:'learning-model',displayName:'learning-model',contextWindow:131072,maxOutputTokens:null};
+  nativeApi.fetchAgentModelCatalogue.mockResolvedValue({cash:[model],defaultCash:model,points:null});
+  nativeApi.fetchActiveAgentExecution.mockResolvedValue(null);
+  nativeApi.acceptAgentExecution.mockImplementation(async(conversationId:string,command:import('./features/assistant/agentExecutionClient').AgentExecutionCommand)=>{
+    const user={messageId:'55555555-5555-4555-8555-555555555555',parentMessageId:'message-assistant-1',role:'user' as const,origin:'user' as const,characterId:null,content:command.action.type==='reply'?command.action.message:''};
+    const assistant={messageId:'44444444-4444-4444-8444-444444444444',parentMessageId:user.messageId,role:'assistant' as const,origin:'model' as const,characterId:tavernCharacter.characterId,content:'测试回答'};
+    savedLearningChat={...savedLearningChat,graph:{...tavernDetail.graph,revision:2,messages:[...tavernDetail.graph.messages,user,assistant],activePath:[...tavernDetail.graph.activePath,user.messageId,assistant.messageId]}};
+    const executionId='22222222-2222-4222-8222-222222222222';
+    return {replayed:false,execution:{executionId,conversationId,state:'succeeded',funding:command.funding,modelId:model.modelId,error:null,
+      result:{executionId,conversationId,generationId:'33333333-3333-4333-8333-333333333333',messageId:assistant.messageId,answer:assistant.content,maps:[],usage:null,
+        settlement:{status:'pending_evidence',cashMicros:null,pointUnits:null,balanceMicros:null}}}};
+  });
   window.innerWidth = 1024;
   for (const mock of Object.values(identityApi)) mock.mockReset();
   for (const mock of Object.values(treeApi)) mock.mockReset();
@@ -306,7 +325,10 @@ beforeEach(() => {
     title: personalEntry.tree.title, available: true, createdAt: '2026-10-11T00:00:00Z' }));
   tavernApi.openTreeConversation.mockReset().mockImplementation(async (entry: string) => ({ ...savedLearningChat,
     conversation: { ...savedLearningChat.conversation, scene: 'learning', learningAreaId: entry, libraryEntryId: entry, treeToolsEnabled: true } }));
-  tavernApi.fetchConversation.mockReset().mockImplementation(async () => ({ ...savedLearningChat,
+  const managementId='77777777-7777-4777-8777-777777777777';
+  const managementChat={...savedLearningChat,conversation:{...savedLearningChat.conversation,conversationId:managementId,scene:'management' as const,learningAreaId:undefined,libraryEntryId:undefined},graph:{...savedLearningChat.graph,conversationId:managementId}};
+  tavernApi.openManagementConversation.mockReset().mockResolvedValue(managementChat);
+  tavernApi.fetchConversation.mockReset().mockImplementation(async (id:string) => id===managementId?managementChat:({ ...savedLearningChat,
     conversation: { ...savedLearningChat.conversation, scene: 'learning', learningAreaId: personalEntry.library_entry_id, libraryEntryId: personalEntry.library_entry_id, treeToolsEnabled: true } }));
   tavernApi.fetchPlatformModels.mockReset().mockResolvedValue({ enabled:true,billingMode:'trial',models:[{id:'learning-model',provider:'AnyAI',contextWindow:32768}] });
   tavernApi.requestCashQuote.mockReset(); tavernApi.resolveTavernToolApproval.mockReset();
@@ -857,7 +879,7 @@ describe('MapFlow tree library', () => {
     expect(treeApi.addTreeToPersonalLibrary).not.toHaveBeenCalled();
   });
 
-  it('个人地图引导可以进入生成流程并在生成器中显示说明', async () => {
+  it('个人地图引导进入全局助手，不再创建旧生成会话', async () => {
     const user = userEvent.setup();
     window.localStorage.removeItem('mapflow.guide.public.v1.seen');
     treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [] });
@@ -876,26 +898,13 @@ describe('MapFlow tree library', () => {
     );
     await user.click(screen.getByRole('button', { name: '下一步' }));
 
-    const generateButton = await screen.findByRole('button', { name: '开始生成技能树' });
-    await waitFor(() => expect(generateButton).toBeEnabled());
-    await user.click(generateButton);
-
-    expect(
-      await screen.findByText(
-        '输入你想学的任何东西，技能，方向，主题，ai都会根据目前主流学习路线，以及你个人的情况，来为你定制一份地图。',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId('public-map-guide-progress')).toHaveTextContent('5 / 5');
-    expect(screen.getByRole('heading', { name: '把一个主题变成学习地图' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '开始体验' })).toBeInTheDocument();
-    expect(screen.getByTestId('public-map-guide-focus')).toHaveAttribute(
-      'data-focus-scope',
-      'generation-panel',
-    );
-    expect(screen.getByRole('dialog', { name: 'mock tree generator' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading',{name:'全局助手'})).toBeInTheDocument();
+    expect(screen.queryByTestId('public-map-guide')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', {name:'mock tree generator'})).not.toBeInTheDocument();
+    expect(nativeApi.acceptAgentExecution).not.toHaveBeenCalled();
   });
 
-  it('生成器引导的开始体验按钮只关闭引导并保留生成器', async () => {
+  it('结束生成入口引导后可直接输入，打开助手不收费', async () => {
     const user = userEvent.setup();
     window.localStorage.removeItem('mapflow.guide.public.v1.seen');
     treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [] });
@@ -907,11 +916,9 @@ describe('MapFlow tree library', () => {
     await user.click(await screen.findByRole('button', { name: '下一步' }));
     await user.click(await screen.findByRole('button', { name: '下一步' }));
 
-    expect(await screen.findByRole('dialog', { name: 'mock tree generator' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '开始体验' }));
-
+    expect(await screen.findByLabelText('消息')).toBeEnabled();
     expect(screen.queryByTestId('public-map-guide')).not.toBeInTheDocument();
-    expect(screen.getByRole('dialog', { name: 'mock tree generator' })).toBeInTheDocument();
+    expect(nativeApi.acceptAgentExecution).not.toHaveBeenCalled();
   });
 
   it('未登录时不能看到生成入口', async () => {
@@ -1238,24 +1245,26 @@ describe('MapFlow tree library', () => {
     expect(treeApi.fetchPersonalLibrary).toHaveBeenCalledTimes(2);
   });
 
-  it('opens generation only from an authenticated personal library and selects its result', async () => {
+  it('starts new map-building through the global assistant instead of the legacy generation form',async()=>{
+    const user=userEvent.setup();identityApi.fetchCurrentSession.mockResolvedValue(authenticated);renderApp();
+    await user.click(await screen.findByRole('button',{name:'我的地图'}));
+    await user.click(await screen.findByRole('button',{name:'生成新技能树'}));
+    expect(await screen.findByRole('heading',{name:'全局助手'})).toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'完成生成'})).not.toBeInTheDocument();
+    expect(new URL(window.location.href).pathname).toBe('/assistant');
+    expect(nativeApi.acceptAgentExecution).not.toHaveBeenCalled();
+  });
+  it('retains an existing generation session and selects its completed result', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     treeApi.fetchPersonalLibrary
       .mockResolvedValueOnce({ entries: [] })
       .mockResolvedValue({ entries: [personalEntry] });
     treeApi.fetchPersonalTree.mockResolvedValue(personalDetail([]));
-    renderApp();
+    renderApp('/maps?generationSession=generation-session-1');
 
     expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: '生成新技能树' }),
-    ).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '我的地图' }));
-    await user.click(screen.getByRole('button', { name: '生成新技能树' }));
-    expect(screen.getByRole('dialog', { name: 'mock tree generator' })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '保存生成会话' }));
+    expect(await screen.findByRole('dialog', { name: 'mock tree generator' })).toBeInTheDocument();
     expect(new URLSearchParams(window.location.search).get('generationSession')).toBe(
       'generation-session-1',
     );
@@ -1279,7 +1288,7 @@ describe('MapFlow tree library', () => {
     expect(generationApi.readPlatformGenerationEntitlements).not.toHaveBeenCalled();
   });
 
-  it('lets an authenticated user start generation directly from the top bar', async () => {
+  it('lets an authenticated user open the shared assistant directly from the map header', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
     treeApi.fetchPersonalLibrary.mockResolvedValue({ entries: [] });
@@ -1290,10 +1299,11 @@ describe('MapFlow tree library', () => {
     await waitFor(() => expect(button).toBeEnabled());
     await user.click(button);
 
-    expect(screen.getByRole('dialog', { name: 'mock tree generator' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading',{name:'全局助手'})).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'mock tree generator' })).not.toBeInTheDocument();
   });
 
-  it('keeps the generation button visible and disabled while capabilities are still loading', async () => {
+  it('opens the assistant while legacy generation capabilities are still loading', async () => {
     const user = userEvent.setup();
     identityApi.fetchCapabilities.mockImplementation(() => new Promise(() => {}));
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
@@ -1305,11 +1315,12 @@ describe('MapFlow tree library', () => {
     await user.click(screen.getByRole('button', { name: '我的地图' }));
 
     const button = await screen.findByRole('button', { name: '生成新技能树' });
-    expect(button).toBeDisabled();
-    expect(button).toHaveTextContent('正在检查生成能力…');
+    expect(button).toBeEnabled();
+    await user.click(button);
+    expect(await screen.findByRole('heading',{name:'全局助手'})).toBeInTheDocument();
   });
 
-  it('keeps the generation button visible and disabled when capabilities fail', async () => {
+  it('opens the assistant when legacy generation capabilities fail', async () => {
     const user = userEvent.setup();
     identityApi.fetchCapabilities.mockRejectedValue(new Error('network down'));
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
@@ -1321,11 +1332,9 @@ describe('MapFlow tree library', () => {
     await user.click(screen.getByRole('button', { name: '我的地图' }));
 
     const button = await screen.findByRole('button', { name: '生成新技能树' });
-    expect(button).toBeDisabled();
-    await waitFor(
-      () => expect(button).toHaveTextContent('生成能力暂不可用'),
-      { timeout: 3000 },
-    );
+    expect(button).toBeEnabled();
+    await user.click(button);
+    expect(await screen.findByRole('heading',{name:'全局助手'})).toBeInTheDocument();
   });
 
   it('restores an unfinished generation dialog from the URL after reload', async () => {
@@ -1346,12 +1355,10 @@ describe('MapFlow tree library', () => {
   it('keeps an unfinished generation session available after minimizing', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);
-    renderApp();
+    renderApp('/maps?generationSession=generation-session-1');
 
     expect(await screen.findByText(authenticated.account.playerId)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '我的地图' }));
-    await user.click(screen.getByRole('button', { name: '生成新技能树' }));
-    await user.click(screen.getByRole('button', { name: '保存生成会话' }));
+    expect(await screen.findByRole('dialog',{name:'mock tree generator'})).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '关闭生成器' }));
 
     expect(screen.queryByRole('dialog', { name: 'mock tree generator' })).not.toBeInTheDocument();
@@ -1452,7 +1459,7 @@ describe('MapFlow tree library', () => {
       activePlatformSessionId: 'server-platform-session-1',
       platformModeAvailable: true,
     });
-    expect(await screen.findByText('平台免费生成剩余 1 次')).toBeInTheDocument();
+    await waitFor(()=>expect(screen.queryByText('平台免费生成剩余 1 次')).not.toBeInTheDocument());
     expect(new URLSearchParams(window.location.search).has('generationSession')).toBe(false);
     expect(screen.queryByRole('dialog', { name: 'mock tree generator' })).not.toBeInTheDocument();
   });
@@ -1952,12 +1959,13 @@ describe('手机端视图栈', () => {
 
     await user.click(screen.getByRole('button', { name: '配置' }));
     await user.click(screen.getByRole('button', { name: '模型接入' }));
-    await user.click(screen.getByRole('button', { name: '使用平台模型（需要充值）' }));
-    await user.click(await screen.findByRole('button', { name: /learning-model/ }));
+    fireEvent.change(screen.getByLabelText('配置资金通路'),{target:{value:'cash'}});
+    expect(screen.getByLabelText('配置助手现金模型')).toHaveValue('learning-profile');
     await user.click(screen.getByRole('button', { name: '关闭配置' }));
     await user.type(screen.getByRole('textbox', { name: '消息' }), '保留这条消息');
     await user.click(screen.getByRole('button', { name: '发送' }));
     expect(await screen.findByText('测试回答')).toBeInTheDocument();
+    expect(nativeApi.acceptAgentExecution).toHaveBeenCalledOnce();expect(tavernApi.generateStream).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: '我的地图' }));
     await user.click(screen.getByRole('button', { name: '进入学习区，向 AI 提问' }));

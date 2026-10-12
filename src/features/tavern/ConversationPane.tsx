@@ -49,17 +49,18 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     if (saved && detail.generations.some(generation => generation.clientActionId === saved.clientActionId)) { storePending(storageKey, null); return null; }
     return saved;
   }),[queryClient,storageKey,detail.conversation.scene,detail.conversation.learningAreaId]);
-  const legacySnapshot=useSyncExternalStore(run.subscribe,run.getSnapshot,run.getSnapshot);
+  const legacySnapshot=useSyncExternalStore(agentOptions?noSubscription:run.subscribe,run.getSnapshot,run.getSnapshot);
   const nativeRun=useMemo(()=>agentConversationRun(queryClient,accountId,detail.conversation.conversationId),[queryClient,accountId,detail.conversation.conversationId]);
   const nativeSnapshot=useSyncExternalStore<ReturnType<typeof nativeRun.getSnapshot>|null>(agentOptions?nativeRun.subscribe:noSubscription,agentOptions?nativeRun.getSnapshot:noSnapshot,noSnapshot);
   const {pendingGeneration,draft,process,stopped,busy,error}=nativeSnapshot??legacySnapshot;
-  const canvasPreview=agentOptions?null:legacySnapshot.canvasPreview;
-  const setPendingGeneration=(pendingGeneration:PendingGeneration|null)=>run.set({pendingGeneration});
+  const canvasPreview=agentOptions?nativeSnapshot?.canvasPreview??null:legacySnapshot.canvasPreview;
+  const setPendingGeneration=(pendingGeneration:PendingGeneration|null)=>{if(agentOptions){if(pendingGeneration===null)nativeRun.dismiss();}else run.set({pendingGeneration});};
   const setDraft=(draft:string)=>run.set({draft});
   const setProcess=(process:GenerationProcessEvent[])=>run.set({process});
   const setStopped=(stopped:boolean)=>run.set({stopped});
   const setBusy=(busy:boolean)=>run.set({busy});
-  const setError=(error:unknown)=>run.set({error});
+  const setError=(error:unknown)=>agentOptions?nativeRun.rejectPreflight(error):run.set({error});
+  useEffect(()=>{if(agentOptions&&nativeSnapshot?.stopRequested)void nativeRun.resumeRequestedStop(csrfToken);},[nativeRun,csrfToken,!!agentOptions,nativeSnapshot?.executionId,nativeSnapshot?.stopRequested]);
   const restoredPending = useRef(run.controller.current?null:pendingGeneration);
   const [message, setMessage] = useState('');
   const [referenceActive, setReferenceActive] = useState(!!nodeReference);
@@ -89,7 +90,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const pane = useRef<HTMLDivElement>(null);
   // 手机端输入区每多一行就少一行聊天记录，模型选择并到底部按钮行，历史字节说明收起。
   const isMobile = useIsMobile();
-  const modelChipButton = <button type="button" className="shrink-0 rounded-full bg-slate-800 px-3 py-1.5 text-slate-200 hover:text-cyan-200" onClick={onOpenModelConfiguration}>{agentOptions?.modelLabel||modelSelection.model || '选择模型'} · {agentOptions?agentOptions.funding==='cash'?'现金额度':agentOptions.funding==='points'?'平台积分':'自填 Key':modelSelection.provider === 'platform' ? '平台额度' : '自填 Key'}</button>;
+  const modelChipButton = <button type="button" aria-label={agentOptions ? `配置当前模型 ${agentOptions.modelLabel || modelSelection.model || ''}` : undefined} className="shrink-0 rounded-full bg-slate-800 px-3 py-1.5 text-slate-200 hover:text-cyan-200" onClick={onOpenModelConfiguration}>{agentOptions?.modelLabel||modelSelection.model || '选择模型'} · {agentOptions?agentOptions.funding==='cash'?'现金额度':agentOptions.funding==='points'?'平台积分':'自填 Key':modelSelection.provider === 'platform' ? '平台额度' : '自填 Key'}</button>;
   const followLatest = useRef(true);
   useEffect(() => {
     if (followLatest.current) bottom.current?.scrollIntoView?.({ block: 'nearest' });
@@ -112,6 +113,10 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   useEffect(()=>{
     const completed=nativeSnapshot?.completion;if(!completed||completedIdentity.current===completed.executionId)return;
     completedIdentity.current=completed.executionId;
+    const action=nativeSnapshot?.completedAction;
+    if(action?.type==='reply'&&referenceActive&&nodeReference&&action.message.includes(`[学习节点参考：${nodeReference.title}；节点 ID：${nodeReference.id}]`)){
+      setReferenceActive(false);onNodeReferenceConsumed?.();
+    }
     const controller=new AbortController();
     void fetchConversation(detail.conversation.conversationId,controller.signal).then(saved=>{
       if(!controller.signal.aborted)onRecovered(saved);
@@ -166,12 +171,12 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         const access=agentOptions.funding==='byok'?selectedUserAccess(modelSelection):undefined;
         if(agentOptions.funding==='byok'&&(!access||!Number.isSafeInteger(agentOptions.contextWindow)||!agentOptions.contextWindow||agentOptions.contextWindow<1))
           throw new TavernApiError(400,'tavern.model_access_required','请填写 API Key、模型和实际上下文窗口。');
-        await canvas.flush();
-        await nativeRun.send(action,detail.graph.revision,{funding:agentOptions.funding,
+        try{await canvas.flush();}catch{/* The canvas retains its manual draft and shows its own error; unrelated chat can proceed. */}
+        const admitted=await nativeRun.send(action,detail.graph.revision,{funding:agentOptions.funding,
           ...(agentOptions.profileId?{profileId:agentOptions.profileId,profileVersion:agentOptions.profileVersion}:{}),
           ...(access?{modelAccess:{apiKey:access.apiKey,baseUrl:access.baseUrl,model:access.model,contextWindow:agentOptions.contextWindow!,
             maxOutputTokens:agentOptions.maxOutputTokens,reasoningProtocol:agentOptions.reasoningProtocol??'none',reasoningSupported:agentOptions.reasoningSupported??false}}:{})},csrfToken);
-        if(action.type==='reply')setMessage('');
+        if(admitted&&action.type==='reply')setMessage('');
       }catch(failure){nativeRun.rejectPreflight(failure);}
       return;
     }
@@ -420,7 +425,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       <div ref={bottom} />
     </div>
     <div className="mx-auto w-full max-w-4xl shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-1 sm:px-8 sm:pt-2">
-      <ErrorNotice error={error} />
+      <ErrorNotice error={error} onRetry={agentOptions?()=>void nativeRun.retry(csrfToken,modelSelection.apiKey):undefined} />
       {nativeSnapshot?.completion&&<p role="status" className="text-xs text-slate-400">
         {nativeSnapshot.completion.usage?`输入 ${nativeSnapshot.completion.usage.inputTokens} · 输出 ${nativeSnapshot.completion.usage.outputTokens} Token · `:'用量待核对 · '}
         {['pending_evidence','pending_posting'].includes(nativeSnapshot.completion.settlement.status)?'结果已保存，费用待核对。':
@@ -430,6 +435,15 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       {agentOptions&&error instanceof AgentApiError&&['credential_required','request_failed'].includes(error.code)&&<button className={buttonClass} onClick={onOpenModelConfiguration}>填写 API Key 或选择平台额度</button>}
       {agentOptions&&error instanceof AgentApiError&&error.code==='cash_non_positive'&&onNavigateWallet&&<button className={buttonClass} onClick={onNavigateWallet}>充值平台额度</button>}
       <ErrorNotice error={canvas.error} />
+      {nativeSnapshot?.pendingApprovals.map(({approval})=><div key={approval.approvalRequestId} className="rounded-xl border border-amber-400 bg-slate-900 p-4 text-sm">
+        <p className="whitespace-pre-wrap">{approvalSummary(approval)}</p>
+        <div className="mt-3 flex gap-2">
+          <button type="button" className={buttonClass} onClick={()=>{
+            if(!approval.destructive||window.confirm('此操作会删除或替换已有内容，确定继续？'))void nativeRun.resolveApproval(approval.approvalRequestId,true,approval.destructive,csrfToken);
+          }}>{approval.destructive?'确认删除或替换':'确认修改'}</button>
+          <button type="button" className={buttonClass} onClick={()=>void nativeRun.resolveApproval(approval.approvalRequestId,false,false,csrfToken)}>取消修改</button>
+        </div>
+      </div>)}
       {error instanceof TavernApiError && ['tavern.model_access_required', 'tavern.model_access_invalid',
         'tavern.platform_model_required', 'tavern.runtime_unavailable', 'generation.model_access_invalid',
         'tavern.user_model_authentication', 'tavern.user_model_balance', 'tavern.user_model_timeout',

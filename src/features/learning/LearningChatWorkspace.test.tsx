@@ -6,6 +6,11 @@ import LearningChatWorkspace from './LearningChatWorkspace';
 
 const api = vi.hoisted(() => ({ fetchLearningAreas: vi.fn(), createLearningArea: vi.fn(), fetchPersonalLibrary: vi.fn(), fetchPersonalTree: vi.fn() }));
 const referenceCallbacks = vi.hoisted(() => [] as Array<() => void>);
+vi.mock('../identity/IdentityContext',()=>({useIdentity:()=>({session:{account:{playerId:'account-1'},csrfToken:'csrf'}})}));
+it('opens actual learning chat through the shared native funding controls',async()=>{
+  mount();await userEvent.setup().click(await screen.findByRole('button',{name:'进入 Python'}));
+  expect(await screen.findByLabelText('资金通路')).toBeInTheDocument();
+});
 vi.mock('../tavern/tavernClient', () => api);
 vi.mock('../tree-library/treeLibraryClient', () => api);
 vi.mock('../tavern/TavernPage', () => ({ default: ({ treeContext, management, onShowMap, onOpenCanvas, onNodeReferenceConsumed }: { treeContext?: { title: string; nodeId?: string }; management?: boolean; onShowMap?: () => void; onOpenCanvas?: () => void; onNodeReferenceConsumed?: () => void }) => {
