@@ -8,6 +8,15 @@ function reply(body: unknown) {
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
 }
+it('reads durable native completions only when bound to this conversation and an actual assistant message',async()=>{
+ const id='11111111-1111-4111-8111-111111111111',messageId='22222222-2222-4222-8222-222222222222';
+ const saved={executionId:'33333333-3333-4333-8333-333333333333',conversationId:id,generationId:'33333333-3333-4333-8333-333333333333',messageId,answer:'Saved',maps:[],usage:null,
+  settlement:{status:'pending_evidence',cashMicros:null,pointUnits:null,balanceMicros:null}};
+ const history={...detail,conversation:{...detail.conversation,conversationId:id},graph:{...detail.graph,messages:[...detail.graph.messages,{...detail.graph.messages[2],messageId}]},agentResults:[saved]};
+ reply(history);expect((await fetchConversation(id) as any).agentResults).toEqual([saved]);
+ reply({...history,agentResults:[{...saved,conversationId:messageId}]});await expect(fetchConversation(id)).rejects.toThrow();
+ reply({...history,agentResults:[{...saved,messageId:saved.executionId}]});await expect(fetchConversation(id)).rejects.toThrow();
+});
 
 describe('Tavern HTTP contract', () => {
   it('reads a saved canvas above the former aggregate shape cap without accepting malformed elements',()=>{

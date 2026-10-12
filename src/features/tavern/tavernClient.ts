@@ -1,4 +1,5 @@
 import { publicHttpErrorMessage } from '../../lib/publicErrors';
+import {parseAgentCompletion} from '../assistant/agentExecutionClient';
 import { prepareConversationInput, validateId, validateMessage } from './conversationInput';
 import { TavernApiError, type Character, type CompletedTurn, type Conversation, type ConversationDetail, type ConversationGraph, type CreateConversationInput, type GenerationAction, type GenerationRecord, type GenerationSettings, type GenerationSettingsState, type GraphMutation, type NormalizedCharacterCard, type TavernUserModelAccess, type Turn } from './types';
 import { isRecord, NORMALIZED_CARD_BYTES, RAW_FILE_BYTES, tooLarge, utf8Bytes } from './validation';
@@ -164,11 +165,15 @@ export async function updateConversationProfile(id: string, expectedRevision: nu
 }
 function parseConversationDetail(body: unknown): ConversationDetail {
   if (!isRecord(body)) throw invalidResponse();
-  return { conversation: parseConversation(body.conversation), character: parseCharacter(body.character),
+  const conversation=parseConversation(body.conversation),graph=parseGraph(body.graph);
+  const agentResults=body.agentResults===undefined?undefined:parseList(body,'agentResults',value=>parseAgentCompletion(value,conversation.conversationId));
+  if(agentResults&&(new Set(agentResults.map(result=>result.executionId)).size!==agentResults.length
+    ||agentResults.some(result=>!graph.messages.some(message=>message.messageId===result.messageId&&message.role==='assistant'))))throw invalidResponse();
+  return { conversation, character: parseCharacter(body.character),...(agentResults===undefined?{}:{agentResults}),
     ...(body.roleChanges === undefined ? {} : { roleChanges: parseList(body, 'roleChanges', parseRoleChange) }),
     ...(Array.isArray(body.diagnostics)?{diagnostics:body.diagnostics.filter((record):record is {actionId:string;payload:Record<string,unknown>}=>isRecord(record)&&typeof record.actionId==='string'&&isRecord(record.payload))}:{}),
     ...(body.canvas === undefined ? {} : { canvas: parseTeachingCanvas(body.canvas) }),
-    turns: parseList(body, 'turns', parseTurn), generations: parseList(body, 'generations', parseGeneration), graph: parseGraph(body.graph),
+    turns: parseList(body, 'turns', parseTurn), generations: parseList(body, 'generations', parseGeneration), graph,
     ...(body.cashCharges===undefined?{}:{cashCharges:parseList(body,'cashCharges',parseCashCharge)}) };
 }
 function parseRoleChange(value: unknown): import('./types').RoleChange {

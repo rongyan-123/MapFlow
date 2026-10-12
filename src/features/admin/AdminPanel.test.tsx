@@ -32,7 +32,7 @@ const adminApi = vi.hoisted(() => ({
 }));
 
 vi.mock('./adminClient', () => adminApi);
-const agentApi=vi.hoisted(()=>({fetchAgentModelConfiguration:vi.fn(),saveAgentModelProfile:vi.fn(),activateAgentModelProfile:vi.fn()}));
+const agentApi=vi.hoisted(()=>({fetchAgentModelConfiguration:vi.fn(),saveAgentModelProfile:vi.fn(),activateAgentModelProfile:vi.fn(),fetchAgentSettlementAttention:vi.fn()}));
 vi.mock('./agentModelClient',()=>agentApi);
 const walletApi = vi.hoisted(() => ({ readAdminTopups: vi.fn(), readAdminChannels: vi.fn(), readUpstreamBalance: vi.fn() }));
 vi.mock('../wallet/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('../wallet/walletClient')>(), ...walletApi }));
@@ -189,6 +189,20 @@ beforeEach(() => {
   adminApi.fetchAdminAnnouncements.mockResolvedValue([]);
   adminApi.fetchAdminProviderConfiguration.mockResolvedValue(providerConfiguration());
   agentApi.fetchAgentModelConfiguration.mockResolvedValue(configurationFixture());
+  agentApi.fetchAgentSettlementAttention.mockResolvedValue({pending:[],nextBefore:null,totalCount:0});
+});
+
+it('keeps missing-fee attention visible to administrators with original calls and check details',async()=>{
+ const execution='11111111-1111-4111-8111-111111111111',call='22222222-2222-4222-8222-222222222222';
+ agentApi.fetchAgentSettlementAttention.mockResolvedValue({pending:[{executionId:execution,accountId:execution,conversationId:execution,funding:'cash',status:'pending_evidence',cashMicros:null,pointUnits:null,
+  checkedAt:'2026-10-12T03:00:00Z',attentionKey:'unchanged-evidence',reason:'真实金额回执尚不完整，保持待核对',diagnostic:{posting:null,reconciliation:null},calls:[{callId:call,status:'completed',usage:null,receipts:[]}]}],nextBefore:null,totalCount:1});
+ render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><AdminPanel onBack={()=>{}} csrfToken="csrf" accountId="admin"/></QueryClientProvider>);
+ expect(await screen.findByText('1 笔费用待核对')).toBeVisible();
+ await userEvent.click(screen.getByRole('button',{name:'查看待核对记录'}));
+ expect(screen.getByText(execution)).toBeVisible();
+ expect(screen.getByText(call)).toBeVisible();
+ expect(screen.getByText(/金额回执尚未提供/u)).toBeVisible();
+ expect(screen.queryByRole('button',{name:/免收|结案/u})).not.toBeInTheDocument();
 });
 
 function providerConfiguration() {

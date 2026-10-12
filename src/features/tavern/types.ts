@@ -88,6 +88,7 @@ export type GenerationAction =
   | { type: 'regenerate'; assistantMessageId: string }
   | { type: 'continue'; assistantMessageId: string };
 export interface ConversationDetail {
+  agentResults?: import('../assistant/agentExecutionClient').AgentCompletion[];
   roleChanges?: RoleChange[];
   canvas?: TeachingCanvasState;
   conversation: Conversation; character: Character; turns: Turn[];

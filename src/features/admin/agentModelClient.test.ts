@@ -1,7 +1,15 @@
 import {afterEach,expect,it,vi} from 'vitest';
-import {fetchAgentModelConfiguration,activateAgentModelProfile,saveAgentModelProfile} from './agentModelClient';
+import {fetchAgentModelConfiguration,activateAgentModelProfile,saveAgentModelProfile,fetchAgentSettlementAttention} from './agentModelClient';
 import {configurationFixture} from './agentModelFixture';
 afterEach(()=>vi.unstubAllGlobals());
+it('reads administrator settlement pages without keys and rejects unexpected secret-bearing fields',async()=>{
+ const page={pending:[],nextBefore:null,totalCount:0};
+ const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify(page)));vi.stubGlobal('fetch',fetch);
+ expect(await fetchAgentSettlementAttention()).toEqual(page);
+ expect(fetch.mock.calls[0]).toEqual(['/api/admin/agent-settlements',expect.objectContaining({credentials:'same-origin'})]);
+ fetch.mockResolvedValue(new Response(JSON.stringify({...page,apiKey:'must not be displayed'})));
+ await expect(fetchAgentSettlementAttention()).rejects.toThrow();
+});
 it('uses a CSRF protected activation with the stored epoch and never sends keys on reads',async()=>{
   const fetch=vi.fn().mockImplementation(()=>Promise.resolve(new Response(JSON.stringify(configurationFixture()),{headers:{'content-type':'application/json'}})));vi.stubGlobal('fetch',fetch);
   await fetchAgentModelConfiguration();

@@ -12,11 +12,26 @@ const status={executionId:execution,conversationId:conversation,state:'running',
 beforeEach(()=>{vi.clearAllMocks();sessionStorage.clear();api.fetchActiveAgentExecution.mockResolvedValue(null);api.fetchAgentExecution.mockResolvedValue(status);canvas.flush.mockResolvedValue(undefined);
  api.acceptAgentExecution.mockResolvedValue({execution:status,replayed:false});api.attachAgentExecution.mockImplementation((_id,_conversation,_after,_onEvent,signal:AbortSignal)=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true})));});
 afterEach(cleanup);
-function mount(reference?:{id:string;title:string},consumed?:()=>void){return render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><ConversationPane
- detail={{...detail,conversation:{...detail.conversation,conversationId:conversation}}} accountId="owner" csrfToken="fresh-csrf"
+function mount(reference?:{id:string;title:string},consumed?:()=>void,extra:Record<string,unknown>={}){return render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><ConversationPane
+ detail={{...detail,...extra,conversation:{...detail.conversation,conversationId:conversation}}} accountId="owner" csrfToken="fresh-csrf"
  modelSelection={{provider:'custom',baseUrl:'',apiKey:'',model:'',historyBytes:32768,settings:{}}} agentOptions={{funding:'cash',modelLabel:'Tutor'}}
  onCompleted={()=>{}} onRecovered={()=>{}} onGraphChanged={()=>{}} configurationOpen={false} onCloseConfiguration={()=>{}} configuration={[]}
  onOpenModelConfiguration={()=>{}} nodeReference={reference} onNodeReferenceConsumed={consumed} /></QueryClientProvider>);}
+const historicalResult={executionId:execution,conversationId:conversation,generationId:execution,messageId:'message-assistant-1',answer:'请用茶。',
+ maps:[{treeId:conversation,libraryEntryId:execution,title:'已保存的学习地图'}],usage:null,
+ settlement:{status:'pending_evidence',cashMicros:null,pointUnits:null,balanceMicros:null}};
+it('restores saved map cards and pending fees from server history without a browser execution attachment',async()=>{
+ mount(undefined,undefined,{agentResults:[historicalResult]});
+ expect(await screen.findByRole('button',{name:'查看 已保存的学习地图'})).toBeVisible();
+ expect(screen.getByText(/结果已保存，费用待核对。/u)).toBeVisible();
+ expect(api.acceptAgentExecution).not.toHaveBeenCalled();
+});
+it('keeps an earlier saved map card when the next native message starts',async()=>{
+ mount(undefined,undefined,{agentResults:[historicalResult]});
+ fireEvent.change(screen.getByLabelText('消息'),{target:{value:'A later question'}});fireEvent.click(screen.getByRole('button',{name:'发送'}));
+ await waitFor(()=>expect(api.acceptAgentExecution).toHaveBeenCalledOnce());
+ expect(screen.getAllByRole('button',{name:'查看 已保存的学习地图'})).toHaveLength(1);
+});
 it('consumes a node reference after its native reply is saved, rather than injecting it on every later reply',async()=>{
  let deliver:(event:any)=>void=()=>{};
  api.attachAgentExecution.mockImplementation((_id,_conversation,_after,onEvent,signal:AbortSignal)=>{deliver=onEvent;return new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));});
@@ -28,6 +43,14 @@ it('consumes a node reference after its native reply is saved, rather than injec
  await waitFor(()=>expect(api.attachAgentExecution).toHaveBeenCalled());
  deliver({executionId:execution,eventId:crypto.randomUUID(),sequence:1,payload:{type:'completed',result:{executionId:execution,conversationId:conversation,generationId:execution,messageId:conversation,answer:'Saved',maps:[],usage:null,settlement:{status:'no_site_charge',cashMicros:null,pointUnits:null,balanceMicros:null}}}});
  await waitFor(()=>expect(consumed).toHaveBeenCalledOnce());
+});
+it('displays fractional points in the same units as the account balance',async()=>{
+ api.fetchActiveAgentExecution.mockResolvedValue({...status,state:'succeeded',funding:'points',result:{
+  executionId:execution,conversationId:conversation,generationId:execution,messageId:conversation,answer:'Saved',maps:[],usage:null,
+  settlement:{status:'settled',cashMicros:null,pointUnits:5190,balanceMicros:null}}});
+ mount();
+ expect(await screen.findByText(/本次消耗/u)).toHaveTextContent('本次消耗 0.00519 积分');
+ expect(screen.queryByText(/本次消耗 5190 积分/u)).not.toBeInTheDocument();
 });
 it('keeps draft text if restoration failed and offers a read-only recovery action',async()=>{
  api.fetchActiveAgentExecution.mockRejectedValueOnce(new Error('network lost'));mount();

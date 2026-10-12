@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalSt
 import { useQueryClient } from '@tanstack/react-query';
 import { conversationRun, type PendingGeneration } from './conversationRuns';
 import {agentConversationRun} from '../assistant/agentConversationRun';
-import {AgentApiError} from '../assistant/agentExecutionClient';
+import {AgentApiError,type AgentCompletion} from '../assistant/agentExecutionClient';
 import type {AgentConversationOptions} from '../assistant/agentConversationOptions';
 import AgentMapResults from '../assistant/AgentMapResults';
 import { approvalSummary } from './approvalSummary';
@@ -19,9 +19,19 @@ import useIsMobile from '../../lib/useIsMobile';
 import { validateId, validateMessage } from './conversationInput';
 import { fetchConversation, generateStream, mutateGraph, resolveTavernToolApproval } from './tavernClient';
 import {formatAmountMicros} from '../wallet/walletClient';
+import {formatCreditAmount} from '../credit/creditClient';
 import type { CashQuote } from './types';
 import { TavernApiError, type CompletedTurn, type ConversationDetail, type ConversationGraph, type GenerationAction, type GenerationRecord, type GraphMessage, type GraphMutation, type TavernModelSelection, type TavernUserModelAccess } from './types';
 import { isRecord, utf8Bytes } from './validation';
+
+function AgentResultSummary({result}:{result:AgentCompletion}) {
+  return <p role="status" className="mx-auto max-w-3xl text-xs text-slate-400">
+    {result.usage?`输入 ${result.usage.inputTokens} · 输出 ${result.usage.outputTokens} Token · `:'用量待核对 · '}
+    {['pending_evidence','pending_posting'].includes(result.settlement.status)?'结果已保存，费用待核对。':
+      result.settlement.cashMicros!==null?`本次费用 ¥${formatAmountMicros(result.settlement.cashMicros)}${result.settlement.balanceMicros!==null?` · 现金余额 ¥${formatAmountMicros(result.settlement.balanceMicros)}`:''}`:
+      result.settlement.pointUnits!==null?`本次消耗 ${formatCreditAmount(result.settlement.pointUnits/1_000_000)} 积分`:'未扣本站额度。'}
+  </p>;
+}
 import { CharacterAvatar, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass, type TavernDialogSection } from './TavernUi';
 import type { Character } from './types';
 
@@ -392,7 +402,8 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         text={activeMessage.content} user={activeMessage.role === 'user'} />
         {(detail.cashCharges??[]).filter(charge=>charge.outputMessageId===activeMessage.messageId
           || activeMessages.some(message=>message.messageId===charge.outputMessageId && message.origin==='continue' &&
-            continuationRoot(message,messagesById,roleChangeAnchors)===activeMessage.messageId)).map(charge=> {
+            continuationRoot(message,messagesById,roleChangeAnchors)===activeMessage.messageId)).filter(charge=>
+              !(detail.agentResults??[]).some(result=>result.generationId===charge.generationId)).map(charge=> {
             const usage=detail.turns.find(turn=>turn.turnId===charge.generationId)?.usage;
             return <p key={charge.generationId} className="mx-auto -mt-4 mb-6 max-w-3xl pl-14 text-xs text-slate-400">
               {usage&&<>输入 {usage.inputTokens} · 输出 {usage.outputTokens} Token · </>}
@@ -400,6 +411,15 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
               {charge.capped&&' · 已按预留上限结算'}
             </p>;
           })}
+        {(detail.agentResults??[]).filter(result=>result.messageId===activeMessage.messageId
+          || activeMessages.some(message=>message.messageId===result.messageId&&message.origin==='continue'&&
+            continuationRoot(message,messagesById,roleChangeAnchors)===activeMessage.messageId)).map(saved=>{
+          const result=nativeSnapshot?.completion?.executionId===saved.executionId?nativeSnapshot.completion:saved;
+          return <div key={result.executionId} className="mb-6 space-y-3">
+            <AgentMapResults completion={result} accountId={accountId} csrfToken={csrfToken} />
+            <AgentResultSummary result={result} />
+          </div>;
+        })}
         {(detail.roleChanges ?? []).filter(change => change.afterMessageId === activeMessage.messageId
           || activeMessages.some(message => message.origin === 'continue' && message.messageId === change.afterMessageId && continuationRoot(message, messagesById, roleChangeAnchors) === activeMessage.messageId))
           .map(change => <p key={change.changeId} className="mx-auto mb-4 max-w-3xl text-center text-xs text-slate-500">已切换角色：{change.characterName}</p>)}
@@ -420,18 +440,15 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
       </div>}
       {nativeSnapshot?.completion&&!detail.graph.messages.some(message=>message.messageId===nativeSnapshot.completion?.messageId)&&
         <Message author={detail.character.card.name} character={detail.character} text={nativeSnapshot.completion.answer} />}
-      {nativeSnapshot?.completion&&<AgentMapResults completion={nativeSnapshot.completion} accountId={accountId} csrfToken={csrfToken} />}
+      {nativeSnapshot?.completion&&!detail.agentResults?.some(result=>result.executionId===nativeSnapshot.completion?.executionId)&&
+        <AgentMapResults completion={nativeSnapshot.completion} accountId={accountId} csrfToken={csrfToken} />}
       {!activeMessages.length && !pendingGeneration && <p className="py-12 text-center text-sm text-slate-400">故事从你的第一句话开始。</p>}
       <div ref={bottom} />
     </div>
     <div className="mx-auto w-full max-w-4xl shrink-0 space-y-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-1 sm:px-8 sm:pt-2">
       <ErrorNotice error={error} onRetry={agentOptions?()=>void nativeRun.retry(csrfToken,modelSelection.apiKey):undefined} />
-      {nativeSnapshot?.completion&&<p role="status" className="text-xs text-slate-400">
-        {nativeSnapshot.completion.usage?`输入 ${nativeSnapshot.completion.usage.inputTokens} · 输出 ${nativeSnapshot.completion.usage.outputTokens} Token · `:'用量待核对 · '}
-        {['pending_evidence','pending_posting'].includes(nativeSnapshot.completion.settlement.status)?'结果已保存，费用待核对。':
-          nativeSnapshot.completion.settlement.cashMicros!==null?`本次费用 ¥${formatAmountMicros(nativeSnapshot.completion.settlement.cashMicros)}${nativeSnapshot.completion.settlement.balanceMicros!==null?` · 现金余额 ¥${formatAmountMicros(nativeSnapshot.completion.settlement.balanceMicros)}`:''}`:
-          nativeSnapshot.completion.settlement.pointUnits!==null?`本次消耗 ${nativeSnapshot.completion.settlement.pointUnits} 积分`:'未扣本站额度。'}
-      </p>}
+      {nativeSnapshot?.completion&&!detail.agentResults?.some(result=>result.executionId===nativeSnapshot.completion?.executionId)&&
+        <AgentResultSummary result={nativeSnapshot.completion} />}
       {agentOptions&&error instanceof AgentApiError&&['credential_required','request_failed'].includes(error.code)&&<button className={buttonClass} onClick={onOpenModelConfiguration}>填写 API Key 或选择平台额度</button>}
       {agentOptions&&error instanceof AgentApiError&&error.code==='cash_non_positive'&&onNavigateWallet&&<button className={buttonClass} onClick={onNavigateWallet}>充值平台额度</button>}
       <ErrorNotice error={canvas.error} />

@@ -50,3 +50,40 @@ export const activateAgentModelProfile=(activation:AgentModelActivation,csrf:str
   method:'PUT',headers:headers(csrf),body:JSON.stringify(activation)});
 export const saveAgentModelProfile=(body:{profile:AgentModelProfile;apiKey?:string},csrf:string)=>request('/api/admin/agent-models',{
   method:'POST',headers:headers(csrf),body:JSON.stringify(body)});
+
+export interface AgentSettlementAttention {
+  executionId:string;accountId:string;conversationId:string;funding:'cash'|'points'|'byok';status:string;
+  cashMicros:number|null;pointUnits:number|null;checkedAt:string|null;attentionKey:string;reason:string;
+  diagnostic:Record<string,unknown>;
+  calls:{callId:string;status:string;usage:import('../assistant/agentExecutionClient').AgentUsage|null;
+    receipts:{receiptId:string;currency:string;amount:string;validationError:string|null}[]}[];
+}
+export interface AgentSettlementPage {pending:AgentSettlementAttention[];nextBefore:string|null;totalCount:number}
+const uuid=(value:unknown):value is string=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+const only=(value:Record<string,unknown>,fields:string[])=>Object.keys(value).every(key=>fields.includes(key));
+export async function fetchAgentSettlementAttention(before?:string):Promise<AgentSettlementPage> {
+  if(before!==undefined&&!uuid(before))throw new Error('费用核对游标无效。');
+  const response=await fetch(`/api/admin/agent-settlements${before?`?before=${encodeURIComponent(before)}`:''}`,{credentials:'same-origin',headers:{Accept:'application/json'}});
+  if(!response.ok)throw new Error('费用核对记录暂时无法读取。');
+  const body:unknown=await response.json();
+  const invalid=()=>new Error('费用核对响应无效。');
+  if(!object(body)||!only(body,['pending','nextBefore','totalCount'])||!Array.isArray(body.pending)
+    ||!(body.nextBefore===null||uuid(body.nextBefore))||!nonnegative(body.totalCount))throw invalid();
+  for(const row of body.pending) {
+    if(!object(row)||!only(row,['executionId','accountId','conversationId','funding','status','cashMicros','pointUnits','checkedAt','attentionKey','reason','diagnostic','calls'])
+      ||!['executionId','accountId','conversationId'].every(key=>uuid(row[key]))||!['cash','points','byok'].includes(String(row.funding))
+      ||!['pending_evidence','pending_posting','settled','no_site_charge','audit_only'].includes(String(row.status))
+      ||!['cashMicros','pointUnits'].every(key=>row[key]===null||nonnegative(row[key]))
+      ||!(row.checkedAt===null||typeof row.checkedAt==='string')||typeof row.attentionKey!=='string'||typeof row.reason!=='string'
+      ||!object(row.diagnostic)||!Array.isArray(row.calls))throw invalid();
+    for(const call of row.calls) {
+      if(!object(call)||!only(call,['callId','status','usage','receipts'])||!uuid(call.callId)||typeof call.status!=='string'||!Array.isArray(call.receipts))throw invalid();
+      if(call.usage!==null&&(!object(call.usage)||!only(call.usage,['inputTokens','outputTokens','cacheHitInputTokens','cacheMissInputTokens'])
+        ||!nonnegative(call.usage.inputTokens)||!nonnegative(call.usage.outputTokens)
+        ||['cacheHitInputTokens','cacheMissInputTokens'].some(key=>call.usage!==null&&object(call.usage)&&call.usage[key]!=null&&!nonnegative(call.usage[key]))))throw invalid();
+      for(const receipt of call.receipts)if(!object(receipt)||!only(receipt,['receiptId','currency','amount','validationError'])
+        ||!['receiptId','currency','amount'].every(key=>typeof receipt[key]==='string')||!(receipt.validationError===null||typeof receipt.validationError==='string'))throw invalid();
+    }
+  }
+  return body as unknown as AgentSettlementPage;
+}

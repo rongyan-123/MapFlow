@@ -65,6 +65,10 @@ function completion(value:unknown,execution:string,conversation:string):AgentCom
     ||!Array.isArray(value.maps)||value.maps.some(map=>!record(map)||!exact(map,['treeId','libraryEntryId','title'])||!uuid(map.treeId)||!uuid(map.libraryEntryId)||!text(map.title)))invalid();
   return {...value,usage:usage(value.usage),settlement:settlement(value.settlement)} as unknown as AgentCompletion;
 }
+export function parseAgentCompletion(value:unknown,conversation:string):AgentCompletion {
+  if(!record(value)||!uuid(value.executionId))invalid();
+  return completion(value,value.executionId,conversation);
+}
 function status(value:unknown,conversation:string,execution?:string):AgentStatus{
   if(!record(value)||!exact(value,['executionId','conversationId','state','funding','modelId','result','error'])
     ||!uuid(value.executionId)||(execution!==undefined&&value.executionId!==execution)||value.conversationId!==conversation
