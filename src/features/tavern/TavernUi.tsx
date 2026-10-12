@@ -2,6 +2,9 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { TavernApiError, type Character, type CompatibilityWarning } from './types';
 import { describePublicError } from '../../lib/publicErrors';
 import {AgentApiError} from '../assistant/agentExecutionClient';
+import { createPortal } from 'react-dom';
+import useIsMobile from '../../lib/useIsMobile';
+import useMobileViewport from '../../lib/useMobileViewport';
 
 export const buttonClass = 'rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-not-allowed disabled:opacity-50';
 export const primaryClass = 'rounded-xl border border-cyan-200 bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-not-allowed disabled:opacity-50';
@@ -48,11 +51,15 @@ export function TavernDialog({ title, children, sections, onClose, busy = false,
   initialSection?: string;
 }) {
   const panel = useRef<HTMLElement>(null);
+  const isMobile = useIsMobile();
+  const viewportRoot = useMobileViewport(isMobile);
   const [activeSection, setActiveSection] = useState(initialSection ?? sections?.[0]?.id ?? '');
   const closeRef = useRef(onClose); closeRef.current = onClose;
   const busyRef = useRef(busy); busyRef.current = busy;
   useEffect(() => {
     const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     panel.current?.focus();
     const keydown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !busyRef.current) closeRef.current();
@@ -65,9 +72,9 @@ export function TavernDialog({ title, children, sections, onClose, busy = false,
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     };
     window.addEventListener('keydown', keydown);
-    return () => { window.removeEventListener('keydown', keydown); previousFocus?.focus(); };
+    return () => { window.removeEventListener('keydown', keydown); document.body.style.overflow = previousOverflow; if(previousFocus?.isConnected)previousFocus.focus(); };
   }, []);
-  return <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm">
+  return createPortal(<div ref={viewportRoot} data-mobile={isMobile} className="mobile-dialog-layer fixed inset-0 z-[2147483647] flex items-center justify-center bg-slate-950/70 p-3">
     <section ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className={`flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl outline-none ${sections ? 'max-w-5xl' : 'max-w-2xl'}`}>
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-800 p-5"><h2 className="text-lg font-bold">{title}</h2>
         <button type="button" className={buttonClass} onClick={onClose} disabled={busy} aria-label={`关闭${title}`}>关闭</button></div>
@@ -82,5 +89,5 @@ export function TavernDialog({ title, children, sections, onClose, busy = false,
         </div>
       </div> : <div className="min-h-0 overflow-y-auto overscroll-contain p-5">{children}</div>}
     </section>
-  </div>;
+  </div>, document.body);
 }

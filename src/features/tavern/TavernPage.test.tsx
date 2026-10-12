@@ -1170,7 +1170,7 @@ describe('Tavern page', () => {
     await user.click(screen.getByRole('button', { name: '停止生成' }));
     expect(await screen.findByText(/已停止生成/)).toBeVisible();
   });
-  it('opens a teaching canvas with drawing permission and can collapse it without losing the conversation', async () => {
+  it('opens a teaching canvas without changing permission, supports explicit consent and preserves the conversation', async () => {
     restoreConversation();
     const normalFetch = fetchMock.getMockImplementation()!;
     let canvas = { revision: 0, enabled: false, elements: [] };
@@ -1187,7 +1187,10 @@ describe('Tavern page', () => {
     const user = userEvent.setup(); renderPage();
     await user.click(await screen.findByRole('button', { name: '绘图讲解' }));
     expect(await screen.findByRole('region', { name: '教学画布' })).toBeVisible();
-    expect(canvas.enabled).toBe(true);
+    expect(canvas.enabled).toBe(false);
+    expect(canvas.revision).toBe(0);
+    await user.click(screen.getByRole('checkbox', { name: '允许 AI 绘图' }));
+    await waitFor(() => expect(canvas.enabled).toBe(true));
     await user.click(within(screen.getByRole('region', { name: '教学画布' })).getByRole('button', { name: '收起画布' }));
     expect(screen.queryByRole('region', { name: '教学画布' })).not.toBeInTheDocument();
     expect(screen.getByRole('log', { name: '对话消息' })).toBeVisible();

@@ -2,6 +2,7 @@ import { describePublicError } from '../../lib/publicErrors';
 import ModelAccessPanel from './ModelAccessPanel';
 import { useSharedModelSelection } from './ModelSelectionContext';
 import { useApplicationShell } from '../navigation/ApplicationShell';
+import { MobileChromePortal, useMobileChatChrome, mobileActionClass, MobileActionIcon } from '../navigation/MobileChatChrome';
 import { readModelSelection, saveModelSelection } from './modelPreferences';
 import useRoleNotices from './useRoleNotices';
 import { creationStorageKey, persistPendingCreation, readPendingCreation } from './pendingCreation';
@@ -56,6 +57,8 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const inApplicationShell = useApplicationShell();
   const sharedModel = useSharedModelSelection();
   const isMobile = useIsMobile();
+  const mobileChrome = useMobileChatChrome();
+  const roleDetails = useRef<HTMLDetailsElement>(null);
   // 手机端对话独占整屏，工具栏必须压成一行、次要动作收进「操作」菜单，否则消息区被挤得只剩几百像素。
   // 独立酒馆（/tavern）与从知识点进入的对话走同一条紧凑路径，桌面端逐区域不变。
   const { logout, logoutPending, logoutError, generationCapabilities } = useIdentity();
@@ -63,6 +66,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const roleNotices = useRoleNotices(accountId);
   const [importedRole, setImportedRole] = useState<Character | null>(null);
   const [historyRole, setHistoryRole] = useState('all');
+  const [historySearch, setHistorySearch] = useState('');
   const [historyOpen,setHistoryOpen]=useState(true);
   const selectionKey = `mapflow.tavern.selection.v1.${accountId}${management ? '.management' : ''}`;
   const treeSelectionKey = treeContext ? `${selectionKey}.tree.${treeContext.libraryEntryId}` : null;
@@ -311,6 +315,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     setEditing(null);
   }
   function editCharacter(character: Character, renameOnly: boolean) {
+    mobileChrome?.closeDrawer();
     setDrawer(null);
     setEditing({ character, renameOnly, ...(treeContext?.available !== false && currentDetail?.conversation.characterId === character.characterId
       ? { conversation: currentDetail } : {}) });
@@ -318,17 +323,17 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
 
   const library = <div className="space-y-4">
     <div className="flex items-center justify-between"><h2 className="text-base font-semibold">角色库</h2><span className="text-xs text-slate-500">{characters.data?.length ?? 0} 个角色</span></div>
-    <button type="button" className={`${primaryClass} w-full`} onClick={() => { setDrawer(null); setImportOpen(true); }}>导入角色卡</button>
-    <button type="button" className={`${buttonClass} w-full`} onClick={() => { setDrawer(null); setCreateOpen(true); }}>创建角色卡</button>
+    <button type="button" className={`${primaryClass} w-full`} onClick={() => { mobileChrome?.closeDrawer(); setDrawer(null); setImportOpen(true); }}>导入角色卡</button>
+    <button type="button" className={`${buttonClass} w-full`} onClick={() => { mobileChrome?.closeDrawer(); setDrawer(null); setCreateOpen(true); }}>创建角色卡</button>
     <ErrorNotice error={characters.error} onRetry={() => void characters.refetch()} />
     {characters.isPending && <p role="status" className="text-sm text-slate-400">正在读取角色库…</p>}
     {characters.data?.length === 0 && <p className="text-sm leading-6 text-slate-400">导入一张 PNG 或 JSON 角色卡，开始你的第一个故事。</p>}
     <div className="space-y-2">{characters.data?.map(item => <CharacterLibraryItem key={item.characterId} character={item}
       selected={selectedCharacter?.characterId === item.characterId} opening={openingCharacter === item.characterId}
-      disabled={openingCharacter !== null || creatingConversation || generationBusy || !!pendingCreation.current || !treeReady || !conversations.isSuccess} onSelect={() => void openCharacter(item)}
+      disabled={openingCharacter !== null || creatingConversation || generationBusy || !!pendingCreation.current || !treeReady || !conversations.isSuccess} onSelect={() => { mobileChrome?.closeDrawer(); void openCharacter(item); }}
       actionsDisabled={openingCharacter !== null || (!!conversationId && !conversationQuery.isSuccess)}
       onRename={() => editCharacter(item, true)} onEdit={() => editCharacter(item, false)}
-      onDelete={() => { setDrawer(null); removing.reset(); setDeleting(item); }} />)}</div>
+      onDelete={() => { mobileChrome?.closeDrawer(); setDrawer(null); removing.reset(); setDeleting(item); }} />)}</div>
   </div>;
   const characterConversations = (scopedConversations ?? []).filter(item =>
     historyRole === 'all' || item.characterId === historyRole || item.conversationId === conversationId);
@@ -336,15 +341,16 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const history = <nav aria-label="会话历史" className="space-y-4">
     <div className="block text-xs text-slate-400"><span>历史角色</span>
       {!isMobile && roleNotices.count > 0 && <button type="button" className="ml-2 rounded-md border border-cyan-700 px-2 py-1 text-cyan-200"
-        onClick={() => { roleNotices.clear(); setDrawer('library'); }}>新增 {roleNotices.count}</button>}
+        onClick={() => { roleNotices.clear(); if(mobileChrome && roleDetails.current) { roleDetails.current.open = true; roleDetails.current.scrollIntoView?.({block:'nearest'}); } else setDrawer('library'); }}>新增 {roleNotices.count}</button>}
+      {mobileChrome && <input type="search" aria-label="搜索会话" placeholder="搜索对话名称…" className={`${inputClass} mt-2`} value={historySearch} onChange={event => setHistorySearch(event.target.value)} />}
       <select aria-label="筛选历史角色" className={`${inputClass} mt-2`} value={historyRole} onChange={event => setHistoryRole(event.target.value)}>
         <option value="all">全部角色</option>{historyRoles.map(id => <option key={id} value={id}>{characters.data?.find(item => item.characterId === id)?.card.name ?? '已隐藏角色'}</option>)}
       </select>
     </div>
-    <div className="space-y-1">{characterConversations.filter(item=>historyRole==='all'||item.characterId===historyRole).map(item=><button type="button" key={item.conversationId}
+    <div className="space-y-1">{characterConversations.filter(item=>(historyRole==='all'||item.characterId===historyRole) && (!mobileChrome || item.title.toLocaleLowerCase().includes(historySearch.trim().toLocaleLowerCase()))).map(item=><button type="button" key={item.conversationId}
       aria-label={`打开会话 ${item.title}`} aria-current={item.conversationId===conversationId?'page':undefined}
       className={`w-full rounded-xl px-3 py-2.5 text-left text-sm transition ${item.conversationId===conversationId?'bg-cyan-400/15 text-cyan-200':'text-slate-300 hover:bg-slate-800'}`}
-      disabled={creatingConversation||!!pendingCreation.current} onClick={()=>{selectConversation(item.conversationId);setDrawer(null);}}>
+      disabled={creatingConversation||!!pendingCreation.current} onClick={()=>{mobileChrome?.closeDrawer();selectConversation(item.conversationId);setDrawer(null);}}>
       <span className="block truncate">{item.title}</span><span className="mt-1 block truncate text-xs text-slate-500">{characters.data?.find(role=>role.characterId===item.characterId)?.card.name??'已隐藏角色'}</span>
     </button>)}</div>
     {conversations.isSuccess&&scopedConversations?.length===0&&<p className="text-xs leading-6 text-slate-500">当前还没有会话。选择角色后新建会话即可开始。</p>}
@@ -391,7 +397,31 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   </>;
 
   return <div className={`flex ${treeContext || management || inApplicationShell ? 'h-full flex-1' : 'h-dvh'} min-h-0 flex-col overflow-hidden bg-slate-950 text-slate-100`}>
-    {inApplicationShell && !treeContext && !management && <h1 className="sr-only">独立酒馆</h1>}
+    {mobileChrome && <>
+      <MobileChromePortal slot="title"><h1 className="truncate" title={currentDetail?.conversation.title ?? selectedCharacter?.card.name}>
+        {currentDetail?.conversation.title ?? selectedCharacter?.card.name ?? (management ? '全局助手' : treeContext ? '学习聊天' : '独立酒馆')}
+      </h1></MobileChromePortal>
+      <MobileChromePortal slot="new"><button type="button" aria-label="新建会话" className={mobileActionClass}
+        disabled={!canCreate || creatingConversation || generationBusy || openingCharacter !== null || !conversations.isSuccess || (!!conversationId && !currentDetail)}
+        onClick={() => void createNewConversation()}><MobileActionIcon name="new" /></button></MobileChromePortal>
+      <MobileChromePortal slot="configuration"><button type="button" aria-label="配置" className={mobileActionClass}
+        onClick={() => { setConfigurationSection('overview'); setConfigurationOpen(true); }}><MobileActionIcon name="configuration" /></button></MobileChromePortal>
+      {!currentDetail && <MobileChromePortal slot="canvas"><button type="button" aria-label="展开画布" className={mobileActionClass} disabled><MobileActionIcon name="canvas" /></button></MobileChromePortal>}
+      <MobileChromePortal slot="characters"><details ref={roleDetails} className="border-t border-slate-800 pt-4" onToggle={event => { if(event.currentTarget.open)roleNotices.clear(); }}>
+        <summary className="cursor-pointer text-sm font-semibold">角色选择{roleNotices.count > 0 && <span className="ml-2 rounded-full bg-cyan-300 px-2 py-0.5 text-xs text-slate-950">新增 {roleNotices.count}</span>}</summary>
+        <div className="mt-4">{library}</div>
+      </details></MobileChromePortal>
+      <MobileChromePortal slot="history"><section aria-label="当前场景会话列表" className="space-y-3 border-t border-slate-800 pt-4">
+        <h2 className="text-sm font-semibold">{treeContext ? '学习区会话' : management ? '助手会话' : '酒馆会话'}</h2>
+        <p className="break-words text-xs text-slate-400">{currentDetail?.conversation.title ?? selectedCharacter?.card.name}</p>
+        {history}
+        <div className="flex flex-wrap gap-2">
+          <button className={buttonClass} onClick={() => { mobileChrome.closeDrawer(); setConfigurationSection('model'); setConfigurationOpen(true); }}>模型接入</button>
+          {currentDetail && <button className={buttonClass} disabled={treeContext?.available === false} onClick={() => { mobileChrome.closeDrawer(); setParametersOpen(true); }}>模型参数</button>}
+        </div>
+      </section></MobileChromePortal>
+    </>}
+    {inApplicationShell && !mobileChrome && !treeContext && !management && <h1 className="sr-only">独立酒馆</h1>}
     {!inApplicationShell && !treeContext && !management && !isMobile && <header className="relative z-30 flex shrink-0 items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-3 sm:px-5">
       <div className="flex min-w-0 items-center gap-2 sm:gap-3"><button type="button" className={buttonClass} aria-label="返回学习控制台" onClick={onNavigateConsole}>← <span className="hidden sm:inline">学习控制台</span></button>
         <div><h1 className="text-lg font-bold">独立酒馆</h1><p className="hidden text-xs text-slate-500 sm:block">一个角色，一段属于你的故事</p></div></div>
@@ -413,7 +443,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         <PanelResizeHandle label="调整会话列表与聊天宽度" storageKey={`mapflow.chat.history-width.v1.${accountId}`} minWidth={180} remainingWidth={360}/>
       </>}
       <section aria-label="角色对话" className="flex min-w-0 flex-1 flex-col">
-        <div className={isMobile
+        {!mobileChrome && <div className={isMobile
           ? 'flex shrink-0 flex-nowrap items-center gap-2 border-b border-slate-800 px-3 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]'
           : 'flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-2 sm:px-5'}>
           {(treeContext || management) && onClose && <button type="button" className={buttonClass} aria-label="返回学习区列表" onClick={onClose}>←</button>}
@@ -436,8 +466,8 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
               {tavernMenuItems}
             </>}
           </HeaderMoreMenu>}
-        </div>
-        {!treeContext && !management && <p className="shrink-0 border-b border-slate-800 px-4 py-2 text-xs leading-5 text-slate-400">
+        </div>}
+        {!mobileChrome && !treeContext && !management && <p className="shrink-0 border-b border-slate-800 px-4 py-2 text-xs leading-5 text-slate-400">
           这里适合角色聊天和剧情互动，不关联学习地图，也不记录学习进度。想系统学习，请前往
           <button type="button" className="ml-1 text-cyan-200 underline underline-offset-4" aria-label="前往学习聊天" onClick={onNavigateConsole}>学习聊天</button>。
         </p>}
@@ -476,7 +506,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
           </div>}
       </section>
     </main>
-    <MobileDrawer open={drawer !== null} desktopVisible onClose={() => setDrawer(null)}>
+    <MobileDrawer open={!mobileChrome && drawer !== null} desktopVisible onClose={() => setDrawer(null)}>
       <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">{drawer === 'library' ? '角色与账号' : drawer==='history'?'会话列表':'会话详情'}</h2><button type="button" className={buttonClass} onClick={() => setDrawer(null)}>关闭</button></div>
       {drawer === 'library' ? <><IdentityAccess onRequestLogout={() => { setDrawer(null); setLogoutOpen(true); }} /><div className="mt-5">{library}</div></> : drawer==='history'?history:summary}
     </MobileDrawer>

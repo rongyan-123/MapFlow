@@ -5,6 +5,7 @@ import TavernPage,{type TavernPageProps} from '../tavern/TavernPage';
 import {buttonClass,ErrorNotice,inputClass} from '../tavern/TavernUi';
 import {fetchAgentModelCatalogue,type AgentFunding} from './agentExecutionClient';
 import type {AgentConversationOptions} from './agentConversationOptions';
+import {MobileChromePortal,useMobileChatChrome} from '../navigation/MobileChatChrome';
 
 type WorkspaceProps=Omit<TavernPageProps,'agentOptions'|'agentConfigurationControls'>&{title?:string;onNavigateLearning?:()=>void};
 export default function AgentTavernPage(props:WorkspaceProps){
@@ -12,6 +13,7 @@ export default function AgentTavernPage(props:WorkspaceProps){
   return <AuthenticatedWorkspace key={session.account.playerId} accountId={session.account.playerId} {...props} />;
 }
 function AuthenticatedWorkspace({accountId,title,onNavigateLearning,...tavernProps}:WorkspaceProps&{accountId:string}){
+  const mobileChrome=useMobileChatChrome();
   const key=`mapflow.agent.selection.v1.${accountId}`;
   const [saved,setSaved]=useState<{funding:AgentFunding|null;profileId:string;contextWindow:string}>(()=>{
     try{const value=JSON.parse(localStorage.getItem(key)??'null');return {funding:['cash','points','byok'].includes(value?.funding)?value.funding:null,
@@ -40,10 +42,13 @@ function AuthenticatedWorkspace({accountId,title,onNavigateLearning,...tavernPro
       className={inputClass+' !w-36'} placeholder="填写模型实际 Token 窗口" value={saved.contextWindow} onChange={event=>change({contextWindow:event.target.value})} /></label>}
   </>;}
   return <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-    <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-950 px-4 py-3">
+    {mobileChrome?<MobileChromePortal slot="model"><section aria-label="模型与资金" className="space-y-3 border-t border-slate-800 pt-4">
+      <h2 className="text-sm font-semibold">模型与额度</h2><div className="flex flex-col gap-3">{controls()}</div>
+      {onNavigateLearning&&<button className={buttonClass+' w-full'} onClick={()=>{mobileChrome.closeDrawer();onNavigateLearning();}}>打开学习聊天</button>}
+    </section></MobileChromePortal>:<header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-950 px-4 py-3">
       {tavernProps.management?<h1 className="text-base font-semibold">{title??'全局助手'}</h1>:<p className="text-sm text-slate-300">{title??(tavernProps.treeContext?'学习聊天':'独立酒馆')}</p>}
       {controls()}{onNavigateLearning&&<button className={buttonClass+' ml-auto'} onClick={onNavigateLearning}>打开学习聊天</button>}
-    </header>
+    </header>}
     {catalogue.error&&<div className="p-3"><ErrorNotice error={catalogue.error} onRetry={()=>void catalogue.refetch()} /></div>}
     <TavernPage {...tavernProps} agentOptions={options} agentConfigurationControls={<div className="mb-4 flex flex-wrap items-center gap-3">{controls(true)}</div>} />
   </div>;

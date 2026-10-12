@@ -42,7 +42,7 @@
   pointer-events: none;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   .tavern-workspace { display: flex; }
   .tavern-canvas {
     flex: 0 0 0%;
@@ -74,8 +74,19 @@
 .canvas-shortcuts-layer section { background: #0f172a; }
 .tavern-canvas .excalidraw .HelpDialog__btn { display: none; }
 
+@media (max-width: 1023px) {
+  .tavern-chat > [role='log'] { padding: 18px 14px; }
+  .tavern-chat > [role='log'] + div { padding-inline: 10px; padding-bottom: max(8px,env(safe-area-inset-bottom)); }
+  .chat-message { gap: 9px; margin-bottom: 18px; }
+  .chat-message > [role='img'], .chat-message > img { width: 28px; height: 28px; font-size: 14px; border-radius: 9px; margin-top: 2px; }
+  .chat-message pre, .chat-message table { max-width: 100%; overflow-x: auto; }
+  .chat-message table { display: block; }
+  .tavern-chat p.pl-14 { padding-left: 0; margin-top: 0; }
+  .tavern-canvas, .tavern-chat { transition-duration: 200ms; }
+}
+
 .panel-resize-handle { display:none; }
-@media(min-width:768px) {
+@media(min-width:1024px) {
  .tavern-workspace>.panel-resize-handle {display:block;}
  .panel-resize-handle {width:8px;flex:0 0 8px;cursor:col-resize;touch-action:none;background:#0f172a;position:relative;outline:none;}
  .panel-resize-handle::after {content:'';position:absolute;left:3px;top:calc(50% - 24px);width:2px;height:48px;border-radius:4px;background:#475569;}

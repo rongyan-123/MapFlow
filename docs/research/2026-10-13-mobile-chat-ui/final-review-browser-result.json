@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "originalConversations": 6,
+  "desktopConversations": 6,
+  "mobileFilterRetained": true,
+  "pageErrors": [],
+  "writeRequests": 0,
+  "automaticModelCalls": 0
+}

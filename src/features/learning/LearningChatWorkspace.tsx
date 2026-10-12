@@ -7,6 +7,7 @@ import { buttonClass, ErrorNotice, inputClass } from '../tavern/TavernUi';
 import LearningAreaSelector from './LearningAreaSelector';
 import useIsMobile from '../../lib/useIsMobile';
 import HeaderMoreMenu from '../navigation/HeaderMoreMenu';
+import {MobileChromePortal,useMobileChatChrome} from '../navigation/MobileChatChrome';
 const LearningMapPanel = lazy(() => import('./LearningMapPanel'));
 
 interface LearningChatWorkspaceProps {
@@ -22,6 +23,7 @@ export default function LearningChatWorkspace({ accountId, csrfToken, requestedA
   onNavigateWallet, onNavigateModels, mobileHeaderActions }: LearningChatWorkspaceProps) {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
+  const mobileChrome = useMobileChatChrome();
   const storageKey = `mapflow.learning.area.v1.${accountId}`;
   const [areaId, setAreaId] = useState<string | null>(() => {
     if (requestedAreaId) return requestedAreaId;
@@ -47,6 +49,7 @@ export default function LearningChatWorkspace({ accountId, csrfToken, requestedA
   }, [areaId, area, areas.isSuccess, storageKey, viewingHistory]);
 
   const enter = (nextAreaId: string | null, history = false) => {
+    mobileChrome?.closeDrawer();
     setAreaId(nextAreaId); setViewingHistory(history); setUnavailableNotice(null); setMapOpen(false); setNodeReference(undefined); onSelectArea?.(nextAreaId);
   };
   const consumeNodeReference = () => {
@@ -57,12 +60,12 @@ export default function LearningChatWorkspace({ accountId, csrfToken, requestedA
     address.searchParams.delete('node'); address.searchParams.delete('title');
     window.history.replaceState(window.history.state, '', `${address.pathname}${address.search}${address.hash}`);
   };
-  const selectionNavigation = isMobile && mobileHeaderActions && <nav aria-label="学习页面操作" className="flex shrink-0 items-center justify-between border-b border-slate-800 px-3 py-2">
+  const selectionNavigation = isMobile && !mobileChrome && mobileHeaderActions && <nav aria-label="学习页面操作" className="flex shrink-0 items-center justify-between border-b border-slate-800 px-3 py-2">
     <span className="text-sm font-semibold">学习聊天</span>
     <HeaderMoreMenu label="操作" menuLabel="学习页面操作菜单">{mobileHeaderActions}</HeaderMoreMenu>
   </nav>;
   if (managerOpen) return <section aria-label="学习区管理助手" className="flex min-h-0 flex-1 flex-col">
-    <div className="shrink-0 border-b border-slate-800 px-3 py-2"><button className={buttonClass} onClick={() => setManagerOpen(false)}>返回学习区列表</button></div>
+    {!mobileChrome && <div className="shrink-0 border-b border-slate-800 px-3 py-2"><button className={buttonClass} onClick={() => setManagerOpen(false)}>返回学习区列表</button></div>}
     <TavernPage management onNavigateConsole={() => setManagerOpen(false)}
       onMapGenerated={() => { setManagerOpen(false); onOpenMaps(); }}
       onNavigateWallet={onNavigateWallet} onNavigateModels={onNavigateModels} mobileHeaderActions={mobileHeaderActions} />
@@ -77,8 +80,7 @@ export default function LearningChatWorkspace({ accountId, csrfToken, requestedA
       if(onOpenManager)onOpenManager();else {enter(null);setManagerOpen(true);}
     }} /></>;
 
-  return <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-    <nav aria-label="当前学习区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2">
+  const areaNavigation = <nav aria-label="当前学习区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2">
       <button type="button" className={buttonClass} onClick={() => enter(null)}>返回学习区列表</button>
       <label className="flex min-w-0 flex-1 items-center gap-2 text-sm"><span className="shrink-0 text-slate-400">学习区：</span>
         <select aria-label="切换学习区" value={area.areaId} onChange={event => {
@@ -88,7 +90,11 @@ export default function LearningChatWorkspace({ accountId, csrfToken, requestedA
           {areas.data?.map(item => <option key={item.areaId} value={item.areaId}>{item.title}{item.available ? '' : '（历史）'}</option>)}
           <option value="manage">管理 / 新建学习区</option>
         </select></label>
-    </nav>
+      {mobileChrome && area.available && <button type="button" className={buttonClass} onClick={() => { mobileChrome.closeDrawer(); setMapOpen(open => !open); }}>
+        {mapOpen ? '返回学习聊天' : '查看学习地图'}</button>}
+    </nav>;
+  return <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    {mobileChrome ? <MobileChromePortal slot="learning">{areaNavigation}</MobileChromePortal> : areaNavigation}
     {!area.available && <p className="border-b border-slate-800 px-4 py-2 text-xs text-amber-200">地图不可用，当前仅查看历史。</p>}
     <section aria-label="学习区" className="learning-workspace relative flex min-h-0 flex-1 overflow-hidden">
       <div data-learning-chat="true" className={`${isMobile && mapOpen ? 'hidden' : 'flex'} min-h-0 min-w-0 flex-1 flex-col lg:flex-none`} style={mapOpen && !isMobile
