@@ -530,8 +530,8 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
             <button type="button" className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-300 hover:border-cyan-400 disabled:opacity-30" disabled={readOnly} onClick={onOpenParameters ?? onOpenModelConfiguration}>参数</button>
             <span className={`hidden text-[11px] sm:inline ${inputTooLarge ? 'text-rose-300' : 'text-slate-500'}`}>{inputTooLarge ? '消息过长（上限 8,192 字节）' : 'Enter 发送 · Shift+Enter 换行'}</span>
           </div>
-          {busy ? <button key="stop" type="button" className={primaryClass} onClick={stopGeneration}>停止生成</button>
-            : <button key="send" type="submit" className={primaryClass} disabled={readOnly || graphBusy || editing || pendingGeneration !== null || !message.trim() || inputTooLarge}>发送</button>}
+          {busy ? <button key="stop" type="button" className={primaryClass+' shrink-0 whitespace-nowrap'} onClick={stopGeneration}>停止生成</button>
+            : <button key="send" type="submit" className={primaryClass+' shrink-0 whitespace-nowrap'} disabled={readOnly || graphBusy || editing || pendingGeneration !== null || !message.trim() || inputTooLarge}>发送</button>}
         </div>
       </form>
     </div>
