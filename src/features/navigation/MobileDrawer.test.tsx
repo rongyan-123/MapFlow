@@ -4,6 +4,26 @@ import { describe, expect, it, vi } from 'vitest';
 import MobileDrawer from './MobileDrawer';
 
 describe('MobileDrawer', () => {
+  it('打开时锁定背景并限制焦点，关闭后恢复触发器与滚动', async () => {
+    const user = userEvent.setup();
+    const content = (open: boolean) => <><button type="button">菜单触发器</button>
+      <MobileDrawer open={open} onClose={() => undefined}>
+        <button type="button">第一个条目</button><button type="button">最后一个条目</button>
+      </MobileDrawer></>;
+    const originalOverflow = document.body.style.overflow;
+    const view = render(content(false));
+    screen.getByRole('button', { name: '菜单触发器' }).focus();
+    view.rerender(content(true));
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(screen.getByRole('button', { name: '第一个条目' })).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(screen.getByRole('button', { name: '最后一个条目' })).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole('button', { name: '第一个条目' })).toHaveFocus();
+    view.rerender(content(false));
+    expect(screen.getByRole('button', { name: '菜单触发器' })).toHaveFocus();
+    expect(document.body.style.overflow).toBe(originalOverflow);
+  });
   it('open 时渲染内容，按 Esc 关闭', () => {
     const onClose = vi.fn();
     render(

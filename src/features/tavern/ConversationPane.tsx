@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { conversationRun, type PendingGeneration } from './conversationRuns';
 import {agentConversationRun} from '../assistant/agentConversationRun';
@@ -16,6 +16,7 @@ import type { GenerationProcessEvent } from './types';
 const TeachingCanvasPanel = lazy(() => import('./TeachingCanvasPanel'));
 import AssistantMarkdown from '../knowledge-chat/AssistantMarkdown';
 import useIsMobile from '../../lib/useIsMobile';
+import { MobileChromePortal, useMobileChatChrome, mobileActionClass, MobileActionIcon } from '../navigation/MobileChatChrome';
 import { validateId, validateMessage } from './conversationInput';
 import { fetchConversation, generateStream, mutateGraph, resolveTavernToolApproval } from './tavernClient';
 import {formatAmountMicros} from '../wallet/walletClient';
@@ -25,12 +26,22 @@ import { TavernApiError, type CompletedTurn, type ConversationDetail, type Conve
 import { isRecord, utf8Bytes } from './validation';
 
 function AgentResultSummary({result}:{result:AgentCompletion}) {
-  return <p role="status" className="mx-auto max-w-3xl text-xs text-slate-400">
-    {result.usage?`输入 ${result.usage.inputTokens} · 输出 ${result.usage.outputTokens} Token · `:'用量待核对 · '}
-    {['pending_evidence','pending_posting'].includes(result.settlement.status)?'结果已保存，费用待核对。':
-      result.settlement.cashMicros!==null?`本次费用 ¥${formatAmountMicros(result.settlement.cashMicros)}${result.settlement.balanceMicros!==null?` · 现金余额 ¥${formatAmountMicros(result.settlement.balanceMicros)}`:''}`:
-      result.settlement.pointUnits!==null?`本次消耗 ${formatCreditAmount(result.settlement.pointUnits/1_000_000)} 积分`:'未扣本站额度。'}
-  </p>;
+  const isMobile = useIsMobile();
+  const pending = ['pending_evidence','pending_posting'].includes(result.settlement.status);
+  const charge = pending ? '结果已保存，费用待核对。'
+    : result.settlement.cashMicros !== null ? `本次费用 ¥${formatAmountMicros(result.settlement.cashMicros)}`
+    : result.settlement.pointUnits !== null ? `本次消耗 ${formatCreditAmount(result.settlement.pointUnits/1_000_000)} 积分` : '未扣本站额度。';
+  const balance = result.settlement.cashMicros !== null && result.settlement.balanceMicros !== null
+    ? ` · 现金余额 ¥${formatAmountMicros(result.settlement.balanceMicros)}` : '';
+  const usage = result.usage ? `输入 ${result.usage.inputTokens} · 输出 ${result.usage.outputTokens} Token · ` : '用量待核对 · ';
+  if (!isMobile) return <p role="status" className="mx-auto max-w-3xl text-xs text-slate-400">{usage}{charge}{balance}</p>;
+  return <details className="mx-auto max-w-3xl rounded-lg text-xs text-slate-400">
+    <summary aria-label="费用与用量" className="cursor-pointer py-2"><span role="status">{charge}</span><span className="ml-2 text-slate-500">用量明细</span></summary>
+    <div className="space-y-1 pb-2 leading-6">
+      <p>{usage}{charge}{balance}</p>
+      {result.usage && <p>缓存命中 {result.usage.cacheHitInputTokens ?? '未提供'} · 缓存未命中 {result.usage.cacheMissInputTokens ?? '未提供'}</p>}
+    </div>
+  </details>;
 }
 import { CharacterAvatar, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass, type TavernDialogSection } from './TavernUi';
 import type { Character } from './types';
@@ -82,6 +93,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const mapVisibleRef = useRef(mapVisible); mapVisibleRef.current = mapVisible;
   useEffect(() => { if (mapVisible) canvas.setOpen(false); }, [mapVisible]);
   async function openTeachingCanvas() {
+    if (isMobile) composer.current?.blur();
     onOpenCanvas?.();
     await canvas.show();
     if (mapVisibleRef.current) canvas.setOpen(false);
@@ -100,6 +112,18 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const pane = useRef<HTMLDivElement>(null);
   // 手机端输入区每多一行就少一行聊天记录，模型选择并到底部按钮行，历史字节说明收起。
   const isMobile = useIsMobile();
+  const mobileChrome = useMobileChatChrome();
+  const composer = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    if (!isMobile) { if (composer.current) composer.current.style.height = ''; return; }
+    const resize = () => {
+      if (!composer.current) return;
+      composer.current.style.height = 'auto';
+      composer.current.style.height = `${Math.max(38, Math.min(composer.current.scrollHeight, 104))}px`;
+    };
+    resize(); window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, [isMobile, message]);
   const modelChipButton = <button type="button" aria-label={agentOptions ? `配置当前模型 ${agentOptions.modelLabel || modelSelection.model || ''}` : undefined} className="shrink-0 rounded-full bg-slate-800 px-3 py-1.5 text-slate-200 hover:text-cyan-200" onClick={onOpenModelConfiguration}>{agentOptions?.modelLabel||modelSelection.model || '选择模型'} · {agentOptions?agentOptions.funding==='cash'?'现金额度':agentOptions.funding==='points'?'平台积分':'自填 Key':modelSelection.provider === 'platform' ? '平台额度' : '自填 Key'}</button>;
   const followLatest = useRef(true);
   useEffect(() => {
@@ -326,6 +350,21 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     } catch (failure) { setError(failure); }
   }
 
+  const sendControl = busy ? <button key="stop" type="button" aria-label="停止生成"
+    className={isMobile ? `${mobileActionClass} !rounded-full !bg-cyan-300 !text-slate-950` : primaryClass+' shrink-0 whitespace-nowrap'} onClick={stopGeneration}>
+    {isMobile ? <MobileActionIcon name="stop" /> : '停止生成'}</button>
+    : <button key="send" type="submit" aria-label="发送"
+      className={isMobile ? `${mobileActionClass} !rounded-full !bg-cyan-300 !text-slate-950` : primaryClass+' shrink-0 whitespace-nowrap'}
+      disabled={readOnly || graphBusy || editing || pendingGeneration !== null || !message.trim() || inputTooLarge}>
+      {isMobile ? <MobileActionIcon name="send" /> : '发送'}</button>;
+  const replyActions = activeLeaf && <>
+    <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={readOnly || !canReviseAssistant || busy || graphBusy || pendingGeneration !== null || editing}
+      onClick={() => { if (canReviseAssistant) { setEditContent(activeLeaf.content); setEditing(true); setError(null); } }}>编辑当前消息</button>
+    <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={readOnly || !canReviseAssistant || busy || graphBusy || pendingGeneration !== null || editing}
+      onClick={() => { if (canReviseAssistant) void runGeneration({ type: 'regenerate', assistantMessageId: activeLeaf.messageId }); }}>重新生成</button>
+    <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={readOnly || !canContinueAssistant || busy || graphBusy || pendingGeneration !== null || editing}
+      onClick={() => { if (canContinueAssistant) void runGeneration({ type: 'continue', assistantMessageId: activeLeaf.messageId }); }}>继续</button>
+  </>;
   return <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {configurationOpen && <TavernDialog title="配置" initialSection={configurationSection} onClose={onCloseConfiguration} sections={[...configuration, {
         id: 'branches', label: '历史与分支', content: <section>
@@ -369,7 +408,10 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         </div>
         </section>,
       }]} />}
-    <nav aria-label="学习区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-1.5 text-xs sm:py-2">
+    {mobileChrome ? <MobileChromePortal slot="canvas"><button type="button" aria-label={canvas.open ? '收起画布' : '展开画布'} aria-expanded={canvas.open}
+      aria-controls={`tavern-canvas-${detail.conversation.conversationId}`} disabled={canvas.saving || (readOnly && !canvas.document)}
+      className={`${mobileActionClass} ${canvas.open ? '!text-cyan-300' : ''}`} onClick={() => canvas.open ? canvas.setOpen(false) : void openTeachingCanvas()}><MobileActionIcon name="canvas" /></button></MobileChromePortal>
+      : <nav aria-label="学习区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-1.5 text-xs sm:py-2">
       <button type="button" aria-expanded={canvas.open} aria-controls={`tavern-canvas-${detail.conversation.conversationId}`} disabled={canvas.saving}
         className={`${buttonClass} ${canvas.open ? 'border-cyan-500 text-cyan-200' : ''}`} onClick={() => canvas.open ? canvas.setOpen(false) : void openTeachingCanvas()}>
         <span aria-hidden="true" className="mr-1.5">▧</span>{canvas.open ? '收起画布' : canvas.document ? '展开画布' : '绘图讲解'}</button>
@@ -378,7 +420,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
         <button type="button" className={buttonClass} onClick={() => canvas.setOpen(false)}>聊天</button>
         <button type="button" className={buttonClass} disabled={readOnly} onClick={onOpenParameters ?? onOpenModelConfiguration}>模型参数</button>
       </div>}
-    </nav>
+    </nav>}
     <div className="tavern-workspace">
     <div id={`tavern-canvas-${detail.conversation.conversationId}`} className="tavern-canvas" data-open={canvas.open} data-wide={canvas.wide}
       aria-hidden={!canvas.open} {...(!canvas.open ? { inert: '' } : {})}>
@@ -424,14 +466,9 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
           || activeMessages.some(message => message.origin === 'continue' && message.messageId === change.afterMessageId && continuationRoot(message, messagesById, roleChangeAnchors) === activeMessage.messageId))
           .map(change => <p key={change.changeId} className="mx-auto mb-4 max-w-3xl text-center text-xs text-slate-500">已切换角色：{change.characterName}</p>)}
       </div>)}
-      {activeLeaf && activeLeaf.origin !== 'opening' && <div aria-label="回复操作" className="mx-auto mb-6 flex max-w-3xl flex-wrap items-center gap-1 pl-14 text-xs text-slate-500">
-        <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={readOnly || !canReviseAssistant || busy || graphBusy || pendingGeneration !== null || editing}
-          onClick={() => { if (canReviseAssistant) { setEditContent(activeLeaf.content); setEditing(true); setError(null); } }}>编辑当前消息</button>
-        <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={readOnly || !canReviseAssistant || busy || graphBusy || pendingGeneration !== null || editing}
-          onClick={() => { if (canReviseAssistant) void runGeneration({ type: 'regenerate', assistantMessageId: activeLeaf.messageId }); }}>重新生成</button>
-        <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={readOnly || !canContinueAssistant || busy || graphBusy || pendingGeneration !== null || editing}
-          onClick={() => { if (canContinueAssistant) void runGeneration({ type: 'continue', assistantMessageId: activeLeaf.messageId }); }}>继续</button>
-      </div>}
+      {activeLeaf && activeLeaf.origin !== 'opening' && (isMobile ? <details aria-label="回复操作" className="mx-auto mb-4 max-w-3xl text-xs text-slate-500">
+        <summary className="cursor-pointer py-2">消息操作</summary><div className="mt-1 flex flex-wrap gap-1">{replyActions}</div>
+      </details> : <div aria-label="回复操作" className="mx-auto mb-6 flex max-w-3xl flex-wrap items-center gap-1 pl-14 text-xs text-slate-500">{replyActions}</div>)}
       {pendingGeneration && <div className="space-y-5">
         {pendingReply && <Message author={detail.conversation.userName} text={pendingReply.message} user />}
         <GenerationProcess events={process} live={busy} />
@@ -508,7 +545,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
           setPendingGeneration(null); setDraft(''); setError(null); storePending(storageKey, null);
         }}>取消本次重试</button>
       </div>}
-      <form onSubmit={event => { event.preventDefault(); void runGeneration({ type: 'reply', message }); }} className="rounded-3xl border border-slate-700 bg-slate-900 p-2 shadow-lg transition focus-within:border-cyan-500/70 sm:p-3">
+      <form onSubmit={event => { event.preventDefault(); void runGeneration({ type: 'reply', message }); }} className={`${isMobile ? 'mobile-chat-composer rounded-2xl' : 'rounded-3xl sm:p-3'} border border-slate-700 bg-slate-900 p-2 shadow-lg transition focus-within:border-cyan-500/70`}>
         {referenceActive && nodeReference && <div className="mb-2 flex items-center gap-2 px-2 text-xs text-cyan-200">
           <span>节点参考：{nodeReference.title}</span><button type="button" className="rounded-full px-2 py-1 text-slate-400 hover:text-slate-200" aria-label="移除节点参考"
             disabled={busy || pendingGeneration !== null} onClick={() => { setReferenceActive(false); onNodeReferenceConsumed?.(); }}>×</button>
@@ -517,22 +554,24 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
           {modelChipButton}
           <span>{agentOptions?'按模型窗口整理历史':`历史 ${modelSelection.historyBytes / 1024} KiB`} · 最大输出 {detail.conversation.generationSettings.maxOutputTokens === null ? '模型默认' : `${detail.conversation.generationSettings.maxOutputTokens} Token`}</span>
         </div>}
+        <div className={isMobile ? 'flex min-w-0 items-end gap-1' : ''}>
         <label htmlFor={`tavern-message-${detail.conversation.conversationId}`} className="sr-only">消息</label>
-        <textarea id={`tavern-message-${detail.conversation.conversationId}`} className="max-h-48 min-h-14 w-full resize-y border-0 bg-transparent px-3 py-2 text-[15px] leading-6 text-slate-100 outline-none placeholder:text-slate-500 disabled:opacity-50 sm:min-h-20" rows={2} placeholder="输入你的问题，或让 AI 画图讲解…" value={message} disabled={readOnly || busy || graphBusy || pendingGeneration !== null || editing}
+        <textarea ref={composer} id={`tavern-message-${detail.conversation.conversationId}`} className={`${isMobile ? 'max-h-[104px] min-h-[38px] flex-1 resize-none overflow-y-auto px-2 text-[16px] leading-[22px]' : 'max-h-48 min-h-14 resize-y px-3 text-[15px] leading-6 sm:min-h-20'} min-w-0 w-full border-0 bg-transparent py-2 text-slate-100 outline-none placeholder:text-slate-500 disabled:opacity-50`} rows={isMobile ? 1 : 2} placeholder={isMobile ? '输入消息…' : '输入你的问题，或让 AI 画图讲解…'} value={message} disabled={readOnly || busy || graphBusy || pendingGeneration !== null || editing}
           onChange={event => setMessage(event.target.value)} onKeyDown={event => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
               event.preventDefault(); if (message.trim() && !inputTooLarge) void runGeneration({ type: 'reply', message });
             }
           }} />
-        <div className="flex items-center justify-between gap-2 px-2 pb-0 sm:pb-1">
+          {isMobile && sendControl}
+        </div>
+        {(!isMobile || !mobileChrome) && <div className="flex items-center justify-between gap-2 px-2 pb-0 sm:pb-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
-            {isMobile && modelChipButton}
+            {isMobile && !mobileChrome && modelChipButton}
             <button type="button" className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-300 hover:border-cyan-400 disabled:opacity-30" disabled={readOnly} onClick={onOpenParameters ?? onOpenModelConfiguration}>参数</button>
             <span className={`hidden text-[11px] sm:inline ${inputTooLarge ? 'text-rose-300' : 'text-slate-500'}`}>{inputTooLarge ? '消息过长（上限 8,192 字节）' : 'Enter 发送 · Shift+Enter 换行'}</span>
           </div>
-          {busy ? <button key="stop" type="button" className={primaryClass+' shrink-0 whitespace-nowrap'} onClick={stopGeneration}>停止生成</button>
-            : <button key="send" type="submit" className={primaryClass+' shrink-0 whitespace-nowrap'} disabled={readOnly || graphBusy || editing || pendingGeneration !== null || !message.trim() || inputTooLarge}>发送</button>}
-        </div>
+          {!isMobile && sendControl}
+        </div>}
       </form>
     </div>
     </div>
@@ -543,7 +582,7 @@ const noSubscription=()=>()=>{};
 const noSnapshot=()=>null;
 
 function Message({ author, text, user = false, character }: { author: string; text: string; user?: boolean; character?: Character }) {
-  return <article className={`mx-auto mb-7 flex max-w-3xl gap-3 ${user ? 'justify-end py-2' : 'py-3 sm:gap-4'}`}>
+  return <article className={`chat-message mx-auto mb-7 flex max-w-3xl gap-3 ${user ? 'justify-end py-2' : 'py-3 sm:gap-4'}`}>
     {!user && <CharacterAvatar character={character} name={author} />}
     <div className={`min-w-0 ${user ? 'max-w-[85%] rounded-3xl rounded-tr-md bg-slate-800 px-5 py-3' : 'flex-1'}`}><h3 className={`${user ? 'sr-only' : 'mb-2'} flex items-center gap-2 text-xs font-medium text-slate-400`}>{author}</h3>
     <div className="text-[15px] leading-7 text-slate-200 [overflow-wrap:anywhere] [&_em]:text-slate-400 [&_p+p]:mt-3"><AssistantMarkdown content={text} /></div></div>

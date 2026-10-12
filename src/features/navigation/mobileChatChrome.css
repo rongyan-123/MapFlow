@@ -1,0 +1,28 @@
+.application-shell[data-mobile='true'] {
+  position: fixed;
+  inset-inline: 0;
+  top: var(--mobile-viewport-top, 0px);
+  height: var(--mobile-viewport-height, 100dvh);
+}
+.mobile-chat-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  height: calc(52px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) 6px 0;
+  border-bottom: 1px solid #1e293b;
+  background: #020617;
+  gap: 2px;
+  position: relative;
+  z-index: 30;
+}
+.mobile-chat-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; font-weight: 600; }
+.mobile-chat-title:empty::before { content: attr(data-fallback-title); }
+.mobile-chat-action { flex-shrink: 0; }
+.mobile-scene-selections > div:empty { display: none; }
+.mobile-scene-selections nav[aria-label='当前学习区'] { flex-direction: column; align-items: stretch; padding: 0 0 16px; }
+.mobile-scene-selections nav[aria-label='当前学习区'] label { flex-direction: column; align-items: stretch; }
+.mobile-scene-selections select { min-width: 0; max-width: 100%; }
+.mobile-drawer-layer { position: fixed; inset: 0; z-index: 2147483647; }
+.mobile-dialog-layer[data-mobile='true'] { top: var(--mobile-viewport-top, 0px); bottom: auto; height: var(--mobile-viewport-height, 100dvh); padding: 8px; }
+.mobile-dialog-layer[data-mobile='true'] > section { max-height: calc(var(--mobile-viewport-height, 100dvh) - 16px); }

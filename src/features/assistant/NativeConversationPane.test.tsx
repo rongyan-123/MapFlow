@@ -11,7 +11,7 @@ const conversation='11111111-1111-4111-8111-111111111111',execution='22222222-22
 const status={executionId:execution,conversationId:conversation,state:'running',funding:'cash',modelId:'fixture',result:null,error:null};
 beforeEach(()=>{vi.clearAllMocks();sessionStorage.clear();api.fetchActiveAgentExecution.mockResolvedValue(null);api.fetchAgentExecution.mockResolvedValue(status);canvas.flush.mockResolvedValue(undefined);
  api.acceptAgentExecution.mockResolvedValue({execution:status,replayed:false});api.attachAgentExecution.mockImplementation((_id,_conversation,_after,_onEvent,signal:AbortSignal)=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true})));});
-afterEach(cleanup);
+afterEach(()=>{cleanup();window.innerWidth=1024;});
 function mount(reference?:{id:string;title:string},consumed?:()=>void,extra:Record<string,unknown>={}){return render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><ConversationPane
  detail={{...detail,...extra,conversation:{...detail.conversation,conversationId:conversation}}} accountId="owner" csrfToken="fresh-csrf"
  modelSelection={{provider:'custom',baseUrl:'',apiKey:'',model:'',historyBytes:32768,settings:{}}} agentOptions={{funding:'cash',modelLabel:'Tutor'}}
@@ -20,6 +20,42 @@ function mount(reference?:{id:string;title:string},consumed?:()=>void,extra:Reco
 const historicalResult={executionId:execution,conversationId:conversation,generationId:execution,messageId:'message-assistant-1',answer:'请用茶。',
  maps:[{treeId:conversation,libraryEntryId:execution,title:'已保存的学习地图'}],usage:null,
  settlement:{status:'pending_evidence',cashMicros:null,pointUnits:null,balanceMicros:null}};
+it('mobile composer starts in one line and keeps IME and Shift+Enter from sending',async()=>{
+ window.innerWidth=390;mount();
+ const input=screen.getByRole('textbox',{name:'消息'});
+ expect(input).toHaveAttribute('rows','1');
+ fireEvent.change(input,{target:{value:'正在输入中文'}});
+ fireEvent.keyDown(input,{key:'Enter',keyCode:229,isComposing:true});
+ fireEvent.keyDown(input,{key:'Enter',shiftKey:true});
+ expect(api.acceptAgentExecution).not.toHaveBeenCalled();
+ fireEvent.keyDown(input,{key:'Enter'});
+ await waitFor(()=>expect(api.acceptAgentExecution).toHaveBeenCalledOnce());
+ expect(screen.getByRole('button',{name:'停止生成'})).toBeInTheDocument();
+});
+it('mobile reply actions stay in their own expandable menu',()=>{
+ window.innerWidth=390;mount();
+ expect(screen.getByRole('button',{name:'编辑当前消息'})).not.toBeVisible();
+ fireEvent.click(screen.getByText('消息操作'));
+ // JSDOM does not implement the browser summary toggle default action.
+ const menu=screen.getByText('消息操作').closest('details')!;menu.open=true;
+ expect(screen.getByRole('button',{name:'编辑当前消息'})).toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'重新生成'})).toBeInTheDocument();
+});
+it('mobile usage can expand without hiding the actual fee or pending status',async()=>{
+ window.innerWidth=390;
+ api.fetchActiveAgentExecution.mockResolvedValue({...status,state:'succeeded',result:{...historicalResult,maps:[],
+  usage:{inputTokens:2000,outputTokens:800,cacheHitInputTokens:333,cacheMissInputTokens:1667},
+  settlement:{status:'settled',cashMicros:2400,pointUnits:null,balanceMicros:2997600}}});
+ mount();
+ const summary=await screen.findByLabelText('费用与用量');
+ expect(summary).toHaveTextContent(/本次费用 ¥0.0024/u);
+ const usage=screen.getByText(/缓存命中 333/u);
+ expect(usage).not.toBeVisible();
+ const menu=summary.closest('details')!;menu.open=true;
+ expect(usage).toBeVisible();
+ expect(menu).toHaveTextContent(/输入 2000 · 输出 800 Token/u);
+ expect(menu).toHaveTextContent(/现金余额 ¥2.9976/u);
+});
 it('restores saved map cards and pending fees from server history without a browser execution attachment',async()=>{
  mount(undefined,undefined,{agentResults:[historicalResult]});
  expect(await screen.findByRole('button',{name:'查看 已保存的学习地图'})).toBeVisible();

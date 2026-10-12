@@ -1,0 +1,54 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "route": "/assistant",
+      "mobileWidths": [
+        320,
+        430
+      ],
+      "focusRestore": true
+    },
+    {
+      "route": "/learning",
+      "mobileWidths": [
+        320,
+        430
+      ],
+      "focusRestore": true
+    },
+    {
+      "route": "/tavern",
+      "mobileWidths": [
+        320,
+        430
+      ],
+      "focusRestore": true
+    },
+    {
+      "route": "/library",
+      "mobileNoOverflow": true
+    },
+    {
+      "route": "/maps",
+      "mobileNoOverflow": true
+    },
+    {
+      "route": "/learning",
+      "mobileNoOverflow": true
+    },
+    {
+      "route": "/wallet",
+      "mobileNoOverflow": true
+    },
+    {
+      "route": "/models",
+      "mobileNoOverflow": true
+    },
+    {
+      "ordinaryAccount": "administratorNavigationHidden"
+    }
+  ],
+  "pageErrors": [],
+  "automaticModelCalls": 0
+}

@@ -1978,6 +1978,67 @@ describe('手机端视图栈', () => {
 describe('手机端抽屉', () => {
   beforeEach(() => { window.innerWidth = 390; });
   afterEach(() => { window.innerWidth = 1024; });
+  it('统一手机聊天：键盘缩小可视窗口后外壳跟随并清理监听', async () => {
+    const viewport = Object.assign(new EventTarget(), { height: 650, offsetTop: 0 });
+    const removeListener = vi.spyOn(viewport, 'removeEventListener');
+    vi.stubGlobal('visualViewport', viewport);
+    try {
+      const view = renderApp('/assistant');
+      const toolbar = await screen.findByRole('toolbar', { name: '对话操作' });
+      const shell = toolbar.closest('.application-shell') as HTMLElement;
+      expect(shell.style.getPropertyValue('--mobile-viewport-height')).toBe('650px');
+      viewport.height = 340; viewport.offsetTop = 16;
+      viewport.dispatchEvent(new Event('resize'));
+      expect(shell.style.getPropertyValue('--mobile-viewport-height')).toBe('340px');
+      expect(shell.style.getPropertyValue('--mobile-viewport-top')).toBe('16px');
+      view.unmount();
+      expect(removeListener).toHaveBeenCalledWith('resize', expect.any(Function));
+      expect(removeListener).toHaveBeenCalledWith('scroll', expect.any(Function));
+    } finally { vi.unstubAllGlobals(); }
+  });
+  it.each(['assistant', 'learning', 'tavern'] as const)('统一手机聊天：%s 顶部一行、单个抽屉和配置保留草稿', async scene => {
+    const user = userEvent.setup();
+    const areaId = personalEntry.library_entry_id;
+    const chat = { ...tavernDetail, conversation: { ...tavernDetail.conversation,
+      scene: scene === 'assistant' ? 'management' as const : scene,
+      libraryEntryId: scene === 'learning' ? areaId : undefined,
+      learningAreaId: scene === 'learning' ? areaId : undefined,
+    } };
+    tavernApi.fetchCharacters.mockResolvedValue([tavernCharacter]);
+    tavernApi.fetchConversations.mockResolvedValue([chat.conversation]);
+    tavernApi.fetchLearningAreaConversations.mockResolvedValue([chat.conversation]);
+    tavernApi.fetchConversation.mockResolvedValue(chat);
+    tavernApi.openTreeConversation.mockResolvedValue(chat);
+    tavernApi.openManagementConversation.mockResolvedValue(chat);
+    tavernApi.fetchLearningAreas.mockResolvedValue([{ areaId, libraryEntryId: areaId,
+      title: personalEntry.tree.title, available: true, createdAt: '2026-10-11T00:00:00Z' }]);
+    localStorage.setItem(`mapflow.tavern.selection.v1.${authenticated.account.playerId}${scene === 'assistant' ? '.management' : ''}`, chat.conversation.conversationId);
+    renderApp(scene === 'learning' ? `/learning?area=${areaId}` : `/${scene}`);
+    const input = await screen.findByRole('textbox', { name: '消息' });
+    const toolbar = screen.getByRole('toolbar', { name: '对话操作' });
+    expect(within(toolbar).getByRole('button', { name: '新建会话' })).toBeInTheDocument();
+    expect(within(toolbar).getByRole('button', { name: '配置' })).toBeInTheDocument();
+    expect(within(toolbar).getByRole('button', { name: /展开画布|收起画布/ })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '资金通路' })).not.toBeInTheDocument();
+    await user.type(input, '抽屉和配置关闭后保留我的输入');
+    await user.click(within(toolbar).getByRole('button', { name: '打开功能菜单' }));
+    const drawer = screen.getByRole('dialog', { name: '功能菜单' });
+    expect(screen.getAllByRole('dialog', { name: '功能菜单' })).toHaveLength(1);
+    expect(within(drawer).getByRole('combobox', { name: '资金通路' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('combobox', { name: '筛选历史角色' })).toHaveValue('all');
+    const search = within(drawer).getByRole('searchbox', { name: '搜索会话' });
+    await user.type(search, '不存在的会话名称');
+    expect(within(drawer).queryByRole('button', { name: `打开会话 ${chat.conversation.title}` })).not.toBeInTheDocument();
+    await user.clear(search);
+    expect(within(drawer).getByRole('button', { name: `打开会话 ${chat.conversation.title}` })).toBeInTheDocument();
+    await user.click(within(drawer).getByRole('button', { name: '关闭功能菜单' }));
+    expect(input).toHaveValue('抽屉和配置关闭后保留我的输入');
+    await user.click(within(toolbar).getByRole('button', { name: '配置' }));
+    const configuration = screen.getByRole('dialog', { name: '配置' });
+    await user.click(within(configuration).getByRole('button', { name: '关闭配置' }));
+    expect(input).toHaveValue('抽屉和配置关闭后保留我的输入');
+    expect(nativeApi.acceptAgentExecution).not.toHaveBeenCalled();
+  });
   it('点 ☰ 打开抽屉，点「我的学习」进入个人视图并关闭抽屉', async () => {
     const user = userEvent.setup();
     identityApi.fetchCurrentSession.mockResolvedValue(authenticated);

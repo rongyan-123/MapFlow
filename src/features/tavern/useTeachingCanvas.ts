@@ -31,8 +31,7 @@ export function useTeachingCanvas(conversationId: string, csrfToken: string, gra
     try {
       setSaving(true); setError(null);
       const saved = current.current ?? await fetchTeachingCanvas(conversationId);
-      const enabled = readOnly || saved.revision > 0 ? saved : await saveTeachingCanvas(conversationId, { ...saved, enabled: true }, csrfToken);
-      setDocument(enabled); setOpen(true);
+      setDocument(saved); setOpen(true);
     } catch (failure) { setError(failure); }
     finally { setSaving(false); }
   }

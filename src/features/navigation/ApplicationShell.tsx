@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIdentity } from '../identity/IdentityContext';
 import IdentityAccess from '../identity/IdentityAccess';
@@ -16,6 +16,9 @@ import { TavernDialog } from '../tavern/TavernUi';
 import MobileDrawer from './MobileDrawer';
 import useIsMobile from '../../lib/useIsMobile';
 import { describePublicError } from '../../lib/publicErrors';
+import { MobileChatChromeContext, mobileChromeSlots, mobileActionClass, MobileActionIcon, type MobileChromeTargets, type MobileChromeRefs } from './MobileChatChrome';
+import './mobileChatChrome.css';
+import useMobileViewport from '../../lib/useMobileViewport';
 
 const ShellContext = createContext(false);
 export function useApplicationShell() { return useContext(ShellContext); }
@@ -31,9 +34,17 @@ export default function ApplicationShell({ activePath, onNavigate, children }: {
 }) {
   const { session, generationCapabilities, logout, logoutPending, logoutError } = useIdentity();
   const isMobile = useIsMobile();
+  const viewportRoot = useMobileViewport(isMobile && !!session);
   const sharedModel = useSharedModelSelection();
   const queryClient = useQueryClient();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mobileTargets, setMobileTargets] = useState<MobileChromeTargets>(() => Object.fromEntries(mobileChromeSlots.map(slot => [slot, null])) as MobileChromeTargets);
+  const mobileRefs = useMemo(() => Object.fromEntries(mobileChromeSlots.map(slot => [slot, (element: HTMLElement | null) => {
+    setMobileTargets(previous => previous[slot] === element ? previous : { ...previous, [slot]: element });
+  }])) as MobileChromeRefs, []);
+  const openDrawer = useCallback(() => setDrawerOpen(true), []);
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+  const mobileChrome = useMemo(() => isMobile ? { targets: mobileTargets, openDrawer, closeDrawer } : null, [isMobile, mobileTargets, openDrawer, closeDrawer]);
   const [dialog, setDialog] = useState<'model' | 'guide' | 'announcements' | 'feedback' | 'logout' | null>(null);
   const credit = useQuery({ queryKey: ['me', session?.account.playerId, 'credit'], queryFn: readCreditSummary,
     enabled: !!session && generationCapabilities?.platformFundedEnabled === true, staleTime: 30_000, retry: false });
@@ -50,6 +61,9 @@ export default function ApplicationShell({ activePath, onNavigate, children }: {
         className={`${itemClass} ${activePath === destination.path ? '!bg-cyan-300 !font-semibold !text-slate-950' : ''}`}
         onClick={() => navigate(destination.path)}>{destination.label}</button>)}
     </nav>
+    {isMobile && <div className="mobile-scene-selections space-y-5 px-2 pt-5">
+      {(['learning', 'characters', 'history', 'model'] as const).map(slot => <div key={slot} ref={mobileRefs[slot]} />)}
+    </div>}
     <nav aria-label="辅助功能" className="mt-auto space-y-3 px-2 pt-8 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="border-t border-slate-800 pt-3"><p className="px-3 pb-1 text-xs text-slate-500">模型与额度</p>
         <button className={itemClass} onClick={() => openDialog('model')}>模型配置</button>
@@ -71,14 +85,17 @@ export default function ApplicationShell({ activePath, onNavigate, children }: {
       <IdentityAccess onRequestLogout={() => openDialog('logout')} />
     </nav>
   </>;
-  return <ShellContext.Provider value={true}>
-    <div className="application-shell flex h-dvh min-h-0 overflow-hidden bg-slate-950 text-slate-100">
+  return <ShellContext.Provider value={true}><MobileChatChromeContext.Provider value={mobileChrome}>
+    <div ref={viewportRoot} data-mobile={isMobile} className="application-shell flex h-dvh min-h-0 overflow-hidden bg-slate-950 text-slate-100">
       {!isMobile && <aside aria-label="全局导航" className="application-navigation flex w-52 shrink-0 flex-col overflow-y-auto border-r border-slate-800 bg-slate-950">{navigation}</aside>}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {isMobile && <div className="flex h-11 shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-950 px-3 pt-[env(safe-area-inset-top)]">
-          <button type="button" aria-label="打开功能菜单" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)} className="rounded-lg border border-slate-700 px-2 py-1">☰</button>
-          <span className="truncate text-sm font-semibold">{destinations.find(destination => destination.path === activePath)?.label ?? 'MapFlow'}</span>
-        </div>}
+        {isMobile && <header className="mobile-chat-toolbar border-slate-800 bg-slate-950" role="toolbar" aria-label="对话操作">
+          <button type="button" aria-label="打开功能菜单" aria-expanded={drawerOpen} onClick={openDrawer} className={mobileActionClass}><MobileActionIcon name="menu" /></button>
+          <div ref={mobileRefs.title} className="mobile-chat-title" data-fallback-title={destinations.find(destination => destination.path === activePath)?.label ?? 'MapFlow'} />
+          <div ref={mobileRefs.new} className="mobile-chat-action" />
+          <div ref={mobileRefs.configuration} className="mobile-chat-action" />
+          <div ref={mobileRefs.canvas} className="mobile-chat-action" />
+        </header>}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
       </div>
       <MobileDrawer open={isMobile && drawerOpen} onClose={() => setDrawerOpen(false)}>{navigation}</MobileDrawer>
@@ -92,5 +109,5 @@ export default function ApplicationShell({ activePath, onNavigate, children }: {
     {dialog === 'feedback' && <FeedbackDialog onClose={() => setDialog(null)} />}
     <LogoutConfirmDialog open={dialog === 'logout'} pending={logoutPending} error={logoutError ? describePublicError(logoutError) : null}
       onCancel={() => setDialog(null)} onConfirm={() => void logout().catch(() => undefined)} />
-  </ShellContext.Provider>;
+  </MobileChatChromeContext.Provider></ShellContext.Provider>;
 }

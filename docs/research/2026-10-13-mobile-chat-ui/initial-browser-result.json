@@ -1,0 +1,36 @@
+{
+  "checks": [
+    {
+      "width": 320,
+      "height": 740,
+      "singleToolbar": true,
+      "touchTargets": 44
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "singleToolbar": true,
+      "touchTargets": 44
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "singleToolbar": true,
+      "touchTargets": 44
+    },
+    {
+      "width": 430,
+      "height": 932,
+      "singleToolbar": true,
+      "touchTargets": 44
+    },
+    {
+      "width": 844,
+      "height": 390,
+      "singleToolbar": true,
+      "touchTargets": 44
+    }
+  ],
+  "errors": [],
+  "automaticModelCalls": 0
+}
