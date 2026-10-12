@@ -43,10 +43,10 @@
 
 **Interfaces:** Produces `AgentExecutionState`, `FundingPath`, `ExecutionLease`, `ModelCallStatus`, `CostReceipt`, and `ReceiptLedger`. State transitions distinguish business outcome, notification and settlement. Receipts retain call identity, currency, exact decimal amount and provenance; aggregate only a sealed set of fully known calls.
 
-- [ ] Write domain tests for a successful result with missing money, late/duplicate/conflicting receipts, explicit zero, stopped costs, unique operation identity and stale ownership. Literal amounts independently check precision and rounding.
-- [ ] Run `cargo test --test agent_execution_domain --locked --offline`; expected RED for missing execution/receipt behavior.
-- [ ] Implement only the state transitions and exact evidence aggregation needed by these tests. Reuse existing decimal billing rules rather than reference prices.
-- [ ] Run domain tests and full Rust suite; expected GREEN. Review diff and commit `feat: model durable agent execution and receipt states`.
+- [x] Write domain tests for a successful result with missing money, late/duplicate/conflicting receipts, explicit zero, stopped costs, unique operation identity and stale ownership. Literal amounts independently check precision and rounding.
+- [x] Run `cargo test --test agent_execution_domain --locked --offline`; expected RED for missing execution/receipt behavior.
+- [x] Implement only the state transitions and exact evidence aggregation needed by these tests. Reuse existing decimal billing rules rather than reference prices.
+- [x] Run domain tests and full Rust suite; expected GREEN. Review diff and commit `feat: model durable agent execution and receipt states`.
 
 ### Task 2: Durable execution store and short-lived coordination
 
@@ -54,10 +54,10 @@
 
 **Interfaces:** Consumes Task 1 states. Produces `PostgresAgentExecutionStore::{accept,claim,renew,stop,append_event,events,record_call,record_receipt,execution}` using account/execution identity and lease fence. `accept` deduplicates the action ID and rejects a changed payload. Model/config snapshots contain versioned credential references, never key plaintext.
 
-- [ ] Write real PostgreSQL tests for replay versus payload conflict, one conversation owner, account cash queueing, lease takeover and stale writes, owner-scoped event pagination, stop/complete races and completed result reattachment.
-- [ ] Run `cargo test --test postgres_agent_execution --locked --offline`; expected RED before the schema/store exists.
-- [ ] Implement schema and transactional CAS operations. Lease expiration identifies lost ownership, never a task timeout. Released completed/pending runs do not retain database connections or cash locks.
-- [ ] Run migration twice, store tests and full Rust suite; expected GREEN and preserved historical tables. Commit `feat: persist fenced agent execution and ordered events`.
+- [x] Write real PostgreSQL tests for replay versus payload conflict, one conversation owner, account cash queueing, lease takeover and stale writes, owner-scoped event pagination, stop/complete races and completed result reattachment.
+- [x] Run `cargo test --test postgres_agent_execution --locked --offline`; expected RED before the schema/store exists.
+- [x] Implement schema and transactional CAS operations. Lease expiration identifies lost ownership, never a task timeout. Released completed/pending runs do not retain database connections or cash locks.
+- [x] Run migration twice, store tests and full Rust suite; expected GREEN and preserved historical tables. Commit `feat: persist fenced agent execution and ordered events`.
 
 ### Task 3: Persistent batched map drafts
 
@@ -65,10 +65,10 @@
 
 **Interfaces:** Produces `AgentMapDraft`, `DraftBatch`, `DraftPublication` and store methods `create_draft`, `apply_draft_batch`, `read_draft`, `prepare_publication`. Every operation has an ID, digest, expected version and execution fence. A prepared publication is immutable and uniquely targets one map.
 
-- [ ] Write tests for whole-batch validation, duplicate action replay, changed-payload conflict, draft continuation across different executions/models, foreign ownership, cycle/dangling-edge diagnostics and stale versions.
-- [ ] Run `cargo test --test postgres_agent_map_drafts --locked --offline`; expected RED.
-- [ ] Implement atomic batches and compact indexed reads; reuse the existing graph representation and essential validators. Store safe, detailed failures without terminating the conversation.
-- [ ] Run draft tests and full Rust suite; expected GREEN. Commit `feat: add recoverable batched agent map drafts`.
+- [x] Write tests for whole-batch validation, duplicate action replay, changed-payload conflict, draft continuation across different executions/models, foreign ownership, cycle/dangling-edge diagnostics and stale versions.
+- [x] Run `cargo test --test postgres_agent_map_drafts --locked --offline`; expected RED.
+- [x] Implement atomic batches and compact indexed reads; reuse the existing graph representation and essential validators. Store safe, detailed failures without terminating the conversation.
+- [x] Run draft tests and full Rust suite; expected GREEN. Commit `feat: add recoverable batched agent map drafts`.
 
 ### Task 4: One uncapped DSH loop with per-call evidence
 
@@ -76,10 +76,10 @@
 
 **Interfaces:** Produces common chat requests with model capability snapshots, call IDs and optional native output parameters; no finite `maxSteps`. Provider adapter reports each call start/outcome, text/usage and exact monetary receipts through a host evidence bridge. Plain chat is the same loop with no private tools.
 
-- [ ] Write worker tests that actually execute more than 16 steps and 8 tools, return a recoverable error then correction, preserve missing versus zero money, and support BYOK completion without money. Add protocol and Rust bridge tests before changing each layer.
-- [ ] Run the targeted worker/Rust contracts; expected RED at current caps and missing fee evidence.
-- [ ] Consolidate DSH loops, remove count/total-time guards, and adapt existing cash/BYOK provider parsing into the model adapter without keeping a second Agent loop. Persist call-start before network dispatch. Abort is an explicit execution signal.
-- [ ] Run full worker tests/typecheck/build and full Rust suite; expected GREEN. Commit `refactor: unify chat in uncapped DSH execution`.
+- [x] Write worker tests that actually execute more than 16 steps and 8 tools, return a recoverable error then correction, preserve missing versus zero money, and support BYOK completion without money. Add protocol and Rust bridge tests before changing each layer.
+- [x] Run the targeted worker/Rust contracts; expected RED at current caps and missing fee evidence.
+- [x] Consolidate DSH loops, remove count/total-time guards, and adapt existing cash/BYOK provider parsing into the model adapter without keeping a second Agent loop. Persist call-start before network dispatch. Abort is an explicit execution signal.
+- [x] Run full worker tests/typecheck/build and full Rust suite; expected GREEN. Commit `refactor: unify chat in uncapped DSH execution`.
 
 ### Task 5: Background execution, recovery and atomic completion
 
@@ -87,10 +87,10 @@
 
 **Interfaces:** Consumes Tasks 1–4 stores, publications and call evidence. Produces accept/subscribe/status/stop/resume operations. Saved reply/map, settlement, business success and completion event share one short transaction. A pending-fee result releases active execution ownership; late receipts post the original settlement once.
 
-- [ ] Write fault tests for browser disconnect, server restart after a tool write, uncertain provider dispatch, notification loss, postcommit read failure, map-ready summary interruption, stop/commit races, zero/negative next balance, missing/conflicting receipts and posting rollback.
-- [ ] Run recovery/settlement contracts; expected RED for current cancellation-on-drop, long locks and false failures.
-- [ ] Run ownership in the background, persist checkpoints/events, restore by querying evidence first and separate subscriber lifetime. Implement exact unique finalization and pending reconciliation. Do not add automatic fee waiver or estimated debit.
-- [ ] Run recovery tests and full Rust/worker suites; expected GREEN. Commit `feat: recover agent execution and finalize results exactly once`.
+- [x] Write fault tests for browser disconnect, server restart after a tool write, uncertain provider dispatch, notification loss, postcommit read failure, map-ready summary interruption, stop/commit races, zero/negative next balance, missing/conflicting receipts and posting rollback.
+- [x] Run recovery/settlement contracts; expected RED for current cancellation-on-drop, long locks and false failures.
+- [x] Run ownership in the background, persist checkpoints/events, restore by querying evidence first and separate subscriber lifetime. Implement exact unique finalization and pending reconciliation. Do not add automatic fee waiver or estimated debit.
+- [x] Run recovery tests and full Rust/worker suites; expected GREEN. Commit `feat: recover agent execution and finalize results exactly once`.
 
 ### Task 6: Persistent model profiles and window-aware context
 
@@ -98,10 +98,10 @@
 
 **Interfaces:** Produces versioned model/credential/capability snapshots and tested activation. Preserves cash catalogue versus points-default distinction. Context preparation returns complete current requirements, draft index and matching tool request/result groups with readable references to large stored data.
 
-- [ ] Write tests for persistent restart selection, failed activation retaining old service, immutable old credentials/config, smaller window preserving a large latest turn/tool pairs, unsupported parameters and admin authorization.
-- [ ] Run targeted profile/context/admin tests; expected RED at memory-only selection and universal history rejection.
-- [ ] Implement supported adapter configuration persistence and snapshot activation, full input storage and window adaptation; record any paid context compression under the same execution.
-- [ ] Run complete Rust/worker/frontend suites and type checks; expected GREEN. Commit `feat: configure durable model profiles and adaptive context`.
+- [x] Write tests for persistent restart selection, failed activation retaining old service, immutable old credentials/config, smaller window preserving a large latest turn/tool pairs, unsupported parameters and admin authorization.
+- [x] Run targeted profile/context/admin tests; expected RED at memory-only selection and universal history rejection.
+- [x] Implement supported adapter configuration persistence and snapshot activation, full input storage and window adaptation; record any paid context compression under the same execution.
+- [x] Run complete Rust/worker/frontend suites and type checks; expected GREEN. Commit `feat: configure durable model profiles and adaptive context`.
 
 ### Task 7: Default global assistant and execution-aware client
 
@@ -109,10 +109,10 @@
 
 **Interfaces:** Consumes Task 5 accepted execution identity and ordered events, reuses management conversations. Routes `/assistant`; status attachment never creates a new execution. Stop explicitly calls the stop endpoint; page changes detach only.
 
-- [ ] Write tests for login/root default, all explicit old destinations, restoring management history, reconnecting from sequence, stale duplicate events, pending-cost display and stop versus navigation behavior. Test opaque mobile drawer/deep links with owned targets.
-- [ ] Run targeted App/assistant/client tests; expected RED for missing default route and subscription protocol.
-- [ ] Implement assistant route and shared client execution attachment; keep original map/chat interface and all role controls. Pure style adjustments follow current dark design.
-- [ ] Run full frontend suite/typecheck/build; expected GREEN. Commit `feat: open the global assistant by default and restore live executions`.
+- [x] Write tests for login/root default, all explicit old destinations, restoring management history, reconnecting from sequence, stale duplicate events, pending-cost display and stop versus navigation behavior. Test opaque mobile drawer/deep links with owned targets.
+- [x] Run targeted App/assistant/client tests; expected RED for missing default route and subscription protocol.
+- [x] Implement assistant route and shared client execution attachment; keep original map/chat interface and all role controls. Pure style adjustments follow current dark design.
+- [x] Run full frontend suite/typecheck/build; expected GREEN. Commit `feat: open the global assistant by default and restore live executions`.
 
 ### Task 8: Map-building tools and trusted learning cards
 
@@ -120,10 +120,10 @@
 
 **Interfaces:** Management tools `create_map_draft`, `read_map_draft`, `apply_map_draft_batch`, `validate_map_draft`, `publish_map_draft` use the current execution fence. Publication prepares a target finalized by Task 5. Cards include only server-owned saved map/area IDs. `join_learning_area` stays idempotent and unbilled.
 
-- [ ] Write end-to-end tool tests for repairable structural errors, batch replay, staged publication, completion card, multiple user rounds and private scene boundaries. Write client tests for exact map selection, failed join staying in chat and click causing no model request.
-- [ ] Run targeted tool/card tests; expected RED because old preparation only opens a form.
-- [ ] Expose draft tools through the shared loop and deterministically render saved result cards with view/learn actions. Model text cannot fake successful publication.
-- [ ] Run all Rust/worker/frontend suites and type checks; expected GREEN. Commit `feat: build maps through assistant tools and open owned learning areas`.
+- [x] Write end-to-end tool tests for repairable structural errors, batch replay, staged publication, completion card, multiple user rounds and private scene boundaries. Write client tests for exact map selection, failed join staying in chat and click causing no model request.
+- [x] Run targeted tool/card tests; expected RED because old preparation only opens a form.
+- [x] Expose draft tools through the shared loop and deterministically render saved result cards with view/learn actions. Model text cannot fake successful publication.
+- [x] Run all Rust/worker/frontend suites and type checks; expected GREEN. Commit `feat: build maps through assistant tools and open owned learning areas`.
 
 ### Task 9: Retire duplicate entry points without deleting history
 
@@ -131,10 +131,14 @@
 
 **Interfaces:** New execution version is fixed at creation; old inflight/historical records retain their supported reading/recovery path. New map-generation requests reach assistant draft tools rather than old planning/research/assembly pipeline.
 
-- [ ] Write regressions for historic generation reads, old inflight ownership, migrated new entry, payment/auth/map editing/learning/standalone/BYOK behavior.
-- [ ] Run tests; expected RED for remaining new traffic entering old loops.
-- [ ] Switch supported new entry points and remove verified duplicate loops only after Task 8 acceptance. Keep protocol adaptation, old historical stores and domain validators.
-- [ ] Run complete suites/typecheck/build/fmt/clippy and inspect call references; expected GREEN. Commit `refactor: retire duplicate generation execution entry points`.
+- [x] Write regressions for historic generation reads, old inflight ownership, migrated new entry, payment/auth/map editing/learning/standalone/BYOK behavior.
+- [x] Run tests; expected RED for remaining new traffic entering old loops.
+- [x] Switch supported new entry points and remove verified duplicate loops only after Task 8 acceptance. Keep protocol adaptation, old historical stores and domain validators.
+- [x] Run complete suites/typecheck/build/fmt/clippy and inspect call references; expected GREEN. Commit `refactor: retire duplicate generation execution entry points`.
+
+## User-directed acceptance closure (2026-10-12)
+
+The user confirmed keeping the current free 8B and finishing the existing work without testing other models. All four points topic classes have real recorded outcomes; map execution and teaching quality are scored separately. The 8B multi-round draft/publication path works, while the requested teaching completeness and single-turn reliability remain known model limitations. Do not label those quality failures as passing, inject workflow prompts to hide them, change the selected model, or deploy this candidate without publication authorization. The already-started long-output test was explicitly stopped by the diagnostic operator after 30 minutes: the first call reached the model's own output limit and DSH continued it; the continuation has no final receipt. Retain the 22,836 streamed characters and known first-call usage as partial evidence, not a successful complete reply. Per-execution database checks confirm no site cash/points debit or generated result. Implementation and required validation/reporting are complete under this user-directed closure; model quality failures remain explicit release limitations.
 
 ### Task 10: Real quality, billing and recovery acceptance
 
@@ -142,8 +146,8 @@
 
 **Interfaces:** Uses the complete candidate and isolated test accounts/databases, not production data. Record model/config version, call IDs, input/output/cache tokens, exact fees, saved maps and timings.
 
-- [ ] Run four real topic classes (simple, specialist, ambiguous, multi-round changes) through cash and the enabled points model, scoring structure and teaching quality separately. Report unavailable credentials/models precisely rather than inventing results.
-- [ ] Run real API calls covering long output and more than former tool/step limits; verify cash exact receipts × 2, points policy, BYOK isolation and replay without another debit.
-- [ ] Inject disconnect/restart/receipt faults against the candidate. Run the complete test suites, types, builds, fmt/clippy and diff self-review. Expected GREEN plus persisted single results and fees.
-- [ ] Create a review package and use one fresh final reviewer as required by executing-plans; fix important findings with RED→GREEN and rerun affected complete suites.
-- [ ] Commit acceptance evidence and report the exact reviewable candidate, remaining practical limitations and verification. Mark the goal complete only when its required implementation and validation are actually achieved.
+- [x] Run four real topic classes (simple, specialist, ambiguous, multi-round changes) through cash and the enabled points model, scoring structure and teaching quality separately. Report unavailable credentials/models precisely rather than inventing results.
+- [x] Run real API calls covering long output and more than former tool/step limits; verify cash exact receipts × 2, points policy, BYOK isolation and replay without another debit. Completed cash long-output evidence and the stopped 8B continuation are distinguished in the acceptance record.
+- [x] Inject disconnect/restart/receipt faults against the candidate. Run the complete test suites, types, builds, fmt/clippy and diff self-review. Expected GREEN plus persisted single results and fees.
+- [x] Create a review package and use one fresh final reviewer as required by executing-plans; fix important findings with RED→GREEN and rerun affected complete suites.
+- [x] Commit acceptance evidence and report the exact reviewable candidate, remaining practical limitations and verification. Required implementation and validation are complete; user-directed closure retains the documented 8B quality failures rather than certifying them as passing.
