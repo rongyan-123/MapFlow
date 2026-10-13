@@ -1,0 +1,34 @@
+{
+  "origin": "https://xxian.fun",
+  "tlsValidation": true,
+  "authenticated": false,
+  "screenshots": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "pageWidth": 1440,
+      "scripts": [
+        "/assets/index-B7b5ZElt.js"
+      ],
+      "loginVisible": true
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "pageWidth": 390,
+      "scripts": [
+        "/assets/index-B7b5ZElt.js"
+      ],
+      "loginVisible": true
+    },
+    {
+      "width": 320,
+      "height": 740,
+      "pageWidth": 320,
+      "scripts": [
+        "/assets/index-B7b5ZElt.js"
+      ],
+      "loginVisible": true
+    }
+  ]
+}
