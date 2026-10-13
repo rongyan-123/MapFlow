@@ -107,4 +107,4 @@ function resizeComposer(element: HTMLTextAreaElement) {
 - [x] 完整运行 `npm test -- --run --maxWorkers=4 --minWorkers=4`、`npm run typecheck`、`npm run build`；自审每一行差异。纯样式以浏览器验证，不写字符串镜像测试。
 - [x] 用真实后端、真实账号记录验证三个手机聊天、四种宽度、横屏、桌面回归、配置、角色导入、学习区切换、历史选择、画布真实保存；统计导航期间自动生成请求必须为 0。保存截图及来源，不将模拟数据当真实验收。
 - [x] 按 executing-plans 要求邀请一次完整分支的新审阅者，修复可重现问题并重新验证有关测试。提交结果、给出具体可审阅版本。
-- [ ] 按具体手机版本的发布授权处理 main 集成和部署；已发布的全局助手不受此待办影响。
+- [x] 用户明确授权“部署吧”；已合并 main f9d871f 并推送，合并后 793 项测试通过、1 项原有跳过，类型检查通过。固定前端镜像与实际 main 代码一致，已发布至 xxian.fun；公网六条路径及原数据保留验证通过，见 `docs/research/2026-10-13-mobile-chat-ui-deployment.md`。
