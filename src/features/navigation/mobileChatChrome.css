@@ -20,9 +20,13 @@
 .mobile-chat-title:empty::before { content: attr(data-fallback-title); }
 .mobile-chat-action { flex-shrink: 0; }
 .mobile-scene-selections > div:empty { display: none; }
-.mobile-scene-selections nav[aria-label='当前学习区'] { flex-direction: column; align-items: stretch; padding: 0 0 16px; }
+.mobile-scene-selections nav[aria-label='当前学习区'] { flex-direction: column; align-items: stretch; padding: 0; border:0; }
 .mobile-scene-selections nav[aria-label='当前学习区'] label { flex-direction: column; align-items: stretch; }
 .mobile-scene-selections select { min-width: 0; max-width: 100%; }
 .mobile-drawer-layer { position: fixed; inset: 0; z-index: 2147483647; }
 .mobile-dialog-layer[data-mobile='true'] { top: var(--mobile-viewport-top, 0px); bottom: auto; height: var(--mobile-viewport-height, 100dvh); padding: 8px; }
 .mobile-dialog-layer[data-mobile='true'] > section { max-height: calc(var(--mobile-viewport-height, 100dvh) - 16px); }
+.application-shell[data-mobile='true'] nav[aria-label='业务导航'] { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
+.application-shell[data-mobile='true'] nav[aria-label='业务导航'] > button { margin:0; }
+.mobile-drawer-layer nav[aria-label='业务导航'] { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
+.mobile-drawer-layer nav[aria-label='业务导航'] > button { margin:0; }

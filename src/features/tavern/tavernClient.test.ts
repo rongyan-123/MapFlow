@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createConversation, deleteCharacter, fetchCharacters, fetchConversation, fetchConversations, fetchTurns, generateStream, importCharacter, mutateGraph, updateGenerationSettings,parseTeachingCanvas } from './tavernClient';
+import { createConversation, deleteCharacter, deleteConversation, fetchCharacters, fetchConversation, fetchConversations, fetchTurns, generateStream, importCharacter, mutateGraph, updateConversationProfile, updateTreeConnection, switchConversationCharacter, updateGenerationSettings,parseTeachingCanvas } from './tavernClient';
 import { character, completion, conversation, detail, sseResponse, turn } from './testFixtures';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -8,6 +8,26 @@ function reply(body: unknown) {
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
 }
+
+it.each(['profile', 'tools', 'role', 'settings'] as const)('blocks deletion until an outstanding %s request finishes even after its panel leaves', async kind => {
+  let completeSave!: (value: Response) => void;
+  const deferred = new Promise<Response>(resolve => { completeSave = resolve; });
+  const fetchMock = vi.fn().mockImplementationOnce(() => deferred).mockResolvedValue(new Response(null, { status: 204 }));
+  vi.stubGlobal('fetch', fetchMock);
+  const saving = kind === 'profile' ? updateConversationProfile('conversation-1', 1, { characterId: character.characterId, userName: '小明' }, 'csrf')
+    : kind === 'tools' ? updateTreeConnection('conversation-1', 1, null, false, 'csrf')
+    : kind === 'role' ? switchConversationCharacter('conversation-1', 1, character.characterId, 'csrf')
+    : updateGenerationSettings('conversation-1', 1, conversation.generationSettings!, 'csrf');
+  try {
+    await expect(deleteConversation('conversation-1', 'csrf')).rejects.toMatchObject({ status: 409, code: 'tavern.conversation_busy' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  } finally {
+    completeSave(new Response(JSON.stringify(kind === 'settings' ? { generationSettings: conversation.generationSettings, generationSettingsVersion: 2 } : detail)));
+    await saving;
+  }
+  await deleteConversation('conversation-1', 'csrf');
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
 it('reads durable native completions only when bound to this conversation and an actual assistant message',async()=>{
  const id='11111111-1111-4111-8111-111111111111',messageId='22222222-2222-4222-8222-222222222222';
  const saved={executionId:'33333333-3333-4333-8333-333333333333',conversationId:id,generationId:'33333333-3333-4333-8333-333333333333',messageId,answer:'Saved',maps:[],usage:null,

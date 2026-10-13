@@ -33,8 +33,8 @@ export default function LearningMapPanel({ accountId, libraryEntryId, csrfToken,
     setNodeProgress(libraryEntryId, nodeId, percent, csrfToken), onSuccess: refreshTree });
   return <>
     <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-800 px-3 py-2">
-      <p className="truncate text-sm font-semibold">{snapshot?.tree.title ?? '学习地图'}</p>
-      <button type="button" className={buttonClass} onClick={onClose}>收起地图</button>
+      <p className="min-w-0 flex-1 truncate text-sm font-semibold" title={snapshot?.tree.title}>{snapshot?.tree.title ?? '学习地图'}</p>
+      <button type="button" className={`${buttonClass} shrink-0 whitespace-nowrap`} onClick={onClose}>收起地图</button>
     </div>
     <TreeRestoreControl key={`${accountId}.${libraryEntryId}`} accountId={accountId} libraryEntryId={libraryEntryId} csrfToken={csrfToken} onRestored={() => setNoteNodeId(null)} />
     {tree.isPending && <p role="status" className="p-6 text-sm text-slate-400">正在读取地图…</p>}

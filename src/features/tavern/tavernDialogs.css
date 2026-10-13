@@ -1,0 +1,16 @@
+.categorized-dialog { height:min(720px,calc(100dvh - 48px)); }
+.categorized-dialog > div:first-child { padding:18px 22px; }
+.categorized-dialog nav[aria-label='配置分类'] { scrollbar-width:thin; scrollbar-color:#334155 transparent; }
+.configuration-compact-label { display:none; }
+@media(max-width:1023px) {
+  .mobile-dialog-layer[data-mobile='true'] > .categorized-dialog { height:min(720px,calc(var(--mobile-viewport-height,100dvh) - 16px)); }
+  .categorized-dialog > div:first-child { padding:14px 16px; }
+  .categorized-dialog > div:last-child > div:last-child { padding:18px 16px; }
+}
+@media(max-width:639px) {
+  .categorized-dialog { border-radius:18px; }
+  .categorized-dialog nav[aria-label='配置分类'] { gap:5px; padding:8px; }
+  .categorized-dialog nav[aria-label='配置分类'] > button { flex:1; min-height:44px; padding:8px 4px; font-size:12px; text-align:center; white-space:nowrap; }
+  .configuration-full-label { display:none; }
+  .configuration-compact-label { display:inline; }
+}

@@ -11,7 +11,7 @@ export function readPendingCreation(key: string): CreateLearningConversationInpu
     const request = JSON.parse(encoded) as CreateLearningConversationInput;
     if (!request || typeof request !== 'object' || Array.isArray(request)
       || typeof request.clientRequestId !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(request.clientRequestId)
-      || typeof request.characterId !== 'string' || typeof request.userName !== 'string'
+      || (request.characterId !== undefined && typeof request.characterId !== 'string') || typeof request.userName !== 'string'
       || Object.keys(request).some(field => !['clientRequestId', 'characterId', 'userName', 'persona', 'vocabulary', 'greetingIndex', 'toolsEnabled'].includes(field))) return null;
     return request;
   } catch { return null; }

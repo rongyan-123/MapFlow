@@ -1,70 +1,35 @@
-import { useEffect, useRef, useState } from 'react';
-import { fetchTeachingCanvas, saveTeachingCanvas } from './tavernClient';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import type { QueryClient } from '@tanstack/react-query';
+import { fetchTeachingCanvas } from './tavernClient';
+import { teachingCanvasPersistence } from './teachingCanvasPersistence';
 import type { TeachingCanvasState } from './types';
 
 export function useTeachingCanvas(conversationId: string, csrfToken: string, graphRevision: number, initial?: TeachingCanvasState,
-  options?: { readOnly: boolean; initiallyOpen: boolean }) {
-  const readOnly = options?.readOnly === true;
-  const [document, setDocument] = useState<TeachingCanvasState | null>(initial?.enabled || initial?.elements.length ? initial : null);
+  options?: { readOnly?: boolean; initiallyOpen?: boolean; queryClient?: QueryClient; accountId?: string }) {
+  const persistence = useMemo(() => teachingCanvasPersistence(conversationId, csrfToken, initial, options?.queryClient, options?.accountId),
+    [conversationId, options?.queryClient, options?.accountId]);
+  persistence.setAccess(csrfToken, options?.readOnly === true);
+  const snapshot = useSyncExternalStore(persistence.subscribe, persistence.getSnapshot, persistence.getSnapshot);
   const [open, setOpen] = useState(options?.initiallyOpen ?? !!initial?.enabled);
   const [wide, setWide] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<unknown>(null);
   const [preview, setPreview] = useState<TeachingCanvasState | null>(null);
-  const current = useRef(document); current.current = document;
-  const pendingSave = useRef<Promise<void> | null>(null);
-  const queuedElements = useRef<Record<string, unknown>[] | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
-  const flushLatest = useRef<() => Promise<void>>(() => Promise.resolve());
-  useEffect(() => () => { clearTimeout(timer.current); void flushLatest.current().catch(() => undefined); }, []);
+  useEffect(() => { persistence.retain(); return () => persistence.leave(); }, [persistence]);
   useEffect(() => {
-    if (!current.current) return;
-    const documentAtRead = current.current;
+    const previous = persistence.getSnapshot().document;
+    if (!previous) return;
     const controller = new AbortController();
     void fetchTeachingCanvas(conversationId, controller.signal).then(saved => {
-      if (controller.signal.aborted || current.current !== documentAtRead || queuedElements.current || pendingSave.current) return;
-      current.current = saved; setDocument(saved); setPreview(null);
-    }).catch(failure => { if (!controller.signal.aborted) setError(failure); });
+      if (controller.signal.aborted) return;
+      persistence.refresh(previous, saved); setPreview(null);
+    }).catch(failure => { if (!controller.signal.aborted) persistence.reportReadError(failure); });
     return () => controller.abort();
-  }, [conversationId, graphRevision]);
-  async function show() {
-    try {
-      setSaving(true); setError(null);
-      const saved = current.current ?? await fetchTeachingCanvas(conversationId);
-      setDocument(saved); setOpen(true);
-    } catch (failure) { setError(failure); }
-    finally { setSaving(false); }
-  }
-  async function persist(enabled?: boolean) {
-    if (readOnly) return;
-    if (pendingSave.current) await pendingSave.current;
-    if (!current.current || (!queuedElements.current && enabled === undefined)) return;
-    const elements = queuedElements.current ?? undefined; queuedElements.current = null;
-    const snapshot = current.current;
-    setSaving(true); setError(null);
-    const writing = (async () => {
-      try {
-        const saved = await saveTeachingCanvas(conversationId, { ...snapshot, enabled: enabled ?? snapshot.enabled }, csrfToken, elements);
-        current.current = saved; setDocument(saved);
-      } catch (failure) { queuedElements.current ??= elements ?? null; setError(failure); throw failure; }
-      finally { pendingSave.current = null; setSaving(false); }
-    })();
-    pendingSave.current = writing;
-    await writing;
-    if (queuedElements.current) await persist();
-  }
-  async function flush() { clearTimeout(timer.current); await persist(); }
-  flushLatest.current = flush;
-  function queue(elements: Record<string, unknown>[]) {
-    if (readOnly) return;
-    queuedElements.current = elements;
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => { void flushLatest.current().catch(() => undefined); }, 800);
-  }
-  async function save(elements?: Record<string, unknown>[], enabled?: boolean) {
-    if (readOnly) return;
-    if (elements) queuedElements.current = elements;
-    try { await persist(enabled); } catch { /* The canvas keeps the unsaved draft and displays the API error. */ }
-  }
-  return { document: preview ?? document, open, wide, saving, error, show, save, flush, queue, setOpen, setWide, setPreview };
+  }, [conversationId, graphRevision, persistence]);
+  const show = async () => {
+    await persistence.show();
+    if (!persistence.getSnapshot().deleted) setOpen(true);
+  };
+  return { ...snapshot, document: preview ?? snapshot.document, open, wide, show,
+    save: persistence.save, flush: persistence.flush, queue: persistence.queue,
+    prepareDeletion: persistence.prepareDeletion, cancelDeletion: persistence.cancelDeletion,
+    markDeleted: persistence.markDeleted, setOpen, setWide, setPreview };
 }

@@ -17,6 +17,7 @@ const TeachingCanvasPanel = lazy(() => import('./TeachingCanvasPanel'));
 import AssistantMarkdown from '../knowledge-chat/AssistantMarkdown';
 import useIsMobile from '../../lib/useIsMobile';
 import { MobileChromePortal, useMobileChatChrome, mobileActionClass, MobileActionIcon } from '../navigation/MobileChatChrome';
+import { DesktopChromePortal, useDesktopChatChrome } from '../navigation/DesktopChatChrome';
 import { validateId, validateMessage } from './conversationInput';
 import { fetchConversation, generateStream, mutateGraph, resolveTavernToolApproval } from './tavernClient';
 import {formatAmountMicros} from '../wallet/walletClient';
@@ -64,6 +65,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
 }) {
   const storageKey = `mapflow.tavern.pending.v1.${accountId}.${detail.conversation.conversationId}`;
   const queryClient=useQueryClient();
+  const desktopChrome=useDesktopChatChrome();
   const run=useMemo(()=>conversationRun(queryClient,{accountId,scene:detail.conversation.scene??(detail.conversation.libraryEntryId?'learning':'tavern'),
     areaId:detail.conversation.learningAreaId??null,conversationId:detail.conversation.conversationId},()=>{
     const saved = agentOptions ? null : readPending(storageKey, detail.graph.revision);
@@ -88,7 +90,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   useEffect(() => { setReferenceActive(!!nodeReference); }, [nodeReference?.id, nodeReference?.title]);
   const [recovering, setRecovering] = useState(false);
   const canvas = useTeachingCanvas(detail.conversation.conversationId, csrfToken, detail.graph.revision, detail.canvas,
-    { readOnly, initiallyOpen: !detail.conversation.libraryEntryId && !readOnly && !!detail.canvas?.enabled });
+    { readOnly, initiallyOpen: !detail.conversation.libraryEntryId && !readOnly && !!detail.canvas?.enabled, queryClient, accountId });
   useEffect(()=>{canvas.setPreview(canvasPreview);},[canvasPreview,canvas.setPreview]);
   const mapVisibleRef = useRef(mapVisible); mapVisibleRef.current = mapVisible;
   useEffect(() => { if (mapVisible) canvas.setOpen(false); }, [mapVisible]);
@@ -124,7 +126,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     resize(); window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
   }, [isMobile, message]);
-  const modelChipButton = <button type="button" aria-label={agentOptions ? `配置当前模型 ${agentOptions.modelLabel || modelSelection.model || ''}` : undefined} className="shrink-0 rounded-full bg-slate-800 px-3 py-1.5 text-slate-200 hover:text-cyan-200" onClick={onOpenModelConfiguration}>{agentOptions?.modelLabel||modelSelection.model || '选择模型'} · {agentOptions?agentOptions.funding==='cash'?'现金额度':agentOptions.funding==='points'?'平台积分':'自填 Key':modelSelection.provider === 'platform' ? '平台额度' : '自填 Key'}</button>;
+  const modelChipButton = <button type="button" aria-label={agentOptions ? `配置当前模型 ${agentOptions.modelLabel || modelSelection.model || ''}` : undefined} className="max-w-full shrink-0 truncate rounded-full bg-slate-800 px-3 py-1.5 text-slate-200 hover:text-cyan-200" onClick={onOpenModelConfiguration}>{agentOptions?.modelLabel||modelSelection.model || '选择模型'} · {agentOptions?agentOptions.funding==='cash'?'现金额度':agentOptions.funding==='points'?'平台积分':'自填 Key':modelSelection.provider === 'platform' ? '平台额度' : '自填 Key'}</button>;
   const followLatest = useRef(true);
   useEffect(() => {
     if (followLatest.current) bottom.current?.scrollIntoView?.({ block: 'nearest' });
@@ -190,7 +192,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   }
 
   async function runGeneration(action: GenerationAction, retry?: PendingGeneration) {
-    if (readOnly) return;
+    if (readOnly || canvas.deletionPreparing || canvas.deleted) return;
     if (activeRequest.current || graphBusy || editing || (pendingGeneration && !retry)) return;
     if (!retry && action.type === 'reply' && referenceActive && nodeReference) {
       action = { ...action, message: `${action.message}\n\n[学习节点参考：${nodeReference.title}；节点 ID：${nodeReference.id}]` };
@@ -315,6 +317,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   const activeAlternativeIndex = alternatives.findIndex(item => item.messageId === activeLeaf?.messageId);
 
   async function applyGraphMutation(action: GraphMutation): Promise<boolean> {
+    if (canvas.deletionPreparing || canvas.deleted) return false;
     if (readOnly) {
       const branch = action.type === 'select_branch' ? detail.graph.branches.find(item => item.branchId === action.branchId) : undefined;
       const leaf = branch ? branch.leafMessageId : action.type === 'select_alternative' ? action.assistantMessageId : undefined;
@@ -355,7 +358,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     {isMobile ? <MobileActionIcon name="stop" /> : '停止生成'}</button>
     : <button key="send" type="submit" aria-label="发送"
       className={isMobile ? `${mobileActionClass} !rounded-full !bg-cyan-300 !text-slate-950` : primaryClass+' shrink-0 whitespace-nowrap'}
-      disabled={readOnly || graphBusy || editing || pendingGeneration !== null || !message.trim() || inputTooLarge}>
+      disabled={readOnly || canvas.deletionPreparing || canvas.deleted || graphBusy || editing || pendingGeneration !== null || !message.trim() || inputTooLarge}>
       {isMobile ? <MobileActionIcon name="send" /> : '发送'}</button>;
   const replyActions = activeLeaf && <>
     <button type="button" className="rounded-lg px-2 py-1.5 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-30" disabled={readOnly || !canReviseAssistant || busy || graphBusy || pendingGeneration !== null || editing}
@@ -367,7 +370,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
   </>;
   return <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {configurationOpen && <TavernDialog title="配置" initialSection={configurationSection} onClose={onCloseConfiguration} sections={[...configuration, {
-        id: 'branches', label: '历史与分支', content: <section>
+        id: 'branches', label: '历史与分支', compactLabel: '历史', content: <section>
         <h3 className="text-sm font-semibold text-slate-300">历史与分支</h3>
         <div className="mt-3 space-y-3">
           <label className="block text-xs text-slate-400">当前分支
@@ -411,6 +414,9 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     {mobileChrome ? <MobileChromePortal slot="canvas"><button type="button" aria-label={canvas.open ? '收起画布' : '展开画布'} aria-expanded={canvas.open}
       aria-controls={`tavern-canvas-${detail.conversation.conversationId}`} disabled={canvas.saving || (readOnly && !canvas.document)}
       className={`${mobileActionClass} ${canvas.open ? '!text-cyan-300' : ''}`} onClick={() => canvas.open ? canvas.setOpen(false) : void openTeachingCanvas()}><MobileActionIcon name="canvas" /></button></MobileChromePortal>
+      : desktopChrome ? <DesktopChromePortal slot="canvas"><button type="button" className="desktop-chat-icon" aria-label={canvas.open ? '收起画布' : canvas.document ? '展开画布' : '绘图讲解'}
+        title={canvas.open ? '收起画布' : '画布 · 让 AI 用图形讲解，也可以自己绘制'} aria-expanded={canvas.open} aria-controls={`tavern-canvas-${detail.conversation.conversationId}`}
+        disabled={canvas.saving} onClick={() => canvas.open ? canvas.setOpen(false) : void openTeachingCanvas()}><MobileActionIcon name="canvas" /></button></DesktopChromePortal>
       : <nav aria-label="学习区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-1.5 text-xs sm:py-2">
       <button type="button" aria-expanded={canvas.open} aria-controls={`tavern-canvas-${detail.conversation.conversationId}`} disabled={canvas.saving}
         className={`${buttonClass} ${canvas.open ? 'border-cyan-500 text-cyan-200' : ''}`} onClick={() => canvas.open ? canvas.setOpen(false) : void openTeachingCanvas()}>
@@ -425,7 +431,7 @@ export default function ConversationPane({ detail, accountId, csrfToken, modelSe
     <div id={`tavern-canvas-${detail.conversation.conversationId}`} className="tavern-canvas" data-open={canvas.open} data-wide={canvas.wide}
       aria-hidden={!canvas.open} {...(!canvas.open ? { inert: '' } : {})}>
     {canvas.open && canvas.document && <Suspense fallback={<section aria-label="教学画布" className="flex-1 p-6" role="status">正在打开教学画布…</section>}>
-      <TeachingCanvasPanel accountId={accountId} document={canvas.document} busy={busy} saving={canvas.saving} wide={canvas.wide} readOnly={readOnly}
+      <TeachingCanvasPanel accountId={accountId} document={canvas.document} busy={busy || canvas.deletionPreparing} saving={canvas.saving} wide={canvas.wide} readOnly={readOnly || canvas.deleted}
         onSave={canvas.save} onChange={canvas.queue} onClose={() => canvas.setOpen(false)} onWidth={() => canvas.setWide(previous => !previous)} />
     </Suspense>}
     </div>

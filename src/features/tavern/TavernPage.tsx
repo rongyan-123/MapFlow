@@ -1,8 +1,12 @@
-import { describePublicError } from '../../lib/publicErrors';
+import { describePublicError, PublicUiError } from '../../lib/publicErrors';
+import { findTeachingCanvasPersistence } from './teachingCanvasPersistence';
+import { conversationRun } from './conversationRuns';
+import { agentConversationRun } from '../assistant/agentConversationRun';
 import ModelAccessPanel from './ModelAccessPanel';
 import { useSharedModelSelection } from './ModelSelectionContext';
 import { useApplicationShell } from '../navigation/ApplicationShell';
 import { MobileChromePortal, useMobileChatChrome, mobileActionClass, MobileActionIcon } from '../navigation/MobileChatChrome';
+import { DesktopChromePortal, useDesktopChatChrome } from '../navigation/DesktopChatChrome';
 import { readModelSelection, saveModelSelection } from './modelPreferences';
 import useRoleNotices from './useRoleNotices';
 import { creationStorageKey, persistPendingCreation, readPendingCreation } from './pendingCreation';
@@ -30,9 +34,17 @@ import PanelResizeHandle from './PanelResizeHandle';
 import ConversationProfilePanel from './ConversationProfilePanel';
 import GenerationSettingsPanel from './GenerationSettingsPanel';
 import ManagementMapGeneration, { mapDraftQueryKey } from './ManagementMapGeneration';
-import { createConversation, createLearningConversation, deleteCharacter, fetchCharacters, fetchConversation, fetchConversations, fetchLearningAreaConversations, fetchPlatformModels, openManagementConversation, openTreeConversation, switchConversationCharacter } from './tavernClient';
-import type { Character, CompletedTurn, Conversation, ConversationDetail, ConversationGraph, CreateLearningConversationInput, GenerationSettingsState, TavernModelSelection } from './types';
+import { createConversation, createLearningConversation, deleteCharacter, deleteConversation, fetchCharacters, fetchConversation, fetchConversationHistory, fetchPlatformModels, openManagementConversation, openTreeConversation, switchConversationCharacter } from './tavernClient';
+import { TavernApiError, type Character, type CompletedTurn, type Conversation, type ConversationHistory, type ConversationDetail, type ConversationGraph, type CreateLearningConversationInput, type GenerationSettingsState, type TavernModelSelection } from './types';
 import { CharacterAvatar, CompatibilityReport, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass } from './TavernUi';
+
+type HistoryCache = ConversationHistory | Conversation[];
+function historyConversations(history?: HistoryCache): Conversation[] { return Array.isArray(history) ? history : history?.conversations ?? []; }
+const historyWasCleared = (error: unknown) => error instanceof TavernApiError && error.code === 'tavern.history_cleared';
+function updateHistory(history: HistoryCache | undefined, change: (conversations: Conversation[]) => Conversation[]): HistoryCache | undefined {
+  if (!history) return undefined;
+  return Array.isArray(history) ? change(history) : { ...history, conversations: change(history.conversations) };
+}
 
 export interface TavernPageProps {
   agentConfigurationControls?: ReactNode;
@@ -58,6 +70,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const sharedModel = useSharedModelSelection();
   const isMobile = useIsMobile();
   const mobileChrome = useMobileChatChrome();
+  const desktopChrome = useDesktopChatChrome();
   const roleDetails = useRef<HTMLDetailsElement>(null);
   // 手机端对话独占整屏，工具栏必须压成一行、次要动作收进「操作」菜单，否则消息区被挤得只剩几百像素。
   // 独立酒馆（/tavern）与从知识点进入的对话走同一条紧凑路径，桌面端逐区域不变。
@@ -101,6 +114,11 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [drawer, setDrawer] = useState<'library' | 'details' | 'history' | null>(null);
   const [deleting, setDeleting] = useState<Character | null>(null);
+  const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null);
+  const [deletePhase, setDeletePhase] = useState<'saving' | 'deleting' | null>(null);
+  const [deleteError, setDeleteError] = useState<unknown>(null);
+  const deletionLock = useRef(false);
+  const deletedConversationIds = useRef(new Set<string>());
   const [localModelSelection, setModelSelection] = useState<TavernModelSelection>(() => readModelSelection(accountId));
   const modelSelection = sharedModel?.selection ?? localModelSelection;
   const savedCustomSelection = useRef(readModelSelection(accountId, 'custom'));
@@ -122,34 +140,48 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const detailKey = ['me', accountId, 'tavern', 'conversation', conversationId] as const;
   const creditKey = ['me', accountId, 'credit'] as const;
   const characters = useQuery({ queryKey: charactersKey, queryFn: ({ signal }) => fetchCharacters(signal), retry: false });
-  const conversations = useQuery({ queryKey: conversationsKey, queryFn: ({ signal }) => treeContext
-    ? fetchLearningAreaConversations(treeContext.libraryEntryId, signal) : management ? fetchConversations(signal, 'management') : fetchConversations(signal), retry: false });
+  const conversations = useQuery<HistoryCache>({ queryKey: conversationsKey, queryFn: ({ signal }) =>
+    fetchConversationHistory(signal, treeContext ? 'learning' : management ? 'management' : 'tavern', treeContext?.libraryEntryId), retry: false });
   const belongsToCurrentScene = (item: Conversation) => treeContext
     ? item.scene === 'learning' && item.learningAreaId === treeContext.libraryEntryId
     : (management ? item.scene === 'management' : item.scene === undefined || item.scene === 'tavern') && !item.learningAreaId && !item.libraryEntryId;
-  const scopedConversations = conversations.data?.filter(belongsToCurrentScene);
+  const scopedConversations = conversations.data ? historyConversations(conversations.data).filter(belongsToCurrentScene)
+    .filter(item => !deletedConversationIds.current.has(item.conversationId)) : undefined;
+  const bootstrapState = Array.isArray(conversations.data) ? (scopedConversations?.length ? 'has_active' : 'never_created') : conversations.data?.bootstrapState;
   const conversationInScene = scopedConversations?.some(item => item.conversationId === conversationId) === true;
+  async function openDefaultConversation(open: () => Promise<ConversationDetail>) {
+    try { return await open(); }
+    catch (failure) {
+      if (historyWasCleared(failure)) {
+        queryClient.setQueryData<ConversationHistory>(conversationsKey, { conversations: [], bootstrapState: 'cleared' });
+        await conversations.refetch();
+      }
+      throw failure;
+    }
+  }
   const conversationQuery = useQuery({ queryKey: detailKey, queryFn: ({ signal }) => fetchConversation(conversationId!, signal), enabled: !!conversationId && conversationInScene, retry: false });
   const currentDetail = conversationInScene && conversationQuery.data && belongsToCurrentScene(conversationQuery.data.conversation)
     ? conversationQuery.data : undefined;
   const managementRestored = useRef(false);
   const managementOpening = useQuery({ queryKey: ['me', accountId, 'management', 'default-conversation'],
-    queryFn: ({ signal }) => openManagementConversation({}, session.csrfToken, signal),
-    enabled: !!management && conversations.isSuccess && !conversations.isFetching && scopedConversations?.length === 0, retry: false });
+    queryFn: ({ signal }) => openDefaultConversation(() => openManagementConversation({}, session.csrfToken, signal)),
+    enabled: !!management && conversations.isSuccess && !conversations.isFetching && bootstrapState === 'never_created' && !deletePhase && scopedConversations?.length === 0, retry: false });
   useEffect(() => {
     if (!management || !conversations.isSuccess || conversations.isFetching || managementRestored.current) return;
     const restored = scopedConversations?.find(item => item.conversationId === conversationId) ?? scopedConversations?.[0];
     if (restored) { managementRestored.current = true; selectConversation(restored.conversationId); }
   }, [management, conversations.isSuccess, conversations.isFetching, scopedConversations, conversationId]);
   useEffect(() => {
-    if (!managementOpening.data || managementRestored.current || !management) return;
+    if (!managementOpening.data || managementRestored.current || !management || deletePhase || bootstrapState !== 'never_created') return;
     managementRestored.current = true;
     const saved = managementOpening.data;
     queryClient.setQueryData(['me', accountId, 'tavern', 'conversation', saved.conversation.conversationId], saved);
     onCreated(saved.conversation); void characters.refetch();
-  }, [managementOpening.data]);
+  }, [managementOpening.data, bootstrapState, deletePhase]);
   useEffect(() => {
-    if (!treeContext && conversationId && conversations.isSuccess && !conversations.isFetching && !conversationInScene) selectConversation(null);
+    if (conversationId && conversations.isSuccess && !conversations.isFetching && !conversationInScene) {
+      selectConversation(scopedConversations?.[0]?.conversationId ?? null);
+    }
   }, [conversationId, conversations.isSuccess, conversations.isFetching, conversationInScene]);
   const credit = useQuery({ queryKey: creditKey, queryFn: readCreditSummary, staleTime: 30_000, retry: false });
   const platformCatalog = useQuery({ queryKey: ['me', accountId, 'tavern', 'platform-models'],
@@ -163,30 +195,78 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   const rememberedTreeStory = scopedConversations?.find(item => item.conversationId === rememberedTreeConversation
     && item.learningAreaId === treeContext?.libraryEntryId);
   const treeStory = useQuery({ queryKey: ['me', accountId, 'tavern', 'tree-conversation', treeContext?.libraryEntryId],
-    queryFn: ({ signal }) => openTreeConversation(treeContext!.libraryEntryId, session.csrfToken, signal),
-    enabled: !!treeContext && treeContext.available !== false && conversations.isSuccess && !conversations.isFetching && !rememberedTreeStory, retry: false });
+    queryFn: ({ signal }) => openDefaultConversation(() => openTreeConversation(treeContext!.libraryEntryId, session.csrfToken, signal)),
+    enabled: !!treeContext && treeContext.available !== false && conversations.isSuccess && !conversations.isFetching && !deletePhase && bootstrapState === 'never_created' && !rememberedTreeStory, retry: false });
   useEffect(() => {
     if (!treeContext || !conversations.isSuccess || conversations.isFetching || treeSelectionRestored.current) return;
     treeSelectionRestored.current = true;
-    const restored = rememberedTreeStory ?? (treeContext.available === false ? scopedConversations?.[0] : undefined);
+    const restored = rememberedTreeStory ?? scopedConversations?.[0];
     if (restored) { treeOpeningApplied.current = true; selectConversation(restored.conversationId); }
   }, [conversations.isSuccess, conversations.isFetching, rememberedTreeStory]);
   useEffect(() => {
-    if (!treeStory.data || !treeContext || rememberedTreeStory || conversations.isFetching || treeStory.isFetching || treeOpeningApplied.current) return;
+    if (!treeStory.data || !treeContext || rememberedTreeStory || conversations.isFetching || treeStory.isFetching || treeOpeningApplied.current || deletePhase || bootstrapState !== 'never_created') return;
     treeOpeningApplied.current = true;
     queryClient.setQueryData<ConversationDetail>(['me', accountId, 'tavern', 'conversation', treeStory.data.conversation.conversationId], previous =>
       previous && previous.graph.revision >= treeStory.data.graph.revision ? previous : treeStory.data);
     onCreated(treeStory.data.conversation);
     void characters.refetch();
-  }, [treeStory.data, treeStory.isFetching, conversations.isFetching, rememberedTreeStory]);
+  }, [treeStory.data, treeStory.isFetching, conversations.isFetching, rememberedTreeStory, bootstrapState, deletePhase]);
   const selectedCharacter = conversationId ? currentDetail?.character : characters.data?.find(item => item.characterId === characterId) ?? characters.data?.[0];
-  const treeReady = !treeContext || (treeContext.available !== false && currentDetail?.conversation.learningAreaId === treeContext.libraryEntryId);
-  const canCreate = treeReady && selectedCharacter && characters.data?.some(item => item.characterId === selectedCharacter.characterId);
+  const treeReady = !treeContext || (treeContext.available !== false && (!conversationId || currentDetail?.conversation.learningAreaId === treeContext.libraryEntryId));
+  const canCreate = !deletePhase && treeReady && (selectedCharacter
+    ? characters.data?.some(item => item.characterId === selectedCharacter.characterId) : !!(treeContext || management));
   const removing = useMutation({ mutationFn: (id: string) => deleteCharacter(id, session.csrfToken), onSuccess: (_, id) => {
     void queryClient.cancelQueries({ queryKey: charactersKey, exact: true });
     queryClient.setQueryData<Character[]>(charactersKey, previous => previous?.filter(item => item.characterId !== id));
     setDeleting(null); if (!conversationId && characterId === id) setCharacterId(null);
   } });
+
+  async function confirmConversationDeletion() {
+    if (!conversationToDelete || deletionLock.current || creatingConversation || parametersBusy ||
+      (conversationToDelete.conversationId === conversationId && generationBusy)) return;
+    const target = conversationToDelete;
+    const canvasPersistence = findTeachingCanvasPersistence(queryClient, accountId, target.conversationId);
+    const legacyRun = conversationRun(queryClient, { accountId, scene: target.scene ?? (target.libraryEntryId ? 'learning' : 'tavern'),
+      areaId: target.learningAreaId ?? null, conversationId: target.conversationId }, () => null);
+    const legacyState = legacyRun.getSnapshot();
+    const nativeRun = agentConversationRun(queryClient, accountId, target.conversationId);
+    const nativeState = nativeRun.getSnapshot().state;
+    if (legacyState.busy || legacyState.pendingGeneration || nativeRun.getSnapshot().busy || (nativeState && !['succeeded', 'stopped', 'failed'].includes(nativeState))) {
+      setDeleteError(new PublicUiError('会话仍在生成或等待处理，请完成后再删除。')); return;
+    }
+    deletionLock.current = true; setDeleteError(null); setDeletePhase('saving');
+    try {
+      try { await canvasPersistence?.prepareDeletion(); }
+      catch { throw new PublicUiError('画布尚未保存成功。请重试保存后删除，或取消删除。'); }
+      setDeletePhase('deleting');
+      await deleteConversation(target.conversationId, session.csrfToken);
+      canvasPersistence?.markDeleted(); nativeRun.markDeleted(); legacyRun.cancel();
+      legacyRun.set({ pendingGeneration: null, draft: '', process: [], error: null, canvasPreview: null });
+      deletedConversationIds.current.add(target.conversationId);
+      await queryClient.cancelQueries({ queryKey: conversationsKey, exact: true });
+      const remaining = historyConversations(queryClient.getQueryData<HistoryCache>(conversationsKey))
+        .filter(item => item.conversationId !== target.conversationId);
+      queryClient.setQueryData<ConversationHistory>(conversationsKey, { conversations: remaining, bootstrapState: remaining.length ? 'has_active' : 'cleared' });
+      const defaults = [
+        ['me', accountId, 'management', 'default-conversation'],
+        ['me', accountId, 'tavern', 'tree-conversation', treeContext?.libraryEntryId],
+      ];
+      for (const key of defaults) { await queryClient.cancelQueries({ queryKey: key, exact: true }); queryClient.removeQueries({ queryKey: key, exact: true }); }
+      const removedDetailKey = ['me', accountId, 'tavern', 'conversation', target.conversationId];
+      await queryClient.cancelQueries({ queryKey: removedDetailKey, exact: true });
+      queryClient.removeQueries({ queryKey: removedDetailKey, exact: true });
+      managementRestored.current = true; treeOpeningApplied.current = true; treeSelectionRestored.current = true;
+      try {
+        const matchingKeys = Object.keys(localStorage).filter(key => key.startsWith(`mapflow.tavern.selection.v1.${accountId}`) && localStorage.getItem(key) === target.conversationId);
+        matchingKeys.forEach(key => localStorage.removeItem(key));
+        localStorage.removeItem(`mapflow.tavern.pending.v1.${accountId}.${target.conversationId}`);
+      } catch { /* Server deletion is authoritative without browser preferences. */ }
+      if (target.conversationId === conversationId) selectConversation(remaining.find(belongsToCurrentScene)?.conversationId ?? null);
+      setConversationToDelete(null);
+      void queryClient.invalidateQueries({ queryKey: conversationsKey, exact: true });
+    } catch (failure) { canvasPersistence?.cancelDeletion(); setDeleteError(failure); }
+    finally { deletionLock.current = false; setDeletePhase(null); }
+  }
 
   function selectConversation(id: string | null) {
     setParametersOpen(false);
@@ -198,12 +278,12 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     } catch { /* Server history remains available without local storage. */ }
   }
   async function createNewConversation() {
-    if (openingLock.current || !canCreate || !selectedCharacter || generationBusy || (conversationId && !currentDetail)) return;
+    if (openingLock.current || deletionLock.current || !canCreate || generationBusy || (conversationId && !currentDetail)) return;
     openingLock.current = true; setCreatingConversation(true); setOpenError(null);
     const previous = currentDetail?.conversation;
     try {
       const input = {
-        characterId: selectedCharacter.characterId, userName: previous?.userName ?? session.account.username,
+        ...(selectedCharacter ? { characterId: selectedCharacter.characterId } : {}), userName: previous?.userName ?? session.account.username,
         ...(previous?.persona ? { persona: previous.persona } : {}),
         ...(previous?.vocabulary ? { vocabulary: previous.vocabulary } : {}), greetingIndex: 0,
       };
@@ -223,8 +303,16 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         const created = await openManagementConversation({ ...request, newConversation: true }, session.csrfToken);
         queryClient.setQueryData(['me', accountId, 'tavern', 'conversation', created.conversation.conversationId], created);
         pendingCreation.current = null; persistPendingCreation(pendingCreationKey, null); onCreated(created.conversation);
-      } else onCreated(await createConversation(input, session.csrfToken));
-    } catch (failure) { setOpenError(failure); }
+      } else if (selectedCharacter) onCreated(await createConversation({ ...input, characterId: selectedCharacter.characterId }, session.csrfToken));
+    } catch (failure) {
+      if (failure instanceof TavernApiError && failure.code === 'tavern.creation_target_deleted') {
+        const failedRequestId = pendingCreation.current?.clientRequestId;
+        if (failedRequestId && readPendingCreation(pendingCreationKey)?.clientRequestId === failedRequestId) persistPendingCreation(pendingCreationKey, null);
+        pendingCreation.current = null;
+        void conversations.refetch();
+      }
+      setOpenError(failure);
+    }
     finally { openingLock.current = false; setCreatingConversation(false); }
   }
   async function openCharacter(character: Character) {
@@ -279,8 +367,10 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     setImportOpen(false); setCreateOpen(false); setImportedRole(imported); roleNotices.added(imported.characterId);
   }
   function onCreated(created: Conversation) {
+    if (deletedConversationIds.current.has(created.conversationId)) return;
     void queryClient.cancelQueries({ queryKey: conversationsKey, exact: true });
-    queryClient.setQueryData<Conversation[]>(conversationsKey, previous => [created, ...(previous ?? []).filter(item => item.conversationId !== created.conversationId)]);
+    queryClient.setQueryData<HistoryCache>(conversationsKey, previous => ({ bootstrapState: 'has_active',
+      conversations: [created, ...historyConversations(previous).filter(item => item.conversationId !== created.conversationId)] }));
     selectConversation(created.conversationId);
     try { window.localStorage.setItem(`${selectionKey}.${created.characterId}`, created.conversationId); } catch { /* Optional preference. */ }
   }
@@ -289,18 +379,19 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     queryClient.setQueryData<ConversationDetail>(detailKey, previous => previous ? {
       ...previous, conversation: { ...previous.conversation, ...state },
     } : previous);
-    queryClient.setQueryData<Conversation[]>(conversationsKey, previous => previous?.map(item =>
-      item.conversationId === conversationId ? { ...item, ...state } : item));
+    queryClient.setQueryData<HistoryCache>(conversationsKey, previous => updateHistory(previous, items => items.map(item =>
+      item.conversationId === conversationId ? { ...item, ...state } : item)));
   }
   function onGraphChanged(graph: ConversationGraph) {
     void queryClient.cancelQueries({ queryKey: detailKey, exact: true });
     queryClient.setQueryData<ConversationDetail>(detailKey, previous => previous ? { ...previous, graph } : previous);
   }
   function onProfileUpdated(updated: ConversationDetail) {
+    if (deletedConversationIds.current.has(updated.conversation.conversationId)) return;
     void queryClient.cancelQueries({ queryKey: detailKey, exact: true });
     void queryClient.cancelQueries({ queryKey: conversationsKey, exact: true });
     queryClient.setQueryData(detailKey, updated);
-    queryClient.setQueryData<Conversation[]>(conversationsKey, previous => previous?.map(item => item.conversationId === updated.conversation.conversationId ? updated.conversation : item));
+    queryClient.setQueryData<HistoryCache>(conversationsKey, previous => updateHistory(previous, items => items.map(item => item.conversationId === updated.conversation.conversationId ? updated.conversation : item)));
   }
   function onRecovered(saved: ConversationDetail) {
     onProfileUpdated(saved); refreshLearningRecords();
@@ -347,12 +438,18 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         <option value="all">全部角色</option>{historyRoles.map(id => <option key={id} value={id}>{characters.data?.find(item => item.characterId === id)?.card.name ?? '已隐藏角色'}</option>)}
       </select>
     </div>
-    <div className="space-y-1">{characterConversations.filter(item=>(historyRole==='all'||item.characterId===historyRole) && (!mobileChrome || item.title.toLocaleLowerCase().includes(historySearch.trim().toLocaleLowerCase()))).map(item=><button type="button" key={item.conversationId}
+    <div className="space-y-1">{characterConversations.filter(item=>(historyRole==='all'||item.characterId===historyRole) && (!mobileChrome || item.title.toLocaleLowerCase().includes(historySearch.trim().toLocaleLowerCase()))).map(item=><div key={item.conversationId} className="group flex items-center rounded-xl pr-1 hover:bg-slate-800/60 focus-within:bg-slate-800/60">
+      <button type="button"
       aria-label={`打开会话 ${item.title}`} aria-current={item.conversationId===conversationId?'page':undefined}
-      className={`w-full rounded-xl px-3 py-2.5 text-left text-sm transition ${item.conversationId===conversationId?'bg-cyan-400/15 text-cyan-200':'text-slate-300 hover:bg-slate-800'}`}
-      disabled={creatingConversation||!!pendingCreation.current} onClick={()=>{mobileChrome?.closeDrawer();selectConversation(item.conversationId);setDrawer(null);}}>
+      className={`min-w-0 flex-1 rounded-xl px-3 py-2.5 text-left text-sm transition ${item.conversationId===conversationId?'bg-cyan-400/15 text-cyan-200':'text-slate-300 hover:bg-slate-800'}`}
+      disabled={creatingConversation||!!pendingCreation.current||!!deletePhase} onClick={()=>{mobileChrome?.closeDrawer();selectConversation(item.conversationId);setDrawer(null);}}>
       <span className="block truncate">{item.title}</span><span className="mt-1 block truncate text-xs text-slate-500">{characters.data?.find(role=>role.characterId===item.characterId)?.card.name??'已隐藏角色'}</span>
-    </button>)}</div>
+    </button><button type="button" aria-label={`删除会话 ${item.title}`} title="删除会话"
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 opacity-0 transition hover:bg-rose-400/10 hover:text-rose-300 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 max-lg:h-11 max-lg:w-11 max-lg:opacity-100"
+      disabled={!!deletePhase || creatingConversation || (item.conversationId === conversationId && (generationBusy || parametersBusy))}
+      onClick={() => { mobileChrome?.closeDrawer(); setDrawer(null); setDeleteError(null); setConversationToDelete(item); }}>
+      <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7M14 10v7" /></svg>
+    </button></div>)}</div>
     {conversations.isSuccess&&scopedConversations?.length===0&&<p className="text-xs leading-6 text-slate-500">当前还没有会话。选择角色后新建会话即可开始。</p>}
   </nav>;
   const summary = <div className="space-y-4">
@@ -378,12 +475,12 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     </> : <p className="text-sm text-slate-500">可选择历史会话，或导入角色开始新的故事。</p>}
   </div>;
   const configurationSections = [
-    { id: 'overview', label: '角色与会话', content: summary },
-    { id: 'model', label: '模型接入', content: <ModelAccessPanel modelSelection={modelSelection} onModelSelectionChange={changeModelSelection} csrfToken={session.csrfToken} accountId={accountId} onNavigateWallet={onNavigateWallet} nativeFunding={agentOptions?.funding} nativeControls={agentConfigurationControls} nativeModelId={agentOptions?.modelId} /> },
+    { id: 'overview', label: '角色与会话', compactLabel: '角色', content: summary },
+    { id: 'model', label: '模型接入', compactLabel: '模型', content: <ModelAccessPanel modelSelection={modelSelection} onModelSelectionChange={changeModelSelection} csrfToken={session.csrfToken} accountId={accountId} onNavigateWallet={onNavigateWallet} nativeFunding={agentOptions?.funding} nativeControls={agentConfigurationControls} nativeModelId={agentOptions?.modelId} /> },
     ...(currentDetail && conversationId ? [
-      ...(treeContext && treeContext.available !== false ? [{ id: 'tools', label: '技能树与工具', content: <TreeToolsPanel key={`${conversationId}.${currentDetail.graph.revision}`} detail={currentDetail} csrfToken={session.csrfToken}
+      ...(treeContext && treeContext.available !== false ? [{ id: 'tools', label: '技能树与工具', compactLabel: '工具', content: <TreeToolsPanel key={`${conversationId}.${currentDetail.graph.revision}`} detail={currentDetail} csrfToken={session.csrfToken}
         accountId={accountId} onUpdated={onProfileUpdated} onConflict={async () => { await conversationQuery.refetch(); }} /> }] : []),
-      ...(treeContext?.available !== false ? [{ id: 'profile', label: '会话设定', content: <ConversationProfilePanel detail={currentDetail} csrfToken={session.csrfToken}
+      ...(treeContext?.available !== false ? [{ id: 'profile', label: '会话设定', compactLabel: '会话', content: <ConversationProfilePanel detail={currentDetail} csrfToken={session.csrfToken}
         onUpdated={onProfileUpdated} onConflict={async () => { await conversationQuery.refetch(); }} /> }] : []),
     ] : []),
   ];
@@ -397,6 +494,29 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
   </>;
 
   return <div className={`flex ${treeContext || management || inApplicationShell ? 'h-full flex-1' : 'h-dvh'} min-h-0 flex-col overflow-hidden bg-slate-950 text-slate-100`}>
+    {desktopChrome && <>
+      <DesktopChromePortal slot="title"><div className="flex min-w-0 items-center gap-2">
+        <span className="desktop-chat-avatar"><CharacterAvatar character={selectedCharacter} /></span>
+        <h1 aria-label={management ? '全局助手' : treeContext ? '学习聊天' : '独立酒馆'} title={currentDetail?.conversation.title ?? selectedCharacter?.card.name}>
+          {selectedCharacter?.card.name ?? (management ? '全局助手' : treeContext ? '学习聊天' : '独立酒馆')}
+          {currentDetail?.conversation.title && currentDetail.conversation.title !== selectedCharacter?.card.name ? ` · ${currentDetail.conversation.title}` : ''}
+        </h1></div></DesktopChromePortal>
+      <DesktopChromePortal slot="history"><button type="button" className="desktop-chat-icon" aria-label="打开会话列表" title="会话列表"
+        aria-expanded={!mapVisible && historyOpen} onClick={() => { if (mapVisible) setDrawer('history'); else setHistoryOpen(open => !open); }}>
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg>
+      </button></DesktopChromePortal>
+      <DesktopChromePortal slot="new"><button type="button" className="desktop-chat-icon" aria-label={pendingCreation.current ? '重试新建会话' : '新建会话'} title="新建会话"
+        disabled={!canCreate || creatingConversation || generationBusy || openingCharacter !== null || !conversations.isSuccess || (!!conversationId && !currentDetail)}
+        onClick={() => void createNewConversation()}><MobileActionIcon name="new" /></button></DesktopChromePortal>
+      <DesktopChromePortal slot="configuration"><button type="button" className="desktop-chat-icon" aria-label="配置" title="配置"
+        onClick={() => { setConfigurationSection('overview'); setConfigurationOpen(true); }}><MobileActionIcon name="configuration" /></button></DesktopChromePortal>
+      {!currentDetail && <DesktopChromePortal slot="canvas"><button type="button" className="desktop-chat-icon" aria-label="展开画布" title="展开画布" disabled><MobileActionIcon name="canvas" /></button></DesktopChromePortal>}
+      {onShowMap && <DesktopChromePortal slot="map"><button type="button" className={`${buttonClass} !py-1.5 !text-xs`} onClick={onShowMap}>{mapVisible ? '返回聊天' : '查看地图'}</button></DesktopChromePortal>}
+      <DesktopChromePortal slot="more">
+        <button type="button" className={headerMenuItem} aria-label="打开角色列表" onClick={() => { roleNotices.clear(); setDrawer('library'); }}>角色库{roleNotices.count > 0 ? ` · 新增 ${roleNotices.count}` : ''}</button>
+        <button type="button" className={headerMenuItem} aria-label="在对话顶部导入角色卡" onClick={() => { setDrawer(null); setImportOpen(true); }}>导入角色卡</button>
+      </DesktopChromePortal>
+    </>}
     {mobileChrome && <>
       <MobileChromePortal slot="title"><h1 className="truncate" title={currentDetail?.conversation.title ?? selectedCharacter?.card.name}>
         {currentDetail?.conversation.title ?? selectedCharacter?.card.name ?? (management ? '全局助手' : treeContext ? '学习聊天' : '独立酒馆')}
@@ -413,7 +533,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
       </details></MobileChromePortal>
       <MobileChromePortal slot="history"><section aria-label="当前场景会话列表" className="space-y-3 border-t border-slate-800 pt-4">
         <h2 className="text-sm font-semibold">{treeContext ? '学习区会话' : management ? '助手会话' : '酒馆会话'}</h2>
-        <p className="break-words text-xs text-slate-400">{currentDetail?.conversation.title ?? selectedCharacter?.card.name}</p>
+        <p className="truncate text-xs text-slate-400" title={currentDetail?.conversation.title ?? selectedCharacter?.card.name}>{currentDetail?.conversation.title ?? selectedCharacter?.card.name}</p>
         {history}
         <div className="flex flex-wrap gap-2">
           <button className={buttonClass} onClick={() => { mobileChrome.closeDrawer(); setConfigurationSection('model'); setConfigurationOpen(true); }}>模型接入</button>
@@ -421,7 +541,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         </div>
       </section></MobileChromePortal>
     </>}
-    {inApplicationShell && !mobileChrome && !treeContext && !management && <h1 className="sr-only">独立酒馆</h1>}
+    {inApplicationShell && !mobileChrome && !desktopChrome && !treeContext && !management && <h1 className="sr-only">独立酒馆</h1>}
     {!inApplicationShell && !treeContext && !management && !isMobile && <header className="relative z-30 flex shrink-0 items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-3 py-3 sm:px-5">
       <div className="flex min-w-0 items-center gap-2 sm:gap-3"><button type="button" className={buttonClass} aria-label="返回学习控制台" onClick={onNavigateConsole}>← <span className="hidden sm:inline">学习控制台</span></button>
         <div><h1 className="text-lg font-bold">独立酒馆</h1><p className="hidden text-xs text-slate-500 sm:block">一个角色，一段属于你的故事</p></div></div>
@@ -435,7 +555,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         <aside aria-label="当前场景会话列表" className="shrink-0 overflow-y-auto border-r border-slate-800 p-3" style={{width:'var(--panel-width, 240px)'}}>
           <div className="mb-4 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">{treeContext?'学习区会话':management?'管理会话':'酒馆会话'}</h2>
             <button className="text-xs text-slate-400 hover:text-cyan-200" aria-label="收起会话列表" onClick={()=>setHistoryOpen(false)}>收起</button></div>
-          {canCreate&&<button type="button" className={`${primaryClass} mb-4 w-full`} disabled={creatingConversation||generationBusy||openingCharacter!==null||!conversations.isSuccess||(!!conversationId&&!currentDetail)}
+          {canCreate&&!desktopChrome&&<button type="button" className={`${primaryClass} mb-4 w-full`} disabled={creatingConversation||generationBusy||openingCharacter!==null||!conversations.isSuccess||(!!conversationId&&!currentDetail)}
             onClick={()=>void createNewConversation()}>{creatingConversation?'创建中…':pendingCreation.current?'重试新建会话':'新建会话'}</button>}
           {history}
           {!treeContext&&!management&&<section aria-label="角色库" className="mt-5 border-t border-slate-800 pt-4">{library}</section>}
@@ -443,7 +563,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         <PanelResizeHandle label="调整会话列表与聊天宽度" storageKey={`mapflow.chat.history-width.v1.${accountId}`} minWidth={180} remainingWidth={360}/>
       </>}
       <section aria-label="角色对话" className="flex min-w-0 flex-1 flex-col">
-        {!mobileChrome && <div className={isMobile
+        {!mobileChrome && !desktopChrome && <div className={isMobile
           ? 'flex shrink-0 flex-nowrap items-center gap-2 border-b border-slate-800 px-3 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]'
           : 'flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-2 sm:px-5'}>
           {(treeContext || management) && onClose && <button type="button" className={buttonClass} aria-label="返回学习区列表" onClick={onClose}>←</button>}
@@ -467,13 +587,13 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
             </>}
           </HeaderMoreMenu>}
         </div>}
-        {!mobileChrome && !treeContext && !management && <p className="shrink-0 border-b border-slate-800 px-4 py-2 text-xs leading-5 text-slate-400">
+        {!mobileChrome && !desktopChrome && !treeContext && !management && <p className="shrink-0 border-b border-slate-800 px-4 py-2 text-xs leading-5 text-slate-400">
           这里适合角色聊天和剧情互动，不关联学习地图，也不记录学习进度。想系统学习，请前往
           <button type="button" className="ml-1 text-cyan-200 underline underline-offset-4" aria-label="前往学习聊天" onClick={onNavigateConsole}>学习聊天</button>。
         </p>}
         {treeContext && currentDetail?.conversation.libraryEntryId === treeContext.libraryEntryId && <span className="sr-only">已关联：{treeContext.title}</span>}
-        {treeStory.error && <ErrorNotice error={treeStory.error} onRetry={() => void treeStory.refetch()} />}
-        {managementOpening.error && <ErrorNotice error={managementOpening.error} onRetry={() => void managementOpening.refetch()} />}
+        {treeStory.error && !historyWasCleared(treeStory.error) && <ErrorNotice error={treeStory.error} onRetry={() => void treeStory.refetch()} />}
+        {managementOpening.error && !historyWasCleared(managementOpening.error) && <ErrorNotice error={managementOpening.error} onRetry={() => void managementOpening.refetch()} />}
         {importedRole && <div role="status" className="flex items-center gap-3 border-b border-slate-800 px-4 py-2 text-sm text-cyan-200">
           <span>角色卡「{importedRole.card.name}」已加入角色库</span><button type="button" className={buttonClass} aria-label={`使用${importedRole.card.name}`}
             disabled={generationBusy || !treeReady || !!pendingCreation.current} onClick={() => { void openCharacter(importedRole); setImportedRole(null); }}>使用</button>
@@ -482,7 +602,7 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
         {openError != null && <div className="p-4"><ErrorNotice error={openError} /></div>}
         {conversations.error && <div className="p-4"><ErrorNotice error={conversations.error} onRetry={() => void conversations.refetch()} /></div>}
         {!agentOptions && management && conversationId && currentDetail && generationCapabilities && <ManagementMapGeneration
-          key={`${accountId}.${conversationId}`} accountId={accountId} conversationId={conversationId} csrfToken={session.csrfToken}
+          key={`generation.${accountId}.${conversationId}`} accountId={accountId} conversationId={conversationId} csrfToken={session.csrfToken}
           capabilities={generationCapabilities} credit={credit.data ?? null} onComplete={libraryEntryId => {
             void queryClient.invalidateQueries({ queryKey: ['me', accountId, 'tree-library'] });
             if (onMapGenerated) onMapGenerated(libraryEntryId); else onNavigateConsole();
@@ -501,8 +621,10 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
           onNavigateWallet={onNavigateWallet} onCloseConfiguration={() => setConfigurationOpen(false)} configuration={configurationSections} />
           : <div className="p-6">{conversationQuery.isPending ? <p role="status" className="text-sm text-slate-400">正在恢复会话与历史…</p> : <ErrorNotice error={conversationQuery.error} onRetry={() => void conversationQuery.refetch()} />}</div>
           : <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-y-auto p-8 text-center">
-            <CharacterAvatar character={selectedCharacter} large /><h2 className="text-xl font-bold">{selectedCharacter ? `与${selectedCharacter.card.name}相遇` : '你的故事，从这里开始'}</h2>
+            <CharacterAvatar character={selectedCharacter} large /><h2 className="text-xl font-bold">{bootstrapState === 'cleared' ? '暂无会话' : selectedCharacter ? `与${selectedCharacter.card.name}相遇` : '你的故事，从这里开始'}</h2>
             <p className="max-w-sm text-sm leading-7 text-slate-400">{selectedCharacter ? '选择角色后点击新建会话，即可开始故事。你的聊天记录会自动保存。' : '打开角色库，导入你喜欢的角色卡。会话和聊天历史保存在当前账号。'}</p>
+            {bootstrapState === 'cleared' && canCreate && <button type="button" className={primaryClass} disabled={creatingConversation}
+              onClick={() => void createNewConversation()}>{creatingConversation ? '创建中…' : pendingCreation.current ? '重试新建会话' : '新建会话'}</button>}
           </div>}
       </section>
     </main>
@@ -521,6 +643,14 @@ function AuthenticatedTavernPage({ session, onNavigateConsole, onNavigateWallet,
     {editing && <EditCharacterDialog character={editing.character} renameOnly={editing.renameOnly} csrfToken={session.csrfToken}
       conversation={editing.conversation} onSaved={onCharacterSaved} onClose={() => setEditing(null)}
       onConflict={async () => { await Promise.all([characters.refetch(), conversationId ? conversationQuery.refetch() : Promise.resolve()]); }} />}
+    {conversationToDelete && <TavernDialog title="删除会话" onClose={() => setConversationToDelete(null)} busy={!!deletePhase}>
+      <p className="text-sm leading-7 text-slate-300">确定删除“<strong className="break-words text-slate-100">{conversationToDelete.title}</strong>”吗？删除后无法从历史中恢复，地图和学习进度保留。</p>
+      <ErrorNotice error={deleteError} />
+      {deletePhase && <p role="status" className="mt-3 text-sm text-slate-400">{deletePhase === 'saving' ? '正在保存画布，请稍候…' : '正在删除会话…'}</p>}
+      <div className="mt-5 flex justify-end gap-3"><button type="button" className={buttonClass} disabled={!!deletePhase} onClick={() => setConversationToDelete(null)}>取消</button>
+        <button type="button" className={`${buttonClass} border-rose-400/40 text-rose-300 hover:border-rose-300`} disabled={!!deletePhase} onClick={() => void confirmConversationDeletion()}>
+          {deletePhase ? '处理中…' : deleteError instanceof PublicUiError && deleteError.message.includes('画布') ? '重试保存并删除' : '确认删除'}</button></div>
+    </TavernDialog>}
     {deleting && <TavernDialog title="删除角色卡" onClose={() => setDeleting(null)} busy={removing.isPending}>
       <p className="text-sm leading-6 text-slate-300">从角色库删除「{deleting.card.name}」？已有会话和聊天记录会保留。</p>
       <ErrorNotice error={removing.error} />

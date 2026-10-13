@@ -1,0 +1,27 @@
+.desktop-chat-toolbar { display:flex; align-items:center; flex:0 0 56px; min-width:0; height:56px; padding:0 12px; gap:6px; position:relative; z-index:30; }
+.desktop-chat-toolbar[hidden] { display:none; }
+.desktop-chat-toolbar > div:empty { display:none; }
+.desktop-chat-action,.desktop-chat-slot { flex-shrink:0; display:flex; align-items:center; min-width:0; }
+.desktop-chat-title { flex:1; min-width:64px; overflow:hidden; }
+.desktop-chat-title h1 { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:14px; font-weight:600; }
+.desktop-chat-icon { display:flex; width:40px; height:40px; flex-shrink:0; align-items:center; justify-content:center; border:1px solid transparent; border-radius:10px; color:#94a3b8; }
+.desktop-chat-icon:hover { background:#0f172a; color:#a5f3fc; border-color:#334155; }
+.desktop-chat-icon:focus-visible { outline:2px solid #67e8f9; outline-offset:2px; }
+.desktop-chat-icon:disabled { cursor:not-allowed; opacity:.35; }
+.desktop-chat-slot select,.desktop-chat-slot input { height:34px; border-radius:9px; padding:4px 8px; font-size:12px; }
+.desktop-chat-slot select { max-width:200px; }
+.desktop-chat-slot > nav { padding:0; border:0; flex-wrap:nowrap; background:transparent; gap:6px; }
+.desktop-chat-slot > nav > button { width:34px; height:34px; padding:0; }
+.desktop-chat-slot > nav label { flex:none; }
+.desktop-chat-slot > nav label > span { display:none; }
+.desktop-chat-toolbar[data-compact='true'] .desktop-chat-avatar { display:none; }
+.desktop-chat-menu-section { border-top:1px solid #1e293b; margin-top:8px; padding:12px 8px 4px; }
+.desktop-chat-menu-section:has(> div:empty) { display:none; }
+.desktop-chat-menu-section > p { margin-bottom:10px; font-size:11px; color:#64748b; }
+.desktop-chat-menu-section > div > label { display:flex; justify-content:space-between; gap:8px; margin-bottom:10px; }
+.desktop-chat-menu-section select { min-width:0; max-width:180px; }
+.desktop-chat-menu-section nav { flex-direction:column; align-items:stretch; border:0; padding:0; background:transparent; }
+.desktop-chat-menu-section nav label { flex-direction:column; align-items:stretch; }
+.desktop-chat-menu-section nav label > span { display:none; }
+.desktop-chat-menu-section nav > button { font-size:12px; }
+.application-shell[data-mobile='false'] .canvas-close-button { display:none; }

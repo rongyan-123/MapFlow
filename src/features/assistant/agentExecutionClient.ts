@@ -35,7 +35,7 @@ const uuid=(value:unknown):value is string=>text(value)&&/^[0-9a-f]{8}-[0-9a-f]{
 const exact=(value:Record<string,unknown>,fields:string[])=>Object.keys(value).every(field=>fields.includes(field));
 function invalid():never {throw new Error('执行响应无效，请重新读取。');}
 function pathId(identity:string){if(!uuid(identity))invalid();return encodeURIComponent(identity);}
-function errorMessage(code:string){return code==='server_network_unavailable'?'服务器网络异常，请稍后重试。':code==='cash_non_positive'?'现金额度不足，请充值后继续。':
+function errorMessage(code:string){return code==='execution_not_found'||code==='agent.execution_not_found'?'这段会话已删除或无法访问，请重新选择。':code==='server_network_unavailable'?'服务器网络异常，请稍后重试。':code==='cash_non_positive'?'现金额度不足，请充值后继续。':
   code==='credential_required'?'请打开配置并填写 API Key。':code==='awaiting_reconciliation'?'本次请求正在核对，请稍后查看。':'请求暂时失败，请稍后重试。';}
 const headers=(csrf:string)=>({Accept:'application/json','Content-Type':'application/json','X-CSRF-Token':csrf});
 async function request(path:string,options:RequestInit={}):Promise<Response>{

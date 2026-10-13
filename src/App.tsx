@@ -20,6 +20,7 @@ import { createLearningArea } from './features/tavern/tavernClient';
 import { useIdentity } from './features/identity/IdentityContext';
 import LandingPage from './features/landing/LandingPage';
 import useIsMobile from './lib/useIsMobile';
+import { useDesktopChatChrome } from './features/navigation/DesktopChatChrome';
 import PublicMapGuide, {
   PUBLIC_GUIDE_STORAGE_KEY,
   type PublicGuideStep,
@@ -257,6 +258,7 @@ function ConsoleApp({ requestedView, requestedMapId, guideRequested, onGuideCons
   const [layoutMode, setLayoutMode] = useState<TreeLayoutMode>('relationship');
   const [mobileView, setMobileView] = useState<MobileView>('list');
   const isMobile = useIsMobile();
+  const desktopChrome = useDesktopChatChrome();
   const [chatOpen, setChatOpen] = useState(false);
   const [learningMapOpen, setLearningMapOpen] = useState(false);
   const [personalSidebarOpen, setPersonalSidebarOpen] = useState(() =>
@@ -1031,7 +1033,7 @@ function ConsoleApp({ requestedView, requestedMapId, guideRequested, onGuideCons
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-slate-950 text-slate-100">
-      {!mobileChatActive && <header className="relative z-30 flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-800 bg-slate-950/95 px-3 py-2 sm:gap-3 sm:px-5 max-lg:pt-[max(0.5rem,env(safe-area-inset-top))]">
+      {!mobileChatActive && !(view === 'learning' && desktopChrome?.active) && <header className="relative z-30 flex min-h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-800 bg-slate-950/95 px-3 py-2 sm:gap-3 sm:px-5 max-lg:pt-[max(0.5rem,env(safe-area-inset-top))]">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {mobileView !== 'list' && mobileView !== 'chat' && (
             <button

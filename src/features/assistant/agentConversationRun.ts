@@ -22,7 +22,7 @@ export class AgentConversationRun {
   private snapshot:AgentRunSnapshot={executionId:null,funding:null,state:null,pendingGeneration:null,draft:'',process:[],busy:false,stopped:false,stopRequested:false,error:null,completion:null,pendingApprovals:[],canvasPreview:null,completedAction:null};
   private listeners=new Set<()=>void>();private reader:AbortController|null=null;private presentation:StreamingPresentation|null=null;
   private restored:Promise<void>|null=null;private operation:SavedCommand|null=null;private sequence=0;private sending=false;
-  private epoch=0;private restorationFailed=false;
+  private epoch=0;private restorationFailed=false;private deleted=false;
   private pendingStopCsrf:string|null=null;private stopActionId:string|null=null;
   private stopTarget:string|null=null;private stopping=false;
   private readonly storageKey:string;
@@ -35,8 +35,17 @@ export class AgentConversationRun {
   };
   private set(patch:Partial<AgentRunSnapshot>){this.snapshot={...this.snapshot,...patch};this.listeners.forEach(listener=>listener());}
   private persist(){try{sessionStorage.setItem(this.storageKey,JSON.stringify({executionId:this.snapshot.executionId,command:this.operation,stopRequested:this.snapshot.stopRequested,stopTarget:this.stopTarget,stopActionId:this.stopActionId}));}catch{/* Recovery can still discover the account-owned active execution. */}}
+  markDeleted(){
+    this.deleted=true;this.epoch++;this.detach();this.operation=null;this.pendingStopCsrf=null;this.stopTarget=null;this.stopActionId=null;
+    this.restorationFailed=false;
+    this.set({executionId:null,state:null,pendingGeneration:null,draft:'',process:[],busy:false,stopped:false,stopRequested:false,
+      completion:null,completedAction:null,pendingApprovals:[],canvasPreview:null,error:new AgentApiError('execution_not_found',404)});
+    try{sessionStorage.removeItem(this.storageKey);}catch{/* Optional browser recovery record. */}
+  }
+  private fail(failure:unknown){if(failure instanceof AgentApiError&&failure.status===404){this.markDeleted();return;}this.set({error:safeFailure(failure)});}
   restore():Promise<void>{
-    return this.restored??=this.restoreSaved().catch(failure=>{this.restorationFailed=true;this.set({error:safeFailure(failure)});});
+    if(this.deleted)return Promise.resolve();
+    return this.restored??=this.restoreSaved().catch(failure=>{this.restorationFailed=true;this.fail(failure);});
   }
   private async restoreSaved(){
     let identity:string|null=null;
@@ -57,6 +66,7 @@ export class AgentConversationRun {
     }catch{/* Invalid browser state cannot dispatch a model call. */}
     const signal=new AbortController().signal;
     const status=identity?await fetchAgentExecution(identity,this.conversationId,signal):await fetchActiveAgentExecution(this.conversationId,signal);
+    if(this.deleted)return;
     this.restorationFailed=false;
     if(status)this.applyStatus(status);
     else if(this.operation)this.set({pendingGeneration:this.operation,error:new PublicUiError('请核对或重试这条消息，避免重复发送。')});
@@ -74,7 +84,7 @@ export class AgentConversationRun {
       error:status.error?new AgentApiError(status.error.code,400,status.error.requestId):null});this.persist();
   }
   async send(action:GenerationAction,expectedRevision:number,options:AgentSendOptions,csrf:string){
-    await this.restore();if(this.restorationFailed||this.sending||this.snapshot.pendingGeneration||this.snapshot.busy)return false;
+    await this.restore();if(this.deleted||this.restorationFailed||this.sending||this.snapshot.pendingGeneration||this.snapshot.busy)return false;
     if(action.type==='reply'&&(!action.message.trim()||action.message.includes('\0'))){this.set({error:new PublicUiError('请输入有效消息。')});return false;}
     const command:AgentExecutionCommand={...options,clientActionId:crypto.randomUUID(),expectedRevision,action};
     const {modelAccess,...saved}=command;
@@ -87,9 +97,10 @@ export class AgentConversationRun {
     this.sending=true;const epoch=this.epoch;
     try{const accepted=await acceptAgentExecution(this.conversationId,command,csrf);if(epoch!==this.epoch)return;this.applyStatus(accepted.execution);
       if(this.pendingStopCsrf||this.snapshot.stopRequested)await this.stop(this.pendingStopCsrf??csrf);else this.watch();}
-    catch(failure){if(epoch===this.epoch)this.set({busy:false,error:safeFailure(failure)});}finally{if(epoch===this.epoch)this.sending=false;}
+    catch(failure){if(epoch===this.epoch){this.set({busy:false});this.fail(failure);}}finally{if(epoch===this.epoch)this.sending=false;}
   }
   async retry(csrf:string,apiKey?:string){
+    if(this.deleted)return;
     if(this.restorationFailed){this.restored=null;await this.restore();if(this.restorationFailed)return;}
     await this.restore();if(this.sending)return;
     if(this.snapshot.executionId){
@@ -98,7 +109,7 @@ export class AgentConversationRun {
       try{const status=this.snapshot.state==='awaiting_reconciliation'&&this.snapshot.funding==='byok'
           ?await resumeAgentExecution(this.snapshot.executionId,this.conversationId,csrf,apiKey)
           :await fetchAgentExecution(this.snapshot.executionId,this.conversationId);
-        if(epoch!==this.epoch||execution!==this.snapshot.executionId)return;this.applyStatus(status);this.watch();}catch(failure){if(epoch===this.epoch&&execution===this.snapshot.executionId)this.set({error:safeFailure(failure)});}return;
+        if(epoch!==this.epoch||execution!==this.snapshot.executionId)return;this.applyStatus(status);this.watch();}catch(failure){if(epoch===this.epoch&&execution===this.snapshot.executionId)this.fail(failure);}return;
     }
     if(!this.operation)return;
     if(this.operation.funding==='byok'&&(!apiKey||!this.operation.modelAccess)){this.set({error:new AgentApiError('credential_required',400)});return;}
@@ -111,7 +122,7 @@ export class AgentConversationRun {
     this.stopActionId??=crypto.randomUUID();const execution=this.snapshot.executionId,epoch=this.epoch;
     this.stopping=true;this.stopTarget=execution;this.set({stopRequested:true});this.persist();
     try{const status=await stopAgentExecution(execution,this.conversationId,this.stopActionId,csrf);if(epoch!==this.epoch||execution!==this.snapshot.executionId)return;this.applyStatus(status);this.pendingStopCsrf=null;this.detach();this.watch();}
-    catch(failure){if(epoch===this.epoch&&execution===this.snapshot.executionId)this.set({error:safeFailure(failure)});}
+    catch(failure){if(epoch===this.epoch&&execution===this.snapshot.executionId)this.fail(failure);}
     finally{if(epoch===this.epoch)this.stopping=false;}
   }
   async resumeRequestedStop(csrf:string){await this.restore();if(this.snapshot.stopRequested&&this.stopTarget===this.snapshot.executionId&&this.snapshot.executionId&&!terminal(this.snapshot.state!))await this.stop(csrf);}
@@ -120,13 +131,13 @@ export class AgentConversationRun {
     if(!execution||!this.snapshot.pendingApprovals.some(item=>item.approval.approvalRequestId===approval))return;
     try{await resolveAgentToolApproval(execution,approval,allowed,destructiveConfirmed,csrf);
       if(epoch===this.epoch&&execution===this.snapshot.executionId)this.set({pendingApprovals:this.snapshot.pendingApprovals.filter(item=>item.approval.approvalRequestId!==approval),error:null});
-    }catch(failure){if(epoch===this.epoch&&execution===this.snapshot.executionId)this.set({error:safeFailure(failure)});}
+    }catch(failure){if(epoch===this.epoch&&execution===this.snapshot.executionId)this.fail(failure);}
   }
   dismiss(){if(this.snapshot.busy||this.snapshot.state==='awaiting_reconciliation')return;
     this.epoch++;this.detach();this.operation=null;this.stopTarget=null;this.set({pendingGeneration:null,error:null,draft:'',process:[],state:null,executionId:null,stopped:false,stopRequested:false});this.persist();}
   private detach(){this.presentation?.flush();this.reader?.abort();this.reader=null;this.presentation?.dispose();this.presentation=null;}
   private watch(){
-    if(!this.listeners.size||this.reader||!this.snapshot.executionId||!this.snapshot.state)return;
+    if(this.deleted||!this.listeners.size||this.reader||!this.snapshot.executionId||!this.snapshot.state)return;
     if(terminal(this.snapshot.state)){
       if(this.pendingSettlement()){const reader=new AbortController();this.reader=reader;void this.readSettlement(reader,this.snapshot.executionId);}
       return;
@@ -146,7 +157,7 @@ export class AgentConversationRun {
   private async readSettlement(reader:AbortController,execution:string){
     try{while(this.currentReader(reader,execution)&&this.listeners.size&&this.pendingSettlement()){
       await this.pause(reader,30000);if(!this.currentReader(reader,execution))break;
-      try{const status=await fetchAgentExecution(execution,this.conversationId,reader.signal);if(this.currentReader(reader,execution))this.applyStatus(status);}catch{/* Saved results remain available while a read is unavailable. */}
+      try{const status=await fetchAgentExecution(execution,this.conversationId,reader.signal);if(this.currentReader(reader,execution))this.applyStatus(status);}catch(failure){if(failure instanceof AgentApiError&&failure.status===404)this.markDeleted();}
     }}finally{if(this.reader===reader)this.reader=null;}
   }
   private event(event:AgentEvent,presentation:StreamingPresentation){
@@ -171,7 +182,7 @@ export class AgentConversationRun {
         if(this.snapshot.completion){await presentation.drain();break;}
         if(terminal(page.state)){await presentation.drain();const status=await fetchAgentExecution(execution,this.conversationId,reader.signal);if(this.currentReader(reader,execution))this.applyStatus(status);break;}
         delay=250;
-      }catch(failure){if(!this.currentReader(reader,execution))break;this.set({error:safeFailure(failure)});delay=Math.min(delay*2,8000);}
+      }catch(failure){if(!this.currentReader(reader,execution))break;this.fail(failure);if(this.deleted)break;delay=Math.min(delay*2,8000);}
       await this.pause(reader,delay);
     }}finally{presentation.dispose();if(this.reader===reader){this.reader=null;this.presentation=null;this.watch();}}
   }

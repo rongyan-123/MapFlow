@@ -16,6 +16,33 @@ it('enters standalone tavern through shared native cash/points/user-key controls
   expect(tavernApi.generateStream).not.toHaveBeenCalled();
 });
 
+it('desktop assistant uses one toolbar for history, new, model, canvas and configuration', async () => {
+  window.innerWidth = 1440;
+  renderApp('/assistant');
+  await screen.findByRole('textbox', { name: '消息' });
+  const toolbar = screen.getByRole('toolbar', { name: '对话操作' });
+  expect(screen.getAllByRole('toolbar', { name: '对话操作' })).toHaveLength(1);
+  expect(within(toolbar).getByRole('button', { name: '打开会话列表' })).toBeInTheDocument();
+  expect(within(toolbar).getByRole('button', { name: '新建会话' })).toBeInTheDocument();
+  expect(within(toolbar).getByRole('button', { name: '配置' })).toBeInTheDocument();
+  expect(within(toolbar).getByRole('button', { name: /展开画布|绘图讲解/ })).toBeInTheDocument();
+  expect(screen.getByLabelText('资金通路').closest('[role="toolbar"]')).toBe(toolbar);
+});
+
+it('1024 px desktop folds model controls into more while preserving the input draft', async () => {
+  window.innerWidth = 1024;
+  renderApp('/assistant');
+  const user = userEvent.setup();
+  await user.type(await screen.findByRole('textbox', { name: '消息' }), '窗口变窄也保留');
+  const toolbar = screen.getByRole('toolbar', { name: '对话操作' });
+  expect(screen.queryByRole('combobox', { name: '资金通路' })).not.toBeInTheDocument();
+  await user.click(within(toolbar).getByRole('button', { name: '更多会话操作' }));
+  const menu = screen.getByRole('navigation', { name: '会话更多操作' });
+  expect(within(menu).getByRole('combobox', { name: '资金通路' })).toBeInTheDocument();
+  await user.keyboard('{Escape}');
+  expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('窗口变窄也保留');
+});
+
 const identityApi = vi.hoisted(() => ({
   fetchCapabilities: vi.fn(),
   fetchCurrentSession: vi.fn(),
@@ -45,7 +72,7 @@ const legacyApi = vi.hoisted(() => ({ fetchLearningTree: vi.fn() }));
 const walletApi = vi.hoisted(() => ({ readWallet: vi.fn(), readModelPricing: vi.fn(), readAdminTopups: vi.fn() }));
 vi.mock('./features/wallet/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('./features/wallet/walletClient')>(), ...walletApi }));
 
-const tavernApi = vi.hoisted(() => ({ fetchCharacters: vi.fn(), fetchConversations: vi.fn(), fetchLearningAreas: vi.fn(), createLearningArea: vi.fn(), fetchLearningAreaConversations: vi.fn(), openTreeConversation: vi.fn(), openManagementConversation:vi.fn(),fetchConversation: vi.fn(),
+const tavernApi = vi.hoisted(() => ({ fetchCharacters: vi.fn(), fetchConversations: vi.fn(), fetchConversationHistory: vi.fn(), deleteConversation: vi.fn(), fetchLearningAreas: vi.fn(), createLearningArea: vi.fn(), fetchLearningAreaConversations: vi.fn(), openTreeConversation: vi.fn(), openManagementConversation:vi.fn(),fetchConversation: vi.fn(),
   generateStream: vi.fn(),fetchPlatformModels: vi.fn(),requestCashQuote:vi.fn(),resolveTavernToolApproval:vi.fn() }));
 vi.mock('./features/tavern/tavernClient', () => tavernApi);
 
@@ -319,6 +346,10 @@ beforeEach(() => {
   tavernApi.fetchCharacters.mockReset().mockResolvedValue([]);
   tavernApi.fetchConversations.mockReset().mockResolvedValue([]);
   tavernApi.fetchLearningAreaConversations.mockReset().mockResolvedValue([]);
+  tavernApi.fetchConversationHistory.mockReset().mockImplementation(async (signal, scene, areaId) => {
+    const conversations = areaId ? await tavernApi.fetchLearningAreaConversations(areaId, signal) : await tavernApi.fetchConversations(signal, scene);
+    return { conversations, bootstrapState: conversations.length ? 'has_active' : 'never_created' };
+  });
   savedLearningChat = structuredClone(tavernDetail);
   tavernApi.fetchLearningAreas.mockReset().mockResolvedValue([]);
   tavernApi.createLearningArea.mockReset().mockImplementation(async (entry: string) => ({ areaId: entry, libraryEntryId: entry,

@@ -8,6 +8,7 @@ import LearningAreaSelector from './LearningAreaSelector';
 import useIsMobile from '../../lib/useIsMobile';
 import HeaderMoreMenu from '../navigation/HeaderMoreMenu';
 import {MobileChromePortal,useMobileChatChrome} from '../navigation/MobileChatChrome';
+import {DesktopChromePortal,useDesktopChatChrome} from '../navigation/DesktopChatChrome';
 const LearningMapPanel = lazy(() => import('./LearningMapPanel'));
 
 interface LearningChatWorkspaceProps {
@@ -24,6 +25,7 @@ export default function LearningChatWorkspace({ accountId, csrfToken, requestedA
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const mobileChrome = useMobileChatChrome();
+  const desktopChrome = useDesktopChatChrome();
   const storageKey = `mapflow.learning.area.v1.${accountId}`;
   const [areaId, setAreaId] = useState<string | null>(() => {
     if (requestedAreaId) return requestedAreaId;
@@ -81,7 +83,7 @@ export default function LearningChatWorkspace({ accountId, csrfToken, requestedA
     }} /></>;
 
   const areaNavigation = <nav aria-label="当前学习区" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950 px-3 py-2">
-      <button type="button" className={buttonClass} onClick={() => enter(null)}>返回学习区列表</button>
+      <button type="button" aria-label="返回学习区列表" title="返回学习区列表" className={buttonClass} onClick={() => enter(null)}>{desktopChrome ? '←' : '返回学习区列表'}</button>
       <label className="flex min-w-0 flex-1 items-center gap-2 text-sm"><span className="shrink-0 text-slate-400">学习区：</span>
         <select aria-label="切换学习区" value={area.areaId} onChange={event => {
           const selected = areas.data?.find(item => item.areaId === event.target.value);
@@ -94,7 +96,7 @@ export default function LearningChatWorkspace({ accountId, csrfToken, requestedA
         {mapOpen ? '返回学习聊天' : '查看学习地图'}</button>}
     </nav>;
   return <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-    {mobileChrome ? <MobileChromePortal slot="learning">{areaNavigation}</MobileChromePortal> : areaNavigation}
+    {mobileChrome ? <MobileChromePortal slot="learning">{areaNavigation}</MobileChromePortal> : desktopChrome ? <DesktopChromePortal slot="learning">{areaNavigation}</DesktopChromePortal> : areaNavigation}
     {!area.available && <p className="border-b border-slate-800 px-4 py-2 text-xs text-amber-200">地图不可用，当前仅查看历史。</p>}
     <section aria-label="学习区" className="learning-workspace relative flex min-h-0 flex-1 overflow-hidden">
       <div data-learning-chat="true" className={`${isMobile && mapOpen ? 'hidden' : 'flex'} min-h-0 min-w-0 flex-1 flex-col lg:flex-none`} style={mapOpen && !isMobile

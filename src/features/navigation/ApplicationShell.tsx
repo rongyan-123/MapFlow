@@ -19,6 +19,7 @@ import { describePublicError } from '../../lib/publicErrors';
 import { MobileChatChromeContext, mobileChromeSlots, mobileActionClass, MobileActionIcon, type MobileChromeTargets, type MobileChromeRefs } from './MobileChatChrome';
 import './mobileChatChrome.css';
 import useMobileViewport from '../../lib/useMobileViewport';
+import { DesktopChatChromeProvider } from './DesktopChatChrome';
 
 const ShellContext = createContext(false);
 export function useApplicationShell() { return useContext(ShellContext); }
@@ -61,8 +62,8 @@ export default function ApplicationShell({ activePath, onNavigate, children }: {
         className={`${itemClass} ${activePath === destination.path ? '!bg-cyan-300 !font-semibold !text-slate-950' : ''}`}
         onClick={() => navigate(destination.path)}>{destination.label}</button>)}
     </nav>
-    {isMobile && <div className="mobile-scene-selections space-y-5 px-2 pt-5">
-      {(['learning', 'characters', 'history', 'model'] as const).map(slot => <div key={slot} ref={mobileRefs[slot]} />)}
+    {isMobile && <div className="mobile-scene-selections space-y-4 px-2 pt-4">
+      {(['learning', 'history', 'characters', 'model'] as const).map(slot => <div key={slot} ref={mobileRefs[slot]} />)}
     </div>}
     <nav aria-label="辅助功能" className="mt-auto space-y-3 px-2 pt-8 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="border-t border-slate-800 pt-3"><p className="px-3 pb-1 text-xs text-slate-500">模型与额度</p>
@@ -96,7 +97,7 @@ export default function ApplicationShell({ activePath, onNavigate, children }: {
           <div ref={mobileRefs.configuration} className="mobile-chat-action" />
           <div ref={mobileRefs.canvas} className="mobile-chat-action" />
         </header>}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
+        <DesktopChatChromeProvider disabled={isMobile}><div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div></DesktopChatChromeProvider>
       </div>
       <MobileDrawer open={isMobile && drawerOpen} onClose={() => setDrawerOpen(false)}>{navigation}</MobileDrawer>
     </div>

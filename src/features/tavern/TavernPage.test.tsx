@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IdentityProvider } from '../identity/IdentityContext';
 import TavernPage from './TavernPage';
 import { character, completion, conversation, detail, sseResponse, turn } from './testFixtures';
-import type { Character, Conversation, ConversationDetail, GenerationAction } from './types';
+import type { Character, Conversation, ConversationHistory, ConversationDetail, GenerationAction } from './types';
 import type { MapGenerationDraft } from './tavernClient';
 vi.mock('@excalidraw/excalidraw', () => ({
   Excalidraw: ({ onChange, initialData }: { onChange: (elements: Record<string, unknown>[]) => void; initialData: { elements: Record<string, unknown>[] } }) => <div aria-label="白板编辑器">{initialData.elements.filter(element => !element.isDeleted).map(element => <span key={element.id as string}>{element.id as string}</span>)}<button type="button" onClick={() => onChange([{ id: 'manual-box', type: 'rectangle', x: 10, y: 20, width: 200, height: 80 }])}>白板：绘制矩形</button></div>,
@@ -788,7 +788,7 @@ describe('Tavern page', () => {
     embedded.unmount();
     const reopened = renderPage({ libraryEntryId: 'entry-1', title: '学习树' });
     await screen.findByText('请用茶。');
-    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/me/tavern/tree-conversations/entry-1')).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/me/tavern/tree-conversations/entry-1')).toHaveLength(0);
     expect(localStorage.getItem('mapflow.tavern.selection.v1.player-1')).toBeNull();
     reopened.unmount();
   });
@@ -2130,7 +2130,7 @@ describe('Tavern page', () => {
     await user.click(screen.getByRole('button', { name: '新建会话' }));
     await screen.findByLabelText('消息');
     await act(async () => { resolveList(json({ conversations: [] })); await refresh; });
-    expect(client.getQueryData<Conversation[]>(['me', 'player-1', 'tavern', 'conversations'])).toHaveLength(1);
+    expect(client.getQueryData<ConversationHistory>(['me', 'player-1', 'tavern', 'conversations'])?.conversations).toHaveLength(1);
     await user.click(screen.getByRole('button', { name: '配置' }));
     expect(screen.getByRole('option', { name: '旅人的茶馆 · 小明' })).toBeInTheDocument();
   });

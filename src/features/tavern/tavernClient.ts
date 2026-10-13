@@ -130,6 +130,22 @@ export async function createConversation(input: CreateConversationInput, csrfTok
 export async function fetchConversations(signal?: AbortSignal, scene: import('./types').ConversationScene = 'tavern'): Promise<Conversation[]> {
   return parseList(await getJson(`${ROOT}/conversations${scene === 'tavern' ? '' : `?scene=${scene}`}`, signal), 'conversations', parseConversation);
 }
+export async function fetchConversationHistory(signal?: AbortSignal, scene: import('./types').ConversationScene = 'tavern', areaId?: string): Promise<import('./types').ConversationHistory> {
+  const path = areaId ? `/api/me/learning-areas/${pathId(areaId)}/conversations`
+    : `${ROOT}/conversations${scene === 'tavern' ? '' : `?scene=${scene}`}`;
+  const body = await getJson(path, signal);
+  const conversations = parseList(body, 'conversations', parseConversation);
+  if (areaId && conversations.some(item => item.scene !== 'learning' || item.learningAreaId !== areaId)) throw invalidResponse();
+  if (!isRecord(body)) throw invalidResponse();
+  // Older servers cannot delete conversations; retain their first-entry behavior during upgrade.
+  const state = body.bootstrapState ?? (conversations.length ? 'has_active' : 'never_created');
+  if (state !== 'never_created' && state !== 'has_active' && state !== 'cleared') throw invalidResponse();
+  if ((state === 'has_active') !== (conversations.length > 0)) throw invalidResponse();
+  return { conversations, bootstrapState: state };
+}
+export async function deleteConversation(id: string, csrfToken: string): Promise<void> {
+  await request(`${ROOT}/conversations/${pathId(id)}`, { method: 'DELETE', headers: mutationHeaders(csrfToken) });
+}
 export async function fetchConversation(id: string, signal?: AbortSignal): Promise<ConversationDetail> {
   const body = await getJson(`${ROOT}/conversations/${pathId(id)}`, signal);
   return parseConversationDetail(body);
@@ -304,7 +320,34 @@ function pathId(id: string): string { validateId(id); return encodeURIComponent(
 async function getJson(path: string, signal?: AbortSignal): Promise<unknown> {
   return readJson(await request(path, { headers: { Accept: 'application/json' }, signal }));
 }
+const conversationWrites = new Map<string, { count: number; deleting: boolean }>();
+function beginConversationRequest(path: string, init: RequestInit): (() => void) | undefined {
+  if (!init.method || init.method === 'GET') return;
+  const match = path.match(/^\/api\/me\/tavern\/conversations\/([^/?]+)(?:\/|$)/);
+  let conversationId = match ? decodeURIComponent(match[1]) : undefined;
+  if (!conversationId && path.startsWith(`${ROOT}/characters/`) && init.method === 'PATCH' && typeof init.body === 'string') {
+    const body = JSON.parse(init.body);
+    if (isRecord(body) && isRecord(body.conversation) && typeof body.conversation.conversationId === 'string') conversationId = body.conversation.conversationId;
+  }
+  if (!conversationId) return;
+  const id = conversationId;
+  const current = conversationWrites.get(id);
+  if (current?.deleting || (init.method === 'DELETE' && current?.count)) {
+    throw new TavernApiError(409, 'tavern.conversation_busy', '会话正在处理或保存，请完成后再删除。');
+  }
+  conversationWrites.set(id, { count: (current?.count ?? 0) + 1, deleting: init.method === 'DELETE' });
+  return () => {
+    const active = conversationWrites.get(id);
+    if (active && active.count > 1) conversationWrites.set(id, { ...active, count: active.count - 1 });
+    else conversationWrites.delete(id);
+  };
+}
 async function request(path: string, init: RequestInit): Promise<Response> {
+  const finish = beginConversationRequest(path, init);
+  try { return await performRequest(path, init); }
+  finally { finish?.(); }
+}
+async function performRequest(path: string, init: RequestInit): Promise<Response> {
   let response: Response;
   try { response = await fetch(path, { ...init, credentials: 'same-origin' }); }
   catch (error) {

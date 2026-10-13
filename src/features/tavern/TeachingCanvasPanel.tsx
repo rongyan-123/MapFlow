@@ -70,7 +70,7 @@ function TeachingCanvasPanel({ document, busy, saving, wide, accountId, readOnly
       <label className=" flex items-center gap-1.5"><input type="checkbox" aria-label="允许 AI 绘图" checked={document.enabled} disabled={busy || saving || readOnly}
         onChange={event => void onSave(undefined, event.target.checked)} />允许 AI 绘图</label>
       <button type="button" className="hidden rounded-lg px-2 py-1 hover:bg-slate-800 md:block" onClick={onWidth}>{wide ? '收窄画布' : '放宽画布'}</button>
-      {!mobileChrome && <button type="button" className="rounded-lg px-2 py-1 hover:bg-slate-800" onClick={onClose}>收起画布</button>}
+      {!mobileChrome && <button type="button" className="canvas-close-button rounded-lg px-2 py-1 hover:bg-slate-800" onClick={onClose}>收起画布</button>}
     </div>
     <div className="min-h-0 flex-1" onPointerDownCapture={event => { userEditing.current=!busy && !readOnly; if((event.target as HTMLElement).tagName==='CANVAS')root.current?.focus({preventScroll:true}); }} onKeyDownCapture={() => { userEditing.current = !busy && !readOnly; }}>
       <Excalidraw excalidrawAPI={instance => { api.current = instance; }} langCode="zh-CN" theme={theme} viewModeEnabled={busy || readOnly}

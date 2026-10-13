@@ -1,12 +1,37 @@
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {AgentConversationRun} from './agentConversationRun';
-import type {AgentStatus,AgentEvent,AgentCompletion} from './agentExecutionClient';
+import {AgentApiError,type AgentStatus,type AgentEvent,type AgentCompletion} from './agentExecutionClient';
 const api=vi.hoisted(()=>({fetchActiveAgentExecution:vi.fn(),fetchAgentExecution:vi.fn(),acceptAgentExecution:vi.fn(),attachAgentExecution:vi.fn(),stopAgentExecution:vi.fn(),resumeAgentExecution:vi.fn()}));
 vi.mock('./agentExecutionClient',async original=>({...await original<typeof import('./agentExecutionClient')>(),...api}));
 const conversation='11111111-1111-4111-8111-111111111111',execution='22222222-2222-4222-8222-222222222222';
 const completion:AgentCompletion={executionId:execution,conversationId:conversation,generationId:'33333333-3333-4333-8333-333333333333',messageId:'44444444-4444-4444-8444-444444444444',answer:'Saved answer',maps:[],usage:null,
   settlement:{status:'pending_evidence',cashMicros:null,pointUnits:null,balanceMicros:null}};
 const status:AgentStatus={executionId:execution,conversationId:conversation,state:'running',funding:'cash',modelId:'original-model',result:null,error:null};
+
+it('a missing saved execution terminates recovery and clears the old browser record', async () => {
+  const key = 'mapflow.agent.execution.v1.owner.' + conversation;
+  sessionStorage.setItem(key, JSON.stringify({ executionId: execution }));
+  api.fetchAgentExecution.mockRejectedValueOnce(new AgentApiError('execution_not_found', 404));
+  const run = new AgentConversationRun('owner', conversation);
+  await run.restore();
+  expect(sessionStorage.getItem(key)).toBeNull();
+  expect(run.getSnapshot().pendingGeneration).toBeNull();
+  expect(run.getSnapshot().busy).toBe(false);
+  await run.retry('csrf');
+  expect(api.fetchAgentExecution).toHaveBeenCalledTimes(1);
+});
+
+it('a deleted event source stops reading instead of reconnecting indefinitely', async () => {
+  api.fetchActiveAgentExecution.mockResolvedValue(status);
+  api.attachAgentExecution.mockRejectedValue(new AgentApiError('execution_not_found', 404));
+  const run = new AgentConversationRun('owner', conversation);
+  const detach = run.subscribe(() => {});
+  await run.restore();
+  await vi.waitFor(() => expect(run.getSnapshot().busy).toBe(false));
+  expect(run.getSnapshot().executionId).toBeNull();
+  expect(api.attachAgentExecution).toHaveBeenCalledTimes(1);
+  detach();
+});
 beforeEach(()=>{vi.clearAllMocks();sessionStorage.clear();api.fetchActiveAgentExecution.mockResolvedValue(null);api.fetchAgentExecution.mockResolvedValue(status);api.acceptAgentExecution.mockResolvedValue({execution:status,replayed:false});
   api.attachAgentExecution.mockImplementation((_id,_conversation,_after,_onEvent,signal:AbortSignal)=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true})));});
 afterEach(()=>{vi.useRealTimers();});

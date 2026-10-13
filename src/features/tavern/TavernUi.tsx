@@ -5,6 +5,7 @@ import {AgentApiError} from '../assistant/agentExecutionClient';
 import { createPortal } from 'react-dom';
 import useIsMobile from '../../lib/useIsMobile';
 import useMobileViewport from '../../lib/useMobileViewport';
+import './tavernDialogs.css';
 
 export const buttonClass = 'rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-not-allowed disabled:opacity-50';
 export const primaryClass = 'rounded-xl border border-cyan-200 bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-not-allowed disabled:opacity-50';
@@ -44,7 +45,7 @@ export function CharacterAvatar({ character, previewUrl, name, large = false }: 
     : <span role="img" aria-label={`${label}默认头像`} className={`${size} flex shrink-0 items-center justify-center rounded-2xl border border-cyan-800 bg-slate-900 font-bold text-cyan-300`}>{Array.from(label)[0] ?? '✦'}</span>;
 }
 
-export interface TavernDialogSection { id: string; label: string; content: ReactNode }
+export interface TavernDialogSection { id: string; label: string; compactLabel?: string; content: ReactNode }
 
 export function TavernDialog({ title, children, sections, onClose, busy = false, initialSection }: {
   title: string; children?: ReactNode; sections?: TavernDialogSection[]; onClose: () => void; busy?: boolean;
@@ -75,14 +76,14 @@ export function TavernDialog({ title, children, sections, onClose, busy = false,
     return () => { window.removeEventListener('keydown', keydown); document.body.style.overflow = previousOverflow; if(previousFocus?.isConnected)previousFocus.focus(); };
   }, []);
   return createPortal(<div ref={viewportRoot} data-mobile={isMobile} className="mobile-dialog-layer fixed inset-0 z-[2147483647] flex items-center justify-center bg-slate-950/70 p-3">
-    <section ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className={`flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl outline-none ${sections ? 'max-w-5xl' : 'max-w-2xl'}`}>
+    <section ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className={`flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl outline-none ${sections ? 'categorized-dialog max-w-5xl' : 'max-w-2xl'}`}>
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-800 p-5"><h2 className="text-lg font-bold">{title}</h2>
         <button type="button" className={buttonClass} onClick={onClose} disabled={busy} aria-label={`关闭${title}`}>关闭</button></div>
-      {sections ? <div className="flex min-h-0 flex-col sm:flex-row">
+      {sections ? <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
         <nav aria-label="配置分类" className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-800 bg-slate-950/40 p-2 sm:w-44 sm:flex-col sm:overflow-y-auto sm:border-b-0 sm:border-r sm:p-3">
-          {sections.map(section => <button key={section.id} type="button" aria-current={activeSection === section.id ? 'page' : undefined}
+          {sections.map(section => <button key={section.id} type="button" aria-label={section.label} aria-current={activeSection === section.id ? 'page' : undefined}
             className={`shrink-0 rounded-xl px-3 py-2.5 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${activeSection === section.id ? 'bg-cyan-300 font-semibold text-slate-950' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'}`}
-            onClick={() => setActiveSection(section.id)}>{section.label}</button>)}
+            onClick={() => setActiveSection(section.id)}>{section.compactLabel ? <><span className="configuration-full-label">{section.label}</span><span className="configuration-compact-label">{section.compactLabel}</span></> : section.label}</button>)}
         </nav>
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-5 sm:p-6">
           {sections.map(section => <div key={section.id} hidden={activeSection !== section.id}>{section.content}</div>)}
