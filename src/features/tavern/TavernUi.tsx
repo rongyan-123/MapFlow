@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { TavernApiError, type Character, type CompatibilityWarning } from './types';
+import { TavernApiError, type Character, type CompatibilityWarning } from '../../domains/conversations/types';
 import { describePublicError } from '../../lib/publicErrors';
-import {AgentApiError} from '../assistant/agentExecutionClient';
+import {AgentApiError} from '../../api/agentExecutionClient';
 import { createPortal } from 'react-dom';
 import useIsMobile from '../../lib/useIsMobile';
 import useMobileViewport from '../../lib/useMobileViewport';

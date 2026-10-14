@@ -1,7 +1,7 @@
 import { describePublicError } from '../../lib/publicErrors';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { readModelPricing, type PricingChannel } from './walletClient';
+import { readModelPricing, type PricingChannel } from '../../api/walletClient';
 import ModelReferencePrices, { ReferencePriceNote } from './ModelReferencePrices';
 import WalletBalance from './WalletBalance';
 import { useApplicationShell } from '../navigation/ApplicationShell';

@@ -5,10 +5,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { IdentityProvider } from '../identity/IdentityContext';
 import TavernPage from './TavernPage';
 import { character, conversation, detail } from './testFixtures';
-import type { ConversationDetail } from './types';
+import type { ConversationDetail } from '../../domains/conversations/types';
 
-vi.mock('../identity/identityClient', async original => ({
-  ...await original<typeof import('../identity/identityClient')>(),
+vi.mock('../../api/identityClient', async original => ({
+  ...await original<typeof import('../../api/identityClient')>(),
   fetchCurrentSession: async () => ({ account: { playerId: 'player-1', username: '小明', status: 'active', isAdmin: false }, csrfToken: 'csrf' }),
   fetchCapabilities: async () => ({ identity: { registrationEnabled: true }, generation: { enabled: false } }),
 }));

@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
-import { parseVocabulary, prepareConversationInput } from './conversationInput';
-import { createConversation } from './tavernClient';
-import type { Character, Conversation } from './types';
+import { parseVocabulary, prepareConversationInput } from '../../domains/conversations/conversationInput';
+import { createConversation } from '../../api/tavernClient';
+import type { Character, Conversation } from '../../domains/conversations/types';
 import { ErrorNotice, TavernDialog, inputClass, primaryClass } from './TavernUi';
 
 export default function NewConversationForm({ character, defaultName, csrfToken, onCreated, onClose }: {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchAdminFeedback } from './adminClient';
+import { fetchAdminFeedback } from '../../api/adminClient';
 
 const PAGE_SIZE = 20;
 

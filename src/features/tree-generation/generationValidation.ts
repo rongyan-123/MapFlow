@@ -1,4 +1,4 @@
-import type { GenerationInput } from './types';
+import type { GenerationInput } from '../../domains/models/legacyGenerationTypes';
 
 export const GENERATION_TEXT_MAX_CHARS = 10_000;
 export const GENERATION_API_KEY_MAX_CHARS = 512;

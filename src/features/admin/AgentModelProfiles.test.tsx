@@ -5,7 +5,7 @@ import {beforeEach,expect,it,vi} from 'vitest';
 import AgentModelProfiles from './AgentModelProfiles';
 import {configurationFixture} from './agentModelFixture';
 const api=vi.hoisted(()=>({fetchAgentModelConfiguration:vi.fn(),saveAgentModelProfile:vi.fn(),activateAgentModelProfile:vi.fn()}));
-vi.mock('./agentModelClient',()=>api);
+vi.mock('../../api/agentModelClient',()=>api);
 beforeEach(()=>{vi.clearAllMocks();api.fetchAgentModelConfiguration.mockResolvedValue(configurationFixture());});
 function open(){render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}})}><AgentModelProfiles csrfToken="csrf-fixture"/></QueryClientProvider>)}
 it('keeps the persisted active model visible when a tested switch fails',async()=>{

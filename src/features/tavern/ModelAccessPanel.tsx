@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { modelPresets } from './modelPresets';
-import { formatAmountMicros, readWallet, readModelPricing } from '../wallet/walletClient';
+import { modelPresets } from '../../domains/models/presets';
+import { formatAmountMicros, readWallet, readModelPricing } from '../../api/walletClient';
 import ModelReferencePrices, { ReferencePriceNote } from '../wallet/ModelReferencePrices';
-import type { TavernModelSelection } from './types';
-import { fetchPlatformModels, testModelConnection } from './tavernClient';
+import type { TavernModelSelection } from '../../domains/conversations/types';
+import { fetchPlatformModels, testModelConnection } from '../../api/tavernClient';
 import { inputClass } from './TavernUi';
 import { describePublicError } from '../../lib/publicErrors';
-import type {AgentFunding} from '../assistant/agentExecutionClient';
+import type {AgentFunding} from '../../api/agentExecutionClient';
 
 export default function ModelAccessPanel({ modelSelection, onModelSelectionChange, accountId, onNavigateWallet, csrfToken, nativeFunding, nativeControls, nativeModelId }: {
   nativeFunding?:AgentFunding;nativeControls?:ReactNode;nativeModelId?:string;

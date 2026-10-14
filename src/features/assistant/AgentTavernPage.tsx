@@ -3,8 +3,8 @@ import {useQuery} from '@tanstack/react-query';
 import {useIdentity} from '../identity/IdentityContext';
 import TavernPage,{type TavernPageProps} from '../tavern/TavernPage';
 import {buttonClass,ErrorNotice,inputClass} from '../tavern/TavernUi';
-import {fetchAgentModelCatalogue,type AgentFunding} from './agentExecutionClient';
-import type {AgentConversationOptions} from './agentConversationOptions';
+import {fetchAgentModelCatalogue,type AgentFunding} from '../../api/agentExecutionClient';
+import type {AgentConversationOptions} from '../../domains/models/agentOptions';
 import {MobileChromePortal,useMobileChatChrome} from '../navigation/MobileChatChrome';
 import {DesktopChromePortal,useDesktopChatChrome} from '../navigation/DesktopChatChrome';
 

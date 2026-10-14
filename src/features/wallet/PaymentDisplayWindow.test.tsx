@@ -2,10 +2,10 @@ import { StrictMode } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import PaymentDisplayWindow from './PaymentDisplayWindow';
-import type { PaymentDisplay } from './walletClient';
+import type { PaymentDisplay } from '../../api/walletClient';
 
 const api = vi.hoisted(() => ({ updatePaymentDisplay: vi.fn() }));
-vi.mock('./walletClient', () => api);
+vi.mock('../../api/walletClient', () => api);
 const start = '2026-10-06T00:00:00Z';
 const active: PaymentDisplay = { windowId: 'first', status: 'active', serverNow: start, expiresAt: '2026-10-06T00:00:20Z', position: 0, imageUrl: '/api/wallet/topups/order/display/first/qr' };
 const waiting: PaymentDisplay = { ...active, status: 'waiting', expiresAt: null, imageUrl: null, position: 1 };

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createLearningArea, createLearningConversation, fetchLearningAreas, fetchLearningAreaConversations, fetchConversations, fetchConversation } from './tavernClient';
+import { createLearningArea, createLearningConversation, fetchLearningAreas, fetchLearningAreaConversations, fetchConversations, fetchConversation } from '../../api/tavernClient';
 import { conversation, detail } from './testFixtures';
 
 const area = {

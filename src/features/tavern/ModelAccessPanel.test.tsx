@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import ModelAccessPanel from './ModelAccessPanel';
-import type { TavernModelSelection } from './types';
+import type { TavernModelSelection } from '../../domains/conversations/types';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const selection: TavernModelSelection = { provider: 'custom', apiKey: '', baseUrl: '', model: '', settings: {}, historyBytes: 32768 };

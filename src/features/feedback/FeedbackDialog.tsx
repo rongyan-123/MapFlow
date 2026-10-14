@@ -2,7 +2,7 @@ import { describePublicError } from '../../lib/publicErrors';
 import { useState, type FormEvent } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useIdentity } from '../identity/IdentityContext';
-import { submitFeedback } from './feedbackClient';
+import { submitFeedback } from '../../api/feedbackClient';
 
 export default function FeedbackDialog({ onClose }: { onClose: () => void }) {
   const { session } = useIdentity();

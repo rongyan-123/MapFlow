@@ -1,4 +1,4 @@
-import type { PricingChannel } from './walletClient';
+import type { PricingChannel } from '../../api/walletClient';
 import { modelPriceRows } from './pricePresentation';
 
 export default function ModelReferencePrices({ channels, compact = false }: {

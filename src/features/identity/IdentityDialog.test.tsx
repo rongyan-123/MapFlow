@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import IdentityDialog from './IdentityDialog';
-import type { ClaimedInvitation } from './identityClient';
-import type { LoginInput, RegistrationInput } from './types';
+import type { ClaimedInvitation } from '../../api/identityClient';
+import type { LoginInput, RegistrationInput } from '../../domains/identity/types';
 
 interface DialogOverrides {
   onClaimInvitation?: (turnstileToken?: string) => Promise<ClaimedInvitation>;

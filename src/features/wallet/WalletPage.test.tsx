@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import WalletPage from './WalletPage';
 
 const api = vi.hoisted(() => ({ readWallet: vi.fn(), createTopup: vi.fn(), declarePaid: vi.fn(), declareUnpaid: vi.fn(), updatePaymentDisplay: vi.fn() }));
-vi.mock('./walletClient', async importOriginal => ({ ...await importOriginal<typeof import('./walletClient')>(), ...api }));
+vi.mock('../../api/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('../../api/walletClient')>(), ...api }));
 const topup = { topupId: 'order-1', accountId: 'a', amountFen: 100, channel: 'wechat', status: 'awaiting_payment', qrCodeId: 'qr-1', qrImageUrl: '/api/wallet/qrcodes/qr-1', createdAt: '2026-09-30T00:00:00Z', updatedAt: '2026-09-30T00:00:00Z', reviewNote: null };
 const wallet = { balanceMicros: 100000, currency: 'CNY', supportContact: 'v：19375007608', channels: [{ channel: 'wechat', label: '微信', qrCodeId: 'qr-1', imageUrl: '/api/wallet/qrcodes/qr-1' }], topups: [], ledger: [{ entryId: 'welcome-1', kind: 'welcome', amountMicros: 100000, balanceAfterMicros: 100000, topupId: null, createdAt: '2026-09-30T00:00:00Z' }] };
 let client: QueryClient;

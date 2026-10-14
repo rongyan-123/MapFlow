@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { fetchAdminInvitations, revokeAdminInvitation } from './adminClient';
-import type { AdminInvitation } from './types';
+import { fetchAdminInvitations, revokeAdminInvitation } from '../../api/adminClient';
+import type { AdminInvitation } from '../../domains/admin/types';
 
 interface InvitationsTabProps {
   csrfToken: string;

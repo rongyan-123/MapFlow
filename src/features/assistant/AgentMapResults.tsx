@@ -1,9 +1,9 @@
 import {useEffect,useRef,useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
 import {PublicUiError} from '../../lib/publicErrors';
-import {createLearningArea} from '../tavern/tavernClient';
+import {createLearningArea} from '../../api/tavernClient';
 import {buttonClass,ErrorNotice,primaryClass} from '../tavern/TavernUi';
-import type {AgentCompletion} from './agentExecutionClient';
+import type {AgentCompletion} from '../../api/agentExecutionClient';
 
 function navigate(address:string){window.history.pushState({},'',address);window.dispatchEvent(new PopStateEvent('popstate'));}
 export default function AgentMapResults({completion,accountId,csrfToken,onNavigate=navigate}: {

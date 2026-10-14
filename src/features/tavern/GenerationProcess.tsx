@@ -1,4 +1,4 @@
-import type { GenerationProcessEvent } from './types';
+import type { GenerationProcessEvent } from '../../domains/conversations/types';
 const names: Record<string, string> = {
   read_canvas: '读取画布', apply_canvas_patch: '绘图', read_skill_tree: '读取树概览',
   read_tree_overview: '读取树概览', find_tree_nodes: '查找节点', read_tree_node: '读取节点资料',

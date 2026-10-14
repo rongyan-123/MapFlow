@@ -5,7 +5,7 @@ import CreditPill from './CreditPill';
 
 const signInForCredit = vi.hoisted(() => vi.fn());
 
-vi.mock('./creditClient', () => ({
+vi.mock('../../api/creditClient', () => ({
   formatCreditAmount: (amount: number) => String(amount),
   signInForCredit,
 }));

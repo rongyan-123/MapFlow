@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import { updateCharacter } from './tavernClient';
-import { TavernApiError, type Character, type ConversationDetail } from './types';
-import { hasControls, utf8Bytes } from './validation';
+import { updateCharacter } from '../../api/tavernClient';
+import { TavernApiError, type Character, type ConversationDetail } from '../../domains/conversations/types';
+import { hasControls, utf8Bytes } from '../../domains/conversations/validation';
 import { buttonClass, ErrorNotice, inputClass, primaryClass, TavernDialog } from './TavernUi';
 
 export default function EditCharacterDialog({ character, conversation, renameOnly, csrfToken, onSaved, onClose, onConflict }: {

@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { IdentityCapabilities } from '../identity/types';
-import type { CreditSummary } from '../credit/creditClient';
+import type { IdentityCapabilities } from '../../domains/identity/types';
+import type { CreditSummary } from '../../api/creditClient';
 import TreeGenerationDialog from '../tree-generation/TreeGenerationDialog';
-import { readPlatformGenerationEntitlements } from '../tree-generation/treeGenerationClient';
-import { fetchMapGenerationDraft, type MapGenerationDraft } from './tavernClient';
+import { readPlatformGenerationEntitlements } from '../../api/treeGenerationClient';
+import { fetchMapGenerationDraft, type MapGenerationDraft } from '../../api/tavernClient';
 import { buttonClass, ErrorNotice } from './TavernUi';
 
 export const mapDraftQueryKey = (accountId:string, conversationId:string) => ['me',accountId,'tavern','conversation',conversationId,'map-generation-draft'] as const;

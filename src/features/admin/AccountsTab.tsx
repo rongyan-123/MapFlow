@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { fetchAdminAccounts, suspendAdminAccount } from './adminClient';
-import type { AdminAccount } from './types';
+import { fetchAdminAccounts, suspendAdminAccount } from '../../api/adminClient';
+import type { AdminAccount } from '../../domains/admin/types';
 
 interface AccountsTabProps {
   csrfToken: string;

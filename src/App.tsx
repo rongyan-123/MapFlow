@@ -9,14 +9,14 @@ import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import AdminPanel from './features/admin/AdminPanel';
-import { readCreditSummary } from './features/credit/creditClient';
+import { readCreditSummary } from './api/creditClient';
 import CompletionFlash from './features/skill-tree/CompletionFlash';
 import NodeDetailPanel from './features/skill-tree/NodeDetailPanel';
 import ProgressOverview from './features/skill-tree/ProgressOverview';
 import SkillTreeCanvas from './features/skill-tree/SkillTreeCanvas';
 import { snapshotFromGraph } from './features/skill-tree/snapshotFromGraph';
 import LearningChatWorkspace from './features/learning/LearningChatWorkspace';
-import { createLearningArea } from './features/tavern/tavernClient';
+import { createLearningArea } from './api/tavernClient';
 import { useIdentity } from './features/identity/IdentityContext';
 import LandingPage from './features/landing/LandingPage';
 import useIsMobile from './lib/useIsMobile';
@@ -30,7 +30,7 @@ import McpGuideDialog, {
 } from './features/mcp/McpGuideDialog';
 import TreeGenerationDialog from './features/tree-generation/TreeGenerationDialog';
 import NodeNoteDialog from './features/node-notes/NodeNoteDialog';
-import { readPlatformGenerationEntitlements } from './features/tree-generation/treeGenerationClient';
+import { readPlatformGenerationEntitlements } from './api/treeGenerationClient';
 import {
   addTreeToPersonalLibrary,
   deletePersonalTree,
@@ -41,11 +41,11 @@ import {
   renamePersonalTree,
   setNodeCompletion,
   setNodeProgress,
-} from './features/tree-library/treeLibraryClient';
+} from './api/treeLibraryClient';
 import type {
   PersonalLibrary,
   PublicTreeCatalog,
-} from './features/tree-library/types';
+} from './domains/maps/types';
 import TreeExportMenu from './features/tree-library/TreeExportMenu';
 import TreeRestoreControl from './features/tree-library/TreeRestoreControl';
 import TreeLibraryActionDialog, {
@@ -944,7 +944,7 @@ function ConsoleApp({ requestedView, requestedMapId, guideRequested, onGuideCons
       if (!stillAtOrigin()) return;
       await queryClient.cancelQueries({ queryKey: ['me', accountPlayerId, 'learning', 'areas'], exact: true });
       if (!stillAtOrigin()) return;
-      queryClient.setQueryData<import('./features/tavern/types').LearningArea[]>(['me', accountPlayerId, 'learning', 'areas'], previous =>
+      queryClient.setQueryData<import('./domains/conversations/types').LearningArea[]>(['me', accountPlayerId, 'learning', 'areas'], previous =>
         [area, ...(previous ?? []).filter(item => item.areaId !== area.areaId)]);
       onNavigateLearning(area.areaId, node ? { id: node.id, title: node.title } : undefined);
     } catch (error) { if (stillAtOrigin()) setAreaEntryError(error); }

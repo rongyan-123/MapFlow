@@ -2,7 +2,7 @@ import { describePublicError } from '../../lib/publicErrors';
 import type {
   TreeGenerationApiError,
   TreeGenerationErrorDetails,
-} from './treeGenerationClient';
+} from '../../api/treeGenerationClient';
 
 export type GenerationDiagnosticOperation =
   | 'create_plan'

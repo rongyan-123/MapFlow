@@ -1,4 +1,4 @@
-import { formatAmountMicros, type PricingChannel } from './walletClient';
+import { formatAmountMicros, type PricingChannel } from '../../api/walletClient';
 
 export function modelPriceRows(channels: readonly PricingChannel[]): { label: string; amount: string }[] {
   if (!channels.length) return [];

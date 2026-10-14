@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import TreeExportMenu from './TreeExportMenu';
-import type { PersonalTreeDetail } from './types';
+import type { PersonalTreeDetail } from '../../domains/maps/types';
 
 const detail: PersonalTreeDetail = {
   view_mode: 'personal',

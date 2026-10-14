@@ -3,7 +3,7 @@ import { useApplicationShell } from '../navigation/ApplicationShell';
 import { useEffect, useRef, useState } from 'react';
 import PaymentDisplayWindow from './PaymentDisplayWindow';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createTopup, declarePaid, declareUnpaid, formatAmountMicros, formatFen, parseAmountFen, readWallet, type LedgerEntry, type PaymentChannel, type Topup } from './walletClient';
+import { createTopup, declarePaid, declareUnpaid, formatAmountMicros, formatFen, parseAmountFen, readWallet, type LedgerEntry, type PaymentChannel, type Topup } from '../../api/walletClient';
 
 const surface = 'min-w-0 rounded-2xl border border-slate-800 bg-slate-900/70 p-5 sm:p-6';
 const button = 'rounded-xl border border-slate-700 px-3.5 py-2.5 text-sm font-medium transition hover:border-cyan-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:opacity-50';

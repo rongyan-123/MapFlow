@@ -2,13 +2,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IdentityCapabilities } from '../identity/types';
+import type { IdentityCapabilities } from '../../domains/identity/types';
 import TreeGenerationDialog from './TreeGenerationDialog';
 import type {
   GenerationInput,
   GenerationRun,
   GenerationSession,
-} from './types';
+} from '../../domains/models/legacyGenerationTypes';
 
 const generationApi = vi.hoisted(() => ({
   adjustTreeGeneration: vi.fn(),
@@ -28,7 +28,7 @@ const generationApi = vi.hoisted(() => ({
   replanPlatformTreeGeneration: vi.fn(),
 }));
 
-vi.mock('./treeGenerationClient', () => generationApi);
+vi.mock('../../api/treeGenerationClient', () => generationApi);
 
 const capabilities: IdentityCapabilities['generation'] = {
   enabled: true,

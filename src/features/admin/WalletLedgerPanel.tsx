@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { formatAmountMicros, readAdminWalletLedger, reverseWalletEntry, type LedgerEntry } from '../wallet/walletClient';
+import { formatAmountMicros, readAdminWalletLedger, reverseWalletEntry, type LedgerEntry } from '../../api/walletClient';
 import WalletActionDialog, { walletButton, walletInput } from './WalletActionDialog';
 
 const kindLabels: Record<LedgerEntry['kind'], string> = { welcome: '注册赠送', topup: '充值入账', adjustment: '人工调整', reversal: '撤销变动',usage:'模型消费' };

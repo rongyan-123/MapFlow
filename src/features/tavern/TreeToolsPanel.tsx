@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { updateTreeConnection } from './tavernClient';
-import type { ConversationDetail } from './types';
+import { updateTreeConnection } from '../../api/tavernClient';
+import type { ConversationDetail } from '../../domains/conversations/types';
 import { ErrorNotice, primaryClass } from './TavernUi';
 
 export default function TreeToolsPanel({ detail, csrfToken, onUpdated, onConflict }: {

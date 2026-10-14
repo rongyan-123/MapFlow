@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { readCommunitySettings, saveCommunitySettings } from '../wallet/walletClient';
+import { readCommunitySettings, saveCommunitySettings } from '../../api/walletClient';
 import { walletButton } from './WalletActionDialog';
 
 export default function RechargeSettings({ accountId, csrfToken }: { accountId?: string; csrfToken: string }) {

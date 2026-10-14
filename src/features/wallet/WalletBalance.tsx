@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { formatAmountMicros, readWallet } from './walletClient';
+import { formatAmountMicros, readWallet } from '../../api/walletClient';
 
 export default function WalletBalance({ accountId, onClick }: { accountId: string; onClick: () => void }) {
   const wallet = useQuery({ queryKey: ['me', accountId, 'wallet'], queryFn: readWallet, retry: false, refetchInterval: 15_000 });

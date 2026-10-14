@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchPersonalTree, setNodeCompletion, setNodeProgress } from '../tree-library/treeLibraryClient';
+import { fetchPersonalTree, setNodeCompletion, setNodeProgress } from '../../api/treeLibraryClient';
 import SkillTreeCanvas from '../skill-tree/SkillTreeCanvas';
 import NodeDetailPanel from '../skill-tree/NodeDetailPanel';
 import TreeRestoreControl from '../tree-library/TreeRestoreControl';

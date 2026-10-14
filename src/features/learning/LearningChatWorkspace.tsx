@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchLearningAreas } from '../tavern/tavernClient';
+import { fetchLearningAreas } from '../../api/tavernClient';
 import TavernPage from '../assistant/AgentTavernPage';
 import PanelResizeHandle from '../tavern/PanelResizeHandle';
 import { buttonClass, ErrorNotice, inputClass } from '../tavern/TavernUi';

@@ -5,7 +5,7 @@ import type { ExcalidrawElementSkeleton } from '@excalidraw/excalidraw/data/tran
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import '@excalidraw/excalidraw/index.css';
 import CanvasShortcuts from './CanvasShortcuts';
-import type { TeachingCanvasState } from './types';
+import type { TeachingCanvasState } from '../../domains/conversations/types';
 import { useMobileChatChrome } from '../navigation/MobileChatChrome';
 
 function materialize(elements: Record<string, unknown>[]) {

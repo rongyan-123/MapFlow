@@ -1,7 +1,7 @@
 import { describePublicError } from '../../lib/publicErrors';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { PersonalTreeDetail } from './types';
+import type { PersonalTreeDetail } from '../../domains/maps/types';
 import { downloadTreeExport } from './treeExport';
 
 interface TreeExportMenuProps {

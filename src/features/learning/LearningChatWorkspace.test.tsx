@@ -11,8 +11,8 @@ it('opens actual learning chat through the shared native funding controls',async
   mount();await userEvent.setup().click(await screen.findByRole('button',{name:'进入 Python'}));
   expect(await screen.findByLabelText('资金通路')).toBeInTheDocument();
 });
-vi.mock('../tavern/tavernClient', () => api);
-vi.mock('../tree-library/treeLibraryClient', () => api);
+vi.mock('../../api/tavernClient', () => api);
+vi.mock('../../api/treeLibraryClient', () => api);
 vi.mock('../tavern/TavernPage', () => ({ default: ({ treeContext, management, onShowMap, onOpenCanvas, onNodeReferenceConsumed }: { treeContext?: { title: string; nodeId?: string }; management?: boolean; onShowMap?: () => void; onOpenCanvas?: () => void; onNodeReferenceConsumed?: () => void }) => {
   if (onNodeReferenceConsumed) referenceCallbacks.push(onNodeReferenceConsumed);
   return <section aria-label="当前学习对话"><p>{management ? '管理助手' : treeContext?.title} 对话</p>{treeContext?.nodeId && <p>待发送参考：{treeContext.nodeId}</p>}{onShowMap && <button onClick={onShowMap}>查看地图</button>}<button onClick={onOpenCanvas}>打开教学画布</button></section>;

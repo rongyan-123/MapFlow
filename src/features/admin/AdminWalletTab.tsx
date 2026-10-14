@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { approveTopup, formatAmountMicros, formatFen, readAdminChannels, readAdminTopups, rejectTopup, uploadChannel, type PaymentChannel, type Topup } from '../wallet/walletClient';
+import { approveTopup, formatAmountMicros, formatFen, readAdminChannels, readAdminTopups, rejectTopup, uploadChannel, type PaymentChannel, type Topup } from '../../api/walletClient';
 import WalletAdjustmentPanel from './WalletAdjustmentPanel';
 import WalletLedgerPanel from './WalletLedgerPanel';
 import RechargeSettings from './RechargeSettings';

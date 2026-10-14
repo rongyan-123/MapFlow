@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
-import { readCardImport } from './cardImport';
-import { importCharacter } from './tavernClient';
-import { TavernApiError, type Character } from './types';
-import { hasControls, utf8Bytes } from './validation';
+import { readCardImport } from '../../domains/characters/cardImport';
+import { importCharacter } from '../../api/tavernClient';
+import { TavernApiError, type Character } from '../../domains/conversations/types';
+import { hasControls, utf8Bytes } from '../../domains/conversations/validation';
 import { ErrorNotice, TavernDialog, inputClass, primaryClass } from './TavernUi';
 
 export default function CreateCharacterDialog({ csrfToken, onCreated, onClose }: {

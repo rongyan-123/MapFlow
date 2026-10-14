@@ -5,7 +5,7 @@ import AgentTavernPage from './AgentTavernPage';
 const catalogue=vi.hoisted(()=>vi.fn());
 const props=vi.hoisted(()=>vi.fn());
 vi.mock('../identity/IdentityContext',()=>({useIdentity:()=>({session:{account:{playerId:'owner'},csrfToken:'csrf'}})}));
-vi.mock('./agentExecutionClient',async original=>({...await original<typeof import('./agentExecutionClient')>(),fetchAgentModelCatalogue:catalogue}));
+vi.mock('../../api/agentExecutionClient',async original=>({...await original<typeof import('../../api/agentExecutionClient')>(),fetchAgentModelCatalogue:catalogue}));
 vi.mock('../tavern/TavernPage',()=>({default:(value:unknown)=>{props(value);return <div>Shared conversation</div>;}}));
 const cash={profileId:'cash-model',profileVersion:1,modelId:'cash-model',displayName:'现金导师',contextWindow:131072,maxOutputTokens:null};
 const points={...cash,profileId:'points-model',modelId:'Qwen/Qwen3-8B',displayName:'积分导师'};

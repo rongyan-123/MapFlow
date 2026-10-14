@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Character } from './types';
+import type { Character } from '../../domains/conversations/types';
 import { CharacterAvatar } from './TavernUi';
 
 export default function CharacterLibraryItem({ character, selected, opening, disabled, actionsDisabled, onSelect, onRename, onEdit, onDelete }: {

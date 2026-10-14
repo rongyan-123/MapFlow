@@ -1,6 +1,6 @@
 import { describePublicError } from '../../lib/publicErrors';
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { updatePaymentDisplay, type PaymentDisplay, type PaymentChannel } from './walletClient';
+import { updatePaymentDisplay, type PaymentDisplay, type PaymentChannel } from '../../api/walletClient';
 
 export default function PaymentDisplayWindow({ topupId, channel, csrfToken, releasePending: sharedRelease }: { topupId: string; channel: PaymentChannel; csrfToken: string; releasePending?: MutableRefObject<Promise<void>> }) {
   const [display, setDisplay] = useState<PaymentDisplay | null>(null);

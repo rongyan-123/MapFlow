@@ -14,7 +14,7 @@ const api = vi.hoisted(() => ({
   registerIdentity: vi.fn(),
 }));
 
-vi.mock('./identityClient', () => api);
+vi.mock('../../api/identityClient', () => api);
 
 const authenticated = {
   account: {

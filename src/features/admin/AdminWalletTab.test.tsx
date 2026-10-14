@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import AdminWalletTab from './AdminWalletTab';
-import type { LedgerEntry, Topup, WalletAccount } from '../wallet/walletClient';
+import type { LedgerEntry, Topup, WalletAccount } from '../../api/walletClient';
 
 const order: Topup = { topupId: 'order-1', accountId: 'account-a', username: 'alice', playerId: 'player-a', amountFen: 300, channel: 'wechat', status: 'awaiting_review', qrCodeId: 'qr-1', qrImageUrl: '/api/wallet/qrcodes/qr-1', createdAt: '2026-09-30T00:00:00Z', updatedAt: '2026-09-30T00:00:00Z', reviewNote: null };
 const account: WalletAccount = { accountId: 'account-a', username: 'alice', playerId: 'player-a', status: 'active', balanceMicros: 3_100_000 };

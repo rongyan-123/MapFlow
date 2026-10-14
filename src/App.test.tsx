@@ -10,7 +10,7 @@ import {
 } from './features/identity/IdentityContext';
 let savedLearningChat: typeof tavernDetail;
 const nativeApi=vi.hoisted(()=>({fetchAgentModelCatalogue:vi.fn(),fetchActiveAgentExecution:vi.fn(),acceptAgentExecution:vi.fn()}));
-vi.mock('./features/assistant/agentExecutionClient',async original=>({...await original<typeof import('./features/assistant/agentExecutionClient')>(),...nativeApi}));
+vi.mock('./api/agentExecutionClient',async original=>({...await original<typeof import('./api/agentExecutionClient')>(),...nativeApi}));
 it('enters standalone tavern through shared native cash/points/user-key controls',async()=>{
   renderApp('/tavern');expect(await screen.findByLabelText('资金通路')).toBeInTheDocument();
   expect(tavernApi.generateStream).not.toHaveBeenCalled();
@@ -70,11 +70,11 @@ const generationApi = vi.hoisted(() => ({
 const legacyApi = vi.hoisted(() => ({ fetchLearningTree: vi.fn() }));
 
 const walletApi = vi.hoisted(() => ({ readWallet: vi.fn(), readModelPricing: vi.fn(), readAdminTopups: vi.fn() }));
-vi.mock('./features/wallet/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('./features/wallet/walletClient')>(), ...walletApi }));
+vi.mock('./api/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('./api/walletClient')>(), ...walletApi }));
 
 const tavernApi = vi.hoisted(() => ({ fetchCharacters: vi.fn(), fetchConversations: vi.fn(), fetchConversationHistory: vi.fn(), deleteConversation: vi.fn(), fetchLearningAreas: vi.fn(), createLearningArea: vi.fn(), fetchLearningAreaConversations: vi.fn(), openTreeConversation: vi.fn(), openManagementConversation:vi.fn(),fetchConversation: vi.fn(),
   generateStream: vi.fn(),fetchPlatformModels: vi.fn(),requestCashQuote:vi.fn(),resolveTavernToolApproval:vi.fn() }));
-vi.mock('./features/tavern/tavernClient', () => tavernApi);
+vi.mock('./api/tavernClient', () => tavernApi);
 
 const chatApi = vi.hoisted(() => ({
   fetchKnowledgeChatHistory: vi.fn(),
@@ -96,16 +96,16 @@ const adminApi = vi.hoisted(() => ({
   revokeAdminInvitation: vi.fn(),
 }));
 
-vi.mock('./features/identity/identityClient', () => identityApi);
-vi.mock('./features/tree-library/treeLibraryClient', () => treeApi);
-vi.mock('./features/tree-generation/treeGenerationClient', () => generationApi);
-vi.mock('./features/admin/adminClient', () => adminApi);
+vi.mock('./api/identityClient', () => identityApi);
+vi.mock('./api/treeLibraryClient', () => treeApi);
+vi.mock('./api/treeGenerationClient', () => generationApi);
+vi.mock('./api/adminClient', () => adminApi);
 vi.mock('./lib/api', () => legacyApi);
-vi.mock('./features/knowledge-chat/knowledgeChatClient', () => chatApi);
+vi.mock('./api/knowledgeChatClient', () => chatApi);
 
 const announcementsApi = vi.hoisted(() => ({ getAnnouncements: vi.fn() }));
 
-vi.mock('./features/announcements/announcementsClient', () => announcementsApi);
+vi.mock('./api/announcementsClient', () => announcementsApi);
 vi.mock('./features/tree-generation/TreeGenerationDialog', () => ({
   default: ({
     sessionId,
@@ -253,7 +253,7 @@ beforeEach(() => {
   const model={profileId:'learning-profile',profileVersion:1,modelId:'learning-model',displayName:'learning-model',contextWindow:131072,maxOutputTokens:null};
   nativeApi.fetchAgentModelCatalogue.mockResolvedValue({cash:[model],defaultCash:model,points:null});
   nativeApi.fetchActiveAgentExecution.mockResolvedValue(null);
-  nativeApi.acceptAgentExecution.mockImplementation(async(conversationId:string,command:import('./features/assistant/agentExecutionClient').AgentExecutionCommand)=>{
+  nativeApi.acceptAgentExecution.mockImplementation(async(conversationId:string,command:import('./api/agentExecutionClient').AgentExecutionCommand)=>{
     const user={messageId:'55555555-5555-4555-8555-555555555555',parentMessageId:'message-assistant-1',role:'user' as const,origin:'user' as const,characterId:null,content:command.action.type==='reply'?command.action.message:''};
     const assistant={messageId:'44444444-4444-4444-8444-444444444444',parentMessageId:user.messageId,role:'assistant' as const,origin:'model' as const,characterId:tavernCharacter.characterId,content:'测试回答'};
     savedLearningChat={...savedLearningChat,graph:{...tavernDetail.graph,revision:2,messages:[...tavernDetail.graph.messages,user,assistant],activePath:[...tavernDetail.graph.activePath,user.messageId,assistant.messageId]}};

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { adjustWallet, formatAmountMicros, parseAmountFen, readAdminWalletAccounts } from '../wallet/walletClient';
+import { adjustWallet, formatAmountMicros, parseAmountFen, readAdminWalletAccounts } from '../../api/walletClient';
 import WalletActionDialog, { walletButton, walletInput, walletPrimaryButton } from './WalletActionDialog';
 
 export default function WalletAdjustmentPanel({ accountId, csrfToken, onChanged }: { accountId?: string; csrfToken: string; onChanged: (notice: string) => Promise<void> }) {

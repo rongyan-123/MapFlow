@@ -2,7 +2,7 @@ import { describePublicError } from '../../lib/publicErrors';
 import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useIdentity } from '../identity/IdentityContext';
-import { formatCreditAmount, signInForCredit, type CreditSummary } from './creditClient';
+import { formatCreditAmount, signInForCredit, type CreditSummary } from '../../api/creditClient';
 
 interface CreditPillProps {
   credit: CreditSummary | null;

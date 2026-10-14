@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   fetchAdminRequestObservation,
   fetchAdminRequestObservations,
-} from './adminClient';
+} from '../../api/adminClient';
 import type {
   AdminRequestObservation,
   AdminRequestObservationSummary,
@@ -14,7 +14,7 @@ import type {
   RequestActorKind,
   RequestStageId,
   RequestStageStatus,
-} from './types';
+} from '../../domains/admin/types';
 
 interface RequestObservationsTabProps {
   csrfToken: string;

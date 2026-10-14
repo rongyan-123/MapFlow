@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { PublicTreeCatalogPanel, filterPublicTrees } from './PublicTreeCatalogPanel';
-import type { PublicTreeAttribution } from './types';
+import type { PublicTreeAttribution } from '../../domains/maps/types';
 import type { SkillTree } from '../../types/learning';
 
 const trees: SkillTree[] = [

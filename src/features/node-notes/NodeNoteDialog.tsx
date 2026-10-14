@@ -1,8 +1,8 @@
 import { describePublicError } from '../../lib/publicErrors';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { deleteNodeNote, fetchNodeNote, saveNodeNote, TreeLibraryApiError } from '../tree-library/treeLibraryClient';
-import type { NodeNote } from '../tree-library/types';
+import { deleteNodeNote, fetchNodeNote, saveNodeNote, TreeLibraryApiError } from '../../api/treeLibraryClient';
+import type { NodeNote } from '../../domains/maps/types';
 import { clearNoteDraft, noteDraftKey, readNoteDraft, writeNoteDraft } from './noteDrafts';
 import SafeMarkdown from './SafeMarkdown';
 

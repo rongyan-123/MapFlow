@@ -1,0 +1,45 @@
+import type {
+  DeepSeekModel,
+  ReasoningEffort,
+  ThinkingMode,
+} from '../models/legacyGenerationTypes';
+
+export interface IdentityCapabilities {
+  identity: {
+    registrationEnabled: boolean;
+  };
+  generation: {
+    enabled: boolean;
+    platformFundedEnabled: boolean;
+    models: DeepSeekModel[];
+    thinkingModes: ThinkingMode[];
+    reasoningEfforts: ReasoningEffort[];
+  };
+}
+
+export interface PublicAccount {
+  playerId: string;
+  username: string;
+  status: 'active';
+  isAdmin: boolean;
+}
+
+export interface IdentitySession {
+  account: PublicAccount;
+  csrfToken: string;
+}
+
+export interface RegistrationInput {
+  username: string;
+  password: string;
+  invitationCode?: string;
+  challengeId?: string;
+  challengeAnswer?: string;
+  email?: string;
+  phone?: string;
+}
+
+export interface LoginInput {
+  username: string;
+  password: string;
+}

@@ -4,7 +4,7 @@ import {
   createAdminAnnouncement,
   deleteAdminAnnouncement,
   fetchAdminAnnouncements,
-} from './adminClient';
+} from '../../api/adminClient';
 
 export default function AnnouncementsTab({ csrfToken }: { csrfToken: string }) {
   const queryClient = useQueryClient();

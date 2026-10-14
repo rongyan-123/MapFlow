@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { modelPriceRows } from './pricePresentation';
-import type { PricingChannel } from './walletClient';
+import type { PricingChannel } from '../../api/walletClient';
 
 const channel: PricingChannel = {
   vendor: 'CBY', lane: 1, enabled: true, inputMicrosPerMillion: 290_393,

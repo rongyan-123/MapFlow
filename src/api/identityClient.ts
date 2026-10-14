@@ -1,0 +1,256 @@
+import { request as apiFetch } from './http';
+import { publicHttpErrorMessage } from '../lib/publicErrors';
+import { PublicUiError } from '../lib/publicErrors';
+import type {
+  IdentityCapabilities,
+  IdentitySession,
+  LoginInput,
+  RegistrationInput,
+} from '../domains/identity/types';
+
+const JSON_HEADERS = {
+  Accept: 'application/json',
+  'Content-Type': 'application/json',
+} as const;
+
+export class IdentityApiError extends PublicUiError {
+  readonly status: number;
+  readonly code: string;
+  readonly traceId?: string;
+
+  constructor(status: number, code: string, message: string, traceId?: string) {
+    super(message);
+    this.name = 'IdentityApiError';
+    this.status = status;
+    this.code = code;
+    this.traceId = traceId;
+  }
+}
+
+const CAPABILITIES_TIMEOUT_MS = 8_000;
+
+export async function fetchCapabilities(): Promise<IdentityCapabilities> {
+  // 弱网下接口可能挂起十几秒；超时后中止，让调用方尽快进入「能力不可用」兜底态。
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CAPABILITIES_TIMEOUT_MS);
+  try {
+    const response = await request('/api/capabilities', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+    const body = await readJson(response);
+    if (
+      !isRecord(body) ||
+      !isRecord(body.identity) ||
+      typeof body.identity.registrationEnabled !== 'boolean' ||
+      !isRecord(body.generation) ||
+      typeof body.generation.enabled !== 'boolean' ||
+      typeof body.generation.platformFundedEnabled !== 'boolean' ||
+      !isExactStringArray(body.generation.models, [
+        'deepseek-v4-flash',
+        'deepseek-v4-pro',
+      ]) ||
+      !isExactStringArray(body.generation.thinkingModes, ['disabled', 'enabled']) ||
+      !isExactStringArray(body.generation.reasoningEfforts, ['low', 'high', 'max'])
+    ) {
+      throw invalidResponseError();
+    }
+    return {
+      identity: { registrationEnabled: body.identity.registrationEnabled },
+      generation: {
+        enabled: body.generation.enabled,
+        platformFundedEnabled: body.generation.platformFundedEnabled,
+        models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+        thinkingModes: ['disabled', 'enabled'],
+        reasoningEfforts: ['low', 'high', 'max'],
+      },
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function fetchCurrentSession(): Promise<IdentitySession | null> {
+  const response = await request(
+    '/api/auth/session',
+    {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    },
+    [401],
+  );
+  if (response.status === 401) return null;
+  return parseSession(await readJson(response));
+}
+
+export async function registerIdentity(
+  input: RegistrationInput,
+): Promise<IdentitySession> {
+  const response = await request('/api/auth/register', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(input),
+  });
+  return parseSession(await readJson(response));
+}
+
+export async function loginIdentity(input: LoginInput): Promise<IdentitySession> {
+  const response = await request('/api/auth/login', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(input),
+  });
+  return parseSession(await readJson(response));
+}
+
+export interface ClaimedInvitation {
+  invitationCode: string;
+}
+
+export interface RegistrationChallenge {
+  challengeId: string;
+  question: string;
+  expiresInSeconds: number;
+}
+
+export async function fetchRegistrationChallenge(signal?: AbortSignal): Promise<RegistrationChallenge> {
+  const response = await request('/api/auth/registration-challenge', {
+    method: 'POST', credentials: 'same-origin', headers: JSON_HEADERS,
+    body: '{}', signal,
+  });
+  const body = await readJson(response);
+  if (!isRecord(body) || typeof body.challengeId !== 'string' ||
+      typeof body.question !== 'string' || typeof body.expiresInSeconds !== 'number') {
+    throw invalidResponseError();
+  }
+  return { challengeId: body.challengeId, question: body.question, expiresInSeconds: body.expiresInSeconds };
+}
+
+export async function claimInvitation(
+  turnstileToken?: string,
+): Promise<ClaimedInvitation> {
+  const response = await request('/api/invitations/claim', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(turnstileToken ? { turnstileToken } : {}),
+  });
+  const body = await readJson(response);
+  if (
+    !isRecord(body) ||
+    typeof body.invitationCode !== 'string' ||
+    !/^[A-Z]{6}$/.test(body.invitationCode)
+  ) {
+    throw invalidResponseError();
+  }
+  return { invitationCode: body.invitationCode };
+}
+
+export async function logoutIdentity(csrfToken: string): Promise<void> {
+  await request('/api/auth/logout', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+  });
+}
+
+async function request(
+  path: string,
+  init: RequestInit,
+  acceptedErrorStatuses: readonly number[] = [],
+): Promise<Response> {
+  let response: Response;
+  try {
+    response = await apiFetch(path, init);
+  } catch {
+    throw new IdentityApiError(0, 'network.unavailable', '账号服务暂时无法连接。');
+  }
+  if (!response.ok && !acceptedErrorStatuses.includes(response.status)) {
+    throw await parseError(response);
+  }
+  return response;
+}
+
+async function parseError(response: Response): Promise<IdentityApiError> {
+  try {
+    const body: unknown = await response.json();
+    if (
+      isRecord(body) &&
+      isRecord(body.error) &&
+      typeof body.error.code === 'string' &&
+      typeof body.error.message === 'string'
+    ) {
+      return new IdentityApiError(
+        response.status,
+        body.error.code,
+        publicHttpErrorMessage(body.error.code, response.status),
+        typeof body.error.traceId === 'string' ? body.error.traceId : undefined,
+      );
+    }
+  } catch {
+    // The fallback below deliberately avoids exposing a malformed server body.
+  }
+  return new IdentityApiError(
+    response.status,
+    'identity.request_failed',
+    response.status === 429 ? '请求过于频繁，请稍后再试。' : '账号请求失败，请稍后再试。',
+  );
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    throw invalidResponseError();
+  }
+}
+
+function parseSession(body: unknown): IdentitySession {
+  if (
+    !isRecord(body) ||
+    !isRecord(body.account) ||
+    typeof body.account.playerId !== 'string' ||
+    typeof body.account.username !== 'string' ||
+    body.account.status !== 'active' ||
+    typeof body.account.isAdmin !== 'boolean' ||
+    typeof body.csrfToken !== 'string' ||
+    body.csrfToken.length === 0
+  ) {
+    throw invalidResponseError();
+  }
+  return {
+    account: {
+      playerId: body.account.playerId,
+      username: body.account.username,
+      status: 'active',
+      isAdmin: body.account.isAdmin,
+    },
+    csrfToken: body.csrfToken,
+  };
+}
+
+function invalidResponseError(): IdentityApiError {
+  return new IdentityApiError(
+    502,
+    'identity.invalid_response',
+    '账号服务返回了无法识别的结果。',
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isExactStringArray(value: unknown, expected: readonly string[]): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length === expected.length &&
+    value.every((item, index) => item === expected[index])
+  );
+}

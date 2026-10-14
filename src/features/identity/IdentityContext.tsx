@@ -14,7 +14,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import IdentityDialog from './IdentityDialog';
-import { clearConversationRuns } from '../tavern/conversationRuns';
+import { clearConversationRuns } from '../../domains/conversations/legacyRun';
 import {
   claimInvitation,
   fetchCapabilities,
@@ -23,13 +23,13 @@ import {
   logoutIdentity,
   registerIdentity,
   type ClaimedInvitation,
-} from './identityClient';
+} from '../../api/identityClient';
 import type {
   IdentityCapabilities,
   IdentitySession,
   LoginInput,
   RegistrationInput,
-} from './types';
+} from '../../domains/identity/types';
 
 export const CAPABILITIES_QUERY_KEY = ['identity', 'capabilities'] as const;
 export const SESSION_QUERY_KEY = ['identity', 'session'] as const;

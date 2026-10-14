@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchAdminDashboard } from './adminClient';
-import type { AdminDashboard } from './types';
+import { fetchAdminDashboard } from '../../api/adminClient';
+import type { AdminDashboard } from '../../domains/admin/types';
 
 interface OverviewTabProps {
   csrfToken: string;

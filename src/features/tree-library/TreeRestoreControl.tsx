@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { buttonClass, ErrorNotice } from '../tavern/TavernUi';
-import { fetchRestorePoint, restoreTree } from './treeRestoreClient';
+import { fetchRestorePoint, restoreTree } from '../../api/treeRestoreClient';
 
 export default function TreeRestoreControl({ accountId, libraryEntryId, csrfToken, onRestored }: {
   accountId: string; libraryEntryId: string; csrfToken: string; onRestored?: () => void;

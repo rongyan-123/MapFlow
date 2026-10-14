@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { executeTreePublication, fetchPublicationStatus, prepareTreePublication } from './treeLibraryClient';
-import type { PublicationPrepare } from './types';
+import { executeTreePublication, fetchPublicationStatus, prepareTreePublication } from '../../api/treeLibraryClient';
+import type { PublicationPrepare } from '../../domains/maps/types';
 
 export default function TreePublicationDialog({libraryEntryId,title,csrfToken,onClose}:{libraryEntryId:string;title:string;csrfToken:string;onClose:()=>void}){
   const queryClient=useQueryClient();

@@ -2,9 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IdentitySession } from '../identity/types';
+import type { IdentitySession } from '../../domains/identity/types';
 import { AnnouncementProvider } from './AnnouncementProvider';
-import type { Announcement } from './announcementsClient';
+import type { Announcement } from '../../api/announcementsClient';
 
 const identityMock = vi.hoisted(() => ({
   session: null as IdentitySession | null,

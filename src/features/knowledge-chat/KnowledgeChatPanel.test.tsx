@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import KnowledgeChatPanel from './KnowledgeChatPanel';
-import { KnowledgeChatApiError } from './types';
+import { KnowledgeChatApiError } from '../../domains/conversations/knowledgeTypes';
 
 const chatApi = vi.hoisted(() => ({
   fetchKnowledgeChatHistory: vi.fn(),
@@ -10,7 +10,7 @@ const chatApi = vi.hoisted(() => ({
   resolveKnowledgeChatApproval: vi.fn(),
 }));
 
-vi.mock('./knowledgeChatClient', () => chatApi);
+vi.mock('../../api/knowledgeChatClient', () => chatApi);
 
 beforeEach(() => {
   chatApi.fetchKnowledgeChatHistory.mockReset();

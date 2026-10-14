@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type UIEvent } from 'react';
 import type { SkillTree } from '../../types/learning';
-import type { PublicTreeAttribution } from './types';
+import type { PublicTreeAttribution } from '../../domains/maps/types';
 
 export type PublicTreeSourceFilter = 'all' | 'user' | 'official';
 export type PublicTreeDifficultyFilter = 'all' | 'beginner' | 'intermediate' | 'advanced';

@@ -6,7 +6,7 @@ import LogoutConfirmDialog from '../identity/LogoutConfirmDialog';
 import ThemeSwitcher from '../theme/ThemeSwitcher';
 import WalletBalance from '../wallet/WalletBalance';
 import CreditPill from '../credit/CreditPill';
-import { readCreditSummary } from '../credit/creditClient';
+import { readCreditSummary } from '../../api/creditClient';
 import AnnouncementsDialog from '../announcements/AnnouncementsDialog';
 import FeedbackDialog from '../feedback/FeedbackDialog';
 import McpGuideDialog from '../mcp/McpGuideDialog';

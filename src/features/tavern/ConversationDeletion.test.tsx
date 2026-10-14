@@ -4,12 +4,12 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { IdentityProvider } from '../identity/IdentityContext';
 import TavernPage from './TavernPage';
-import { conversationRun } from './conversationRuns';
+import { conversationRun } from '../../domains/conversations/legacyRun';
 import { character, conversation, detail } from './testFixtures';
-import type { Conversation, ConversationDetail, ConversationScene } from './types';
+import type { Conversation, ConversationDetail, ConversationScene } from '../../domains/conversations/types';
 
-vi.mock('../identity/identityClient', async original => ({
-  ...await original<typeof import('../identity/identityClient')>(),
+vi.mock('../../api/identityClient', async original => ({
+  ...await original<typeof import('../../api/identityClient')>(),
   fetchCurrentSession: async () => ({ account: { playerId: 'player-1', username: '小明', status: 'active', isAdmin: false }, csrfToken: 'csrf' }),
   fetchCapabilities: async () => ({ identity: { registrationEnabled: true }, generation: { enabled: false } }),
 }));

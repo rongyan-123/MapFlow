@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { fetchAdminAuditEventsPage } from './adminClient';
-import type { AdminAuditEvent, AuditFilter } from './types';
+import { fetchAdminAuditEventsPage } from '../../api/adminClient';
+import type { AdminAuditEvent, AuditFilter } from '../../domains/admin/types';
 
 interface AuditLogTabProps {
   csrfToken: string;

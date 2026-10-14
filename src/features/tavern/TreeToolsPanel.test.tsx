@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import TreeToolsPanel from './TreeToolsPanel';
 import { detail } from './testFixtures';
-import type { ConversationDetail } from './types';
+import type { ConversationDetail } from '../../domains/conversations/types';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { parseVocabulary } from './conversationInput';
-import { updateConversationProfile } from './tavernClient';
-import { TavernApiError, type ConversationDetail } from './types';
+import { parseVocabulary } from '../../domains/conversations/conversationInput';
+import { updateConversationProfile } from '../../api/tavernClient';
+import { TavernApiError, type ConversationDetail } from '../../domains/conversations/types';
 import { ErrorNotice, inputClass, primaryClass } from './TavernUi';
 
 export default function ConversationProfilePanel({ detail, csrfToken, onUpdated, onConflict }: {

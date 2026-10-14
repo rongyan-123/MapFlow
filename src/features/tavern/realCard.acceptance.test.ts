@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { normalizeCharacterCard } from './cardImport';
+import { normalizeCharacterCard } from '../../domains/characters/cardImport';
 
 // Opt in locally. Third-party card content is intentionally never copied into this repository.
 const { env } = await vi.importActual<{ env: Record<string, string | undefined> }>('node:process');

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { fetchAdminPublications, removeAdminPublication } from './adminClient';
+import { fetchAdminPublications, removeAdminPublication } from '../../api/adminClient';
 
 export default function PublicationsTab({ csrfToken }: { csrfToken: string }) {
   const client = useQueryClient();

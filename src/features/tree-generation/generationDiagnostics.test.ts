@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TreeGenerationApiError } from './treeGenerationClient';
+import { TreeGenerationApiError } from '../../api/treeGenerationClient';
 import {
   createGenerationDiagnostic,
   readableGenerationError,

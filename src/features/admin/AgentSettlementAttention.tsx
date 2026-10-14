@@ -1,6 +1,6 @@
 import {useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
-import {fetchAgentSettlementAttention} from './agentModelClient';
+import {fetchAgentSettlementAttention} from '../../api/agentModelClient';
 
 export default function AgentSettlementAttention({accountId}:{accountId?:string}) {
   const [open,setOpen]=useState(false),[before,setBefore]=useState<string>();

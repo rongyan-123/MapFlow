@@ -10,7 +10,7 @@ import type {
   ObservationEvidence,
   RequestStageId,
   RequestStageStatus,
-} from './types';
+} from '../../domains/admin/types';
 import RequestObservationsTab from './RequestObservationsTab';
 
 const adminApi = vi.hoisted(() => ({
@@ -18,7 +18,7 @@ const adminApi = vi.hoisted(() => ({
   fetchAdminRequestObservation: vi.fn(),
 }));
 
-vi.mock('./adminClient', () => adminApi);
+vi.mock('../../api/adminClient', () => adminApi);
 
 const REQUEST_ID = '81000000-0000-4000-8000-000000000301';
 

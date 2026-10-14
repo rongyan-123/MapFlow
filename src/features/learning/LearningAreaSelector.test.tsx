@@ -5,8 +5,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import LearningAreaSelector from './LearningAreaSelector';
 
 const api = vi.hoisted(() => ({ fetchLearningAreas: vi.fn(), createLearningArea: vi.fn(), fetchPersonalLibrary: vi.fn() }));
-vi.mock('../tavern/tavernClient', () => api);
-vi.mock('../tree-library/treeLibraryClient', () => api);
+vi.mock('../../api/tavernClient', () => api);
+vi.mock('../../api/treeLibraryClient', () => api);
 const area = { areaId: 'map-1', libraryEntryId: 'map-1', title: 'Python 学习', available: true, createdAt: '2026-10-08T12:00:00Z' };
 const callbacks = { onEnterArea: vi.fn(), onOpenMaps: vi.fn(), onOpenManager: vi.fn() };
 beforeEach(() => {

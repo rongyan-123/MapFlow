@@ -4,9 +4,9 @@ import {
   fetchKnowledgeChatHistory,
   resolveKnowledgeChatApproval,
   sendKnowledgeChatMessageStream,
-} from './knowledgeChatClient';
-import { KnowledgeChatApiError } from './types';
-import type { KnowledgeChatMessage } from './types';
+} from '../../api/knowledgeChatClient';
+import { KnowledgeChatApiError } from '../../domains/conversations/knowledgeTypes';
+import type { KnowledgeChatMessage } from '../../domains/conversations/knowledgeTypes';
 import AssistantMarkdown from './AssistantMarkdown';
 
 interface KnowledgeChatPanelProps {

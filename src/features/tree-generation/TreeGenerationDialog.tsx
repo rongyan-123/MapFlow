@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { IdentityCapabilities } from '../identity/types';
+import type { IdentityCapabilities } from '../../domains/identity/types';
 import GenerationFundingSelector from './GenerationFundingSelector';
 import {
   createGenerationDiagnostic,
@@ -38,7 +38,7 @@ import {
   replanPlatformTreeGeneration,
   reviseCreditsTreeGeneration,
   replanTreeGeneration,
-} from './treeGenerationClient';
+} from '../../api/treeGenerationClient';
 import type {
   DeepSeekModel,
   CreditGenerationSelection,
@@ -51,8 +51,8 @@ import type {
   PlatformGenerationEntitlementSummary,
   ReasoningEffort,
   ThinkingMode,
-} from './types';
-import type { CreditSummary } from '../credit/creditClient';
+} from '../../domains/models/legacyGenerationTypes';
+import type { CreditSummary } from '../../api/creditClient';
 import {
   GENERATION_TEXT_MAX_CHARS,
   validateGenerationApiKey,

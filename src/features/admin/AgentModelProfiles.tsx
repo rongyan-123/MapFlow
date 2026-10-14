@@ -1,6 +1,6 @@
 import {useState,type FormEvent} from 'react';
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
-import {activateAgentModelProfile,fetchAgentModelConfiguration,saveAgentModelProfile,type AgentFunding,type AgentModelProfile} from './agentModelClient';
+import {activateAgentModelProfile,fetchAgentModelConfiguration,saveAgentModelProfile,type AgentFunding,type AgentModelProfile} from '../../api/agentModelClient';
 const inputClass='mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100';
 export default function AgentModelProfiles({csrfToken}:{csrfToken:string}) {
   const client=useQueryClient();

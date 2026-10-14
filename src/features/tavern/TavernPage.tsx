@@ -1,27 +1,27 @@
 import { describePublicError, PublicUiError } from '../../lib/publicErrors';
-import { findTeachingCanvasPersistence } from './teachingCanvasPersistence';
-import { conversationRun } from './conversationRuns';
-import { agentConversationRun } from '../assistant/agentConversationRun';
+import { findTeachingCanvasPersistence } from '../../domains/canvas/persistence';
+import { conversationRun } from '../../domains/conversations/legacyRun';
+import { agentConversationRun } from '../../domains/conversations/agentRun';
 import ModelAccessPanel from './ModelAccessPanel';
 import { useSharedModelSelection } from './ModelSelectionContext';
 import { useApplicationShell } from '../navigation/ApplicationShell';
 import { MobileChromePortal, useMobileChatChrome, mobileActionClass, MobileActionIcon } from '../navigation/MobileChatChrome';
 import { DesktopChromePortal, useDesktopChatChrome } from '../navigation/DesktopChatChrome';
-import { readModelSelection, saveModelSelection } from './modelPreferences';
-import useRoleNotices from './useRoleNotices';
-import { creationStorageKey, persistPendingCreation, readPendingCreation } from './pendingCreation';
+import { readModelSelection, saveModelSelection } from '../../domains/models/preferences';
+import useRoleNotices from '../../domains/characters/useRoleNotices';
+import { creationStorageKey, persistPendingCreation, readPendingCreation } from '../../domains/conversations/pendingCreation';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import TreeToolsPanel from './TreeToolsPanel';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import CreditPill from '../credit/CreditPill';
 import WalletBalance from '../wallet/WalletBalance';
-import type {Wallet} from '../wallet/walletClient';
+import type {Wallet} from '../../api/walletClient';
 import HeaderMoreMenu, { headerMenuItem } from '../navigation/HeaderMoreMenu';
-import { readCreditSummary, type CreditSummary } from '../credit/creditClient';
+import { readCreditSummary, type CreditSummary } from '../../api/creditClient';
 import IdentityAccess from '../identity/IdentityAccess';
 import { useIdentity } from '../identity/IdentityContext';
 import LogoutConfirmDialog from '../identity/LogoutConfirmDialog';
-import type { IdentitySession } from '../identity/types';
+import type { IdentitySession } from '../../domains/identity/types';
 import MobileDrawer from '../navigation/MobileDrawer';
 import ThemeSwitcher from '../theme/ThemeSwitcher';
 import CardImportDialog from './CardImportDialog';
@@ -34,8 +34,8 @@ import PanelResizeHandle from './PanelResizeHandle';
 import ConversationProfilePanel from './ConversationProfilePanel';
 import GenerationSettingsPanel from './GenerationSettingsPanel';
 import ManagementMapGeneration, { mapDraftQueryKey } from './ManagementMapGeneration';
-import { createConversation, createLearningConversation, deleteCharacter, deleteConversation, fetchCharacters, fetchConversation, fetchConversationHistory, fetchPlatformModels, openManagementConversation, openTreeConversation, switchConversationCharacter } from './tavernClient';
-import { TavernApiError, type Character, type CompletedTurn, type Conversation, type ConversationHistory, type ConversationDetail, type ConversationGraph, type CreateLearningConversationInput, type GenerationSettingsState, type TavernModelSelection } from './types';
+import { createConversation, createLearningConversation, deleteCharacter, deleteConversation, fetchCharacters, fetchConversation, fetchConversationHistory, fetchPlatformModels, openManagementConversation, openTreeConversation, switchConversationCharacter } from '../../api/tavernClient';
+import { TavernApiError, type Character, type CompletedTurn, type Conversation, type ConversationHistory, type ConversationDetail, type ConversationGraph, type CreateLearningConversationInput, type GenerationSettingsState, type TavernModelSelection } from '../../domains/conversations/types';
 import { CharacterAvatar, CompatibilityReport, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass } from './TavernUi';
 
 type HistoryCache = ConversationHistory | Conversation[];
@@ -48,7 +48,7 @@ function updateHistory(history: HistoryCache | undefined, change: (conversations
 
 export interface TavernPageProps {
   agentConfigurationControls?: ReactNode;
-  agentOptions?: import('../assistant/agentConversationOptions').AgentConversationOptions;
+  agentOptions?: import('../../domains/models/agentOptions').AgentConversationOptions;
   management?: boolean;
   onMapGenerated?: (libraryEntryId: string) => void;
   onNodeReferenceConsumed?: () => void;

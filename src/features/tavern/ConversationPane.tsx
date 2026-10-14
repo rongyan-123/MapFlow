@@ -1,30 +1,30 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { conversationRun, type PendingGeneration } from './conversationRuns';
-import {agentConversationRun} from '../assistant/agentConversationRun';
-import {AgentApiError,type AgentCompletion} from '../assistant/agentExecutionClient';
-import type {AgentConversationOptions} from '../assistant/agentConversationOptions';
+import { conversationRun, type PendingGeneration } from '../../domains/conversations/legacyRun';
+import {agentConversationRun} from '../../domains/conversations/agentRun';
+import {AgentApiError,type AgentCompletion} from '../../api/agentExecutionClient';
+import type {AgentConversationOptions} from '../../domains/models/agentOptions';
 import AgentMapResults from '../assistant/AgentMapResults';
-import { approvalSummary } from './approvalSummary';
-import { messageAuthors } from './messageAuthors';
-import { useTeachingCanvas } from './useTeachingCanvas';
+import { approvalSummary } from '../../domains/conversations/approvalSummary';
+import { messageAuthors } from '../../domains/conversations/messageAuthors';
+import { useTeachingCanvas } from '../../domains/canvas/useTeachingCanvas';
 import './teachingWorkspace.css';
 import PanelResizeHandle from './PanelResizeHandle';
 import GenerationProcess from './GenerationProcess';
-import { StreamingPresentation } from './streamingPresentation';
-import type { GenerationProcessEvent } from './types';
+import { StreamingPresentation } from '../../domains/conversations/streamingPresentation';
+import type { GenerationProcessEvent } from '../../domains/conversations/types';
 const TeachingCanvasPanel = lazy(() => import('./TeachingCanvasPanel'));
 import AssistantMarkdown from '../knowledge-chat/AssistantMarkdown';
 import useIsMobile from '../../lib/useIsMobile';
 import { MobileChromePortal, useMobileChatChrome, mobileActionClass, MobileActionIcon } from '../navigation/MobileChatChrome';
 import { DesktopChromePortal, useDesktopChatChrome } from '../navigation/DesktopChatChrome';
-import { validateId, validateMessage } from './conversationInput';
-import { fetchConversation, generateStream, mutateGraph, resolveTavernToolApproval } from './tavernClient';
-import {formatAmountMicros} from '../wallet/walletClient';
-import {formatCreditAmount} from '../credit/creditClient';
-import type { CashQuote } from './types';
-import { TavernApiError, type CompletedTurn, type ConversationDetail, type ConversationGraph, type GenerationAction, type GenerationRecord, type GraphMessage, type GraphMutation, type TavernModelSelection, type TavernUserModelAccess } from './types';
-import { isRecord, utf8Bytes } from './validation';
+import { validateId, validateMessage } from '../../domains/conversations/conversationInput';
+import { fetchConversation, generateStream, mutateGraph, resolveTavernToolApproval } from '../../api/tavernClient';
+import {formatAmountMicros} from '../../api/walletClient';
+import {formatCreditAmount} from '../../api/creditClient';
+import type { CashQuote } from '../../domains/conversations/types';
+import { TavernApiError, type CompletedTurn, type ConversationDetail, type ConversationGraph, type GenerationAction, type GenerationRecord, type GraphMessage, type GraphMutation, type TavernModelSelection, type TavernUserModelAccess } from '../../domains/conversations/types';
+import { isRecord, utf8Bytes } from '../../domains/conversations/validation';
 
 function AgentResultSummary({result}:{result:AgentCompletion}) {
   const isMobile = useIsMobile();
@@ -45,7 +45,7 @@ function AgentResultSummary({result}:{result:AgentCompletion}) {
   </details>;
 }
 import { CharacterAvatar, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass, type TavernDialogSection } from './TavernUi';
-import type { Character } from './types';
+import type { Character } from '../../domains/conversations/types';
 
 export default function ConversationPane({ detail, accountId, csrfToken, modelSelection, platformModelError, onBusyChange, onCompleted, onRecovered, onGraphChanged, configurationOpen, configurationSection, onOpenModelConfiguration, onOpenParameters, onNavigateWallet, onCloseConfiguration, configuration, nodeReference, onNodeReferenceConsumed, mapVisible, onOpenCanvas, readOnly = false, agentOptions }: {
   detail: ConversationDetail; accountId: string; csrfToken: string;

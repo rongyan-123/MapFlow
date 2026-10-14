@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { updateGenerationSettings } from './tavernClient';
-import { TavernApiError, type GenerationSettings, type GenerationSettingsState } from './types';
+import { updateGenerationSettings } from '../../api/tavernClient';
+import { TavernApiError, type GenerationSettings, type GenerationSettingsState } from '../../domains/conversations/types';
 import { ErrorNotice, inputClass, primaryClass } from './TavernUi';
 
 export default function GenerationSettingsPanel({ conversationId, settings, version, csrfToken, onUpdated, onConflict, onBusyChange }: {

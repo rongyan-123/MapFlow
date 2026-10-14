@@ -1,7 +1,7 @@
 import { describePublicError } from '../../lib/publicErrors';
 import { useQuery } from '@tanstack/react-query';
 import { useIdentity } from '../identity/IdentityContext';
-import { getAnnouncements } from './announcementsClient';
+import { getAnnouncements } from '../../api/announcementsClient';
 
 export default function AnnouncementsDialog({ onClose }: { onClose: () => void }) {
   const { session } = useIdentity();

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
-import type { IdentitySession } from '../identity/types';
+import type { IdentitySession } from '../../domains/identity/types';
 import McpGuideDialog from '../mcp/McpGuideDialog';
 import LandingStory from './LandingStory';
 

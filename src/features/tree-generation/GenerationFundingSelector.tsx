@@ -1,8 +1,8 @@
 import type {
   GenerationFundingMode,
   PlatformGenerationEntitlementSummary,
-} from './types';
-import type { CreditSummary } from '../credit/creditClient';
+} from '../../domains/models/legacyGenerationTypes';
+import type { CreditSummary } from '../../api/creditClient';
 
 interface GenerationFundingSelectorProps {
   value: GenerationFundingMode;

@@ -9,7 +9,7 @@ import {
   type FormEvent,
   type ReactElement,
 } from 'react';
-import type { LoginInput, RegistrationInput } from './types';
+import type { LoginInput, RegistrationInput } from '../../domains/identity/types';
 import {
   passwordRules,
   validateConfirmPasswordField,
@@ -19,8 +19,8 @@ import {
   validateRegistration,
   validateUsernameField,
   type RegistrationFormValues,
-} from './identityValidation';
-import { fetchRegistrationChallenge, type RegistrationChallenge, type ClaimedInvitation } from './identityClient';
+} from '../../domains/identity/validation';
+import { fetchRegistrationChallenge, type RegistrationChallenge, type ClaimedInvitation } from '../../api/identityClient';
 
 interface IdentityDialogProps {
   presentation?: 'dialog' | 'page';

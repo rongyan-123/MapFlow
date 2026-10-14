@@ -1,8 +1,8 @@
-import type { LearningArea } from '../tavern/types';
+import type { LearningArea } from '../../domains/conversations/types';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createLearningArea, fetchLearningAreas } from '../tavern/tavernClient';
-import { fetchPersonalLibrary } from '../tree-library/treeLibraryClient';
+import { createLearningArea, fetchLearningAreas } from '../../api/tavernClient';
+import { fetchPersonalLibrary } from '../../api/treeLibraryClient';
 import { ErrorNotice, buttonClass, inputClass, primaryClass } from '../tavern/TavernUi';
 
 interface LearningAreaSelectorProps {

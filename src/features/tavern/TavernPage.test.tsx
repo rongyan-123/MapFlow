@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IdentityProvider } from '../identity/IdentityContext';
 import TavernPage from './TavernPage';
 import { character, completion, conversation, detail, sseResponse, turn } from './testFixtures';
-import type { Character, Conversation, ConversationHistory, ConversationDetail, GenerationAction } from './types';
-import type { MapGenerationDraft } from './tavernClient';
+import type { Character, Conversation, ConversationHistory, ConversationDetail, GenerationAction } from '../../domains/conversations/types';
+import type { MapGenerationDraft } from '../../api/tavernClient';
 vi.mock('@excalidraw/excalidraw', () => ({
   Excalidraw: ({ onChange, initialData }: { onChange: (elements: Record<string, unknown>[]) => void; initialData: { elements: Record<string, unknown>[] } }) => <div aria-label="白板编辑器">{initialData.elements.filter(element => !element.isDeleted).map(element => <span key={element.id as string}>{element.id as string}</span>)}<button type="button" onClick={() => onChange([{ id: 'manual-box', type: 'rectangle', x: 10, y: 20, width: 200, height: 80 }])}>白板：绘制矩形</button></div>,
   // Skeleton construction creates fresh elements; it must not be used to restore a saved editor scene.
@@ -15,8 +15,8 @@ vi.mock('@excalidraw/excalidraw', () => ({
   restoreElements: (elements: unknown) => elements,
 }));
 
-vi.mock('../identity/identityClient', async importOriginal => ({
-  ...await importOriginal<typeof import('../identity/identityClient')>(),
+vi.mock('../../api/identityClient', async importOriginal => ({
+  ...await importOriginal<typeof import('../../api/identityClient')>(),
   fetchCurrentSession: () => Promise.resolve({ account: { playerId: identityAccountId, username: '小明', status: 'active', isAdmin: false }, csrfToken: 'csrf' }),
   fetchCapabilities: () => Promise.resolve({ identity: { registrationEnabled: true }, generation: { enabled: true, platformFundedEnabled: true, models: [], thinkingModes: [], reasoningEfforts: [] } }),
 }));
@@ -184,7 +184,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 function renderPage(treeContext?: { libraryEntryId: string; title: string; available?: boolean; nodeId?: string; nodeTitle?: string }, sharedClient?: QueryClient, management = false,
-  agentOptions?: import('../assistant/agentConversationOptions').AgentConversationOptions) {
+  agentOptions?: import('../../domains/models/agentOptions').AgentConversationOptions) {
   const client = sharedClient ?? new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
   const rendered = render(<QueryClientProvider client={client}><IdentityProvider><TavernPage onNavigateConsole={() => {}} treeContext={treeContext} management={management} agentOptions={agentOptions} /></IdentityProvider></QueryClientProvider>);
   return { ...rendered, client };

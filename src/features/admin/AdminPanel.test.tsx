@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IdentityApiError } from '../identity/identityClient';
+import { IdentityApiError } from '../../api/identityClient';
 import AdminPanel from './AdminPanel';
 import {configurationFixture} from './agentModelFixture';
 import type {
@@ -11,7 +11,7 @@ import type {
   AdminAuditEventsPage,
   AdminDashboard,
   AdminInvitationsResponse,
-} from './types';
+} from '../../domains/admin/types';
 
 const adminApi = vi.hoisted(() => ({
   fetchAdminDashboard: vi.fn(),
@@ -31,11 +31,11 @@ const adminApi = vi.hoisted(() => ({
   switchAdminProvider: vi.fn(),
 }));
 
-vi.mock('./adminClient', () => adminApi);
+vi.mock('../../api/adminClient', () => adminApi);
 const agentApi=vi.hoisted(()=>({fetchAgentModelConfiguration:vi.fn(),saveAgentModelProfile:vi.fn(),activateAgentModelProfile:vi.fn(),fetchAgentSettlementAttention:vi.fn()}));
-vi.mock('./agentModelClient',()=>agentApi);
+vi.mock('../../api/agentModelClient',()=>agentApi);
 const walletApi = vi.hoisted(() => ({ readAdminTopups: vi.fn(), readAdminChannels: vi.fn(), readUpstreamBalance: vi.fn() }));
-vi.mock('../wallet/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('../wallet/walletClient')>(), ...walletApi }));
+vi.mock('../../api/walletClient', async importOriginal => ({ ...await importOriginal<typeof import('../../api/walletClient')>(), ...walletApi }));
 
 function dashboard(): AdminDashboard {
   return {

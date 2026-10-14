@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { PublicUiError } from '../../lib/publicErrors';
-import { readCardImport } from './cardImport';
-import { importCharacter } from './tavernClient';
-import { downloadOfficialCard, fetchOfficialCards, type OfficialCard } from './officialCards';
-import type { CardImport, Character } from './types';
+import { readCardImport } from '../../domains/characters/cardImport';
+import { importCharacter } from '../../api/tavernClient';
+import { downloadOfficialCard, fetchOfficialCards, type OfficialCard } from '../../domains/characters/officialCards';
+import type { CardImport, Character } from '../../domains/conversations/types';
 import { CharacterAvatar, CompatibilityReport, ErrorNotice, TavernDialog, buttonClass, inputClass, primaryClass } from './TavernUi';
 
 export default function CardImportDialog({ csrfToken, onImported, onClose }: {

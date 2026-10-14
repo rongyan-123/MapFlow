@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { readUpstreamBalance, type UpstreamBalance } from '../wallet/walletClient';
+import { readUpstreamBalance, type UpstreamBalance } from '../../api/walletClient';
 
 export default function UpstreamBalanceBanner({ accountId }: { accountId?: string }) {
   const [balance, setBalance] = useState<UpstreamBalance | null>(null);

@@ -1,6 +1,6 @@
 import IdentityDialog from './IdentityDialog';
 import { useIdentity } from './IdentityContext';
-import type { LoginInput, RegistrationInput } from './types';
+import type { LoginInput, RegistrationInput } from '../../domains/identity/types';
 
 interface IdentityGateProps {
   onAuthenticated: () => void;

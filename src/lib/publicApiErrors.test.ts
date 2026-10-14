@@ -1,10 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { fetchCapabilities } from '../features/identity/identityClient';
-import { fetchPublicTrees } from '../features/tree-library/treeLibraryClient';
-import { readUserModelCatalog } from '../features/tree-generation/treeGenerationClient';
-import { readWallet } from '../features/wallet/walletClient';
-import { getAnnouncements } from '../features/announcements/announcementsClient';
-import { readCreditSummary } from '../features/credit/creditClient';
+import { fetchCapabilities } from '../api/identityClient';
+import { fetchPublicTrees } from '../api/treeLibraryClient';
+import { readUserModelCatalog } from '../api/treeGenerationClient';
+import { readWallet } from '../api/walletClient';
+import { getAnnouncements } from '../api/announcementsClient';
+import { readCreditSummary } from '../api/creditClient';
 
 afterEach(() => vi.unstubAllGlobals());
 

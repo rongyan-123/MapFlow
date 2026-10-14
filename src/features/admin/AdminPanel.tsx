@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { readAdminTopups } from '../wallet/walletClient';
+import { readAdminTopups } from '../../api/walletClient';
 import AdminWalletTab from './AdminWalletTab';
 import UpstreamBalanceBanner from './UpstreamBalanceBanner';
 import AgentSettlementAttention from './AgentSettlementAttention';

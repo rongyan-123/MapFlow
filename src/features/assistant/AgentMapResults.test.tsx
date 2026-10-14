@@ -2,10 +2,10 @@ import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import AgentMapResults from './AgentMapResults';
-import type {AgentCompletion} from './agentExecutionClient';
+import type {AgentCompletion} from '../../api/agentExecutionClient';
 
 const join=vi.hoisted(()=>vi.fn());
-vi.mock('../tavern/tavernClient',()=>({createLearningArea:join}));
+vi.mock('../../api/tavernClient',()=>({createLearningArea:join}));
 const entry='11111111-1111-4111-8111-111111111111';
 const area='22222222-2222-4222-8222-222222222222';
 const result:AgentCompletion={executionId:'33333333-3333-4333-8333-333333333333',conversationId:'44444444-4444-4444-8444-444444444444',

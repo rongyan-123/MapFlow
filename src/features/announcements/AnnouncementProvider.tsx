@@ -2,7 +2,7 @@ import { describePublicError } from '../../lib/publicErrors';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIdentity } from '../identity/IdentityContext';
-import { getAnnouncements, markAnnouncementRead } from './announcementsClient';
+import { getAnnouncements, markAnnouncementRead } from '../../api/announcementsClient';
 import AnnouncementDialog from './AnnouncementDialog';
 
 /**

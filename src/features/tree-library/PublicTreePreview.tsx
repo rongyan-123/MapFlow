@@ -1,5 +1,5 @@
 import type { SkillTree } from '../../types/learning';
-import type { PublicTreeAttribution } from './types';
+import type { PublicTreeAttribution } from '../../domains/maps/types';
 import { difficultyLabel } from './PublicTreeCatalogPanel';
 
 export function PublicTreePreviewHeader({ tree, attribution, joining, joinError, catalogCollapsed, onJoin, onExpandCatalog }: { tree: SkillTree; attribution?: PublicTreeAttribution; joining: boolean; joinError?: unknown; catalogCollapsed: boolean; onJoin: () => void; onExpandCatalog: () => void }) {
