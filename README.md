@@ -2,7 +2,13 @@
 
 MapFlow 是一个面向真实用户、现已正式开放的技能树学习平台。线上版本运行于 [xxian.fun](https://xxian.fun)，所有人都可以直接访问网站并浏览公共技能树；需要保存个人树库、学习进度或使用 AI 生成器时，可以在站内注册账号。
 
-当前网站运行在 Linux 笔记本，通过现有 FRP 隧道对外提供服务。前后端统一从 `main` 发布，51 个聊天模型、参考价与不透明菜单见 [最新部署记录](docs/deployment/2026-10-08-model-catalog-pricing.md)；接入偏好、新建会话、教学画布和模型参数见 [交互记录](docs/deployment/2026-10-07-tavern-interaction.md)；发送后结算、学习酒馆和 Q 群设置见 [结算与学习记录](docs/deployment/2026-10-07-postpaid-learning.md)，按需读取见 [读取工具记录](docs/deployment/2026-10-07-granular-tavern-reading.md)。旧阿里云部署流程保持停用。
+当前网站运行在 Linux 笔记本，通过现有 FRP 隧道对外提供服务。前后端统一从 `main` 发布，聊天布局、手机适配、会话删除及最新生产验证见 [2026-10-13 发布记录](docs/research/2026-10-13-chat-ui-deployment.md)；模型目录和参考价见 [模型记录](docs/deployment/2026-10-08-model-catalog-pricing.md)。旧阿里云部署流程保持停用。
+
+## 固定代码入口
+
+本机前端固定目录是 `D:/MapFlow-publish`，后端是 `D:/mapflow-server`，均保持最新整合 `main`。开始开发或审计前运行 `npm run workspace:check`；功能修改在从最新 main 建立的独立 worktree 和 `codex/` 分支完成，合入后再次核对固定入口。已有会话及其目录路径保留。
+
+带日期的整合目录与历史开发目录保留供原任务使用。使用时核对真实 HEAD，不能将其名称或旧交接中的路径当作最新主线。操作和恢复规则见 [工作区入口说明](docs/workflow/workspace-entry.md) 与 [AGENTS.md](AGENTS.md)。
 
 ## 当前主线
 
@@ -28,7 +34,10 @@ MapFlow 是一个面向真实用户、现已正式开放的技能树学习平台
 
 ## 本地开发
 
+先检查固定入口，再进入独立开发工作区：
+
 ```bash
+npm run workspace:check
 npm install
 npm run dev
 ```
@@ -70,6 +79,7 @@ Skill 会引导确认学习方向和目标，并生成符合 MapFlow 数据结�
 ```bash
 npm test
 npm run build
+npm run workspace:test
 ```
 
 ## 技术栈

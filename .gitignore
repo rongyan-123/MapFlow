@@ -4,6 +4,9 @@ dist
 /public/excalidraw/
 *.tsbuildinfo
 
+# Python 检查脚本的缓存
+__pycache__/
+
 # 日志
 *.log
 

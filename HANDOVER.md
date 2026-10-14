@@ -1,6 +1,6 @@
-> **最新发布（2026-10-07）**：前后端 main，笔记本镜像 `mapflow-server:postpaid-learning-20261007`，迁移 0034。平台现金大于 0 可以发送，完成后按实际费用结算，可扣成负数；后续发送需恢复正余额。学习酒馆独占内容区并卸载地图。管理员可设置 Q 群、检测上游余额。请先阅读 [最新部署记录](docs/deployment/2026-10-07-postpaid-learning.md)，以下旧预留逻辑和旧镜像仅供历史参考。
+> **固定入口更新（2026-10-14）**：日常前端入口为 `D:/MapFlow-publish`，后端为 `D:/mapflow-server`，两个目录保持最新整合 `main`。开始审计或开发前运行 `python D:/MapFlow-publish/scripts/workspace_entry.py`。功能开发使用独立 worktree；未完成工作、所有 Codex 会话和关联路径保留。带日期目录为原任务环境，不再作为默认最新入口。详见 [工作区规则](docs/workflow/workspace-entry.md) 和 [AGENTS.md](AGENTS.md)。
 
-> **Main 融合与发布（2026-10-06）**：日常前端以 `D:\MapFlow-main-integration-20261006` 的 `main` 为准，后端以 `D:\mapflow-server-main-integration-20261006` 的 `main` 为准。已融合公共树库搜索、筛选、分页、笔记与发布，以及 Vmq 自动充值、20 秒展示队列、酒馆和注册。笔记本生产状态以 `/opt/mapflow-laptop-migration-20261006/OPERATIONS.md` 首段为准；固定提交和验收证据见 `releases/20261006-main-integration/provenance.json`。不要再从未收齐功能的独立分支直接覆盖生产。详见 [main 整合记录](docs/deployment/2026-10-06-main-integration.md)。下文包含历史版本。
+> **最近生产发布（2026-10-13）**：聊天布局、手机适配、持久会话删除及迁移 0054 的发布验证见 [发布记录](docs/research/2026-10-13-chat-ui-deployment.md)。生产实际状态继续以 Linux 笔记本 `/opt/mapflow-laptop-migration-20261006/OPERATIONS.md` 首段为准。本机入口整理不发布或重启产品。下文带有旧日期的功能和部署记录属于历史资料。
 
 # MapFlow 项目交接文档
 
@@ -8,7 +8,7 @@
 
 当前状态检查：`ssh rong-frp` 后运行 `sudo docker -H unix:///var/run/docker.sock ps`，生产容器为 `mapflow-laptop-app`、`mapflow-laptop-postgres`、`mapflow-laptop-caddy`。不要使用默认 Docker Desktop socket 判断生产容器不存在。
 
-> **收款与排队发布更新（2026-10-06）**：当前生产镜像为 `mapflow-server:payment-display-queue-20261006`，迁移 0030。微信/支付宝共用 20 秒二维码展示队列，超时重新排队，已扫码的原订单保留 5 分钟付款有效期；继续按指定金额匹配、按实收入账。微信码版本 5，支付宝 4；先前实收 0.03 元仍只有一条流水。已保留另一会话的注册后端 `f60293e` 与前端 `a8d393d`。前端目录 `D:\MapFlow-payment-listener`、分支 `codex/payment-listener-20261006`；最新后端目录 `D:\mapflow-server-payment-queue`、分支 `codex/payment-display-queue-20261006`。当前操作与备份见 [队列部署记录](docs/deployment/2026-10-06-payment-display-queue.md)，首次接通监控的历史见 [自动充值部署记录](docs/deployment/2026-10-06-vmq-auto-topup.md)。
+> **收款与排队发布历史（2026-10-06）**：当时镜像为 `mapflow-server:payment-display-queue-20261006`，迁移 0030。微信/支付宝共用 20 秒二维码展示队列，已扫码订单保留付款有效期；当时的处理和备份见 [队列部署记录](docs/deployment/2026-10-06-payment-display-queue.md)。本机 `D:/MapFlow-payment-listener` 的收款脚本与自动启动任务仍保留原入口；迁移须另行验证新入口、重启、链路和回滚。历史后端队列开发目录已经封存，当前后端代码以 `D:/mapflow-server` 为准。
 
 > 交接日期：2026-08-21　交接对象：接手此项目的 AI Agent
 > 阅读顺序：本文档（30 秒概览 + 部署流水线必读）→ 全局 `C:\Users\Administrator\.claude\CLAUDE.md`（工作流规则）→ `git log --oneline -20`（两仓库；SDD ledger 已清理，历史以本文档 §7 + git 为准）→ 相关代码
@@ -25,7 +25,7 @@ MapFlow 是一个 **AI 技能树教学系统**（生产：https://xxian.fun）�
 - **辅助系统**：信用/积分（平台免费额度）、公告、意见反馈
 - **MapFlow MCP**：外部 Agent（`npx @mapflow-publish/mcp`）经 device flow 授权后读取学习进度、读取/编辑私人技能树（含分组块），全部写操作落 agent 审计
 
-两个仓库（均直接工作在 `main` 分支）：
+两个仓库的固定入口（保持最新 main；功能开发在独立 worktree）：
 
 | 仓库 | 路径 | 内容 |
 |---|---|---|
@@ -73,8 +73,8 @@ MapFlow 是一个 **AI 技能树教学系统**（生产：https://xxian.fun）�
 - **三阶段**：先想清楚（描述+步骤+验证方式）→ 用户确认 → TDD（先写测试跑红→实现跑绿）→ 完成前全量测试 + typecheck + build
 - **修复 bug 用 systematic-debugging 技能**；新功能先 brainstorming
 - **全程中文**（对话、commit message、注释）
-- **Subagent 必须显式 `model=sonnet`**（用户要求不用 Pro）
-- **直接在 main 分支工作**（两仓库都是，用户已确认的既定工作流）
+- **Agent 协作**：按当前用户授权、全局规范和本会话可用模型执行。
+- **固定主目录保持最新 main，功能开发在独立 worktree**；完成合入后运行入口检查，保留原任务会话目录和未完成工作。
 - **最小改动**：只改任务要求的代码；同一方案失败 2-3 次立即 WebSearch
 - **图片识别用 `mcp__vision__describe_image`**（豆包 MCP），不用内置 Read 读图
 - 用户是产品所有者，有明确技术判断力；**不要假设用户操作错误**（曾因此被纠正）
@@ -189,4 +189,4 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/rongyan-123/
 
 ## 10. 给接手 AI 的开场指令（可直接复制）
 
-> 你正在接手 MapFlow 教学系统（https://xxian.fun）。请先读 `D:\MapFlow-publish\HANDOVER.md`（项目交接文档）→ 全局 `C:\Users\Administrator\.claude\CLAUDE.md`（工作流规则）。然后 `git log --oneline -20` 核实两仓库（D:\MapFlow-publish 前端、D:\mapflow-server 后端）当前状态（§7 有最近变更摘要）。确认无误后我们再开始具体任务。
+> 你正在接手 MapFlow 教学系统（https://xxian.fun）。先读两个仓库的 `AGENTS.md` 和 `D:/MapFlow-publish/docs/workflow/workspace-entry.md`，运行 `python D:/MapFlow-publish/scripts/workspace_entry.py`，核对固定前后端目录的分支、HEAD、远端 main 和未完成工作。再阅读相关代码与带日期的历史交接。固定目录保持最新 main，功能开发使用独立 worktree，保留已有 Codex 会话及关联目录。
