@@ -12,3 +12,5 @@
   --mf-on-brand:#14241b; --mf-danger:#ffa3a3; --mf-warning:#ebc983;
   --mf-shadow:0 16px 60px #0004; color-scheme:dark;
 }
+:root[data-mapflow-theme='ivory']{--mf-bg:#faf7ef;--mf-panel:#fffcf5;--mf-soft:#f2eee3;--mf-line:#e6dfcf;--mf-tint:#eaf0e1}
+:root[data-mapflow-theme='blue-gray']{--mf-bg:#151e29;--mf-panel:#1d2936;--mf-soft:#263544;--mf-line:#354657;--mf-ink:#e6edf3;--mf-muted:#a2b4c4;--mf-brand:#9dc5d0;--mf-tint:#283f49;--mf-on-brand:#152831}

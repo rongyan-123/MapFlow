@@ -1,5 +1,5 @@
 import type { PricingChannel } from '../../api/walletClient';
-import { modelPriceRows } from './pricePresentation';
+import { modelPriceRows } from '../../domains/wallet/pricePresentation';
 
 export default function ModelReferencePrices({ channels, compact = false }: {
   channels: readonly PricingChannel[];
