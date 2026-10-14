@@ -1,0 +1,14 @@
+:root {
+  --mf-bg:#fafbf9; --mf-panel:#fff; --mf-soft:#f1f4f0; --mf-ink:#1c2b26;
+  --mf-muted:#687970; --mf-line:#e2e8e2; --mf-brand:#1b7558; --mf-tint:#e8f3ec;
+  --mf-on-brand:#fff; --mf-danger:#a73838; --mf-warning:#8a651d;
+  --mf-shadow:0 16px 60px #1c302618; --mf-radius:16px;
+  font-family:Inter,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  font-synthesis:none; text-rendering:optimizeLegibility; color-scheme:light;
+}
+:root[data-mapflow-theme='dark'],:root[data-mapflow-theme='blue-gray'] {
+  --mf-bg:#121b18; --mf-panel:#1a2520; --mf-soft:#222f29; --mf-ink:#e7eee8;
+  --mf-muted:#a2b0a6; --mf-line:#314037; --mf-brand:#83cba4; --mf-tint:#244134;
+  --mf-on-brand:#14241b; --mf-danger:#ffa3a3; --mf-warning:#ebc983;
+  --mf-shadow:0 16px 60px #0004; color-scheme:dark;
+}
