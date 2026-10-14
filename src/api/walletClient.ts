@@ -1,7 +1,7 @@
 import { request as apiFetch } from './http';
 import { publicHttpErrorMessage } from '../lib/publicErrors';
 import { IdentityApiError } from './identityClient';
-import type { UserModelSetting } from '../domains/models/legacyGenerationTypes';
+import type { UserModelSetting } from '../domains/models/modelCatalog';
 
 export type PaymentChannel = 'wechat' | 'alipay';
 export interface PaymentDisplay { windowId: string | null; status: 'waiting' | 'active' | 'expired' | 'cancelled' | 'finished'; serverNow: string; expiresAt: string | null; position: number; imageUrl: string | null }

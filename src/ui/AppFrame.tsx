@@ -28,16 +28,19 @@ export function AppFrame({ children, items, tools, accountName, navigate, onAcco
       if (!element) return;
       const visual = window.visualViewport;
       element.style.setProperty('--mf-viewport-height', `${visual?.height || window.innerHeight}px`);
+      element.style.setProperty('--mf-viewport-offset', `${visual?.offsetTop || 0}px`);
       element.dataset.editing = document.activeElement?.matches('input,textarea') ? 'true' : 'false';
     };
     update();
     window.addEventListener('resize', update);
     window.visualViewport?.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('scroll', update);
     document.addEventListener('focusin', update);
     document.addEventListener('focusout', update);
     return () => {
       window.removeEventListener('resize', update);
       window.visualViewport?.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('scroll', update);
       document.removeEventListener('focusin', update);
       document.removeEventListener('focusout', update);
     };

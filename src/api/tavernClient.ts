@@ -7,18 +7,6 @@ import { isRecord, NORMALIZED_CARD_BYTES, RAW_FILE_BYTES, tooLarge, utf8Bytes } 
 import type {CashCharge,CashQuote} from '../domains/conversations/types';
 
 const ROOT = '/api/me/tavern';
-export interface MapGenerationDraft { draftId: string; input: import('../domains/models/legacyGenerationTypes').GenerationInput }
-export async function fetchMapGenerationDraft(conversationId: string, signal?: AbortSignal): Promise<MapGenerationDraft | null> {
-  const value = await getJson(`${ROOT}/conversations/${pathId(conversationId)}/map-generation-draft`, signal);
-  if (!isRecord(value)) throw invalidResponse();
-  if (value.draft === null) return null;
-  const draft = value.draft;
-  if (!isRecord(draft) || typeof draft.draftId !== 'string' || !draft.draftId.trim() || !isRecord(draft.input)) throw invalidResponse();
-  const fields = ['topic','role','goalDescription','learnerContextSummary'] as const;
-  const input = draft.input;
-  if (fields.some(field => typeof input[field] !== 'string' || !input[field].trim() || Array.from(input[field]).length > 10000)) throw invalidResponse();
-  return { draftId: draft.draftId, input: Object.fromEntries(fields.map(field => [field,input[field]])) as unknown as MapGenerationDraft['input'] };
-}
 export async function openManagementConversation(input: import('../domains/conversations/types').OpenManagementConversationInput, csrfToken: string, signal?: AbortSignal): Promise<ConversationDetail> {
   const detail = parseConversationDetail(await readJson(await request(`${ROOT}/management-conversations`, {
     method: 'POST', headers: mutationHeaders(csrfToken, true), body: JSON.stringify(input), signal,

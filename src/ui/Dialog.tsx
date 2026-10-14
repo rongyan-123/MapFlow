@@ -21,6 +21,11 @@ export function Dialog({ title, children, onClose, dismissible = true, layout = 
   const canDismiss = useRef(dismissible);
   close.current = onClose;
   canDismiss.current = dismissible;
+  useEffect(()=>{
+    const update=()=>{const viewport=window.visualViewport;layer.current?.style.setProperty('--mf-viewport-height',`${viewport?.height||window.innerHeight}px`);layer.current?.style.setProperty('--mf-viewport-offset',`${viewport?.offsetTop||0}px`);};
+    update();window.addEventListener('resize',update);window.visualViewport?.addEventListener('resize',update);window.visualViewport?.addEventListener('scroll',update);
+    return()=>{window.removeEventListener('resize',update);window.visualViewport?.removeEventListener('resize',update);window.visualViewport?.removeEventListener('scroll',update);};
+  },[]);
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;

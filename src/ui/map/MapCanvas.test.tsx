@@ -74,7 +74,7 @@ vi.mock('@xyflow/react', async () => {
     Background: () => null,
     Controls: () => null,
     MiniMap: () => null,
-    ReactFlow,
+    ReactFlow:React.forwardRef((props:React.ComponentProps<typeof ReactFlow>,_ref:React.ForwardedRef<HTMLDivElement>)=><ReactFlow {...props} />),
     useEdgesState,
     useNodesInitialized,
     useNodesState,
@@ -126,6 +126,15 @@ describe('SkillTreeCanvas', () => {
     flowProbe.setViewport.mockClear(); localStorage.clear();
     flowProbe.fitViewBeforeNodesInitialized.length = 0;
   });
+  it('opens a large map around a learning starting node rather than shrinking all nodes into unreadable dots',async()=>{
+    render(<SkillTreeCanvas snapshot={{...snapshot,current_node_id:null}} displayMode="personal" layoutMode="relationship" selectedNodeId={null} isGraphVisible onSelectNode={()=>{}} />);
+    await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());expect(flowProbe.fitView.mock.calls[0][0].nodes).toEqual([{id:'node-1'}]);
+  });
+  it('keeps the same graph center when a saved viewport is restored at a wider screen',async()=>{
+    const previousWidth=window.innerWidth;const props={snapshot,displayMode:'personal' as const,layoutMode:'relationship' as const,selectedNodeId:null,isGraphVisible:true,onSelectNode:()=>{},viewportStorageKey:'mapflow.map.test.resize'};
+    const first=render(<SkillTreeCanvas {...props} />);await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());fireEvent.click(screen.getByRole('button',{name:'移动地图'}));first.unmount();window.innerWidth=previousWidth+400;
+    render(<SkillTreeCanvas {...props} />);await waitFor(()=>expect(flowProbe.setViewport).toHaveBeenCalledWith({x:272,y:-31,zoom:.63},{duration:0}));window.innerWidth=previousWidth;
+  });
 
   it('restores an account/map viewport after leaving the page and does not replace it with fitView', async () => {
     const props = { snapshot, displayMode: 'personal' as const, layoutMode: 'relationship' as const,
@@ -149,10 +158,10 @@ describe('SkillTreeCanvas', () => {
     flowProbe.fitView.mockClear();
     const other = render(<SkillTreeCanvas {...props} viewportStorageKey="mapflow.map.viewport.v1.account-2.map-1" />);
     await waitFor(() => expect(flowProbe.fitView).toHaveBeenCalled());
-    expect(flowProbe.setViewport).not.toHaveBeenCalled(); other.unmount(); flowProbe.fitView.mockClear();
+    expect(flowProbe.setViewport).not.toHaveBeenCalledWith({x:72,y:-31,zoom:.63},{duration:0}); other.unmount(); flowProbe.fitView.mockClear();
     render(<SkillTreeCanvas {...props} snapshot={{ ...snapshot, tree: { ...snapshot.tree, revision: 2 } }} />);
     await waitFor(() => expect(flowProbe.fitView).toHaveBeenCalled());
-    expect(flowProbe.setViewport).not.toHaveBeenCalled();
+    expect(flowProbe.setViewport).not.toHaveBeenCalledWith({x:72,y:-31,zoom:.63},{duration:0});
   });
 
   it('等待 React Flow 节点完成测量后再 fitView，避免初始视口停留在原始坐标', async () => {

@@ -2,6 +2,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import ModelPricingPage from './ModelsPage';
+it('uses the active Agent catalogue for cash access even when legacy pricing metadata says BYOK',async()=>{
+  const profile={profileId:'cash-model',profileVersion:1,modelId:'model-a',displayName:'额度模型',contextWindow:32000,maxOutputTokens:null};
+  vi.stubGlobal('fetch',async(path:string)=>new Response(JSON.stringify(String(path).endsWith('/agent-models')?{cash:[profile],defaultCash:profile,points:null}:String(path).includes('/wallet')?{balanceMicros:100000,currency:'CNY',supportContact:'',channels:[],topups:[],ledger:[]}:catalog)));
+  render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><ModelPricingPage accountId="player-a" onNavigateWallet={()=>{}} onBack={()=>{}} onNavigateTavern={()=>{}} /></QueryClientProvider>);
+  const details=await screen.findByRole('region',{name:'模型详情'});await within(details).findByText('现金额度');expect(screen.queryByText(/额度调用尚未开放/)).not.toBeInTheDocument();
+});
 
 const catalog = { multiplierLabel: '0.2倍率', currency: 'CNY', updatedAt: '2026-09-30', models: [
   { id: 'model-a', provider: 'AnyAI', contextWindow: 1048576, settings: [{ name: 'thinking', kind: 'switch', options: [] }], vendorCodes: ['vendor-a'], availability: 'byok', pricing: null },
@@ -64,7 +70,7 @@ it('searches and selects a model with context, settings and honest channel monit
   expect(within(details).getByText('暂无监测数据')).toBeInTheDocument();
   expect(screen.queryByText(/\d+%/)).not.toBeInTheDocument();
   expect(screen.getByText('单价待配置')).toBeInTheDocument();
-  expect(screen.getByText(/目前使用自填 Key/)).toBeInTheDocument();
+  expect(screen.getByText(/额度模型在助手的模型配置中选择/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '选择模型 model-b' }));
   expect(within(details).getByRole('heading', { name: 'model-b' })).toBeInTheDocument();
   expect(within(details).getByText('128,000')).toBeInTheDocument();

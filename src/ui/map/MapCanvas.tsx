@@ -28,7 +28,7 @@ import {
 import SkillNodeComponent, {
   type SkillFlowNode,
 } from './MapNode';
-import { getReadableInitialZoom } from '../../domains/maps/viewport';
+import { getReadableInitialZoom,getStartingViewport } from '../../domains/maps/viewport';
 import BlockConnectionEdge from './BlockConnectionEdge';
 import { buildBlockConnections } from '../../domains/maps/blockConnections';
 
@@ -222,6 +222,8 @@ export default function SkillTreeCanvas({
   const flowRef = useRef<ReactFlowInstance<SkillFlowNode | BlockLaneFlowNode> | null>(
     null,
   );
+  const containerRef=useRef<HTMLDivElement>(null);
+  const canvasSize=()=>({width:containerRef.current?.clientWidth||window.innerWidth,height:containerRef.current?.clientHeight||window.innerHeight});
   const layoutKey = `${snapshot.tree.id}:${snapshot.tree.revision ?? 0}:${layoutMode}`;
   const fitViewKey = `${viewportStorageKey ?? ''}:${layoutKey}:${snapshot.current_node_id ?? ''}`;
   const viewportKey = viewportStorageKey ? `${viewportStorageKey}.${layoutMode}` : undefined;
@@ -250,14 +252,15 @@ export default function SkillTreeCanvas({
   const fitGraphView = useCallback(() => {
     const flow = flowRef.current;
     if (!flow || generatedNodes.length === 0) return;
-    const remembered = readMapViewport(viewportKey, layoutKey);
+    const remembered = readMapViewport(viewportKey, layoutKey,canvasSize());
     if (remembered) { void flow.setViewport(remembered, { duration: 0 }); return; }
+    const startingNode=snapshot.current_node_id??generatedNodes.filter(node=>node.type==='skill').sort((first,second)=>first.position.y-second.position.y||first.position.x-second.position.x)[0]?.id;
 
     void flow
       .fitView({
         nodes:
-          layoutMode === 'relationship' && snapshot.current_node_id
-            ? [{ id: snapshot.current_node_id }]
+          layoutMode === 'relationship' && startingNode
+            ? [{ id: startingNode }]
             : undefined,
         padding: layoutMode === 'blocks' ? 0.2 : 0.18,
         maxZoom: layoutMode === 'blocks' ? 1 : 1.15,
@@ -267,14 +270,14 @@ export default function SkillTreeCanvas({
         if (!didFit || layoutMode !== 'relationship') return;
         const fittedZoom = flow.getZoom();
         const readableZoom = getReadableInitialZoom(fittedZoom);
-        if (readableZoom > fittedZoom + 0.01) {
-          void flow.zoomTo(readableZoom, { duration: 180 });
-        }
+        const starting=generatedNodes.find(node=>node.id===startingNode);
+        if(starting)void flow.setViewport(getStartingViewport(canvasSize(),starting.position,readableZoom),{duration:0});
       });
-  }, [generatedNodes.length, layoutMode, snapshot.current_node_id, viewportKey, layoutKey]);
+  }, [generatedNodes, layoutMode, snapshot.current_node_id, viewportKey, layoutKey]);
 
   return (
     <ReactFlow
+      ref={containerRef}
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
@@ -284,7 +287,7 @@ export default function SkillTreeCanvas({
       onNodeClick={(_, node) => onSelectNode(node.id)}
       onMoveEnd={(_, viewport) => {
         if (!viewportKey) return;
-        try { localStorage.setItem(viewportKey, JSON.stringify({ layoutKey, viewport })); }
+        try { localStorage.setItem(viewportKey, JSON.stringify({ layoutKey, viewport,canvas:canvasSize() })); }
         catch { /* Viewport preferences are optional and never affect server-owned map data. */ }
       }}
       onInit={(instance) => {
@@ -294,6 +297,7 @@ export default function SkillTreeCanvas({
       maxZoom={2.5}
       defaultEdgeOptions={{ type: 'smoothstep' }}
       proOptions={{ hideAttribution: true }}
+      ariaLabelConfig={{'controls.ariaLabel':'地图操作','controls.zoomIn.ariaLabel':'放大地图','controls.zoomOut.ariaLabel':'缩小地图','controls.fitView.ariaLabel':'显示整张地图','controls.interactive.ariaLabel':'切换地图拖动','minimap.ariaLabel':'地图总览'}}
     >
       {layoutMode === 'blocks' && selectedNodeId && <div className="mf-map-legend"><span>前置流入</span><span>→ 选中节点 →</span><span>后置流出</span></div>}
       <FitViewWhenReady
@@ -323,15 +327,15 @@ export default function SkillTreeCanvas({
   );
 }
 
-function readMapViewport(storageKey: string | undefined, layoutKey: string): Viewport | null {
+function readMapViewport(storageKey: string | undefined, layoutKey: string,canvas:{width:number;height:number}): Viewport | null {
   if (!storageKey) return null;
   try {
     const serialized = localStorage.getItem(storageKey);
     if (!serialized) return null;
-    const saved = JSON.parse(serialized) as { layoutKey?: unknown; viewport?: Partial<Viewport> } | null;
+    const saved = JSON.parse(serialized) as { layoutKey?: unknown; viewport?: Partial<Viewport>;canvas?:{width:number;height:number} } | null;
     const viewport = saved?.viewport;
     return saved?.layoutKey === layoutKey && viewport && Number.isFinite(viewport.x) && Number.isFinite(viewport.y)
-      && typeof viewport.zoom === 'number' && viewport.zoom >= 0.1 && viewport.zoom <= 2.5 ? viewport as Viewport : null;
+      && typeof viewport.zoom === 'number' && viewport.zoom >= 0.1 && viewport.zoom <= 2.5&&saved.canvas&&Number.isFinite(saved.canvas.width)&&saved.canvas.width>0&&Number.isFinite(saved.canvas.height)&&saved.canvas.height>0 ? {x:viewport.x!+(canvas.width-saved.canvas.width)/2,y:viewport.y!+(canvas.height-saved.canvas.height)/2,zoom:viewport.zoom} : null;
   } catch { return null; }
 }
 

@@ -20,3 +20,8 @@ it('offers guidance as an entry screen without inserting fictional chat messages
   render(<Controller />);expect(screen.getAllByRole('button').filter(button=>button.dataset.guide)).toHaveLength(4);
   expect(screen.getByRole('log',{name:'对话消息'})).toBeEmptyDOMElement();
 });
+it('makes secondary actions available in one menu and keeps the composer draft',()=>{
+  render(<Controller />);fireEvent.change(screen.getByRole('textbox',{name:'消息'}),{target:{value:'还没发送'}});
+  fireEvent.click(screen.getByRole('button',{name:'更多聊天操作'}));expect(screen.getByRole('dialog',{name:'聊天操作'})).toBeVisible();
+  fireEvent.click(screen.getByRole('button',{name:'查看会话历史'}));expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue('还没发送');
+});

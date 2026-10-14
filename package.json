@@ -15,8 +15,6 @@
   },
   "dependencies": {
     "@excalidraw/excalidraw": "0.18.1",
-    "@react-three/drei": "^9.122.0",
-    "@react-three/fiber": "^8.18.0",
     "@tanstack/react-query": "^5.45.0",
     "@xyflow/react": "^12.3.0",
     "clsx": "^2.1.1",
@@ -24,8 +22,7 @@
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "tailwind-merge": "^2.4.0",
-    "three": "^0.169.0"
+    "tailwind-merge": "^2.4.0"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",

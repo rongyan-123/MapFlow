@@ -1,6 +1,6 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {fetchAgentModelConfiguration,activateAgentModelProfile,saveAgentModelProfile,fetchAgentSettlementAttention} from './agentModelClient';
-import {configurationFixture} from '../features/admin/agentModelFixture';
+import {configurationFixture} from '../test/agentModelFixture';
 afterEach(()=>vi.unstubAllGlobals());
 it('reads administrator settlement pages without keys and rejects unexpected secret-bearing fields',async()=>{
  const page={pending:[],nextBefore:null,totalCount:0};

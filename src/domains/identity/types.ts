@@ -2,7 +2,7 @@ import type {
   DeepSeekModel,
   ReasoningEffort,
   ThinkingMode,
-} from '../models/legacyGenerationTypes';
+} from '../models/modelCatalog';
 
 export interface IdentityCapabilities {
   identity: {

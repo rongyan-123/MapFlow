@@ -76,8 +76,8 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
   const composer = useRef<HTMLTextAreaElement>(null);
   const followLatest = useRef(true);
   useEffect(() => {
-    if (followLatest.current) bottom.current?.scrollIntoView?.({ block: 'nearest' });
-  }, [draft, process, detail.graph.revision, pendingGeneration]);
+    if (followLatest.current&&(busy||draft||pendingGeneration||detail.graph.messages.some(message=>message.role==='user'))) bottom.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [draft, process, detail.graph.revision, pendingGeneration,busy]);
   useEffect(() => { setEditing(false); setEditContent(''); }, [detail.graph.revision]);
   useEffect(() => {
     if (!busy && pendingGeneration && detail.generations.some(generation => generation.clientActionId === pendingGeneration.clientActionId)) {
