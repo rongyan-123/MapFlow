@@ -20,19 +20,19 @@ def read_git(root, *arguments):
 
 def inspect_workspace(location, expected_repository=None):
     root = Path(location).resolve()
-    result = {'path': str(root), 'issues': []}
+    workspace_report = {'path': str(root), 'issues': []}
 
     def issue(code, message):
-        result['issues'].append({'code': code, 'message': message})
+        workspace_report['issues'].append({'code': code, 'message': message})
 
     if not root.is_dir():
         issue('missing_directory', '固定目录不存在。')
-        return result
+        return workspace_report
     try:
         top = read_git(root, 'rev-parse', '--show-toplevel')
         if top.returncode:
             issue('not_repository', '固定目录不是可读取的 Git 工作区。')
-            return result
+            return workspace_report
         if Path(top.stdout.strip()).resolve() != root:
             issue('wrong_root', '指定目录是仓库的子目录，不能作为固定入口。')
         expected_repository = expected_repository or REGISTERED_REPOSITORIES.get(root.as_posix().casefold())
@@ -49,25 +49,25 @@ def inspect_workspace(location, expected_repository=None):
             if remote_url.returncode or repository_name != expected_repository.casefold().removesuffix('.git'):
                 issue('wrong_repository', 'origin 与固定入口登记的产品仓库不一致。')
         branch = read_git(root, 'symbolic-ref', '--short', '-q', 'HEAD')
-        result['branch'] = branch.stdout.strip() if branch.returncode == 0 else 'DETACHED'
-        if result['branch'] != 'main':
+        workspace_report['branch'] = branch.stdout.strip() if branch.returncode == 0 else 'DETACHED'
+        if workspace_report['branch'] != 'main':
             issue('wrong_branch', '固定入口应位于 main；请先保存开发工作，再恢复主目录。')
         head = read_git(root, 'rev-parse', '--verify', 'HEAD')
         if head.returncode:
             issue('missing_head', '工作区没有可读取的提交。')
-            return result
-        result['head'] = head.stdout.strip()
+            return workspace_report
+        workspace_report['head'] = head.stdout.strip()
         tracking = read_git(root, 'rev-parse', '--verify', 'refs/remotes/origin/main')
         if tracking.returncode:
             issue('missing_origin_main', '缺少 origin/main；请先 git fetch origin。')
         else:
-            result['originMain'] = tracking.stdout.strip()
+            workspace_report['originMain'] = tracking.stdout.strip()
             counts = read_git(root, 'rev-list', '--left-right', '--count', 'HEAD...refs/remotes/origin/main')
             if counts.returncode:
                 issue('cannot_compare_main', '无法核对 main 的提交范围。')
             else:
-                result['aheadOrigin'], result['behindOrigin'] = map(int, counts.stdout.split())
-                if result['behindOrigin']:
+                workspace_report['aheadOrigin'], workspace_report['behindOrigin'] = map(int, counts.stdout.split())
+                if workspace_report['behindOrigin']:
                     issue('behind_origin', '工作区缺少 origin/main 的提交；请在保存本地工作后更新固定主线。')
         status = read_git(root, 'status', '--porcelain=v1', '-z', '--untracked-files=all')
         if status.returncode:
@@ -89,8 +89,8 @@ def inspect_workspace(location, expected_repository=None):
                     tracked += 1
                     if 'R' in flags or 'C' in flags:
                         cursor += 1
-            result['trackedChangeCount'] = tracked
-            result['untrackedFileCount'] = untracked
+            workspace_report['trackedChangeCount'] = tracked
+            workspace_report['untrackedFileCount'] = untracked
             if tracked:
                 issue('tracked_changes', '固定入口有暂存或未暂存改动；请将功能工作保存在独立工作区。')
             if untracked:
@@ -100,12 +100,12 @@ def inspect_workspace(location, expected_repository=None):
             if remote.returncode or not remote.stdout.strip():
                 issue('remote_unavailable', '无法读取远端 main；本次不能确认固定入口为最新。')
             else:
-                result['remoteMain'] = remote.stdout.split()[0]
-                if result['remoteMain'] != result['originMain']:
+                workspace_report['remoteMain'] = remote.stdout.split()[0]
+                if workspace_report['remoteMain'] != workspace_report['originMain']:
                     issue('stale_origin_main', '远端 main 已变化；请先 git fetch origin 再重新检查。')
     except (OSError, subprocess.TimeoutExpired, ValueError):
         issue('git_check_failed', 'Git 检查失败或超时；请核对目录、Git 安装与远端访问。')
-    return result
+    return workspace_report
 
 
 def main():
