@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { resolveRoute, type LegacyView } from './routes';
+import { resolveRoute, type LegacyView,type LegacyConsoleState } from './routes';
 
 export type Navigate = (address: string, replace?: boolean) => void;
 
-export function useLocation(legacyView?: LegacyView) {
+export function useLocation(legacyView?: LegacyView|LegacyConsoleState) {
   const [address, setAddress] = useState(() => window.location.pathname + window.location.search);
   useEffect(() => {
     const update = () => setAddress(window.location.pathname + window.location.search);

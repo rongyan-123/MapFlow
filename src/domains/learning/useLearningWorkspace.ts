@@ -1,13 +1,19 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {createLearningArea,fetchLearningAreas} from '../../api/tavernClient';
 import {usePersonalCatalog} from '../maps/useMapCatalog';
 import type {LearningArea} from '../conversations/types';
 export function useLearningWorkspace(accountId:string,csrfToken:string,requestedAreaId?:string){
   const storageKey=`mapflow.learning.area.v1.${accountId}`;const client=useQueryClient();
-  const [selection,setSelection]=useState<string|null>(()=>{try{return requestedAreaId??localStorage.getItem(storageKey);}catch{return requestedAreaId??null;}});
+  const rememberedArea=()=>{try{return localStorage.getItem(storageKey);}catch{return null;}};
+  const [selection,setSelection]=useState<string|null>(()=>requestedAreaId??rememberedArea());
+  const previousRequest=useRef({storageKey,requestedAreaId});
   const [mapVisible,setMapVisible]=useState(false);
-  useEffect(()=>{setSelection(requestedAreaId??null);setMapVisible(false);},[requestedAreaId]);
+  useEffect(()=>{
+    const previous=previousRequest.current;previousRequest.current={storageKey,requestedAreaId};
+    if(previous.storageKey===storageKey&&previous.requestedAreaId===requestedAreaId)return;
+    setSelection(requestedAreaId??(previous.storageKey!==storageKey?rememberedArea():null));setMapVisible(false);
+  },[storageKey,requestedAreaId]);
   const areasKey=['me',accountId,'learning','areas'] as const;
   const areas=useQuery({queryKey:areasKey,queryFn:({signal})=>fetchLearningAreas(signal),staleTime:30_000,retry:false});
   const area=areas.data?.find(item=>item.areaId===selection);

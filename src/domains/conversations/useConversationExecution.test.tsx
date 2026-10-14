@@ -39,3 +39,16 @@ it('persists one command identity before a lost response and does not automatica
   const recovery=sessionStorage.getItem(`mapflow.agent.execution.v1.a.${conversationId}`);expect(recovery).toContain(sent.clientActionId);
   await act(async()=>{await Promise.resolve();});expect(commands).toHaveLength(1);view.unmount();
 });
+it.each(['accepted','response lost'] as const)('preserves a newer unsent draft after a delayed %s response',async(outcome)=>{
+  let resolveResponse!:(response:Response)=>void;let rejectResponse!:(failure:Error)=>void;
+  const response=new Promise<Response>((resolve,reject)=>{resolveResponse=resolve;rejectResponse=reject;});
+  const commands:RequestInit[]=[];
+  vi.stubGlobal('fetch',async(_path:string,options?:RequestInit)=>{if(options?.method==='POST'){commands.push(options);return response;}return new Response(JSON.stringify({execution:null}));});
+  const view=setup('cash','first question');let sending!:Promise<void>;
+  act(()=>{sending=view.result.current.runGeneration({type:'reply',message:view.result.current.message});});
+  await waitFor(()=>expect(commands).toHaveLength(1));
+  act(()=>view.result.current.setMessage('new unsent draft'));
+  await act(async()=>{if(outcome==='response lost')rejectResponse(new TypeError('response lost'));else resolveResponse(new Response(JSON.stringify({execution:{executionId:'55555555-5555-4555-8555-555555555555',conversationId,state:'stopped',funding:'cash',modelId:'fixture-model',result:null,error:null},replayed:false})));await sending;});
+  expect(view.result.current.message).toBe('new unsent draft');
+  expect(commands).toHaveLength(1);expect(JSON.parse(String(commands[0].body)).action.message).toBe('first question');view.unmount();
+});

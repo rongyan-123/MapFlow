@@ -5,7 +5,7 @@ import {AgentModelProvider} from '../domains/models/AgentModelContext';
 import {ModelSelectionProvider} from '../domains/models/ModelSelectionContext';
 import {clearAccountNoteDrafts} from '../domains/notes/noteDrafts';
 import {useLocation} from './useLocation';
-import type {LegacyView} from './routes';
+import {readLegacyConsoleState} from './consoleState';
 import {AppFrame,type NavigationItem} from '../ui/AppFrame';
 import {Dialog} from '../ui/Dialog';
 import {Button} from '../ui/Button';
@@ -23,11 +23,10 @@ const WalletPage=lazy(()=>import('../pages/WalletPage'));
 const ModelsPage=lazy(()=>import('../pages/ModelsPage'));
 const SettingsPage=lazy(()=>import('../pages/SettingsPage'));
 const AdminPage=lazy(()=>import('../pages/admin/AdminPage'));
-function savedConsoleView(accountId?:string):LegacyView|undefined{if(!accountId)return;try{const saved=JSON.parse(localStorage.getItem(`mapflow.console.state.v1.${accountId}`)??'null');return saved?.version===1&&['public','personal','learning'].includes(saved.view)?saved.view:undefined;}catch{return;}}
 function safeReturnTarget(search:string,fallback:string){const requested=new URLSearchParams(search).get('next');if(!requested)return fallback;try{const target=new URL(requested,window.location.origin);return target.origin===window.location.origin&&target.pathname!=='/login'&&target.pathname!=='/register'?target.pathname+target.search:'/assistant';}catch{return '/assistant';}}
 type SupportModal='help'|'feedback'|'announcements'|'agent'|'guide'|null;
 export default function Application(){
-  const identity=useIdentity();const {session}=identity;const accountId=session?.account.playerId;const {route,navigate}=useLocation(savedConsoleView(accountId));const {theme,setTheme}=useTheme();const [modal,setModal]=useState<SupportModal>(null);const previousAccount=useRef<string>();
+  const identity=useIdentity();const {session}=identity;const accountId=session?.account.playerId;const {route,navigate}=useLocation(readLegacyConsoleState(accountId));const {theme,setTheme}=useTheme();const [modal,setModal]=useState<SupportModal>(null);const previousAccount=useRef<string>();
   useEffect(()=>{if(previousAccount.current&&previousAccount.current!==accountId){clearAccountNoteDrafts(previousAccount.current);setModal(null);}previousAccount.current=accountId;},[accountId]);
   useEffect(()=>{if(route.guide)setModal('guide');},[route.guide,accountId]);
   function closeSupport(){setModal(null);if(route.guide){const query=new URLSearchParams(route.search);query.delete('guide');navigate(route.pathname+(query.size?'?'+query:''),true);}}
@@ -42,6 +41,6 @@ export default function Application(){
   const items:NavigationItem[]=[{href:'/assistant',label:'全局助手',shortLabel:'助手',icon:'chat'},{href:'/library',label:'公共书库',shortLabel:'书库',icon:'book'},{href:'/maps',label:'我的地图',shortLabel:'地图',icon:'map'},{href:'/learning',label:'学习聊天',shortLabel:'学习',icon:'learn'},{href:'/tavern',label:'独立酒馆',icon:'spark'}].map(item=>({...item,active:route.page===item.href.slice(1)} as NavigationItem));
   const tools:NavigationItem[]=[{href:'/wallet',label:'我的额度',icon:'wallet'},{href:'/models',label:'模型与价格',icon:'settings'},{href:'/settings',label:'账号与设置',icon:'user'},...(session.account.isAdmin?[{href:'/admin',label:'管理后台',icon:'admin' as const}]:[])].map(item=>({...item,active:route.page===item.href.slice(1)} as NavigationItem));
   const back=()=>navigate('/assistant');
-  const page=route.page==='assistant'?<AssistantPage navigate={navigate} />:route.page==='library'?<LibraryPage navigate={navigate} treeId={route.treeId} />:route.page==='maps'?<MapsPage navigate={navigate} entryId={route.entryId} />:route.page==='learning'?<LearningPage navigate={navigate} areaId={route.areaId} node={route.node} />:route.page==='tavern'?<TavernPage navigate={navigate} />:route.page==='wallet'?<WalletPage accountId={accountId!} csrfToken={session.csrfToken} onBack={back} onNavigateModels={()=>navigate('/models')} />:route.page==='models'?<ModelsPage accountId={accountId!} onBack={back} onNavigateTavern={back} onNavigateWallet={()=>navigate('/wallet')} />:route.page==='admin'?<AdminPage navigate={navigate} />:<SettingsPage navigate={navigate} />;
+  const page=route.page==='assistant'?<AssistantPage navigate={navigate} />:route.page==='library'?<LibraryPage navigate={navigate} treeId={route.treeId} initialNodeId={route.selectedNodeId} initialLayout={route.layoutMode} />:route.page==='maps'?<MapsPage navigate={navigate} entryId={route.entryId} initialNodeId={route.selectedNodeId} initialLayout={route.layoutMode} />:route.page==='learning'?<LearningPage navigate={navigate} areaId={route.areaId} node={route.node} />:route.page==='tavern'?<TavernPage navigate={navigate} />:route.page==='wallet'?<WalletPage accountId={accountId!} csrfToken={session.csrfToken} onBack={back} onNavigateModels={()=>navigate('/models')} />:route.page==='models'?<ModelsPage accountId={accountId!} onBack={back} onNavigateTavern={back} onNavigateWallet={()=>navigate('/wallet')} />:route.page==='admin'?<AdminPage navigate={navigate} />:<SettingsPage navigate={navigate} />;
   return <AgentModelProvider key={accountId} accountId={accountId!}><ModelSelectionProvider accountId={accountId!}><AppFrame items={items} tools={tools} accountName={session.account.username} navigate={navigate} onAccount={()=>navigate('/settings')} onTheme={()=>setTheme(theme==='dark'?'light':'dark')} onHelp={()=>setModal('help')} onMarketing={()=>navigate('/?marketing=1')} chatMode={['assistant','tavern'].includes(route.page)||(route.page==='learning'&&!!route.areaId)}><Suspense fallback={<p role="status" className="mf-status">正在打开页面…</p>}>{page}</Suspense></AppFrame>{support}<UnreadAnnouncements key={accountId} accountId={accountId} csrfToken={session.csrfToken} suppressed={modal!==null} /></ModelSelectionProvider></AgentModelProvider>;
 }

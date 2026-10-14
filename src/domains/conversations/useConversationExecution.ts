@@ -44,7 +44,9 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
   const setError=(error:unknown)=>agentOptions?nativeRun.rejectPreflight(error):run.set({error});
   useEffect(()=>{if(agentOptions&&nativeSnapshot?.stopRequested)void nativeRun.resumeRequestedStop(csrfToken);},[nativeRun,csrfToken,!!agentOptions,nativeSnapshot?.executionId,nativeSnapshot?.stopRequested]);
   const restoredPending = useRef(run.controller.current?null:pendingGeneration);
-  const [message, setMessage] = useState(initialDraft);
+  const [message, updateMessage] = useState(initialDraft);
+  const messageRevision=useRef(0);
+  function setMessage(value:string){messageRevision.current++;updateMessage(value);}
   const [referenceActive, setReferenceActive] = useState(!!nodeReference);
   useEffect(() => { setReferenceActive(!!nodeReference); }, [nodeReference?.id, nodeReference?.title]);
   const [recovering, setRecovering] = useState(false);
@@ -141,6 +143,7 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
   async function runGeneration(action: GenerationAction, retry?: PendingGeneration) {
     if (readOnly || canvas.deletionPreparing || canvas.deleted) return;
     if (activeRequest.current || graphBusy || editing || (pendingGeneration && !retry)) return;
+    const submittedMessageRevision=messageRevision.current;
     if (!retry && action.type === 'reply' && referenceActive && nodeReference) {
       action = { ...action, message: `${action.message}\n\n[学习节点参考：${nodeReference.title}；节点 ID：${nodeReference.id}]` };
     }
@@ -160,7 +163,7 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
           ...(agentOptions.profileId?{profileId:agentOptions.profileId,profileVersion:agentOptions.profileVersion}:{}),
           ...(access?{modelAccess:{apiKey:access.apiKey,baseUrl:access.baseUrl,model:access.model,contextWindow:agentOptions.contextWindow!,
             maxOutputTokens:agentOptions.maxOutputTokens,reasoningProtocol:agentOptions.reasoningProtocol??'none',reasoningSupported:agentOptions.reasoningSupported??false}}:{})},csrfToken);
-        if(admitted&&action.type==='reply')setMessage('');
+        if(admitted&&action.type==='reply'&&messageRevision.current===submittedMessageRevision)setMessage('');
       }catch(failure){nativeRun.rejectPreflight(failure);}
       return;
     }

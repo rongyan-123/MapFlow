@@ -16,3 +16,18 @@ it('allows viewing unavailable area history while preventing creation and map ac
   expect(view.result.current.area?.available).toBe(false);expect(view.result.current.canCreate).toBe(false);
   expect(paths.every(path=>!path.endsWith('/owned-map'))).toBe(true);
 });
+it('restores the remembered area only after checking the account-owned server list',async()=>{
+  localStorage.setItem('mapflow.learning.area.v1.player-1','owned-map');
+  vi.stubGlobal('fetch',async(path:string)=>new Response(JSON.stringify(path.endsWith('/learning-areas')?{areas:[area]}:{entries:[]})));
+  const view=mount();await waitFor(()=>expect(view.result.current.areas.isSuccess).toBe(true));
+  expect(view.result.current.area?.areaId).toBe('owned-map');
+  act(()=>view.result.current.select(null));expect(view.result.current.area).toBeUndefined();expect(localStorage.getItem('mapflow.learning.area.v1.player-1')).toBeNull();
+});
+it('prefers an explicit area over the remembered area and clears when returning to the list',async()=>{
+  localStorage.setItem('mapflow.learning.area.v1.player-1','stale-map');
+  vi.stubGlobal('fetch',async(path:string)=>new Response(JSON.stringify(path.endsWith('/learning-areas')?{areas:[area]}:{entries:[]})));
+  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
+  const view=renderHook(({requested})=>useLearningWorkspace('player-1','csrf',requested),{initialProps:{requested:'owned-map' as string|undefined},wrapper:({children})=><QueryClientProvider client={client}>{children}</QueryClientProvider>});
+  await waitFor(()=>expect(view.result.current.area?.areaId).toBe('owned-map'));
+  view.rerender({requested:undefined});expect(view.result.current.area).toBeUndefined();
+});

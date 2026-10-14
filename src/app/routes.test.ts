@@ -38,3 +38,9 @@ describe('application addresses', () => {
 it('keeps the public map deep link',()=>{
   expect(resolveRoute('/library?tree=public-one')).toMatchObject({page:'library',treeId:'public-one'});
 });
+it('restores a legacy map, node and layout without overriding explicit URL selection',()=>{
+  const remembered={version:1 as const,view:'personal' as const,selectedLibraryEntryId:'owned-map',selectedPublicTreeId:null,selectedNodeId:'owned-node',layoutMode:'blocks' as const};
+  expect(resolveRoute('/console',remembered)).toMatchObject({page:'maps',entryId:'owned-map',selectedNodeId:'owned-node',layoutMode:'blocks'});
+  expect(resolveRoute('/console?entry=explicit-map&node=explicit-node&layout=relationship',remembered)).toMatchObject({entryId:'explicit-map',selectedNodeId:'explicit-node',layoutMode:'relationship'});
+  expect(resolveRoute('/maps',remembered).entryId).toBeUndefined();
+});

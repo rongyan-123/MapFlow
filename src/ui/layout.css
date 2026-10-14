@@ -12,6 +12,7 @@
 .mf-header-breadcrumb span{padding-left:13px;color:var(--mf-line)}
 .mf-page-header-actions,.mf-page-header-context{display:flex;align-items:center;gap:6px;flex-shrink:0;min-width:0}
 .mf-page-header-context{max-width:360px}
+.mf-page-header-context select{width:100%;max-width:100%;min-width:0;height:34px;padding:6px 30px 6px 11px;border:1px solid var(--mf-line);border-radius:9px;background:var(--mf-panel);color:var(--mf-ink);font:inherit;font-size:11px;text-overflow:ellipsis;cursor:pointer}
 .mf-sidebar{width:224px;padding:25px 16px 16px;display:flex;flex-direction:column;flex-shrink:0;border-right:1px solid var(--mf-line);background:var(--mf-panel);overflow-y:auto;scrollbar-width:thin}
 .mf-brand{display:flex;align-items:center;gap:10px;padding:0 12px 28px;font:inherit;font-size:20px;font-weight:750;letter-spacing:-.5px;border:0;background:none;color:var(--mf-ink);cursor:pointer;text-align:left}
 .mf-brand-mark{display:grid;place-items:center;width:30px;height:30px;color:var(--mf-on-brand);background:var(--mf-brand);border-radius:9px;font-size:17px;font-weight:750;flex-shrink:0}

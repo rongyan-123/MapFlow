@@ -14,4 +14,3 @@ export interface UserModelProfile {
   baseUrl: string;
   settings: UserModelSetting[];
 }
-

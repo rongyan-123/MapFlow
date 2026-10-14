@@ -16,3 +16,9 @@ it('uses the new light presentation when no valid stored theme exists',()=>{
   expect(screen.getByLabelText('主题')).toHaveValue('light');
   expect(document.documentElement.style.colorScheme).toBe('light');
 });
+it('keeps the settings picker and shell toggle on the same theme',()=>{
+  function Shell(){const {theme,setTheme}=useTheme();return <button onClick={()=>setTheme(theme==='dark'?'light':'dark')}>外壳主题 {theme}</button>;}
+  render(<><Shell /><Control /></>);fireEvent.change(screen.getByLabelText('主题'),{target:{value:'dark'}});
+  expect(screen.getByRole('button')).toHaveTextContent('外壳主题 dark');fireEvent.click(screen.getByRole('button'));
+  expect(screen.getByLabelText('主题')).toHaveValue('light');expect(document.documentElement.dataset.mapflowTheme).toBe('light');
+});

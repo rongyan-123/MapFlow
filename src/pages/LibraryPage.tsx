@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type {TreeLayoutMode} from '../types/learning';
 import { useMutation,useQueryClient } from '@tanstack/react-query';
 import { addTreeToPersonalLibrary } from '../api/treeLibraryClient';
 import { useIdentity } from '../domains/identity/IdentityContext';
@@ -11,7 +12,7 @@ import { Button } from '../ui/Button';
 import { MapCard } from '../ui/MapCard';
 import MapView from '../ui/map/MapView';
 
-export default function LibraryPage({navigate,treeId}:{navigate:Navigate;treeId?:string}) {
+export default function LibraryPage({navigate,treeId,initialNodeId,initialLayout}:{navigate:Navigate;treeId?:string;initialNodeId?:string;initialLayout?:TreeLayoutMode}) {
   const {session}=useIdentity();const {catalog,detail,trees,attributions}=usePublicCatalog(session?.account.playerId,treeId);
   const [search,setSearch]=useState('');const [difficulty,setDifficulty]=useState('all');
   const client=useQueryClient();
@@ -19,7 +20,7 @@ export default function LibraryPage({navigate,treeId}:{navigate:Navigate;treeId?
   const visible=trees.filter(tree=>`${tree.title} ${tree.topic} ${tree.description??''}`.toLowerCase().includes(search.trim().toLowerCase())&&(difficulty==='all'||tree.difficulty_level===difficulty));
   return <><PageHeader title={treeId ? detail.data?.graph.tree.title??'公共地图':'公共书库'} actions={treeId?<><Button variant="quiet" onClick={()=>navigate('/library')}>返回书库</Button><Button variant="primary" disabled={!detail.data||add.isPending} onClick={()=>add.mutate()}>加入我的地图</Button></>:<Button variant="quiet" onClick={()=>navigate('/maps')}>我的地图</Button>} />
     {add.error && <p role="alert" className="mf-status mf-status--error">{describePublicError(add.error)}</p>}
-    {treeId ? <>{detail.isPending && <p role="status" className="mf-status">正在读取地图…</p>}{detail.error && <p role="alert" className="mf-status mf-status--error">{describePublicError(detail.error)} <Button onClick={()=>void detail.refetch()}>重试</Button></p>}{detail.data && !detail.error && <MapView snapshot={snapshotFromGraph(detail.data.graph,[])} displayMode="showcase" accountId={session?.account.playerId??''} />}</> : <div className="mf-content"><main className="mf-page">
+    {treeId ? <>{detail.isPending && <p role="status" className="mf-status">正在读取地图…</p>}{detail.error && <p role="alert" className="mf-status mf-status--error">{describePublicError(detail.error)} <Button onClick={()=>void detail.refetch()}>重试</Button></p>}{detail.data && !detail.error && <MapView initialNodeId={initialNodeId} initialLayout={initialLayout} snapshot={snapshotFromGraph(detail.data.graph,[])} displayMode="showcase" accountId={session?.account.playerId??''} />}</> : <div className="mf-content"><main className="mf-page">
       <div className="mf-page-heading"><div><p className="mf-eyebrow">EXPLORE THE LIBRARY</p><h1>找一张地图，开始探索。</h1><p>从已有的学习路线中，找到你感兴趣的方向。</p></div></div>
       <div className="mf-catalog-filter"><label className="mf-field"><span className="mf-sr-only">搜索公共地图</span><input value={search} onChange={event=>setSearch(event.target.value)} placeholder="搜索主题、地图或知识方向" /></label><label className="mf-field"><span className="mf-sr-only">筛选难度</span><select value={difficulty} onChange={event=>setDifficulty(event.target.value)}><option value="all">全部难度</option>{[...new Set(trees.map(tree=>tree.difficulty_level))].map(level=><option value={level} key={level}>{level}</option>)}</select></label></div>
       {catalog.isPending && <p role="status" className="mf-status">正在读取书库…</p>}{catalog.error && <div role="alert" className="mf-status mf-status--error">{describePublicError(catalog.error)} <Button onClick={()=>void catalog.refetch()}>重新读取书库</Button></div>}

@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 import {useIdentity} from '../domains/identity/IdentityContext';
 import {useLearningWorkspace} from '../domains/learning/useLearningWorkspace';
 import {useMapActions} from '../domains/maps/useMapActions';
@@ -13,6 +13,7 @@ interface Props{navigate:Navigate;areaId?:string;node?:{id:string;title:string}}
 export default function LearningPage({navigate,areaId,node}:Props){
   const {session}=useIdentity();const [search,setSearch]=useState('');const [selectedMap,setSelectedMap]=useState('');
   const accountId=session?.account.playerId??'';const csrfToken=session?.csrfToken??'';const workspace=useLearningWorkspace(accountId,csrfToken,areaId);const {area,maps,areas}=workspace;
+  useEffect(()=>{if(area&&!areaId){const query=new URLSearchParams(window.location.search);query.set('area',area.areaId);navigate(`/learning?${query}`,true);}},[area?.areaId,areaId,navigate]);
   const actions=useMapActions({accountId,csrfToken,entryId:area?.available?area.libraryEntryId:undefined,onLearning:()=>{},onDeleted:()=>{}});
   function select(id:string|null){workspace.select(id);navigate(id?`/learning?area=${encodeURIComponent(id)}`:'/learning');}
   function reference(node?:{id:string;title:string}){if(!area||!node)return;workspace.setMapVisible(false);navigate(`/learning?${new URLSearchParams({area:area.areaId,node:node.id,title:node.title})}`);}
