@@ -1,4 +1,4 @@
-import type { PersonalTreeDetail } from '../../domains/maps/types';
+import type { PersonalTreeDetail } from './types';
 
 const OBJECT_URL_CLEANUP_DELAY_MS = 1_000;
 

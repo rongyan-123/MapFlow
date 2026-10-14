@@ -7,6 +7,7 @@ export interface ApplicationRoute {
   search: string;
   guide: boolean;
   entryId?: string;
+  treeId?: string;
   areaId?: string;
   node?: { id: string; title: string };
 }
@@ -29,6 +30,7 @@ export function resolveRoute(address: string, legacyView?: LegacyView): Applicat
     page, pathname: url.pathname, search: url.search,
     guide: url.searchParams.get('guide') === '1',
     ...(page === 'maps' && entryId ? { entryId } : {}),
+    ...(page === 'library' && url.searchParams.get('tree') ? {treeId:url.searchParams.get('tree')!} : {}),
     ...(page === 'learning' && areaId ? { areaId } : {}),
     ...(page === 'learning' && nodeId && nodeId.length <= 128 && !nodeId.includes('\0') && nodeTitle?.trim() && nodeTitle.length <= 200 && !nodeTitle.includes('\0')
       ? { node: { id: nodeId, title: nodeTitle.trim() } } : {}),

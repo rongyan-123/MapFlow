@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import SkillNodeComponent, { type SkillFlowNode } from './SkillNode';
+import SkillNodeComponent, { type SkillFlowNode } from './MapNode';
 
 vi.mock('@xyflow/react', async () => {
   const React = await import('react');
@@ -56,27 +56,10 @@ function renderNode(displayMode: 'showcase' | 'personal', title?: string) {
 }
 
 describe('SkillNode 渲染', () => {
-  it('showcase 节点带不透明底色兜底，渐变失效时不至于全黑', () => {
-    const node = renderNode('showcase');
-    expect(node.className).toContain('bg-cyan-400');
-    expect(node.className).toContain('bg-gradient-to-br');
-  });
-
-  it('showcase 节点强制独立合成层，渐变纹理不随缩放重绘', () => {
-    const node = renderNode('showcase');
-    expect(node.className).toContain('will-change-transform');
-  });
-
-  it('showcase 节点渐变简化为两端色，减少瓦片复杂度', () => {
-    const node = renderNode('showcase');
-    expect(node.className).toContain('from-cyan-400');
-    expect(node.className).not.toContain('via-sky-400');
-    expect(node.className).toContain('to-violet-400');
-  });
-
-  it('showcase 节点不使用未开始节点的深色样式', () => {
-    const node = renderNode('showcase');
-    expect(node.className).not.toContain('bg-slate-900/85');
+  it('public preview shows the depth and does not claim personal progress', () => {
+    renderNode('showcase');
+    expect(screen.getByText(/Understand/)).toBeVisible();
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
   });
 
   it('为主题对比度样式暴露节点状态标记', () => {
@@ -92,7 +75,6 @@ describe('SkillNode 渲染', () => {
 
     const heading = screen.getByRole('heading', { name: title });
     expect(heading).toHaveAttribute('title', title);
-    expect(heading).toHaveClass('whitespace-normal');
     expect(heading).not.toHaveClass('truncate');
   });
 });

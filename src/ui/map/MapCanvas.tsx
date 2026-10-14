@@ -18,19 +18,19 @@ import type {
   TreeLayoutMode,
   TreeDisplayMode,
 } from '../../types/learning';
-import { computeTreeLayout } from './layoutTree';
+import { computeTreeLayout } from '../../domains/maps/layoutTree';
 import {
   BLOCK_LABEL_GAP,
   BLOCK_LABEL_WIDTH,
   computeBlockLayoutModel,
   type BlockLayoutModel,
-} from './layoutBlocks';
+} from '../../domains/maps/layoutBlocks';
 import SkillNodeComponent, {
   type SkillFlowNode,
-} from './SkillNode';
-import { getReadableInitialZoom } from './viewport';
+} from './MapNode';
+import { getReadableInitialZoom } from '../../domains/maps/viewport';
 import BlockConnectionEdge from './BlockConnectionEdge';
-import { buildBlockConnections } from './blockConnections';
+import { buildBlockConnections } from '../../domains/maps/blockConnections';
 
 interface BlockLaneData extends Record<string, unknown> {
   name: string;
@@ -40,51 +40,13 @@ interface BlockLaneData extends Record<string, unknown> {
 
 type BlockLaneFlowNode = Node<BlockLaneData, 'block'>;
 
-function BlockLaneComponent({ data }: NodeProps<BlockLaneFlowNode>) {
-  const accent = data.color ?? '#38bdf8';
-  const labelOffset = BLOCK_LABEL_WIDTH + BLOCK_LABEL_GAP;
-
-  return (
-    <div
-      data-mapflow-block-lane="true"
-      className="pointer-events-none relative h-full w-full"
-    >
-      <div
-        className="absolute inset-y-0 right-0 rounded-2xl border border-dashed bg-slate-950/35"
-        style={{
-          left: labelOffset,
-          borderColor: `${accent}88`,
-          boxShadow: `inset 0 0 32px ${accent}12`,
-        }}
-      />
-      <div
-        className="absolute top-1/2 flex -translate-y-1/2 items-center gap-3 rounded-xl border bg-slate-900 px-4 py-3 shadow-[0_8px_24px_rgba(2,6,23,0.35)]"
-        style={{
-          left: 0,
-          width: BLOCK_LABEL_WIDTH,
-          borderColor: `${accent}88`,
-        }}
-      >
-        <span
-          aria-hidden="true"
-          className="h-2.5 w-2.5 shrink-0 rounded-full"
-          style={{ backgroundColor: accent, boxShadow: `0 0 12px ${accent}` }}
-        />
-        <div className="min-w-0 truncate text-sm font-semibold text-slate-100">
-          {data.name}
-        </div>
-      </div>
-      <span
-        aria-hidden="true"
-        className="absolute top-1/2 h-px -translate-y-1/2"
-        style={{
-          left: BLOCK_LABEL_WIDTH,
-          width: BLOCK_LABEL_GAP,
-          backgroundColor: `${accent}88`,
-        }}
-      />
-    </div>
-  );
+function BlockLaneComponent({data}:NodeProps<BlockLaneFlowNode>){
+  const accent=data.color??'var(--mf-brand)';const labelOffset=BLOCK_LABEL_WIDTH+BLOCK_LABEL_GAP;
+  return <div data-mapflow-block-lane="true" className="mf-block-lane">
+    <div className="mf-block-lane-area" style={{left:labelOffset,borderColor:accent}} />
+    <div className="mf-block-lane-label" style={{width:BLOCK_LABEL_WIDTH,borderColor:accent}}><span style={{backgroundColor:accent}} /><strong title={data.name}>{data.name}</strong></div>
+    <span className="mf-block-lane-link" style={{left:BLOCK_LABEL_WIDTH,width:BLOCK_LABEL_GAP,backgroundColor:accent}} />
+  </div>;
 }
 
 const nodeTypes = {
@@ -234,7 +196,7 @@ export default function SkillTreeCanvas({
             source: edge.source_node_id,
             target: edge.target_node_id,
             type: 'smoothstep',
-            style: { stroke: '#22d3ee', strokeWidth: 1.8 },
+            style: { stroke: 'var(--mf-brand)', strokeWidth: 1.8 },
           };
         }
         return {
@@ -244,7 +206,7 @@ export default function SkillTreeCanvas({
           type: 'smoothstep',
           animated: completed || mastered,
           style: {
-            stroke: mastered ? '#facc15' : completed ? '#34d399' : '#334155',
+            stroke: mastered ? 'var(--mf-warning)' : completed ? 'var(--mf-brand)' : 'var(--mf-muted)',
             strokeWidth: completed || mastered ? 2 : 1.2,
           },
         };
@@ -333,37 +295,29 @@ export default function SkillTreeCanvas({
       defaultEdgeOptions={{ type: 'smoothstep' }}
       proOptions={{ hideAttribution: true }}
     >
-      {layoutMode === 'blocks' && selectedNodeId && (
-        <div className="pointer-events-none absolute left-4 top-4 z-10 flex items-center gap-2 rounded-lg border border-slate-700/70 bg-slate-950/90 px-3 py-2 text-[11px] shadow-lg">
-          <span className="text-cyan-300">前置流入</span>
-          <span className="text-slate-500">→</span>
-          <span className="text-slate-100">选中节点</span>
-          <span className="text-slate-500">→</span>
-          <span className="text-purple-300">后置流出</span>
-        </div>
-      )}
+      {layoutMode === 'blocks' && selectedNodeId && <div className="mf-map-legend"><span>前置流入</span><span>→ 选中节点 →</span><span>后置流出</span></div>}
       <FitViewWhenReady
         fitGraphView={fitGraphView}
         fitViewKey={fitViewKey}
         isGraphVisible={isGraphVisible}
       />
-      <Background color="#1e293b" gap={20} />
-      <Controls className="!rounded-lg !border-slate-700 !bg-slate-900" />
+      <Background color="var(--mf-line)" gap={24} />
+      <Controls className="mf-flow-controls" />
       <MiniMap
         nodeColor={(node) => {
           if (node.type === 'block') {
             return (node.data as BlockLaneData).color ?? '#1e293b';
           }
-          if (displayMode === 'showcase') return '#22d3ee';
+          if (displayMode === 'showcase') return '#1b7558';
           const flowNode = node as SkillFlowNode;
           const status = flowNode.data.progress?.status ?? 'not_started';
           if (status === 'mastered') return '#facc15';
           if (status === 'completed') return '#34d399';
           if (status === 'in_progress') return '#fbbf24';
-          return '#334155';
+          return '#b9c9bf';
         }}
-        maskColor="rgba(2, 6, 23, 0.78)"
-        className="!border-slate-700 !bg-slate-950"
+        maskColor="var(--mf-soft)"
+        className="mf-flow-minimap"
       />
     </ReactFlow>
   );

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchPersonalTree, setNodeCompletion, setNodeProgress } from '../../api/treeLibraryClient';
-import SkillTreeCanvas from '../skill-tree/SkillTreeCanvas';
+import SkillTreeCanvas from '../../ui/map/MapCanvas';
 import NodeDetailPanel from '../skill-tree/NodeDetailPanel';
 import TreeRestoreControl from '../tree-library/TreeRestoreControl';
 import NodeNoteDialog from '../node-notes/NodeNoteDialog';
-import { snapshotFromGraph } from '../skill-tree/snapshotFromGraph';
+import { snapshotFromGraph } from '../../domains/maps/snapshotFromGraph';
 import { buttonClass, ErrorNotice } from '../tavern/TavernUi';
 
 export default function LearningMapPanel({ accountId, libraryEntryId, csrfToken, onClose, onReference }: {

@@ -3,7 +3,7 @@ import remarkGfm from 'remark-gfm';
 
 export default function SafeMarkdown({ markdown }: { markdown: string }) {
   return (
-    <div className="prose prose-invert max-w-none text-sm leading-7 text-slate-200">
+    <div className="mf-markdown">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

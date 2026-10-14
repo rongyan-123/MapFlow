@@ -4,7 +4,7 @@ import {
   buildTreeExportMarkdown,
   downloadTreeExport,
 } from './treeExport';
-import type { PersonalTreeDetail } from '../../domains/maps/types';
+import type { PersonalTreeDetail } from './types';
 
 const detail: PersonalTreeDetail = {
   view_mode: 'personal',

@@ -1,4 +1,4 @@
-import { clearAccountNoteDrafts, noteDraftKey, readNoteDraft } from './noteDrafts';
+import { clearAccountNoteDrafts, noteDraftKey, readNoteDraft } from '../../domains/notes/noteDrafts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';

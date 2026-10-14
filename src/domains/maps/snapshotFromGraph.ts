@@ -1,4 +1,4 @@
-import type { NodeProgress, TreeGraph } from '../../domains/maps/types';
+import type { NodeProgress, TreeGraph } from './types';
 import type { LearningTreeSnapshot } from '../../types/learning';
 import { learningStatusFromProgressPercent, normalizeProgressPercent } from '../../types/learning';
 

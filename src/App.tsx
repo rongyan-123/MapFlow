@@ -1,4 +1,4 @@
-import { clearAccountNoteDrafts } from './features/node-notes/noteDrafts';
+import { clearAccountNoteDrafts } from './domains/notes/noteDrafts';
 import ApplicationShell from './features/navigation/ApplicationShell';
 import GlobalAssistantPage from './features/assistant/GlobalAssistantPage';
 import { ModelSelectionProvider } from './features/tavern/ModelSelectionContext';
@@ -13,8 +13,8 @@ import { readCreditSummary } from './api/creditClient';
 import CompletionFlash from './features/skill-tree/CompletionFlash';
 import NodeDetailPanel from './features/skill-tree/NodeDetailPanel';
 import ProgressOverview from './features/skill-tree/ProgressOverview';
-import SkillTreeCanvas from './features/skill-tree/SkillTreeCanvas';
-import { snapshotFromGraph } from './features/skill-tree/snapshotFromGraph';
+import SkillTreeCanvas from './ui/map/MapCanvas';
+import { snapshotFromGraph } from './domains/maps/snapshotFromGraph';
 import LearningChatWorkspace from './features/learning/LearningChatWorkspace';
 import { createLearningArea } from './api/tavernClient';
 import { useIdentity } from './features/identity/IdentityContext';

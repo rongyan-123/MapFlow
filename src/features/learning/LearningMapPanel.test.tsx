@@ -7,7 +7,7 @@ import LearningMapPanel from './LearningMapPanel';
 const api = vi.hoisted(() => ({ fetchPersonalTree: vi.fn(), setNodeCompletion: vi.fn(), setNodeProgress: vi.fn(),
   fetchNodeNote: vi.fn(), saveNodeNote: vi.fn(), deleteNodeNote: vi.fn() }));
 vi.mock('../../api/treeLibraryClient', async original => ({ ...await original<typeof import('../../api/treeLibraryClient')>(), ...api }));
-vi.mock('../skill-tree/SkillTreeCanvas', () => ({ default: ({ onSelectNode }: { onSelectNode: (id: string) => void }) =>
+vi.mock('../../ui/map/MapCanvas', () => ({ default: ({ onSelectNode }: { onSelectNode: (id: string) => void }) =>
   <button onClick={() => onSelectNode('node-1')}>查看节点 事务</button> }));
 
 const node = { id: 'node-1', tree_id: 'tree-1', title: '事务', description: '理解事务边界', icon: 'box', category: 'foundation',

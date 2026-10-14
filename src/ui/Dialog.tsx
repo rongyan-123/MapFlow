@@ -49,7 +49,7 @@ export function Dialog({ title, children, onClose, dismissible = true, layout = 
       if (opener?.isConnected) opener.focus();
     };
   }, []);
-  return createPortal(<div ref={layer} className={`mf-modal-layer mf-modal-layer--${layout}`} onMouseDown={event => { if (event.target === event.currentTarget && canDismiss.current) close.current(); }}>
+  return createPortal(<div ref={layer} role="presentation" className={`mf-modal-layer mf-modal-layer--${layout}`} onMouseDown={event => { if (event.target === event.currentTarget && canDismiss.current) close.current(); }}>
     <section ref={panel} className={`mf-dialog mf-dialog--${layout} ${className}`} role="dialog" aria-modal="true" aria-labelledby={labelId} tabIndex={-1}>
       <div className="mf-dialog-header"><h2 id={labelId}>{title}</h2><IconButton icon="close" label="关闭" disabled={!dismissible} onClick={onClose} /></div>
       <div className="mf-dialog-body">{navigation && <nav className="mf-dialog-navigation">{navigation}</nav>}<div className="mf-dialog-content">{children}</div></div>

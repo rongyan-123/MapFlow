@@ -17,7 +17,7 @@ vi.mock('../tavern/TavernPage', () => ({ default: ({ treeContext, management, on
   if (onNodeReferenceConsumed) referenceCallbacks.push(onNodeReferenceConsumed);
   return <section aria-label="当前学习对话"><p>{management ? '管理助手' : treeContext?.title} 对话</p>{treeContext?.nodeId && <p>待发送参考：{treeContext.nodeId}</p>}{onShowMap && <button onClick={onShowMap}>查看地图</button>}<button onClick={onOpenCanvas}>打开教学画布</button></section>;
 } }));
-vi.mock('../skill-tree/SkillTreeCanvas', () => ({ default: () => <div aria-label="学习地图画面" /> }));
+vi.mock('../../ui/map/MapCanvas', () => ({ default: () => <div aria-label="学习地图画面" /> }));
 const python = { areaId: 'map-1', libraryEntryId: 'map-1', title: 'Python', available: true, createdAt: '2026-10-08T00:00:00Z' };
 const rust = { ...python, areaId: 'map-2', libraryEntryId: 'map-2', title: 'Rust' };
 const callbacks = { onOpenMaps: vi.fn(), onOpenManager: vi.fn() };

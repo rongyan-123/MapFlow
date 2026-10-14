@@ -1,7 +1,7 @@
 import { memo, useId, useMemo, type CSSProperties } from 'react';
 import { useNodes, type EdgeProps } from '@xyflow/react';
-import { getBlockConnectionRoute, type BlockConnection } from './blockConnections';
-import { BLOCK_NODE_HEIGHT, BLOCK_NODE_WIDTH } from './layoutBlocks';
+import { getBlockConnectionRoute, type BlockConnection } from '../../domains/maps/blockConnections';
+import { BLOCK_NODE_HEIGHT, BLOCK_NODE_WIDTH } from '../../domains/maps/layoutBlocks';
 
 function BlockConnectionEdge({ source, target, data }: EdgeProps<BlockConnection>) {
   const nodes = useNodes();
@@ -20,7 +20,7 @@ function BlockConnectionEdge({ source, target, data }: EdgeProps<BlockConnection
     return getBlockConnectionRoute(sourceCard, targetCard, cards.filter((node) => node.id !== source && node.id !== target), data?.lane);
   }, [nodes, source, target, data?.lane]);
   if (!route) return null;
-  const color = data?.relation === 'incoming' ? '#22d3ee' : '#c084fc';
+  const color = data?.relation === 'incoming' ? 'var(--mf-brand)' : 'var(--mf-warning)';
 
   return (
     <g

@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { deleteNodeNote, fetchNodeNote, saveNodeNote, TreeLibraryApiError } from '../../api/treeLibraryClient';
 import type { NodeNote } from '../../domains/maps/types';
-import { clearNoteDraft, noteDraftKey, readNoteDraft, writeNoteDraft } from './noteDrafts';
-import SafeMarkdown from './SafeMarkdown';
+import { clearNoteDraft, noteDraftKey, readNoteDraft, writeNoteDraft } from '../../domains/notes/noteDrafts';
+import SafeMarkdown from '../../ui/SafeMarkdown';
 
 interface Props { accountId: string; libraryEntryId: string; nodeId: string; nodeTitle: string; csrfToken: string; onClose: () => void }
 interface NoteWrite { markdown: string; expectedVersion: number; draftRevision: string }

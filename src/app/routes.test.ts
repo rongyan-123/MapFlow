@@ -35,3 +35,6 @@ describe('application addresses', () => {
     }
   });
 });
+it('keeps the public map deep link',()=>{
+  expect(resolveRoute('/library?tree=public-one')).toMatchObject({page:'library',treeId:'public-one'});
+});

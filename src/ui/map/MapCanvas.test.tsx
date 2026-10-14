@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LearningTreeSnapshot } from '../../types/learning';
-import SkillTreeCanvas from './SkillTreeCanvas';
+import SkillTreeCanvas from './MapCanvas';
 
 const flowProbe = vi.hoisted(() => ({
   fitView: vi.fn(),
