@@ -1,0 +1,18 @@
+export interface AgentGuideSection{id:string;group:string;title:string;paragraphs:string[];command?:string}
+export const agentGuide:AgentGuideSection[]=[
+  {id:'core',group:'认识 MapFlow',title:'核心理念',paragraphs:['@mapflow-publish/mcp 是运行在你电脑上的连接器，把 Agent 和自己的 MapFlow 账号连起来，学习数据保留在账号中。','Skill（给 Agent 的操作说明）帮助理解地图与节点规则；MCP（连接器协议）提供真实的读取和写入能力。']},
+  {id:'map',group:'认识 MapFlow',title:'学习地图',paragraphs:['地图把一个技能或方向拆成学习路线；节点代表具体知识与能力；关系表示前置、并列和递进。','先读取地图，再结合目标安排下一步。']},
+  {id:'node-status',group:'认识 MapFlow',title:'节点与学习状态',paragraphs:['公共地图提供路线参考。加入个人地图后，每个人的完成状态保存在自己的副本中，不影响公共地图或他人进度。']},
+  {id:'quick-start',group:'开始接入',title:'快速开始',paragraphs:['准备 Node.js 18+、MapFlow 账号和支持 MCP 的 Agent。','1. 安装 Skill，帮助 Agent 理解操作规则。安装写入本机技能目录，不修改地图。','2. 配置 MCP 连接器，提供读取和修改账号数据的通道。配置写入 Agent 的本机设置。','3. 在浏览器确认账号授权。令牌保存到本机，完成后才能访问该账号的数据。']},
+  {id:'install-skill',group:'开始接入',title:'安装 Skill',paragraphs:['先安装 Skill，让 Agent 理解树、节点、块与布局规则。--global 安装到当前电脑；只用于当前项目时可以去掉它。'],command:'npx skills add rongyan-123/MapFlow --skill mapflow-mcp --global'},
+  {id:'configure-mcp',group:'开始接入',title:'配置 MCP',paragraphs:['在终端运行连接器。第一次运行会下载并启动授权流程。也可在 Agent 的 MCP 设置中填写同一命令。'],command:'npx @mapflow-publish/mcp'},
+  {id:'first-auth',group:'开始接入',title:'首次授权',paragraphs:['1. 浏览器打开 MapFlow 授权页，先登录自己的账号。','2. 核对授权用途，再点击“允许”，服务器建立账号访问授权。','3. 令牌保存到本机 ~/.mapflow/token，之后通常静默连接。不要把令牌交给别人或提交到 Git。']},
+  {id:'capabilities',group:'管理地图',title:'Agent 能做什么',paragraphs:['mapflow.whoami：确认当前账号和授权。','mapflow.get_progress：读取地图与完成进度，不改变数据。','mapflow.get_tree：读取节点、关系、块和完成情况。','mapflow.apply_tree_mutation：按指令增加、修改或删除地图内容，写入个人地图。']},
+  {id:'read-progress',group:'管理地图',title:'读取地图与学习进度',paragraphs:['让 Agent 先读取真实地图与进度，再建议下一步。可以说：“我现在有哪些地图，哪张地图应该继续学习？”']},
+  {id:'modify-map',group:'管理地图',title:'修改地图与节点',paragraphs:['可以补充节点、修改标题和说明、调整关系或整理分组。写操作会改变个人地图；指令中说明目标、范围，以及是否允许删除或移动内容。']},
+  {id:'manage-progress',group:'管理地图',title:'管理学习进度',paragraphs:['本地 Agent 可以直接修改地图内容和节点进度。请它记录学完的节点、需要复习的内容和下一步。','例如：“把刚学完的 TypeScript 泛型标记为完成，并告诉我下一个前置节点。”完成状态写入自己的地图。']},
+  {id:'claude-code',group:'管理地图',title:'Claude Code',paragraphs:['注册连接器后，可以让 Claude Code 读取学习进度或整理节点。'],command:'claude mcp add mapflow -- npx @mapflow-publish/mcp'},
+  {id:'other-agents',group:'管理地图',title:'其他 Agent',paragraphs:['通用 MCP 配置：command 填 npx，args 填 @mapflow-publish/mcp。客户端会执行同一连接命令。']},
+  {id:'tokens',group:'账号与安全',title:'授权与 Token',paragraphs:['Token（访问令牌）位于 ~/.mapflow/token，服务器保存摘要。令牌代表账号授权，不要共享或提交到 Git。','换账号时删除本机令牌后重新运行连接器，再授权目标账号。删除令牌不会删除地图或聊天。']},
+  {id:'faq',group:'账号与安全',title:'常见问题',paragraphs:['找不到 npx：安装 Node.js 18 或更高版本，再重新打开终端。','切换账号：删除本机令牌并重新授权。','写操作：服务器记录地图、操作和授权令牌的审计信息。']},
+];
