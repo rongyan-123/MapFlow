@@ -1,0 +1,9 @@
+import { useGenerationSettings,type GenerationSettingsProps } from '../../domains/conversations/useGenerationSettings';
+import { describePublicError } from '../../lib/publicErrors';
+import { Button } from '../Button';
+export default function GenerationSettingsForm(props:GenerationSettingsProps){
+  const state=useGenerationSettings(props);
+  return <div className="mf-stack"><p className="mf-muted mf-small">用于当前会话的下一次发送，已保存的回复保留原参数。</p><label className="mf-field">温度（回复的随机程度）<div className="mf-row mf-row--between"><span>0 更确定 · 2 更多变化</span><output>{state.temperature===''?'模型默认':Number(state.temperature).toFixed(2)}</output></div><input type="range" min={0} max={2} step={0.05} value={state.temperature===''?'1':state.temperature} disabled={state.busy} onChange={event=>state.setTemperature(event.target.value)} /></label><Button variant="quiet" disabled={state.busy} onClick={()=>state.setTemperature('')}>使用模型默认</Button>
+    <label className="mf-field">最大输出 Token<input type="number" min={1} max={4294967295} step={1} value={state.maxOutputTokens} disabled={state.busy} placeholder="模型默认" onChange={event=>state.setMaxOutputTokens(event.target.value)} /><small>Token（模型计量文本的单位）。留空使用默认输出长度，上下文窗口包含输入和输出。</small></label><details className="mf-status"><summary>高级参数</summary><label className="mf-field">停止词（每行一个）<textarea rows={3} value={state.stopSequences} disabled={state.busy} placeholder="最多 4 条" onChange={event=>state.setStopSequences(event.target.value)} /></label></details>{Boolean(state.error)&&<p role="alert" className="mf-status mf-status--error">{describePublicError(state.error)}</p>}{state.savedVersion!==null&&<p role="status" className="mf-status">参数已保存 · 版本 {state.savedVersion}</p>}<Button variant="primary" disabled={state.busy} onClick={()=>void state.save()}>{state.busy?'保存中…':'保存生成参数'}</Button>
+  </div>;
+}

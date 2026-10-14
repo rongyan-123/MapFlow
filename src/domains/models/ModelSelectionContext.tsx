@@ -1,6 +1,6 @@
 import { createContext, useContext, useRef, useState, type ReactNode } from 'react';
-import { readModelSelection, saveModelSelection } from '../../domains/models/preferences';
-import type { TavernModelSelection } from '../../domains/conversations/types';
+import { readModelSelection, saveModelSelection } from './preferences';
+import type { TavernModelSelection } from '../conversations/types';
 
 interface ModelSelectionState {
   selection: TavernModelSelection;

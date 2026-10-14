@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { IdentityProvider } from '../identity/IdentityContext';
 import TavernPage from './TavernPage';
 import { conversationRun } from '../../domains/conversations/legacyRun';
-import { character, conversation, detail } from './testFixtures';
+import { character, conversation, detail } from '../../test/conversations';
 import type { Conversation, ConversationDetail, ConversationScene } from '../../domains/conversations/types';
 
 vi.mock('../../api/identityClient', async original => ({

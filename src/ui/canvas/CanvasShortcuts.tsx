@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { createPortal } from 'react-dom';
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
-import { TavernDialog, buttonClass } from './TavernUi';
+import { Dialog } from '../Dialog';
+import { Button,IconButton } from '../Button';
 
 const commands = [
   ['selection','选择','KeyV','Digit1'],['hand','抓手 / 移动画布','KeyH',''],['rectangle','矩形','KeyR','Digit2'],
@@ -97,18 +97,12 @@ export default function CanvasShortcuts({api,root,busy,accountId='local'}:{api:R
     document.addEventListener('keydown',onKey,true);document.addEventListener('wheel',onWheel,{capture:true,passive:false});
     return()=>{document.removeEventListener('keydown',onKey,true);document.removeEventListener('wheel',onWheel,true);};
   },[storageKey]);
-  return <>
-    <button type="button" className={buttonClass} onClick={()=>setOpen(true)}>快捷键</button>
-    {open&&createPortal(<div className="canvas-shortcuts-layer"><TavernDialog title="画布快捷键" onClose={()=>{setOpen(false);setListening(null);}}>
-      <p className="mb-3 text-sm text-slate-400">点击绑定，再按键或滚动鼠标：上滚 mouse+，下滚 mouse-。仅在画布内生效，不影响聊天输入。</p>
-      {conflict&&<p role="alert" className="mb-3 text-amber-300">{conflict}</p>}
-      <div className="grid grid-cols-[minmax(120px,1fr)_1fr_1fr] gap-2 text-sm">
-        <strong>功能</strong><strong>主要绑定</strong><strong>备用绑定</strong>
-        {commands.map(([id,name])=><div key={id} className="contents"><span className="self-center">{name}</span>{([0,1] as const).map(slot=><div key={slot} className="flex gap-1">
-          <button type="button" aria-label={`${name}：${slot===0?'主要':'备用'}绑定`} className={`${buttonClass} min-w-0 flex-1`} onClick={()=>{setListening({id,slot});setConflict('');}}>{listening?.id===id&&listening.slot===slot?'按下按键…':label(bindings[id][slot])}</button>
-          <button type="button" className="px-1 text-slate-400" aria-label={`清除${name}的${slot===0?'主要':'备用'}绑定`} onClick={()=>{const next=structuredClone(bindings);next[id][slot]='';save(next);}}>×</button>
-        </div>)}</div>)}
-      </div><button type="button" className={`${buttonClass} mt-4`} onClick={()=>{save(defaults());setListening(null);setConflict('');}}>恢复默认绑定</button>
-    </TavernDialog></div>,document.body)}
+  return <><Button variant="quiet" onClick={()=>setOpen(true)}>快捷键</Button>
+    {open&&<Dialog title="画布快捷键" onClose={()=>{setOpen(false);setListening(null);}}><div className="mf-stack">
+      <p className="mf-muted mf-small">点击绑定，再按键或滚动鼠标：上滚 mouse+，下滚 mouse-。仅在画布内生效，不影响聊天输入。</p>
+      {conflict&&<p role="alert" className="mf-status mf-status--warning">{conflict}</p>}
+      <div className="mf-shortcuts-list">{commands.map(([id,name])=><div className="mf-shortcut" key={id}><strong>{name}</strong><div>{([0,1] as const).map(slot=><div key={slot} className="mf-row"><Button aria-label={`${name}：${slot===0?'主要':'备用'}绑定`} onClick={()=>{setListening({id,slot});setConflict('');}}>{listening?.id===id&&listening.slot===slot?'按下按键…':label(bindings[id][slot])}</Button><IconButton icon="close" label={`清除${name}的${slot===0?'主要':'备用'}绑定`} onClick={()=>{const next=structuredClone(bindings);next[id][slot]='';save(next);}} /></div>)}</div></div>)}</div>
+      <Button onClick={()=>{save(defaults());setListening(null);setConflict('');}}>恢复默认绑定</Button>
+    </div></Dialog>}
   </>;
 }

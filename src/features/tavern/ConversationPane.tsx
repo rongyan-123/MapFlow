@@ -13,7 +13,7 @@ import PanelResizeHandle from './PanelResizeHandle';
 import GenerationProcess from './GenerationProcess';
 import { StreamingPresentation } from '../../domains/conversations/streamingPresentation';
 import type { GenerationProcessEvent } from '../../domains/conversations/types';
-const TeachingCanvasPanel = lazy(() => import('./TeachingCanvasPanel'));
+const TeachingCanvasPanel = lazy(() => import('../../ui/canvas/TeachingCanvasPanel'));
 import AssistantMarkdown from '../knowledge-chat/AssistantMarkdown';
 import useIsMobile from '../../lib/useIsMobile';
 import { MobileChromePortal, useMobileChatChrome, mobileActionClass, MobileActionIcon } from '../navigation/MobileChatChrome';

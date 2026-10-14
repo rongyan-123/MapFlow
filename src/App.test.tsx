@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
-import { detail as tavernDetail, character as tavernCharacter } from './features/tavern/testFixtures';
+import { detail as tavernDetail, character as tavernCharacter } from './test/conversations';
 import {
   IdentityProvider,
   SESSION_QUERY_KEY,

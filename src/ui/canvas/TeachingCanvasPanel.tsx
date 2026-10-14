@@ -6,7 +6,7 @@ import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import '@excalidraw/excalidraw/index.css';
 import CanvasShortcuts from './CanvasShortcuts';
 import type { TeachingCanvasState } from '../../domains/conversations/types';
-import { useMobileChatChrome } from '../navigation/MobileChatChrome';
+import { Button } from '../Button';
 
 function materialize(elements: Record<string, unknown>[]) {
   const saved = new Map(elements.filter(element => typeof element.version === 'number' && typeof element.seed === 'number').map(element => [element.id, element]));
@@ -36,7 +36,6 @@ function TeachingCanvasPanel({ document, busy, saving, wide, accountId, readOnly
   onChange: (elements: Record<string, unknown>[]) => void;
   onClose: () => void; onWidth: () => void;
 }) {
-  const mobileChrome = useMobileChatChrome();
   const root=useRef<HTMLElement>(null);
   const api = useRef<ExcalidrawImperativeAPI | null>(null);
   const fittedInitialScene = useRef(false);
@@ -62,17 +61,9 @@ function TeachingCanvasPanel({ document, busy, saving, wide, accountId, readOnly
     api.current.updateScene({ elements });
     if (elements.length) api.current.scrollToContent(elements, { fitToContent: true, animate: true });
   }, [document]);
-  return <section ref={root} tabIndex={-1} aria-label="教学画布" className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-slate-800">
-    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-2 text-xs">
-      <span className="font-semibold">教学画布</span>
-      <span role="status" className="text-slate-500">{readOnly ? '仅查看历史' : busy ? 'AI 正在讲解 · 画布暂为只读' : saving ? '保存中…' : '自动保存'}</span>
-      <div className="ml-auto"><CanvasShortcuts api={api} root={root} busy={busy || readOnly} accountId={accountId} /></div>
-      <label className=" flex items-center gap-1.5"><input type="checkbox" aria-label="允许 AI 绘图" checked={document.enabled} disabled={busy || saving || readOnly}
-        onChange={event => void onSave(undefined, event.target.checked)} />允许 AI 绘图</label>
-      <button type="button" className="hidden rounded-lg px-2 py-1 hover:bg-slate-800 md:block" onClick={onWidth}>{wide ? '收窄画布' : '放宽画布'}</button>
-      {!mobileChrome && <button type="button" className="canvas-close-button rounded-lg px-2 py-1 hover:bg-slate-800" onClick={onClose}>收起画布</button>}
-    </div>
-    <div className="min-h-0 flex-1" onPointerDownCapture={event => { userEditing.current=!busy && !readOnly; if((event.target as HTMLElement).tagName==='CANVAS')root.current?.focus({preventScroll:true}); }} onKeyDownCapture={() => { userEditing.current = !busy && !readOnly; }}>
+  return <section ref={root} tabIndex={-1} aria-label="教学画布" className="mf-teaching-canvas">
+    <div className="mf-canvas-toolbar"><strong>教学画布</strong><span role="status">{readOnly?'仅查看历史':busy?'AI 正在讲解 · 画布暂为只读':saving?'保存中…':'自动保存'}</span><CanvasShortcuts api={api} root={root} busy={busy||readOnly} accountId={accountId} /><label><input type="checkbox" aria-label="允许 AI 绘图" checked={document.enabled} disabled={busy||saving||readOnly} onChange={event=>void onSave(undefined,event.target.checked)} />允许 AI 绘图</label><Button variant="quiet" className="mf-desktop-only" onClick={onWidth}>{wide?'收窄画布':'放宽画布'}</Button><Button variant="quiet" onClick={onClose}>收起画布</Button></div>
+    <div className="mf-canvas-editor" onPointerDownCapture={event => { userEditing.current=!busy && !readOnly; if((event.target as HTMLElement).tagName==='CANVAS')root.current?.focus({preventScroll:true}); }} onKeyDownCapture={() => { userEditing.current = !busy && !readOnly; }}>
       <Excalidraw excalidrawAPI={instance => { api.current = instance; }} langCode="zh-CN" theme={theme} viewModeEnabled={busy || readOnly}
         initialData={{ elements: initial.current, scrollToContent: true, appState: { viewBackgroundColor: '#ffffff' } }}
         UIOptions={{ tools: { image: false }, canvasActions: { loadScene: false, saveToActiveFile: false, export: false, toggleTheme: false } }}

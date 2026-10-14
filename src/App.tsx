@@ -1,7 +1,7 @@
 import { clearAccountNoteDrafts } from './domains/notes/noteDrafts';
 import ApplicationShell from './features/navigation/ApplicationShell';
 import GlobalAssistantPage from './features/assistant/GlobalAssistantPage';
-import { ModelSelectionProvider } from './features/tavern/ModelSelectionContext';
+import { ModelSelectionProvider } from './domains/models/ModelSelectionContext';
 import { describePublicError } from './lib/publicErrors';
 import PanelResizeHandle from './features/tavern/PanelResizeHandle';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';

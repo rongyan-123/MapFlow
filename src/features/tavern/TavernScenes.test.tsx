@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { IdentityProvider } from '../identity/IdentityContext';
 import TavernPage from './TavernPage';
-import { character, conversation, detail } from './testFixtures';
+import { character, conversation, detail } from '../../test/conversations';
 import type { ConversationDetail } from '../../domains/conversations/types';
 
 vi.mock('../../api/identityClient', async original => ({

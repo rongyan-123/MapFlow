@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IdentityProvider } from '../identity/IdentityContext';
 import TavernPage from './TavernPage';
-import { character, completion, conversation, detail, sseResponse, turn } from './testFixtures';
+import { character, completion, conversation, detail, sseResponse, turn } from '../../test/conversations';
 import type { Character, Conversation, ConversationHistory, ConversationDetail, GenerationAction } from '../../domains/conversations/types';
 import type { MapGenerationDraft } from '../../api/tavernClient';
 vi.mock('@excalidraw/excalidraw', () => ({

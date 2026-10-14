@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createLearningArea, createLearningConversation, fetchLearningAreas, fetchLearningAreaConversations, fetchConversations, fetchConversation } from '../../api/tavernClient';
-import { conversation, detail } from './testFixtures';
+import { conversation, detail } from '../../test/conversations';
 
 const area = {
   areaId: 'personal-map-1', libraryEntryId: 'personal-map-1', title: 'Python 学习',

@@ -1,4 +1,4 @@
-import type { Character, CompletedTurn, Conversation, ConversationDetail, Turn } from '../../domains/conversations/types';
+import type { Character, CompletedTurn, Conversation, ConversationDetail, Turn } from '../domains/conversations/types';
 
 export const character: Character = {
   characterId: 'character-1', normalizedHash: 'normalized-hash', sourceHash: null, avatarUrl: null, createdAt: '2026-09-22T00:00:00Z',

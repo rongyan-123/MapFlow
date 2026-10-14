@@ -11,7 +11,7 @@ import AnnouncementsDialog from '../announcements/AnnouncementsDialog';
 import FeedbackDialog from '../feedback/FeedbackDialog';
 import McpGuideDialog from '../mcp/McpGuideDialog';
 import ModelAccessPanel from '../tavern/ModelAccessPanel';
-import { useSharedModelSelection } from '../tavern/ModelSelectionContext';
+import { useSharedModelSelection } from '../../domains/models/ModelSelectionContext';
 import { TavernDialog } from '../tavern/TavernUi';
 import MobileDrawer from './MobileDrawer';
 import useIsMobile from '../../lib/useIsMobile';

@@ -4,7 +4,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import TreeToolsPanel from './TreeToolsPanel';
-import { detail } from './testFixtures';
+import { detail } from '../../test/conversations';
 import type { ConversationDetail } from '../../domains/conversations/types';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });

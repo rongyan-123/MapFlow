@@ -3,7 +3,7 @@ import { findTeachingCanvasPersistence } from '../../domains/canvas/persistence'
 import { conversationRun } from '../../domains/conversations/legacyRun';
 import { agentConversationRun } from '../../domains/conversations/agentRun';
 import ModelAccessPanel from './ModelAccessPanel';
-import { useSharedModelSelection } from './ModelSelectionContext';
+import { useSharedModelSelection } from '../../domains/models/ModelSelectionContext';
 import { useApplicationShell } from '../navigation/ApplicationShell';
 import { MobileChromePortal, useMobileChatChrome, mobileActionClass, MobileActionIcon } from '../navigation/MobileChatChrome';
 import { DesktopChromePortal, useDesktopChatChrome } from '../navigation/DesktopChatChrome';

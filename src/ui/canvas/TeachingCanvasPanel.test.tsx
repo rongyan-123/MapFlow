@@ -47,7 +47,7 @@ it('offers an opaque shortcuts dialog with two bindings and ignores keys typed i
   fireEvent.click(screen.getByRole('button',{name:'箭头：主要绑定'}));
   fireEvent.keyDown(dialog,{key:'j',code:'KeyJ'});
   expect(screen.getByRole('alert')).toHaveTextContent('已绑定到“矩形”');
-  fireEvent.click(screen.getByRole('button',{name:'关闭画布快捷键'}));
+  fireEvent.click(screen.getByRole('button',{name:'关闭'}));
   const canvas = document.querySelector('.teaching-canvas') || document.querySelector('section');
   expect(canvas).not.toBeNull();
   fireEvent.keyDown(canvas!,{key:'j',code:'KeyJ'});
@@ -74,7 +74,7 @@ it('captures wheel directions, remembers bindings, and only executes them inside
   fireEvent.click(screen.getByRole('button',{name:'箭头：备用绑定'}));
   fireEvent.wheel(dialog,{deltaY:100});
   expect(screen.getByRole('button',{name:'箭头：备用绑定'})).toHaveTextContent('mouse-');
-  fireEvent.click(screen.getByRole('button',{name:'关闭画布快捷键'}));
+  fireEvent.click(screen.getByRole('button',{name:'关闭'}));
   const canvas=document.querySelector('section[aria-label="教学画布"]')!;
   fireEvent.wheel(canvas,{deltaY:-20});
   expect(tool).not.toHaveBeenCalled();

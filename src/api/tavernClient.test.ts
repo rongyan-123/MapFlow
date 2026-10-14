@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createConversation, deleteCharacter, deleteConversation, fetchCharacters, fetchConversation, fetchConversations, fetchTurns, generateStream, importCharacter, mutateGraph, updateConversationProfile, updateTreeConnection, switchConversationCharacter, updateGenerationSettings,parseTeachingCanvas } from './tavernClient';
-import { character, completion, conversation, detail, sseResponse, turn } from '../features/tavern/testFixtures';
+import { character, completion, conversation, detail, sseResponse, turn } from '../test/conversations';
 
 afterEach(() => vi.unstubAllGlobals());
 function reply(body: unknown) {

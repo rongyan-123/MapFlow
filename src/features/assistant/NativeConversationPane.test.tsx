@@ -2,7 +2,7 @@ import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import ConversationPane from '../tavern/ConversationPane';
-import {detail} from '../tavern/testFixtures';
+import {detail} from '../../test/conversations';
 const api=vi.hoisted(()=>({fetchActiveAgentExecution:vi.fn(),fetchAgentExecution:vi.fn(),acceptAgentExecution:vi.fn(),attachAgentExecution:vi.fn(),stopAgentExecution:vi.fn(),resolveAgentToolApproval:vi.fn()}));
 const canvas=vi.hoisted(()=>({flush:vi.fn(),setPreview:vi.fn(),setOpen:vi.fn(),show:vi.fn()}));
 vi.mock('../../api/agentExecutionClient',async original=>({...await original<typeof import('../../api/agentExecutionClient')>(),...api}));
