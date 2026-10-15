@@ -3,6 +3,6 @@
 .mf-knowledge-list,.mf-knowledge-main,.mf-knowledge-editor{min-width:0}
 .mf-knowledge-list{max-height:72dvh;overflow-y:auto;padding:1px 5px 12px 1px}
 .mf-knowledge-fields{border:0;padding:0;margin:0;min-width:0}
-.mf-knowledge-markdown{width:100%;min-height:290px;resize:vertical;padding:16px;border:1px solid var(--mf-line);border-radius:12px;background:var(--mf-panel);color:var(--mf-ink);font:inherit;font-size:13px;line-height:1.8}
+.mf-knowledge-markdown{width:100%;min-height:290px;resize:vertical;padding:16px;border:1px solid var(--mf-control-border);border-radius:13px;background:var(--mf-panel);color:var(--mf-ink);font-family:var(--mf-font-mono);font-size:13px;line-height:1.85}
 .mf-knowledge-preview{min-height:290px;max-height:600px;overflow:auto;overflow-wrap:anywhere}
 @media(max-width:767px){.mf-knowledge-layout{grid-template-columns:minmax(0,1fr);gap:20px}.mf-knowledge-list{max-height:260px}.mf-knowledge-editor>.mf-row .mf-button{flex:1}.mf-knowledge-markdown{font-size:16px}.mf-knowledge-fields>.mf-row .mf-button{min-height:44px}}

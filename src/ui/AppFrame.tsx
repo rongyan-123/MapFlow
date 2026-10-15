@@ -2,6 +2,7 @@ import { createContext, useLayoutEffect, useRef, useState, type ReactNode } from
 import { Dialog } from './Dialog';
 import { Icon, type IconName } from './Icon';
 import { IconButton } from './Button';
+import { BrandMark } from './BrandMark';
 
 export const FrameContext = createContext<{ openNavigation: () => void } | null>(null);
 export interface NavigationItem { href: string; label: string; shortLabel?: string; icon: IconName; active?: boolean }
@@ -48,7 +49,7 @@ export function AppFrame({ children, items, tools, accountName, navigate, onAcco
   const follow = (href: string) => { setNavigationOpen(false); navigate(href); };
   const link = (item: NavigationItem) => <a key={item.href} href={item.href} aria-current={item.active ? 'page' : undefined} className={`mf-navigation-link ${item.active ? 'is-active' : ''}`} onClick={event => { event.preventDefault(); follow(item.href); }}><Icon name={item.icon} /><span>{item.label}</span></a>;
   const navigation = <aside className="mf-sidebar" aria-label="全局导航">
-    <button className="mf-brand" onClick={() => follow(items[0]?.href ?? '/')}><span className="mf-brand-mark">M</span>MapFlow</button>
+    <button className="mf-brand" onClick={() => follow(items[0]?.href ?? '/')}><span className="mf-brand-mark"><BrandMark /></span>MapFlow</button>
     <nav aria-label="业务导航">{items.map(link)}</nav>
     <p className="mf-navigation-caption">工具与账号</p><nav aria-label="账号工具">{tools.map(link)}</nav>
     <div className="mf-sidebar-bottom"><button className="mf-navigation-link" onClick={() => { setNavigationOpen(false); onMarketing(); }}><Icon name="home" />产品首页</button><button className="mf-navigation-link" onClick={() => { setNavigationOpen(false); onHelp(); }}><Icon name="help" />帮助与反馈</button>

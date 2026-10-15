@@ -1,16 +1,70 @@
 :root {
-  --mf-bg:#fafbf9; --mf-panel:#fff; --mf-soft:#f1f4f0; --mf-ink:#1c2b26;
-  --mf-muted:#687970; --mf-line:#e2e8e2; --mf-brand:#1b7558; --mf-tint:#e8f3ec;
-  --mf-on-brand:#fff; --mf-danger:#a73838; --mf-warning:#8a651d;
-  --mf-shadow:0 16px 60px #1c302618; --mf-radius:16px;
-  font-family:Inter,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
-  font-synthesis:none; text-rendering:optimizeLegibility; color-scheme:light;
+  --mf-bg: #f7f2eb;
+  --mf-panel: #fffdf9;
+  --mf-panel-raised: #fffefa;
+  --mf-soft: #efe8df;
+  --mf-ink: #302923;
+  --mf-muted: #6f6258;
+  --mf-line: #dfd5c9;
+  --mf-control-border: #9b897a;
+  --mf-brand: #9b4c32;
+  --mf-tint: #f0e1d5;
+  --mf-on-brand: #fffaf5;
+  --mf-danger: #a63835;
+  --mf-warning: #805714;
+  --mf-sidebar-bg: linear-gradient(155deg, #f4ede3 0%, #eae0d2 100%);
+  --mf-header-bg: #fffaf2d9;
+  --mf-surface-bg: linear-gradient(135deg, #fffefb 0%, #faf5ef 100%);
+  --mf-brand-bg: linear-gradient(145deg, #a95639, #8d412b);
+  --mf-ambient: radial-gradient(ellipse at 85% 3%, #dfc7a838, transparent 52%), radial-gradient(ellipse at 12% 90%, #ead9c51f, transparent 60%);
+  --mf-paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23000' opacity='.025' filter='url(%23n)' d='M0 0h160v160H0z'/%3E%3C/svg%3E");
+  --mf-shadow-sm: 0 2px 4px #4b301207, 0 6px 16px #4b301209;
+  --mf-shadow: 0 12px 32px #4b301211, 0 2px 6px #4b301209;
+  --mf-shadow-lg: 0 28px 80px #3d291f26, 0 6px 20px #3d291f12;
+  --mf-edge-light: inset 0 1px 0 #ffffffd9;
+  --mf-scrim: #2c20196b;
+  --mf-radius: 18px;
+  --mf-font-ui: Inter, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  --mf-font-display: "Noto Serif SC", "Source Han Serif SC", "Songti SC", STSong, SimSun, Georgia, serif;
+  --mf-font-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --mf-ease: cubic-bezier(.2, .7, .2, 1);
+  font-family: var(--mf-font-ui);
+  font-synthesis: weight;
+  text-rendering: optimizeLegibility;
+  color-scheme: light;
+  accent-color: var(--mf-brand);
 }
-:root[data-mapflow-theme='dark'],:root[data-mapflow-theme='blue-gray'] {
-  --mf-bg:#121b18; --mf-panel:#1a2520; --mf-soft:#222f29; --mf-ink:#e7eee8;
-  --mf-muted:#a2b0a6; --mf-line:#314037; --mf-brand:#83cba4; --mf-tint:#244134;
-  --mf-on-brand:#14241b; --mf-danger:#ffa3a3; --mf-warning:#ebc983;
-  --mf-shadow:0 16px 60px #0004; color-scheme:dark;
+
+:root[data-mapflow-theme='dark'],
+:root[data-mapflow-theme='blue-gray'] {
+  --mf-bg: #111319;
+  --mf-panel: #1d202a;
+  --mf-panel-raised: #232632;
+  --mf-soft: #282b37;
+  --mf-ink: #f2f0f7;
+  --mf-muted: #b4afc2;
+  --mf-line: #3d4050;
+  --mf-control-border: #7d778d;
+  --mf-brand: #b9a5ff;
+  --mf-tint: #322c48;
+  --mf-on-brand: #241c36;
+  --mf-danger: #ffb0ad;
+  --mf-warning: #e9c07a;
+  --mf-sidebar-bg: linear-gradient(165deg, #1b1d28 0%, #13151e 100%);
+  --mf-header-bg: #191b25e8;
+  --mf-surface-bg: linear-gradient(140deg, #242632 0%, #1c1f28 100%);
+  --mf-brand-bg: linear-gradient(145deg, #cdbdff, #ad99f1);
+  --mf-ambient: radial-gradient(ellipse at 78% 0%, #8b6dde1c, transparent 54%), radial-gradient(ellipse at 12% 90%, #4d548c0e, transparent 60%);
+  --mf-paper-grain: none;
+  --mf-shadow-sm: 0 3px 8px #00000029, 0 1px 0 #ffffff04;
+  --mf-shadow: 0 12px 32px #00000035, 0 1px 0 #ffffff05;
+  --mf-shadow-lg: 0 28px 80px #00000075, 0 5px 16px #00000040;
+  --mf-edge-light: inset 0 1px 0 #ffffff09;
+  --mf-scrim: #070811a6;
+  color-scheme: dark;
 }
-:root[data-mapflow-theme='ivory']{--mf-bg:#faf7ef;--mf-panel:#fffcf5;--mf-soft:#f2eee3;--mf-line:#e6dfcf;--mf-tint:#eaf0e1}
-:root[data-mapflow-theme='blue-gray']{--mf-bg:#151e29;--mf-panel:#1d2936;--mf-soft:#263544;--mf-line:#354657;--mf-ink:#e6edf3;--mf-muted:#a2b4c4;--mf-brand:#9dc5d0;--mf-tint:#283f49;--mf-on-brand:#152831}
+
+::selection {
+  background: color-mix(in srgb, var(--mf-brand) 25%, transparent);
+  color: var(--mf-ink);
+}

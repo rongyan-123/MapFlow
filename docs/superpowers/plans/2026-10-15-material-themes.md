@@ -32,10 +32,10 @@
 
 **Interfaces:** `useTheme()` still returns `{theme,setTheme}`; canonical values are `light/dark`. BrandMark and WelcomeArtwork consume only optional CSS class names and emit decorative presentation.
 
-- [ ] Run existing full suite before edits; save output in this task's evidence directory.
-- [ ] Write legacy-preference and cross-tab normalization expectations; run the theme test and observe the missing mapping fail.
-- [ ] Implement canonical two-theme choices and migration; rerun theme and affected settings tests to green.
-- [ ] Create and inspect folded-route branding and paper/graphite art, keeping text and controls native HTML.
+- [x] Run existing full suite before edits; save output in this task's evidence directory.
+- [x] Write legacy-preference and cross-tab normalization expectations; run the theme test and observe the missing mapping fail.
+- [x] Implement canonical two-theme choices and migration; rerun theme and affected settings tests to green.
+- [x] Create and inspect folded-route branding and paper/graphite art, keeping text and controls native HTML.
 
 Validation: meaningful preference tests, current settings/account tests, typecheck, direct asset inspection. Artwork creation and read-only color audit have separate ownership from root's shared components.
 
@@ -45,11 +45,11 @@ Validation: meaningful preference tests, current settings/account tests, typeche
 
 **Interfaces:** Existing `--mf-*` variables retain semantic meaning; add surface/elevation/display-font/ambient tokens consumed consistently by page CSS. Existing navigation callbacks, form handlers, dialogs, map and chat controllers retain signatures.
 
-- [ ] Define both palettes, surface and typography scales, focus/pressed/loading states and reduced-motion behavior.
-- [ ] Apply route branding and layered sidebar/header/navigation, preserving layout breakpoints.
-- [ ] Refine global assistant title, decorative welcome, question card markup and composer; preserve actual question text selection and handlers.
-- [ ] Refine map cards/canvas/nodes, home/auth, chat/roles/dialogs and account/model/admin data views.
-- [ ] Run affected component tests, typecheck and build; inspect current diff for behavioral changes outside the theme migration.
+- [x] Define both palettes, surface and typography scales, focus/pressed/loading states and reduced-motion behavior.
+- [x] Apply route branding and layered sidebar/header/navigation, preserving layout breakpoints.
+- [x] Refine global assistant title, decorative welcome, question card markup and composer; preserve actual question text selection and handlers.
+- [x] Refine map cards/canvas/nodes, home/auth, chat/roles/dialogs and account/model/admin data views.
+- [x] Run affected component tests, typecheck and build; inspect current diff for behavioral changes outside the theme migration.
 
 Validation: Vitest regressions and built preview against the existing isolated real API. Check map-node geometry and preserved model/account/payment controls in actual pages.
 
@@ -57,10 +57,10 @@ Validation: Vitest regressions and built preview against the existing isolated r
 
 **Files:** browser evidence under `D:/tmp/mapflow-ui-material-themes-20261015/`; tracked final acceptance record under `docs/research/`.
 
-- [ ] Inspect both themes at320/390/768/1024/1440 and390×500; include representative long content and all page groups.
-- [ ] Click navigation, theme controls, model/role/admin dialogs and question cards; verify no question-card auto-send.
-- [ ] Read screenshots and measure header height, overflow, card/composer clearance, focus and representative computed contrast.
-- [ ] Fix observed issues, run the final full suite/typecheck/build, then obtain fresh review of the whole branch.
-- [ ] Commit reviewed changes and provide the actual local preview URL plus desktop/mobile screenshots for user acceptance.
+- [x] Inspect both themes at320/390/768/1024/1440 and390×500; include representative long content and all page groups.
+- [x] Click navigation, theme controls, model/role/admin dialogs and question cards; verify no question-card auto-send.
+- [x] Read screenshots and measure header height, overflow, card/composer clearance, focus and representative computed contrast.
+- [x] Fix observed issues, run the final full suite/typecheck/build, then obtain fresh review of the whole branch.
+- [x] Commit reviewed changes and provide the actual local preview URL plus desktop/mobile screenshots for user acceptance.
 
 Validation: complete test logs, actual screenshots and a bounded written account of any environment limitations. Production and fixed main updates await the user's release instruction.

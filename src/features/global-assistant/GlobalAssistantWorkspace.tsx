@@ -10,6 +10,8 @@ import {PageHeader} from '../../ui/PageHeader';
 import {Button,IconButton} from '../../ui/Button';
 import {Icon} from '../../ui/Icon';
 import {Dialog} from '../../ui/Dialog';
+import {BrandMark} from '../../ui/BrandMark';
+import {WelcomeArtwork} from '../../ui/WelcomeArtwork';
 import GlobalMessageMarkdown from './GlobalMessageMarkdown';
 import GlobalMessageBody from './GlobalMessageBody';
 import ModelSettings from '../../ui/conversation/ModelSettings';
@@ -81,7 +83,10 @@ export default function GlobalAssistantWorkspace({accountId,csrfToken,navigate}:
     <PageHeader title="MapFlow 助手" context={<span className="mf-muted mf-small">网站使用 · 学习规划</span>} actions={<Button variant="quiet" onClick={()=>{setCredentialTarget(null);setSettingsOpen(true);}}><Icon name="settings" /><span>模型设置</span></Button>} />
     <div className="mf-global-scroll" ref={scroll} onScroll={()=>{const pane=scroll.current;if(pane){followLatest.current=pane.scrollHeight-pane.scrollTop-pane.clientHeight<100;if(pane.scrollTop<40&&(startIndex>0||timeline?.olderCursor)&&!state.loadingOlder&&!state.historyError)void loadOlder();}}}>
       <div className="mf-global-content">
-        <div className="mf-global-intro"><span className="mf-welcome-mark"><Icon name="spark" /></span><h2>你好，我是 MapFlow 助手。</h2><p>网站怎么用、学习路线怎么规划，都可以问我。</p></div>
+        <div className="mf-global-intro">
+          <WelcomeArtwork />
+          <div className="mf-global-intro-copy"><span className="mf-welcome-mark"><BrandMark /></span><p className="mf-eyebrow">MAPFLOW · 你的下一步</p><h2>把下一步，看清楚。</h2><p>网站怎么用，学习路线怎么规划。<br />从一个问题开始，一起找到方向。</p></div>
+        </div>
         {state.loading&&<p role="status" className="mf-muted mf-small">正在读取最近消息…</p>}
         {Boolean(state.error)&&<p role="alert" className="mf-status mf-status--error">{describePublicError(state.error)} <Button onClick={()=>void controller.reload()}>重新读取最近消息</Button></p>}
         {Boolean(state.noticeError)&&!state.error&&<p role="alert" className="mf-status">{describePublicError(state.noticeError)}</p>}
@@ -101,7 +106,7 @@ export default function GlobalAssistantWorkspace({accountId,csrfToken,navigate}:
         {!execution?.busy&&execution?.pendingGeneration&&!execution.executionId&&<div className="mf-runtime-actions"><Button onClick={()=>void controller.resume(shared.selection.apiKey)}>查回原操作</Button><Button onClick={()=>credentials()}>补充 API Key</Button></div>}
         {execution?.pendingApprovals.map(({approval})=><div className="mf-approval" key={approval.approvalRequestId}><p>{approvalSummary(approval)}</p><div className="mf-row mf-wrap"><Button variant="primary" onClick={()=>{if(!approval.destructive||window.confirm('此操作会删除或替换已有内容，确定继续？'))void controller.approve(approval.approvalRequestId,true,approval.destructive);}}>{approval.destructive?'确认删除或替换':'确认修改'}</Button><Button onClick={()=>void controller.approve(approval.approvalRequestId,false,false)}>取消修改</Button></div></div>)}
         {Boolean(state.syncError)&&<p role="alert" className="mf-status mf-status--error">最近消息暂时未同步，已确认的回复和草稿已保留。 <Button onClick={()=>void controller.sync()}>重试同步</Button><Button onClick={()=>void controller.reload()}>重新读取最近消息</Button></p>}
-        {atLatest&&!state.guidesDismissed&&!active&&<section className="mf-global-questions" aria-label="问一问"><h2>问一问</h2>{state.questions.map(question=><button key={question.id} type="button" onClick={()=>{controller.chooseQuestion(question.text);composer.current?.focus();}}><span>{question.text}</span><Icon name="right" /></button>)}</section>}
+        {atLatest&&!state.guidesDismissed&&!active&&<section className="mf-global-questions" aria-label="问一问"><h2>问一问 <span>从这里开始</span></h2>{state.questions.map((question,index)=><button key={question.id} type="button" aria-label={question.text} onClick={()=>{controller.chooseQuestion(question.text);composer.current?.focus();}}><span className="mf-question-icon"><Icon name={(['book','map','learn'] as const)[index%3]} /></span><span className="mf-question-copy"><strong>{question.text}</strong><small>{['认识 MapFlow','找到使用方法','规划学习方向'][index%3]}</small></span><Icon name="right" /></button>)}</section>}
       </div>
     </div>
     <div className="mf-composer-area"><form className="mf-composer" onSubmit={event=>{event.preventDefault();void send();}}>

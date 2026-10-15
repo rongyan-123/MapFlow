@@ -310,15 +310,15 @@ export default function SkillTreeCanvas({
       <MiniMap
         nodeColor={(node) => {
           if (node.type === 'block') {
-            return (node.data as BlockLaneData).color ?? '#1e293b';
+            return (node.data as BlockLaneData).color ?? 'var(--mf-muted)';
           }
-          if (displayMode === 'showcase') return '#1b7558';
+          if (displayMode === 'showcase') return 'var(--mf-brand)';
           const flowNode = node as SkillFlowNode;
           const status = flowNode.data.progress?.status ?? 'not_started';
-          if (status === 'mastered') return '#facc15';
-          if (status === 'completed') return '#34d399';
-          if (status === 'in_progress') return '#fbbf24';
-          return '#b9c9bf';
+          if (status === 'mastered') return 'var(--mf-brand)';
+          if (status === 'completed') return 'var(--mf-brand)';
+          if (status === 'in_progress') return 'var(--mf-warning)';
+          return 'var(--mf-muted)';
         }}
         maskColor="var(--mf-soft)"
         className="mf-flow-minimap"

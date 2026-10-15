@@ -5,7 +5,8 @@ import { passwordRules, validateRegistration, type RegistrationFormValues } from
 import { describePublicError } from '../lib/publicErrors';
 import type { Navigate } from '../app/useLocation';
 import { Button } from '../ui/Button';
-import { Icon } from '../ui/Icon';
+import { BrandMark } from '../ui/BrandMark';
+import { WelcomeArtwork } from '../ui/WelcomeArtwork';
 
 const emptyRegistration: RegistrationFormValues = {username:'',password:'',confirmPassword:'',email:'',phone:''};
 
@@ -60,8 +61,8 @@ export default function IdentityPage({ mode, navigate, onAuthenticated }: {
   const visibleError = localError ?? (identity.authenticationError ? describePublicError(identity.authenticationError) : null);
   const registrationField = (field: keyof RegistrationFormValues, value: string) => setRegistration(current => ({...current,[field]:value}));
   return <div className="mf-auth-page">
-    <header className="mf-auth-header"><button className="mf-brand" onClick={()=>navigate('/?marketing=1')}><span className="mf-brand-mark"><Icon name="map" /></span>MapFlow</button><Button variant="quiet" onClick={()=>navigate('/?marketing=1')}>返回首页</Button></header>
-    <main className="mf-auth-body"><section className="mf-auth-card">
+    <header className="mf-auth-header"><button className="mf-brand" onClick={()=>navigate('/?marketing=1')}><span className="mf-brand-mark"><BrandMark /></span>MapFlow</button><Button variant="quiet" onClick={()=>navigate('/?marketing=1')}>返回首页</Button></header>
+    <main className="mf-auth-body"><aside className="mf-auth-story"><WelcomeArtwork /><p className="mf-eyebrow">A CLEARER WAY TO LEARN</p><h2>想学的那件事，<br />值得好好开始。</h2><p>把零散的兴趣，连成可以走的路。</p></aside><section className="mf-auth-card">
       <p className="mf-eyebrow">YOUR LEARNING, CONNECTED</p>
       <h1>{mode === 'login' ? '欢迎回来' : '开始你的学习旅程'}</h1>
       <p className="mf-muted">{mode === 'login' ? '继续探索，找到下一步。' : '把想学的事，变成清晰的路线。'}</p>

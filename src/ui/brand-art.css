@@ -1,0 +1,45 @@
+.mf-brand-symbol {
+  display: block;
+  width: 1em;
+  height: 1em;
+  flex: none;
+  color: inherit;
+}
+
+.mf-welcome-art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 7 / 3;
+  overflow: hidden;
+  isolation: isolate;
+  pointer-events: none;
+  user-select: none;
+}
+
+.mf-welcome-art-paper,
+.mf-welcome-art-graphite {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.mf-welcome-art-paper {
+  opacity: .76;
+}
+
+.mf-welcome-art-graphite {
+  display: none;
+}
+
+:root[data-mapflow-theme='dark'] .mf-welcome-art-paper,
+:root[data-mapflow-theme='blue-gray'] .mf-welcome-art-paper {
+  display: none;
+}
+
+:root[data-mapflow-theme='dark'] .mf-welcome-art-graphite,
+:root[data-mapflow-theme='blue-gray'] .mf-welcome-art-graphite {
+  display: block;
+}

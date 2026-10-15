@@ -38,7 +38,9 @@ it('opens one continuous assistant with model-only settings and three questions 
   const questions=screen.getByRole('region',{name:'问一问'});
   expect(within(questions).getAllByRole('button')).toHaveLength(3);
   fireEvent.change(screen.getByRole('textbox',{name:'消息'}),{target:{value:'我自己的草稿'}});
-  const question=within(questions).getAllByRole('button')[0].textContent!;
+  const question=within(questions).getAllByRole('button')[0].getAttribute('aria-label')!;
+  expect(question).toBeTruthy();
+  expect(within(questions).getAllByRole('button')[0]).toHaveAccessibleName(question);
   fireEvent.click(within(questions).getAllByRole('button')[0]);
   expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue(`我自己的草稿\n${question}`);
   fireEvent.click(within(questions).getAllByRole('button')[0]);
