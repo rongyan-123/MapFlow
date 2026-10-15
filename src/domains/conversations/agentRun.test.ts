@@ -45,6 +45,7 @@ it('ignores a detached reader delivering the old completion after a new executio
   api.acceptAgentExecution.mockResolvedValue({execution:{...status,executionId:nextExecution},replayed:false});
   await run.send({type:'reply',message:'Next question'},1,{funding:'cash'},'csrf');
   readers[0]({executionId:execution,eventId:crypto.randomUUID(),sequence:11,payload:{type:'completed',result:completion}});
+  readers[0]({executionId:execution,eventId:crypto.randomUUID(),sequence:12,payload:{type:'settlement',settlement:{status:'settled',cashMicros:4000,pointUnits:null,balanceMicros:0},usage:null}});
   expect(run.getSnapshot()).toMatchObject({executionId:nextExecution,state:'running',completion:null,busy:true});detach();
 });
 it('clears stale confirmations on stop and retains a committed canvas if history delivery is unavailable',async()=>{
@@ -194,4 +195,181 @@ it('retains an explicit stop pressed before the acceptance response arrives',asy
   await vi.waitFor(()=>expect(api.acceptAgentExecution).toHaveBeenCalledOnce());await run.stop('csrf');
   accepted({execution:status,replayed:false});await sending;
   expect(api.stopAgentExecution).toHaveBeenCalledOnce();expect(run.getSnapshot().stopped).toBe(true);
+});
+it('releases only a confirmed stopped operation so the next send can use its own identity',async()=>{
+  const run=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});
+  await run.send({type:'reply',message:'Original'},0,{funding:'cash',bindingVersion:7},'csrf');
+  api.stopAgentExecution.mockRejectedValueOnce(new Error('stop response lost'));
+  await run.stop('csrf');
+  expect(run.getSnapshot().pendingGeneration).not.toBeNull();
+  api.stopAgentExecution.mockResolvedValue({...status,state:'stopped'});
+  await run.stop('csrf');
+  expect(run.getSnapshot().pendingGeneration).toBeNull();
+  expect(run.getSnapshot().executionId).toBe(execution);
+  api.acceptAgentExecution.mockResolvedValue({execution:{...status,executionId:'66666666-6666-4666-8666-666666666666'},replayed:false});
+  expect(await run.send({type:'reply',message:'Next'},1,{funding:'cash',bindingVersion:7},'csrf')).toBe(true);
+  expect(api.acceptAgentExecution.mock.calls[1][1].clientActionId).not.toBe(api.acceptAgentExecution.mock.calls[0][1].clientActionId);
+  expect(api.acceptAgentExecution.mock.calls[1][1].bindingVersion).toBe(7);
+});
+it('attaches a projected active execution without reaccepting and ignores a projection read before a newer execution',async()=>{
+  const run=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});await run.restore();
+  run.synchronizeStatus(status,null);
+  expect(run.getSnapshot()).toMatchObject({executionId:execution,state:'running'});
+  api.stopAgentExecution.mockResolvedValue({...status,state:'stopped'});await run.stop('csrf');
+  const nextExecution='66666666-6666-4666-8666-666666666666';api.acceptAgentExecution.mockResolvedValue({execution:{...status,executionId:nextExecution},replayed:false});
+  await run.send({type:'reply',message:'Next'},1,{funding:'cash',bindingVersion:7},'csrf');
+  run.synchronizeStatus({...status,state:'stopped'},execution);
+  expect(run.getSnapshot()).toMatchObject({executionId:nextExecution,state:'running',busy:true});
+  expect(api.acceptAgentExecution).toHaveBeenCalledOnce();
+});
+it('does not keep a terminally rejected global command available for automatic replay',async()=>{
+  api.acceptAgentExecution.mockRejectedValueOnce(new AgentApiError('global_conversation_not_current',409));
+  const run=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});
+  await run.send({type:'reply',message:'Original draft'},0,{funding:'cash',bindingVersion:1},'csrf');
+  expect(run.getSnapshot().pendingGeneration).toBeNull();
+  await run.retry('csrf');
+  expect(api.acceptAgentExecution).toHaveBeenCalledOnce();
+  const stored=JSON.parse(sessionStorage.getItem(`mapflow.agent.execution.v1.owner.${conversation}`)!);
+  expect(stored.command).toBeNull();
+});
+it('restores safe model metadata for an ambiguous BYOK acceptance without restoring its credential',async()=>{
+  api.acceptAgentExecution.mockRejectedValueOnce(new Error('lost acceptance'));
+  const first=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});
+  await first.send({type:'reply',message:'Original'},0,{funding:'byok',bindingVersion:2,modelAccess:{apiKey:'ephemeral-test-key',baseUrl:'https://model.example/v1',model:'original-byok',contextWindow:128000,reasoningProtocol:'none',reasoningSupported:false}},'csrf');
+  const recovered=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});await recovered.restore();
+  expect(recovered.getSnapshot()).toMatchObject({funding:'byok',modelId:'original-byok',pendingGeneration:{action:{type:'reply',message:'Original'}}});
+  expect(JSON.stringify(sessionStorage)).not.toContain('ephemeral-test-key');
+  expect(api.acceptAgentExecution).toHaveBeenCalledOnce();
+});
+it('retries a failed execution-state read explicitly without reaccepting the original request',async()=>{
+  api.fetchActiveAgentExecution.mockRejectedValueOnce(new Error('state read unavailable'));
+  const run=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});await run.restore();
+  api.fetchActiveAgentExecution.mockResolvedValue(status);await run.checkStatus();
+  expect(run.getSnapshot()).toMatchObject({executionId:execution,state:'running',error:null});
+  expect(api.acceptAgentExecution).not.toHaveBeenCalled();
+});
+it('allows explicit return to editing only after a confirmed unaccepted global revision conflict, including refresh',async()=>{
+  api.acceptAgentExecution.mockRejectedValueOnce(new AgentApiError('global_assistant_revision_conflict',409));
+  const first=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});
+  await first.send({type:'reply',message:'Original rejected request'},4,{funding:'cash',bindingVersion:2},'csrf');
+  const recovered=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});await recovered.restore();
+  expect(recovered.returnRejectedToEdit()).toEqual({type:'reply',message:'Original rejected request'});
+  expect(recovered.getSnapshot()).toMatchObject({executionId:null,pendingGeneration:null,busy:false,error:null});
+  await recovered.retry('csrf');expect(api.acceptAgentExecution).toHaveBeenCalledOnce();
+  expect(JSON.parse(sessionStorage.getItem(`mapflow.agent.execution.v1.owner.${conversation}`)!).command).toBeNull();
+});
+it.each(['succeeded','stopped'] as const)('keeps a rejected request independent across two refreshes and another device execution ending %s',async terminalState=>{
+  const rejected={type:'reply' as const,message:'Rejected A must survive the other device request'};
+  api.acceptAgentExecution.mockRejectedValueOnce(new AgentApiError('global_assistant_revision_conflict',409));
+  const first=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});
+  await first.send(rejected,4,{funding:'byok',bindingVersion:2,modelAccess:{apiKey:'never-persist-this-key',baseUrl:'https://model.example/v1',model:'rejected-model',contextWindow:128000,reasoningProtocol:'none',reasoningSupported:false}},'csrf');
+  const actionId=api.acceptAgentExecution.mock.calls[0][1].clientActionId;
+  api.fetchActiveAgentExecution.mockResolvedValue(status);
+  const refreshed=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});await refreshed.restore();
+  expect(refreshed.getSnapshot()).toMatchObject({executionId:execution,funding:'cash',modelId:'original-model',state:'running',
+    pendingGeneration:{clientActionId:execution,action:{type:'reply',message:''}},rejectedGeneration:{clientActionId:actionId,action:rejected}});
+  expect(refreshed.returnRejectedToEdit()).toBeNull();
+  const refreshedAgain=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});await refreshedAgain.restore();
+  expect(refreshedAgain.getSnapshot()).toMatchObject({executionId:execution,state:'running',pendingGeneration:{clientActionId:execution},rejectedGeneration:{clientActionId:actionId,action:rejected}});
+  const finished:AgentStatus={...status,state:terminalState,result:terminalState==='succeeded'?{...completion,settlement:{status:'no_site_charge',cashMicros:null,pointUnits:null,balanceMicros:null}}:null};
+  if(terminalState==='stopped'){api.stopAgentExecution.mockResolvedValue(finished);await refreshedAgain.stop('csrf');}
+  else {api.fetchAgentExecution.mockResolvedValue(finished);await refreshedAgain.checkStatus();}
+  expect(refreshedAgain.getSnapshot()).toMatchObject({executionId:execution,state:terminalState,pendingGeneration:null,completedAction:null,
+    completion:finished.result,rejectedGeneration:{clientActionId:actionId,action:rejected}});
+  api.fetchAgentExecution.mockResolvedValue(finished);
+  const afterTerminalRefresh=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});await afterTerminalRefresh.restore();
+  expect(api.acceptAgentExecution).toHaveBeenCalledOnce();
+  expect(JSON.stringify(sessionStorage)).not.toContain('never-persist-this-key');
+  expect(afterTerminalRefresh.returnRejectedToEdit()).toEqual(rejected);
+  expect(afterTerminalRefresh.getSnapshot()).toMatchObject({executionId:execution,state:terminalState,completion:finished.result,completedAction:null,rejectedGeneration:null,confirmedUnaccepted:false});
+  expect(afterTerminalRefresh.returnRejectedToEdit()).toBeNull();
+  await afterTerminalRefresh.retry('csrf');expect(api.acceptAgentExecution).toHaveBeenCalledOnce();
+});
+it('migrates the original rejected-command proof before attaching another device execution',async()=>{
+  const actionId=crypto.randomUUID(),rejected={type:'reply' as const,message:'Rejected before the recovery schema changed'};
+  sessionStorage.setItem(`mapflow.agent.execution.v1.owner.${conversation}`,JSON.stringify({executionId:null,
+    command:{clientActionId:actionId,expectedRevision:4,bindingVersion:2,funding:'cash',action:rejected},unacceptedActionId:actionId}));
+  api.fetchActiveAgentExecution.mockResolvedValue(status);
+  const run=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});await run.restore();
+  expect(run.getSnapshot()).toMatchObject({executionId:execution,pendingGeneration:{clientActionId:execution},rejectedGeneration:{clientActionId:actionId,action:rejected}});
+  api.stopAgentExecution.mockResolvedValue({...status,state:'stopped'});await run.stop('csrf');
+  expect(run.returnRejectedToEdit()).toEqual(rejected);expect(api.acceptAgentExecution).not.toHaveBeenCalled();
+});
+it('keeps a separate unknown operation frozen even when a rejected draft is also saved',async()=>{
+  const unknownId=crypto.randomUUID(),rejectedId=crypto.randomUUID();
+  const command={clientActionId:unknownId,expectedRevision:4,bindingVersion:2,funding:'cash',action:{type:'reply',message:'Unknown acceptance must keep its identity'}};
+  sessionStorage.setItem(`mapflow.agent.execution.v1.owner.${conversation}`,JSON.stringify({executionId:null,command,
+    rejectedCommand:{...command,clientActionId:rejectedId,action:{type:'reply',message:'Independently rejected'}},unacceptedActionId:rejectedId}));
+  const run=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});await run.restore();
+  expect(run.getSnapshot().pendingGeneration?.clientActionId).toBe(unknownId);
+  expect(run.returnRejectedToEdit()).toBeNull();
+  expect(await run.send({type:'reply',message:'Must not replace the unknown request'},5,{funding:'cash',bindingVersion:2},'csrf')).toBe(false);
+  await run.retry('csrf');expect(api.acceptAgentExecution).toHaveBeenCalledOnce();expect(api.acceptAgentExecution.mock.calls[0][1]).toEqual(command);
+});
+it('does not restore a rejected command whose saved proof names another operation',async()=>{
+  const actionId=crypto.randomUUID();
+  sessionStorage.setItem(`mapflow.agent.execution.v1.owner.${conversation}`,JSON.stringify({executionId:null,
+    command:{clientActionId:actionId,expectedRevision:4,bindingVersion:2,funding:'cash',action:{type:'reply',message:'Uncertain request'}},
+    rejectedCommand:{clientActionId:actionId,expectedRevision:4,bindingVersion:2,funding:'cash',action:{type:'reply',message:'Uncertain request'}},unacceptedActionId:crypto.randomUUID()}));
+  const run=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});await run.restore();
+  expect(run.getSnapshot()).toMatchObject({confirmedUnaccepted:false,rejectedGeneration:null,pendingGeneration:{clientActionId:actionId}});
+  expect(run.returnRejectedToEdit()).toBeNull();expect(api.acceptAgentExecution).not.toHaveBeenCalled();
+});
+it('does not carry the rejected request stop intent onto another device execution',async()=>{
+  let rejectAcceptance:(failure:unknown)=>void=()=>{};
+  api.acceptAgentExecution.mockImplementation(()=>new Promise((_resolve,reject)=>{rejectAcceptance=reject;}));
+  const first=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});
+  const sending=first.send({type:'reply',message:'A was never accepted'},4,{funding:'cash',bindingVersion:2},'csrf');
+  await vi.waitFor(()=>expect(api.acceptAgentExecution).toHaveBeenCalledOnce());await first.stop('csrf');
+  rejectAcceptance(new AgentApiError('global_assistant_revision_conflict',409));await sending;
+  expect(first.getSnapshot().stopRequested).toBe(false);
+  api.fetchActiveAgentExecution.mockResolvedValue(status);
+  const refreshed=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});await refreshed.restore();await refreshed.resumeRequestedStop('csrf');
+  expect(refreshed.getSnapshot()).toMatchObject({executionId:execution,state:'running',stopRequested:false,rejectedGeneration:{action:{type:'reply',message:'A was never accepted'}}});
+  expect(api.stopAgentExecution).not.toHaveBeenCalled();expect(api.acceptAgentExecution).toHaveBeenCalledOnce();
+});
+it('keeps the rejected slot separate from completion, fees and late stop callbacks when the next explicit send starts',async()=>{
+  const actionId=crypto.randomUUID(),rejected={type:'reply' as const,message:'Recover A without changing the B receipt'};
+  sessionStorage.setItem(`mapflow.agent.execution.v1.owner.${conversation}`,JSON.stringify({executionId:null,
+    command:{clientActionId:actionId,expectedRevision:4,bindingVersion:2,funding:'cash',action:rejected},unacceptedActionId:actionId}));
+  api.fetchActiveAgentExecution.mockResolvedValue(status);
+  const readers:Array<(event:AgentEvent)=>void>=[];
+  api.attachAgentExecution.mockImplementation((_id,_conversation,_after,onEvent,signal:AbortSignal)=>{readers.push(onEvent);return new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));});
+  const run=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});const detach=run.subscribe(()=>{});
+  try{
+    await run.restore();await vi.waitFor(()=>expect(readers).toHaveLength(1));
+    let finishStop:(value:AgentStatus)=>void=()=>{};api.stopAgentExecution.mockImplementation(()=>new Promise(resolve=>{finishStop=resolve;}));
+    const stopping=run.stop('csrf');
+    readers[0]({executionId:execution,eventId:crypto.randomUUID(),sequence:8,payload:{type:'completed',result:completion}});
+    expect(run.getSnapshot().completedAction).toBeNull();expect(run.returnRejectedToEdit()).toEqual(rejected);
+    const settled={status:'settled' as const,cashMicros:4000,pointUnits:null,balanceMicros:5000};
+    readers[0]({executionId:execution,eventId:crypto.randomUUID(),sequence:9,payload:{type:'settlement',settlement:settled,usage:null}});
+    expect(run.getSnapshot()).toMatchObject({executionId:execution,completion:{settlement:settled},rejectedGeneration:null});
+    const nextExecution='66666666-6666-4666-8666-666666666666';api.acceptAgentExecution.mockResolvedValue({execution:{...status,executionId:nextExecution},replayed:false});
+    expect(await run.send(rejected,5,{funding:'cash',bindingVersion:2},'csrf')).toBe(true);
+    finishStop({...status,state:'stopped'});await stopping;
+    readers[0]({executionId:execution,eventId:crypto.randomUUID(),sequence:10,payload:{type:'settlement',settlement:settled,usage:null}});
+    expect(run.getSnapshot()).toMatchObject({executionId:nextExecution,state:'running',busy:true,completion:null,rejectedGeneration:null,confirmedUnaccepted:false});
+    expect(api.acceptAgentExecution).toHaveBeenCalledOnce();expect(api.acceptAgentExecution.mock.calls[0][1].clientActionId).not.toBe(actionId);
+  }finally{detach();}
+});
+it.each([
+  ['generic conflict',new AgentApiError('execution_conflict',409)],
+  ['server failure',new AgentApiError('request_failed',503)],
+  ['reserved code with a non-authoritative status',new AgentApiError('global_assistant_revision_conflict',503)],
+  ['unknown network outcome',new Error('connection lost')],
+])('keeps the original operation identity and forbids return-to-edit for %s',async(_label,failure)=>{
+  api.acceptAgentExecution.mockRejectedValueOnce(failure);
+  const run=new AgentConversationRun('owner',conversation,{releaseTerminalPending:true});
+  await run.send({type:'reply',message:'Potentially accepted'},4,{funding:'cash',bindingVersion:2},'csrf');
+  const original=api.acceptAgentExecution.mock.calls[0][1];
+  expect(run.returnRejectedToEdit()).toBeNull();expect(run.getSnapshot().pendingGeneration?.clientActionId).toBe(original.clientActionId);
+  await run.retry('csrf');expect(api.acceptAgentExecution.mock.calls[1][1]).toEqual(original);
+});
+it('does not enable the global rejected-edit path for a learning or tavern run',async()=>{
+  api.acceptAgentExecution.mockRejectedValueOnce(new AgentApiError('global_assistant_revision_conflict',409));
+  const run=new AgentConversationRun('owner',conversation);await run.send({type:'reply',message:'Existing scene request'},4,{funding:'cash'},'csrf');
+  expect(run.getSnapshot().confirmedUnaccepted).toBe(false);expect(run.returnRejectedToEdit()).toBeNull();
+  expect(run.getSnapshot().pendingGeneration).not.toBeNull();
+  expect(JSON.parse(sessionStorage.getItem(`mapflow.agent.execution.v1.owner.${conversation}`)!)).not.toHaveProperty('unacceptedActionId');
 });

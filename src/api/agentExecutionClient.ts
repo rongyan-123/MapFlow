@@ -8,12 +8,13 @@ export type AgentState='queued'|'running'|'recovering'|'awaiting_reconciliation'
 export interface AgentUsage {inputTokens:number;outputTokens:number;cacheHitInputTokens?:number|null;cacheMissInputTokens?:number|null}
 export interface AgentSettlement {status:'settled'|'no_site_charge'|'audit_only'|'pending_evidence'|'pending_posting';cashMicros:number|null;pointUnits:number|null;balanceMicros:number|null}
 export interface AgentCompletion {executionId:string;conversationId:string;generationId:string;messageId:string;answer:string;
+  answerRef?:{messageId:string;totalChars:number;nextOffset:number};
   maps:{treeId:string;libraryEntryId:string;title:string}[];usage:AgentUsage|null;settlement:AgentSettlement}
 export interface AgentStatus {executionId:string;conversationId:string;state:AgentState;funding:AgentFunding;modelId:string;result:AgentCompletion|null;
   error:{code:string;message:string;requestId:string}|null}
 export interface PublicAgentModel {profileId:string;profileVersion:number;modelId:string;displayName:string;contextWindow:number;maxOutputTokens:number|null}
 export interface AgentModelCatalogue {cash:PublicAgentModel[];defaultCash:PublicAgentModel|null;points:PublicAgentModel|null}
-export interface AgentExecutionCommand {clientActionId:string;expectedRevision:number;action:GenerationAction;funding:AgentFunding;profileId?:string;profileVersion?:number;
+export interface AgentExecutionCommand {clientActionId:string;expectedRevision:number;bindingVersion?:number;action:GenerationAction;funding:AgentFunding;profileId?:string;profileVersion?:number;
   modelAccess?:{apiKey:string;baseUrl:string;model:string;contextWindow:number;maxOutputTokens?:number|null;
     reasoningProtocol:'none'|'deepseek'|'siliconflow'|'openai_reasoning';reasoningSupported:boolean}}
 export type AgentPayload={type:'text_delta'|'reasoning_delta';text:string}|{type:'completed';result:AgentCompletion}
@@ -36,8 +37,19 @@ const uuid=(value:unknown):value is string=>text(value)&&/^[0-9a-f]{8}-[0-9a-f]{
 const exact=(value:Record<string,unknown>,fields:string[])=>Object.keys(value).every(field=>fields.includes(field));
 function invalid():never {throw new Error('执行响应无效，请重新读取。');}
 function pathId(identity:string){if(!uuid(identity))invalid();return encodeURIComponent(identity);}
-function errorMessage(code:string){return code==='execution_not_found'||code==='agent.execution_not_found'?'这段会话已删除或无法访问，请重新选择。':code==='server_network_unavailable'?'服务器网络异常，请稍后重试。':code==='cash_non_positive'?'现金额度不足，请充值后继续。':
-  code==='credential_required'?'请打开配置并填写 API Key。':code==='awaiting_reconciliation'?'本次请求正在核对，请稍后查看。':'请求暂时失败，请稍后重试。';}
+function errorMessage(code:string){
+  const globalMessages:Record<string,string>={
+    global_conversation_not_current:'当前助手对话已更新，请重新读取最近消息。草稿已保留。',
+    global_assistant_client_upgrade_required:'助手页面已更新，请刷新页面后继续。草稿已保留。',
+    global_assistant_migration_pending:'原助手请求尚未结束，请先核对或停止原请求。',
+    global_assistant_cursor_invalid:'消息同步位置已失效，请重新读取最近消息。',
+    global_assistant_revision_conflict:'最近消息已更新，本次请求尚未接受。请返回编辑后再发送。',
+    context_window_exceeded:'当前模型上下文容量不足，请在模型设置中选择更大窗口的模型后重试。',
+  };
+  if(globalMessages[code])return globalMessages[code];
+  return code==='execution_not_found'||code==='agent.execution_not_found'?'这段会话已删除或无法访问，请重新选择。':code==='server_network_unavailable'?'服务器网络异常，请稍后重试。':code==='cash_non_positive'?'现金额度不足，请充值后继续。':
+    code==='credential_required'?'请打开配置并填写 API Key。':code==='awaiting_reconciliation'?'本次请求正在核对，请稍后查看。':'请求暂时失败，请稍后重试。';
+}
 const headers=(csrf:string)=>({Accept:'application/json','Content-Type':'application/json','X-CSRF-Token':csrf});
 async function request(path:string,options:RequestInit={}):Promise<Response>{
   const response=await apiFetch(path,{credentials:'same-origin',headers:{Accept:'application/json'},...options});
@@ -60,9 +72,12 @@ function settlement(value:unknown):AgentSettlement{
   return value as unknown as AgentSettlement;
 }
 function completion(value:unknown,execution:string,conversation:string):AgentCompletion{
-  if(!record(value)||!exact(value,['executionId','conversationId','generationId','messageId','answer','maps','usage','settlement'])
+  if(!record(value)||!exact(value,['executionId','conversationId','generationId','messageId','answer','answerRef','maps','usage','settlement'])
     ||value.executionId!==execution||value.conversationId!==conversation||!uuid(value.generationId)||!uuid(value.messageId)||!text(value.answer)
     ||!Array.isArray(value.maps)||value.maps.some(map=>!record(map)||!exact(map,['treeId','libraryEntryId','title'])||!uuid(map.treeId)||!uuid(map.libraryEntryId)||!text(map.title)))invalid();
+  const reference=value.answerRef;
+  if(reference!==undefined&&(!record(reference)||!exact(reference,['messageId','totalChars','nextOffset'])||reference.messageId!==value.messageId
+    ||!positive(reference.totalChars)||!positive(reference.nextOffset)||reference.nextOffset>=reference.totalChars||reference.nextOffset>8192||reference.nextOffset!==Array.from(value.answer).length))invalid();
   return {...value,usage:usage(value.usage),settlement:settlement(value.settlement)} as unknown as AgentCompletion;
 }
 export function parseAgentCompletion(value:unknown,conversation:string):AgentCompletion {
@@ -78,6 +93,9 @@ function status(value:unknown,conversation:string,execution?:string):AgentStatus
     error={code:value.error.code,message:errorMessage(value.error.code),requestId:value.error.requestId};}
   return {...value,error,result:value.result===null?null:completion(value.result,value.executionId,conversation)} as unknown as AgentStatus;
 }
+export const parseAgentStatus=status;
+export const parseAgentSettlement=settlement;
+export const parseAgentUsage=usage;
 function model(value:unknown):PublicAgentModel{
   if(!record(value)||!exact(value,['profileId','profileVersion','modelId','displayName','contextWindow','maxOutputTokens'])
     ||!text(value.profileId)||!positive(value.profileVersion)||!text(value.modelId)||!text(value.displayName)||!positive(value.contextWindow)

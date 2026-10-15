@@ -1,10 +1,21 @@
 import {afterEach,expect,it,vi} from 'vitest';
-import {acceptAgentExecution,attachAgentExecution,fetchActiveAgentExecution,fetchAgentExecution,fetchAgentModelCatalogue,stopAgentExecution,resolveAgentToolApproval} from './agentExecutionClient';
+import {acceptAgentExecution,attachAgentExecution,fetchActiveAgentExecution,fetchAgentExecution,fetchAgentModelCatalogue,stopAgentExecution,resolveAgentToolApproval,parseAgentCompletion} from './agentExecutionClient';
 
 const executionId='11111111-1111-4111-8111-111111111111';
 const conversationId='22222222-2222-4222-8222-222222222222';
 const eventId='33333333-3333-4333-8333-333333333333';
 const status={executionId,conversationId,state:'running',funding:'cash',modelId:'fixture-model',result:null,error:null};
+it('validates a bounded completion answer reference using Unicode scalar offsets',()=>{
+  const receipt={executionId,conversationId,generationId:eventId,messageId:eventId,answer:'😀前',maps:[],usage:null,settlement:{status:'no_site_charge',cashMicros:null,pointUnits:null,balanceMicros:null},answerRef:{messageId:eventId,totalChars:9000,nextOffset:2}};
+  expect(parseAgentCompletion(receipt,conversationId)).toEqual(receipt);
+  expect(()=>parseAgentCompletion({...receipt,answerRef:{...receipt.answerRef,nextOffset:3}},conversationId)).toThrow('响应无效');
+});
+it('maps context capacity failure to a safe actionable model-settings message',async()=>{
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(json({...status,state:'failed',error:{code:'context_window_exceeded',message:'private provider diagnostic',requestId:eventId}})));
+  const failed=await fetchAgentExecution(executionId,conversationId);
+  expect(failed.error?.message).toBe('当前模型上下文容量不足，请在模型设置中选择更大窗口的模型后重试。');
+  expect(failed.error?.message).not.toContain('private provider diagnostic');
+});
 afterEach(()=>vi.unstubAllGlobals());
 function json(value:unknown,code=200){return new Response(JSON.stringify(value),{status:code,headers:{'Content-Type':'application/json'}});}
 function stream(pages:unknown[]){return new Response(pages.map(page=>`event: progress\ndata: ${JSON.stringify(page)}\n\n`).join(''),{headers:{'Content-Type':'text/event-stream'}});}
