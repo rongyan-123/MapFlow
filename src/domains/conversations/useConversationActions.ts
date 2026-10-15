@@ -15,22 +15,22 @@ export function useConversationActions(history:ReturnType<typeof useConversation
   const [deletePhase,setDeletePhase]=useState<'saving'|'deleting'|null>(null);const [error,setError]=useState<unknown>(null);
   const creationLock=useRef(false);const deletionLock=useRef(false);
   const pendingKey=creationStorageKey(accountId,areaId,scene==='management');const pending=useRef<CreateLearningConversationInput|null>(readPendingCreation(pendingKey));
-  const selectedCharacter=detail?.character??history.characters.data?.find(character=>character.characterId===characterId)??history.characters.data?.[0];
-  const roleReady=selectedCharacter?history.characters.data?.some(character=>character.characterId===selectedCharacter.characterId):scene!=='tavern';
+  const selectedCharacter=detail?.character??(scene==='management'?undefined:history.characters.data?.find(character=>character.characterId===characterId)??history.characters.data?.[0]);
+  const roleReady=scene==='management'||(selectedCharacter?history.characters.data?.some(character=>character.characterId===selectedCharacter.characterId):scene!=='tavern');
   const canCreate=history.history.isSuccess&&!history.defaultQuery.isFetching&&owner.available!==false&&!deletePhase&&!creating&&!switching&&!busy&&!!roleReady&&(!conversationId||!!detail);
   async function create(){
     if(creationLock.current||deletionLock.current||!canCreate)return;
     creationLock.current=true;setCreating(true);setError(null);
     const previous=detail?.conversation;
     try{
-      const input={...(selectedCharacter?{characterId:selectedCharacter.characterId}:{}),userName:previous?.userName??owner.userName,...(previous?.persona?{persona:previous.persona}:{}),...(previous?.vocabulary?{vocabulary:previous.vocabulary}:{}),greetingIndex:0};
+      const input={...(scene!=='management'&&selectedCharacter?{characterId:selectedCharacter.characterId}:{}),userName:previous?.userName??owner.userName,...(previous?.persona?{persona:previous.persona}:{}),...(previous?.vocabulary?{vocabulary:previous.vocabulary}:{}),greetingIndex:0};
       if(scene==='learning'||scene==='management'){
         const request=pending.current??{...input,clientRequestId:crypto.randomUUID(),...(scene==='learning'?{toolsEnabled:previous?.treeToolsEnabled===true}:{})};pending.current=request;persistPendingCreation(pendingKey,request);
         const created=scene==='learning'?await createLearningConversation(areaId!,request,csrfToken):await openManagementConversation({...request,newConversation:true},csrfToken);
         pending.current=null;persistPendingCreation(pendingKey,null);history.created(created);
       }else if(selectedCharacter)history.created(await createConversation({...input,characterId:selectedCharacter.characterId},csrfToken));
     }catch(failure){
-      if(failure instanceof TavernApiError&&failure.code==='tavern.creation_target_deleted'){
+      if(failure instanceof TavernApiError&&(failure.code==='tavern.creation_target_deleted'||(scene==='management'&&failure.code==='tavern.character_not_found'))){
         const requestId=pending.current?.clientRequestId;if(requestId&&readPendingCreation(pendingKey)?.clientRequestId===requestId)persistPendingCreation(pendingKey,null);pending.current=null;void history.history.refetch();
       }setError(failure);
     }finally{creationLock.current=false;setCreating(false);}
@@ -50,7 +50,7 @@ export function useConversationActions(history:ReturnType<typeof useConversation
     finally{deletionLock.current=false;setDeletePhase(null);}
   }
   async function chooseCharacter(character:Character){
-    if(creationLock.current||busy||!history.history.isSuccess||owner.available===false)return;
+    if(scene==='management'||creationLock.current||busy||!history.history.isSuccess||owner.available===false)return;
     setCharacterId(character.characterId);setError(null);if(!conversationId||detail?.character.characterId===character.characterId)return;
     if(!detail)return;creationLock.current=true;setSwitching(character.characterId);
     try{history.recovered(await switchConversationCharacter(conversationId,detail.graph.revision,character.characterId,csrfToken));}

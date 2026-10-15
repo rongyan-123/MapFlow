@@ -7,6 +7,7 @@ import { useConversationActions } from './useConversationActions';
 import { conversationRun } from './legacyRun';
 import { teachingCanvasPersistence } from '../canvas/persistence';
 import { agentConversationRun } from './agentRun';
+import {creationStorageKey,persistPendingCreation} from './pendingCreation';
 afterEach(()=>{vi.unstubAllGlobals();localStorage.clear();sessionStorage.clear();});
 const owner={accountId:'player-1',csrfToken:'csrf',userName:'小明',scene:'management' as const};
 const story={...conversation,conversationId:'22222222-2222-4222-8222-222222222222',scene:'management' as const,libraryEntryId:null,learningAreaId:null};
@@ -41,6 +42,32 @@ it('allows explicit creation after clearing and discards a deleted replay reques
   await act(async()=>view.result.current.actions.create());await waitFor(()=>expect(view.result.current.actions.error).toBeDefined());
   await act(async()=>view.result.current.actions.create());expect(requestIds).toHaveLength(2);expect(requestIds[1]).not.toBe(requestIds[0]);
   expect(view.result.current.history.conversationId).toBe('new-story');
+});
+it('creates a fixed global assistant even when its role is absent from the personal library',async()=>{
+  const payloads:Record<string,unknown>[]=[];
+  const platform={...character,characterId:'platform-role'};
+  vi.stubGlobal('fetch',async(path:string,options?:RequestInit)=>{
+    if(options?.method==='POST'){payloads.push(JSON.parse(String(options.body)));return new Response(JSON.stringify({...detail,character:platform,conversation:{...story,characterId:platform.characterId}}));}
+    return new Response(JSON.stringify(path.endsWith('/characters')?{characters:[]}:path.endsWith('/'+story.conversationId)?{...detail,character:platform,conversation:{...story,characterId:platform.characterId}}:{conversations:[{...story,characterId:platform.characterId}],bootstrapState:'has_active'}));
+  });
+  const view=setup();await waitFor(()=>expect(view.result.current.history.detail).toBeDefined());
+  expect(view.result.current.actions.canCreate).toBe(true);
+  await act(async()=>view.result.current.actions.create());
+  expect(payloads).toHaveLength(1);expect(payloads[0]).not.toHaveProperty('characterId');
+});
+it('ends a rejected legacy role-selection retry and uses a new fixed-assistant creation request',async()=>{
+  const legacy={clientRequestId:'11111111-1111-4111-8111-111111111111',characterId:'private-role',userName:'小明'};
+  const key=creationStorageKey(owner.accountId,undefined,true);persistPendingCreation(key,legacy);
+  const payloads:Record<string,unknown>[]=[];
+  vi.stubGlobal('fetch',async(path:string,options?:RequestInit)=>{
+    if(options?.method==='POST'){payloads.push(JSON.parse(String(options.body)));return payloads.length===1?new Response(JSON.stringify({error:{code:'tavern.character_not_found',message:'unavailable'}}),{status:404}):new Response(JSON.stringify({...detail,conversation:story}));}
+    return new Response(JSON.stringify(path.endsWith('/characters')?{characters:[character]}:{conversations:[],bootstrapState:'cleared'}));
+  });
+  const view=setup();await waitFor(()=>expect(view.result.current.actions.canCreate).toBe(true));
+  await act(async()=>view.result.current.actions.create());expect(payloads[0]).toMatchObject(legacy);
+  expect(localStorage.getItem(key)).toBeNull();
+  await act(async()=>view.result.current.actions.create());
+  expect(payloads[1].clientRequestId).not.toBe(legacy.clientRequestId);expect(payloads[1]).not.toHaveProperty('characterId');
 });
 it('blocks deletion while a previous generation is still active',async()=>{
   const deletes:string[]=[];vi.stubGlobal('fetch',async(path:string,options?:RequestInit)=>{if(options?.method==='DELETE')deletes.push(path);return reads(path);});
