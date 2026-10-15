@@ -1,5 +1,5 @@
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
-import {render,screen,fireEvent,waitFor,act} from '@testing-library/react';
+import {render,screen,fireEvent,waitFor,act,within} from '@testing-library/react';
 import {afterEach,expect,it,vi} from 'vitest';
 import {IdentityProvider,SESSION_QUERY_KEY} from '../domains/identity/IdentityContext';
 import Application from './Application';
@@ -13,7 +13,8 @@ it('restores the account-owned legacy console view and responds to browser navig
 it('opens the anonymous marketing page',()=>{open('/?marketing=1');expect(screen.getByRole('heading',{level:1})).toBeVisible();expect(screen.getByRole('button',{name:/打开我的学习地图/})).toBeVisible();});
 it('restores the current account legacy map and node after server ownership is confirmed',async()=>{
   localStorage.setItem('mapflow.console.state.v1.a',JSON.stringify({version:1,view:'personal',selectedLibraryEntryId:'owned-entry',selectedNodeId:node.id,layoutMode:'blocks'}));
-  open('/console',true,['owned-entry']);await screen.findByRole('dialog',{name:node.title});
+  open('/console',true,['owned-entry']);const details=await screen.findByRole('complementary',{name:'节点详情'});
+  expect(within(details).getByRole('heading',{name:node.title,level:2})).toBeVisible();
   expect(screen.getByRole('button',{name:'按块排序'})).toHaveAttribute('aria-pressed','true');
 });
 it('rejects an unowned remembered map without fetching its detail',async()=>{

@@ -20,7 +20,7 @@ function BlockConnectionEdge({ source, target, data }: EdgeProps<BlockConnection
     return getBlockConnectionRoute(sourceCard, targetCard, cards.filter((node) => node.id !== source && node.id !== target), data?.lane);
   }, [nodes, source, target, data?.lane]);
   if (!route) return null;
-  const color = data?.relation === 'incoming' ? 'var(--mf-brand)' : 'var(--mf-warning)';
+  const color = data?.relation === 'incoming' ? 'var(--mf-map-incoming)' : 'var(--mf-map-outgoing)';
 
   return (
     <g

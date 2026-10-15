@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LearningTreeSnapshot } from '../../types/learning';
 import SkillTreeCanvas from './MapCanvas';
 
 const flowProbe = vi.hoisted(() => ({
   fitView: vi.fn(),
   getZoom: vi.fn(() => 0.8),
+  getViewport: vi.fn(() => ({x:72,y:-31,zoom:.63})),
   zoomTo: vi.fn().mockResolvedValue(undefined),
   setViewport: vi.fn().mockResolvedValue(undefined),
   nodesInitialized: false,
@@ -21,6 +22,7 @@ vi.mock('@xyflow/react', async () => {
       return flowProbe.fitView(...args);
     },
     getZoom: () => flowProbe.getZoom(),
+    getViewport: () => flowProbe.getViewport(),
     zoomTo: (...args: unknown[]) => flowProbe.zoomTo(...args),
     setViewport: (...args: unknown[]) => flowProbe.setViewport(...args),
   };
@@ -51,20 +53,25 @@ vi.mock('@xyflow/react', async () => {
     nodes,
     onInit,
     onMoveEnd,
+    onNodeClick,
     children,
+    reference,
   }: {
     nodes: unknown[];
     onInit?: (instance: typeof flowInstance) => void;
     onMoveEnd?: (event: unknown, viewport: { x: number; y: number; zoom: number }) => void;
+    onNodeClick?: (event: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => void;
     children?: React.ReactNode;
+    reference?: React.Ref<HTMLDivElement>;
   }) {
     React.useEffect(() => {
       onInit?.(flowInstance);
     }, []);
 
     return (
-      <div data-testid="skill-tree-flow" data-node-count={nodes.length}>
+      <div ref={reference} data-testid="skill-tree-flow" data-node-count={nodes.length}>
         <button onClick={() => onMoveEnd?.({}, { x: 72, y: -31, zoom: 0.63 })}>移动地图</button>
+        {nodes.length > 0 && <button onClick={event => onNodeClick?.(event, nodes[0] as { id: string; position: { x: number; y: number } })}>选择地图节点</button>}
         {children}
       </div>
     );
@@ -74,7 +81,7 @@ vi.mock('@xyflow/react', async () => {
     Background: () => null,
     Controls: () => null,
     MiniMap: () => null,
-    ReactFlow:React.forwardRef((props:React.ComponentProps<typeof ReactFlow>,_ref:React.ForwardedRef<HTMLDivElement>)=><ReactFlow {...props} />),
+    ReactFlow:React.forwardRef((props:React.ComponentProps<typeof ReactFlow>,ref:React.ForwardedRef<HTMLDivElement>)=><ReactFlow {...props} reference={ref} />),
     useEdgesState,
     useNodesInitialized,
     useNodesState,
@@ -117,6 +124,7 @@ const snapshot = {
 } satisfies LearningTreeSnapshot;
 
 describe('SkillTreeCanvas', () => {
+  afterEach(()=>vi.unstubAllGlobals());
   beforeEach(() => {
     flowProbe.fitView.mockClear();
     flowProbe.fitView.mockResolvedValue(true);
@@ -130,11 +138,56 @@ describe('SkillTreeCanvas', () => {
     render(<SkillTreeCanvas snapshot={{...snapshot,current_node_id:null}} displayMode="personal" layoutMode="relationship" selectedNodeId={null} isGraphVisible onSelectNode={()=>{}} />);
     await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());expect(flowProbe.fitView.mock.calls[0][0].nodes).toEqual([{id:'node-1'}]);
   });
+  it('opens a node deep link around that node instead of the map starting node',async()=>{
+    const target={...snapshot.nodes[0],id:'node-target',depth_level:2};
+    render(<SkillTreeCanvas snapshot={{...snapshot,nodes:[...snapshot.nodes,target]}} displayMode="personal" layoutMode="relationship" selectedNodeId="node-target" isGraphVisible onSelectNode={()=>{}} />);
+    await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());
+    expect(flowProbe.fitView.mock.calls[0][0].nodes).toEqual([{id:'node-target'}]);
+  });
+  it('falls back to the map starting node when a deep link refers to a missing node',async()=>{
+    render(<SkillTreeCanvas snapshot={snapshot} displayMode="personal" layoutMode="relationship" selectedNodeId="missing-node" isGraphVisible onSelectNode={()=>{}} />);
+    await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());
+    expect(flowProbe.fitView.mock.calls[0][0].nodes).toEqual([{id:'node-1'}]);
+  });
   it('keeps the same graph center when a saved viewport is restored at a wider screen',async()=>{
     const previousWidth=window.innerWidth;const props={snapshot,displayMode:'personal' as const,layoutMode:'relationship' as const,selectedNodeId:null,isGraphVisible:true,onSelectNode:()=>{},viewportStorageKey:'mapflow.map.test.resize'};
     const first=render(<SkillTreeCanvas {...props} />);await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());fireEvent.click(screen.getByRole('button',{name:'移动地图'}));first.unmount();window.innerWidth=previousWidth+400;
     render(<SkillTreeCanvas {...props} />);await waitFor(()=>expect(flowProbe.setViewport).toHaveBeenCalledWith({x:272,y:-31,zoom:.63},{duration:0}));window.innerWidth=previousWidth;
   });
+
+  it('keeps the viewed graph center when resizing the live canvas, without fitting the whole graph again',async()=>{
+    let notifyResize!:ResizeObserverCallback;
+    const observed:Element[]=[];
+    vi.stubGlobal('ResizeObserver',class {
+      constructor(callback:ResizeObserverCallback){notifyResize=callback;}
+      observe(element:Element){observed.push(element);}
+      unobserve(){}
+      disconnect(){}
+    });
+    vi.stubGlobal('innerWidth',1000);vi.stubGlobal('innerHeight',800);
+    render(<SkillTreeCanvas snapshot={snapshot} displayMode="personal" layoutMode="relationship" selectedNodeId={null} isGraphVisible onSelectNode={()=>{}} />);
+    await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());
+    const canvas=screen.getByTestId('skill-tree-flow');
+    expect(observed).toContain(canvas);
+    flowProbe.fitView.mockClear();flowProbe.setViewport.mockClear();
+    Object.defineProperties(canvas,{clientWidth:{value:600},clientHeight:{value:500}});
+    notifyResize([],{} as ResizeObserver);
+    expect(flowProbe.setViewport).toHaveBeenCalledWith({x:-128,y:-181,zoom:.63},{duration:0});
+    expect(flowProbe.fitView).not.toHaveBeenCalled();
+  });
+
+  it('centers the chosen node in the remaining canvas after its detail panel opens',async()=>{
+    const onSelectNode=vi.fn(()=>{
+      Object.defineProperties(screen.getByTestId('skill-tree-flow'),{clientWidth:{value:390},clientHeight:{value:280}});
+    });
+    render(<SkillTreeCanvas snapshot={snapshot} displayMode="personal" layoutMode="relationship" selectedNodeId={null} isGraphVisible onSelectNode={onSelectNode} />);
+    await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());
+    flowProbe.setViewport.mockClear();
+    fireEvent.click(screen.getByRole('button',{name:'选择地图节点'}));
+    expect(onSelectNode).toHaveBeenCalledWith('node-1');
+    await waitFor(()=>expect(flowProbe.setViewport).toHaveBeenCalledWith({x:195,y:98.4,zoom:.8},{duration:0}));
+  });
+
 
   it('restores an account/map viewport after leaving the page and does not replace it with fitView', async () => {
     const props = { snapshot, displayMode: 'personal' as const, layoutMode: 'relationship' as const,

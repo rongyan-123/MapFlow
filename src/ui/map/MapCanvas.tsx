@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import {
   Background,
   Controls,
@@ -22,6 +22,8 @@ import { computeTreeLayout } from '../../domains/maps/layoutTree';
 import {
   BLOCK_LABEL_GAP,
   BLOCK_LABEL_WIDTH,
+  BLOCK_NODE_HEIGHT,
+  BLOCK_NODE_WIDTH,
   computeBlockLayoutModel,
   type BlockLayoutModel,
 } from '../../domains/maps/layoutBlocks';
@@ -41,11 +43,11 @@ interface BlockLaneData extends Record<string, unknown> {
 type BlockLaneFlowNode = Node<BlockLaneData, 'block'>;
 
 function BlockLaneComponent({data}:NodeProps<BlockLaneFlowNode>){
-  const accent=data.color??'var(--mf-brand)';const labelOffset=BLOCK_LABEL_WIDTH+BLOCK_LABEL_GAP;
-  return <div data-mapflow-block-lane="true" className="mf-block-lane">
-    <div className="mf-block-lane-area" style={{left:labelOffset,borderColor:accent}} />
-    <div className="mf-block-lane-label" style={{width:BLOCK_LABEL_WIDTH,borderColor:accent}}><span style={{backgroundColor:accent}} /><strong title={data.name}>{data.name}</strong></div>
-    <span className="mf-block-lane-link" style={{left:BLOCK_LABEL_WIDTH,width:BLOCK_LABEL_GAP,backgroundColor:accent}} />
+  const accent=data.color??'var(--mf-map-incoming)';const labelOffset=BLOCK_LABEL_WIDTH+BLOCK_LABEL_GAP;
+  return <div data-mapflow-block-lane="true" className="mf-block-lane" style={{'--lane-accent':accent} as CSSProperties}>
+    <div className="mf-block-lane-area" style={{left:labelOffset}} />
+    <div className="mf-block-lane-label" style={{width:BLOCK_LABEL_WIDTH}}><span /><strong title={data.name}>{data.name}</strong></div>
+    <span className="mf-block-lane-link" style={{left:BLOCK_LABEL_WIDTH,width:BLOCK_LABEL_GAP}} />
   </div>;
 }
 
@@ -157,6 +159,7 @@ export default function SkillTreeCanvas({
           y: node.position_y,
         },
         zIndex: 1,
+        selected: node.id === selectedNodeId,
         data: {
           node,
           progress: progressMap.get(node.id) ?? null,
@@ -181,6 +184,7 @@ export default function SkillTreeCanvas({
       progressMap,
       snapshot.current_node_id,
       snapshot.nodes,
+      selectedNodeId,
     ],
   );
   const generatedEdges = useMemo<Edge[]>(
@@ -196,7 +200,7 @@ export default function SkillTreeCanvas({
             source: edge.source_node_id,
             target: edge.target_node_id,
             type: 'smoothstep',
-            style: { stroke: 'var(--mf-brand)', strokeWidth: 1.8 },
+            style: { stroke: 'var(--mf-map-edge)', strokeWidth: 1.8 },
           };
         }
         return {
@@ -206,7 +210,7 @@ export default function SkillTreeCanvas({
           type: 'smoothstep',
           animated: completed || mastered,
           style: {
-            stroke: mastered ? 'var(--mf-warning)' : completed ? 'var(--mf-brand)' : 'var(--mf-muted)',
+            stroke: mastered ? 'var(--mf-map-mastery)' : completed ? 'var(--mf-map-complete)' : 'var(--mf-map-edge)',
             strokeWidth: completed || mastered ? 2 : 1.2,
           },
         };
@@ -224,6 +228,22 @@ export default function SkillTreeCanvas({
   );
   const containerRef=useRef<HTMLDivElement>(null);
   const canvasSize=()=>({width:containerRef.current?.clientWidth||window.innerWidth,height:containerRef.current?.clientHeight||window.innerHeight});
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    let previous = canvasSize();
+    const observer = new ResizeObserver(() => {
+      const next = canvasSize();
+      const flow = flowRef.current;
+      if (flow && previous.width > 0 && previous.height > 0 && (next.width !== previous.width || next.height !== previous.height)) {
+        const viewport = flow.getViewport();
+        void flow.setViewport({ ...viewport, x: viewport.x + (next.width - previous.width) / 2, y: viewport.y + (next.height - previous.height) / 2 }, { duration: 0 });
+      }
+      previous = next;
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
   const layoutKey = `${snapshot.tree.id}:${snapshot.tree.revision ?? 0}:${layoutMode}`;
   const fitViewKey = `${viewportStorageKey ?? ''}:${layoutKey}:${snapshot.current_node_id ?? ''}`;
   const viewportKey = viewportStorageKey ? `${viewportStorageKey}.${layoutMode}` : undefined;
@@ -252,14 +272,15 @@ export default function SkillTreeCanvas({
   const fitGraphView = useCallback(() => {
     const flow = flowRef.current;
     if (!flow || generatedNodes.length === 0) return;
+    const selectedNode = generatedNodes.find(node => node.type === 'skill' && node.id === selectedNodeId);
     const remembered = readMapViewport(viewportKey, layoutKey,canvasSize());
-    if (remembered) { void flow.setViewport(remembered, { duration: 0 }); return; }
-    const startingNode=snapshot.current_node_id??generatedNodes.filter(node=>node.type==='skill').sort((first,second)=>first.position.y-second.position.y||first.position.x-second.position.x)[0]?.id;
+    if (remembered && !selectedNode) { void flow.setViewport(remembered, { duration: 0 }); return; }
+    const startingNode=selectedNode?.id??snapshot.current_node_id??generatedNodes.filter(node=>node.type==='skill').sort((first,second)=>first.position.y-second.position.y||first.position.x-second.position.x)[0]?.id;
 
     void flow
       .fitView({
         nodes:
-          layoutMode === 'relationship' && startingNode
+          (layoutMode === 'relationship' || selectedNode) && startingNode
             ? [{ id: startingNode }]
             : undefined,
         padding: layoutMode === 'blocks' ? 0.2 : 0.18,
@@ -273,7 +294,23 @@ export default function SkillTreeCanvas({
         const starting=generatedNodes.find(node=>node.id===startingNode);
         if(starting)void flow.setViewport(getStartingViewport(canvasSize(),starting.position,readableZoom),{duration:0});
       });
-  }, [generatedNodes, layoutMode, snapshot.current_node_id, viewportKey, layoutKey]);
+  }, [generatedNodes, layoutMode, selectedNodeId, snapshot.current_node_id, viewportKey, layoutKey]);
+
+  function selectAndCenterNode(node: SkillFlowNode | BlockLaneFlowNode) {
+    if (node.type !== 'skill') return;
+    onSelectNode(node.id);
+    const flow = flowRef.current;
+    window.requestAnimationFrame(() => {
+      if (!flow || flowRef.current !== flow || !containerRef.current?.isConnected) return;
+      const size = canvasSize();
+      const zoom = flow.getZoom();
+      void flow.setViewport({
+        x: size.width / 2 - (node.position.x + BLOCK_NODE_WIDTH / 2) * zoom,
+        y: size.height / 2 - (node.position.y + BLOCK_NODE_HEIGHT / 2) * zoom,
+        zoom,
+      }, { duration: 0 });
+    });
+  }
 
   return (
     <ReactFlow
@@ -284,7 +321,13 @@ export default function SkillTreeCanvas({
       edgeTypes={edgeTypes}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
-      onNodeClick={(_, node) => onSelectNode(node.id)}
+      onNodeClick={(_, node) => selectAndCenterNode(node)}
+      onKeyDown={event => {
+        if ((event.key !== 'Enter' && event.key !== ' ') || !(event.target instanceof HTMLElement)) return;
+        const nodeElement = event.target.closest<HTMLElement>('.react-flow__node-skill');
+        const node = nodes.find(item => item.id === nodeElement?.dataset.id);
+        if (node) { event.preventDefault(); selectAndCenterNode(node); }
+      }}
       onMoveEnd={(_, viewport) => {
         if (!viewportKey) return;
         try { localStorage.setItem(viewportKey, JSON.stringify({ layoutKey, viewport,canvas:canvasSize() })); }
@@ -305,22 +348,22 @@ export default function SkillTreeCanvas({
         fitViewKey={fitViewKey}
         isGraphVisible={isGraphVisible}
       />
-      <Background color="var(--mf-line)" gap={24} />
+      <Background color="var(--mf-map-edge)" gap={24} size={.8} />
       <Controls className="mf-flow-controls" />
       <MiniMap
         nodeColor={(node) => {
           if (node.type === 'block') {
-            return (node.data as BlockLaneData).color ?? 'var(--mf-muted)';
+            return (node.data as BlockLaneData).color ?? 'var(--mf-map-edge)';
           }
-          if (displayMode === 'showcase') return 'var(--mf-brand)';
+          if (displayMode === 'showcase') return 'var(--mf-map-incoming)';
           const flowNode = node as SkillFlowNode;
           const status = flowNode.data.progress?.status ?? 'not_started';
-          if (status === 'mastered') return 'var(--mf-brand)';
-          if (status === 'completed') return 'var(--mf-brand)';
-          if (status === 'in_progress') return 'var(--mf-warning)';
-          return 'var(--mf-muted)';
+          if (status === 'mastered') return 'var(--mf-map-mastery)';
+          if (status === 'completed') return 'var(--mf-map-complete)';
+          if (status === 'in_progress') return 'var(--mf-map-active)';
+          return 'var(--mf-map-edge)';
         }}
-        maskColor="var(--mf-soft)"
+        maskColor="color-mix(in srgb, var(--mf-map-paper) 75%, transparent)"
         className="mf-flow-minimap"
       />
     </ReactFlow>
