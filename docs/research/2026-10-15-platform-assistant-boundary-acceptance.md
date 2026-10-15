@@ -1,6 +1,6 @@
 # 平台固定助手边界验收
 
-按[用户确认的范围](../specs/2026-10-15-platform-assistant-boundary-design.md)实现。后端提交 `a1a579be354a82a955f92090d597aedfa641f7b5`；前端基于 `9dff7ae`，与本记录一起保存。本轮更新本机和远端主线，未更新生产部署。
+按[用户确认的范围](../specs/2026-10-15-platform-assistant-boundary-design.md)实现。后端提交 `a1a579be354a82a955f92090d597aedfa641f7b5`；前端基于 `9dff7ae`，与本记录一起保存。实施验收时仅更新本机和远端主线；后续生产发布见[发布记录](2026-10-15-platform-assistant-deployment.md)。
 
 ## 已实现
 
