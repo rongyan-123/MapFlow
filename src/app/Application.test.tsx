@@ -14,7 +14,7 @@ it('opens the anonymous marketing page',()=>{open('/?marketing=1');expect(screen
 it('restores the current account legacy map and node after server ownership is confirmed',async()=>{
   localStorage.setItem('mapflow.console.state.v1.a',JSON.stringify({version:1,view:'personal',selectedLibraryEntryId:'owned-entry',selectedNodeId:node.id,layoutMode:'blocks'}));
   open('/console',true,['owned-entry']);await screen.findByRole('dialog',{name:node.title});
-  expect(screen.getByRole('combobox',{name:'地图布局'})).toHaveValue('blocks');
+  expect(screen.getByRole('button',{name:'按块排序'})).toHaveAttribute('aria-pressed','true');
 });
 it('rejects an unowned remembered map without fetching its detail',async()=>{
   localStorage.setItem('mapflow.console.state.v1.a',JSON.stringify({version:1,view:'personal',selectedLibraryEntryId:'foreign-entry',selectedNodeId:node.id}));

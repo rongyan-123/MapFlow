@@ -4,13 +4,13 @@ import {readCardImport} from './cardImport';
 import {importCharacter} from '../../api/tavernClient';
 import {downloadOfficialCard,fetchOfficialCards,type OfficialCard} from './officialCards';
 import type {CardImport,Character} from '../conversations/types';
-export function useCharacterImport({csrfToken,onImported}:{csrfToken:string;onImported:(character:Character)=>void}){
+export function useCharacterImport({csrfToken,onImported,initialBrowseOfficial=false}:{csrfToken:string;onImported:(character:Character)=>void;initialBrowseOfficial?:boolean}){
   const [preview, setPreview] = useState<CardImport | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string>();
   const [reading, setReading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const [browseOfficial, setBrowseOfficial] = useState(false);
+  const [browseOfficial, setBrowseOfficial] = useState(initialBrowseOfficial);
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
   const [catalog, setCatalog] = useState<OfficialCard[] | null>(null);

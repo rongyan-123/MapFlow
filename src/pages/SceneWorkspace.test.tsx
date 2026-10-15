@@ -18,6 +18,7 @@ function mount(active=false,fresh=false){
     if(path.endsWith('/characters'))return new Response(JSON.stringify({characters:[character]}));
     if(path.endsWith('/executions'))return new Response(JSON.stringify({execution:null}));
     if(path==='/api/me/tree-library')return new Response(JSON.stringify({entries:[]}));
+    if(path==='https://raw.githubusercontent.com/SillyTavern/SillyTavern-Content/main/index.json')return new Response(JSON.stringify([{type:'character',id:'guide.png',name:'官方示例向导',description:'官方目录中的角色卡',highlight:false,url:'https://raw.githubusercontent.com/SillyTavern/SillyTavern-Content/main/assets/character/guide.png'}]));
     if(path.endsWith('/'+story.conversationId))return new Response(JSON.stringify({...detail,conversation:story,...(fresh?{turns:[],generations:[],graph:{...detail.graph,activePath:['message-opening'],messages:[detail.graph.messages[0]],branches:[{...detail.graph.branches[0],leafMessageId:'message-opening'}]}}:{})}));
     if(path.includes('/conversations'))return new Response(JSON.stringify({conversations:active?[story]:[],bootstrapState:active?'has_active':'cleared'}));
     return new Response('{}',{status:503});
@@ -37,6 +38,37 @@ it('keeps a real conversation draft through the five-section configuration dialo
   expect(screen.getByRole('button',{name:'角色与会话'})).toBeVisible();expect(screen.getByRole('button',{name:'历史与分支'})).toBeVisible();
   fireEvent.click(screen.getByRole('button',{name:'技能树与工具'}));fireEvent.click(screen.getByRole('button',{name:'关闭'}));
   await waitFor(()=>expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue('我的下一条问题'));
+});
+it('opens the role library from history without replacing the draft or stacking dialogs',async()=>{
+  const requests=mount(true);await screen.findByText('请用茶。');
+  fireEvent.change(screen.getByRole('textbox',{name:'消息'}),{target:{value:'尚未发送的草稿'}});
+  fireEvent.click(within(screen.getByRole('complementary')).getByRole('button',{name:'打开角色库'}));
+  expect(screen.getByRole('dialog',{name:'角色库'})).toBeVisible();
+  expect(within(screen.getByRole('dialog',{name:'角色库'})).getByRole('button',{name:'导入角色卡'})).toBeVisible();
+  fireEvent.click(screen.getByRole('button',{name:'关闭'}));
+  expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue('尚未发送的草稿');
+  fireEvent.click(screen.getByRole('button',{name:'配置'}));
+  fireEvent.click(within(screen.getByRole('dialog',{name:'配置'})).getByRole('button',{name:'会话历史'}));
+  fireEvent.click(within(screen.getByRole('dialog',{name:'会话历史'})).getByRole('button',{name:'打开角色库'}));
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  expect(screen.getByRole('dialog',{name:'角色库'})).toBeVisible();
+  expect(requests.every(([,options])=>!options?.method||options.method==='GET')).toBe(true);
+});
+it('exposes communities and opens the official catalog directly from the role library',async()=>{
+  const requests=mount(true);await screen.findByText('请用茶。');
+  fireEvent.click(within(screen.getByRole('complementary')).getByRole('button',{name:'打开角色库'}));
+  const library=screen.getByRole('dialog',{name:'角色库'});
+  expect(within(library).getByText('点击此处浏览角色卡社区')).toBeVisible();
+  for(const name of ['类脑 · 中文酒馆社区','废墟之下的藏书室','Chub','AI Character Cards']){
+    expect(within(library).getByRole('link',{name})).toBeVisible();
+  }
+  fireEvent.click(within(library).getByRole('button',{name:'浏览官方角色卡'}));
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  await screen.findByRole('button',{name:/官方示例向导/});
+  expect(requests.some(([path])=>path.endsWith('/index.json'))).toBe(true);
+  expect(requests.every(([,options])=>!options?.method||options.method==='GET')).toBe(true);
+  fireEvent.click(screen.getByRole('button',{name:'关闭'}));
+  expect(screen.getByRole('dialog',{name:'角色库'})).toBeVisible();
 });
 it('replaces the history drawer with a single deletion confirmation dialog',async()=>{
   mount(true);await screen.findByText('请用茶。');fireEvent.click(screen.getByRole('button',{name:'配置'}));
