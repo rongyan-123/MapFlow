@@ -1,4 +1,5 @@
 @import './ui/tokens.css';
+@import './ui/theme-transition.css';
 @import './ui/layout.css';
 @import './ui/primitives.css';
 @import './ui/pages.css';

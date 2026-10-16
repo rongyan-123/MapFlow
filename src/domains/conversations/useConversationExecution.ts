@@ -50,8 +50,15 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
   const [referenceActive, setReferenceActive] = useState(!!nodeReference);
   useEffect(() => { setReferenceActive(!!nodeReference); }, [nodeReference?.id, nodeReference?.title]);
   const [recovering, setRecovering] = useState(false);
+  const learningScene = (detail.conversation.scene ?? (detail.conversation.libraryEntryId ? 'learning' : 'tavern')) === 'learning';
   const canvas = useTeachingCanvas(detail.conversation.conversationId, csrfToken, detail.graph.revision, detail.canvas,
-    { readOnly, initiallyOpen: !detail.conversation.libraryEntryId && !readOnly && !!detail.canvas?.enabled, queryClient, accountId });
+    { readOnly, initiallyOpen: learningScene && !readOnly, queryClient, accountId });
+  const learningCanvasOpened = useRef(false);
+  useEffect(() => {
+    if (!learningScene || readOnly || busy || pendingGeneration || learningCanvasOpened.current) return;
+    learningCanvasOpened.current = true;
+    void canvas.enableDrawing();
+  }, [learningScene, readOnly, busy, pendingGeneration]);
   useEffect(()=>{canvas.setPreview(canvasPreview);},[canvasPreview,canvas.setPreview]);
   const mapVisibleRef = useRef(mapVisible); mapVisibleRef.current = mapVisible;
   useEffect(() => { if (mapVisible) canvas.setOpen(false); }, [mapVisible]);

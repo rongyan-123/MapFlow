@@ -1,0 +1,9 @@
+:root[data-mapflow-theme-transition='spotlight']::view-transition-group(root){animation:none}
+:root[data-mapflow-theme-transition='spotlight']::view-transition-image-pair(root){isolation:isolate}
+:root[data-mapflow-theme-transition='spotlight']::view-transition-old(root),
+:root[data-mapflow-theme-transition='spotlight']::view-transition-new(root){animation:none;mix-blend-mode:normal}
+:root[data-mapflow-theme-transition='spotlight']::view-transition-old(root){z-index:2}
+:root[data-mapflow-theme-transition='spotlight']::view-transition-new(root){z-index:1}
+:root[data-mapflow-theme-transition='fade'],
+:root[data-mapflow-theme-transition='fade'] *{transition:background-color .32s ease,color .32s ease,border-color .32s ease,box-shadow .32s ease!important}
+@media(prefers-reduced-motion:reduce){:root[data-mapflow-theme-transition='fade'],:root[data-mapflow-theme-transition='fade'] *{transition:none!important}}

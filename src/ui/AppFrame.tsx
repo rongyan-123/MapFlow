@@ -14,7 +14,7 @@ export interface AppFrameProps {
   accountName: string;
   navigate: (href: string) => void;
   onAccount: () => void;
-  onTheme: () => void;
+  onTheme: (source: HTMLElement) => void;
   onHelp: () => void;
   onMarketing: () => void;
   chatMode?: boolean;
@@ -53,7 +53,7 @@ export function AppFrame({ children, items, tools, accountName, navigate, onAcco
     <nav aria-label="业务导航">{items.map(link)}</nav>
     <p className="mf-navigation-caption">工具与账号</p><nav aria-label="账号工具">{tools.map(link)}</nav>
     <div className="mf-sidebar-bottom"><button className="mf-navigation-link" onClick={() => { setNavigationOpen(false); onMarketing(); }}><Icon name="home" />产品首页</button><button className="mf-navigation-link" onClick={() => { setNavigationOpen(false); onHelp(); }}><Icon name="help" />帮助与反馈</button>
-      <div className="mf-account"><button className="mf-account-profile" onClick={() => { setNavigationOpen(false); onAccount(); }}><span className="mf-avatar">{accountName.slice(0,1).toUpperCase()}</span><span><strong>{accountName}</strong><small>你的学习空间</small></span></button><IconButton icon="moon" label="切换浅色和深色主题" onClick={onTheme} /></div>
+      <div className="mf-account"><button className="mf-account-profile" onClick={() => { setNavigationOpen(false); onAccount(); }}><span className="mf-avatar">{accountName.slice(0,1).toUpperCase()}</span><span><strong>{accountName}</strong><small>你的学习空间</small></span></button><IconButton icon="moon" label="切换浅色和深色主题" onClick={event=>onTheme(event.currentTarget)} /></div>
     </div>
   </aside>;
   return <FrameContext.Provider value={{ openNavigation: () => setNavigationOpen(true) }}><div ref={viewport} className={`mf-app ${chatMode ? 'mf-app--chat' : ''}`}>

@@ -26,9 +26,16 @@ export function useTeachingCanvas(conversationId: string, csrfToken: string, gra
   }, [conversationId, graphRevision, persistence]);
   const show = async () => {
     await persistence.show();
-    if (!persistence.getSnapshot().deleted) setOpen(true);
+    const loaded = persistence.getSnapshot();
+    if (loaded.deleted || !loaded.document) return;
+    setOpen(true);
   };
-  return { ...snapshot, document: preview ?? snapshot.document, open, wide, show,
+  const enableDrawing = async () => {
+    await persistence.show();
+    const loaded = persistence.getSnapshot();
+    if (!loaded.deleted && loaded.document && !loaded.document.enabled) await persistence.save(undefined, true);
+  };
+  return { ...snapshot, document: preview ?? snapshot.document, open, wide, show, enableDrawing,
     save: persistence.save, flush: persistence.flush, queue: persistence.queue,
     prepareDeletion: persistence.prepareDeletion, cancelDeletion: persistence.cancelDeletion,
     markDeleted: persistence.markDeleted, setOpen, setWide, setPreview };
