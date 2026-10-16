@@ -36,4 +36,4 @@
 - [手机配置](D:/tmp/mapflow-chat-scene-core-20261016/tavern-shared-settings-320-3.png)
 - [深色手机界面](D:/tmp/mapflow-chat-scene-core-20261016/learning-shared-dark-mobile.png)
 
-本轮不自动部署。已部署的回执修复保持原发布版本；后续发布只需配套更新前端。
+用户确认后，已将前端 `093a79bd5488c9ae908297d774cd3fee89ab5efd` 发布至生产；后端回执修复、知识推理镜像和 schema58 保持原版本。详见 [发布验收与回退](2026-10-16-chat-scene-core-deployment.md)。
