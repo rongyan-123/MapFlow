@@ -60,6 +60,24 @@ export interface AgentSettlementAttention {
     receipts:{receiptId:string;currency:string;amount:string;validationError:string|null}[]}[];
 }
 export interface AgentSettlementPage {pending:AgentSettlementAttention[];nextBefore:string|null;totalCount:number}
+export interface AgentSettlementReviewInput {
+  action:'recheck'|'acknowledge_audit';expectedAttentionKey:string;note?:string;
+}
+export interface AgentSettlementReviewResult {
+  executionId:string;outcome:'pending'|'resolved'|'acknowledged';checkedAt:string;reason:string;attentionKey?:string;
+}
+export async function reviewAgentSettlement(executionId:string,input:AgentSettlementReviewInput,csrf:string):Promise<AgentSettlementReviewResult> {
+  const response=await apiFetch(`/api/admin/agent-settlements/${encodeURIComponent(executionId)}/review`,{
+    method:'POST',credentials:'same-origin',headers:headers(csrf),body:JSON.stringify(input),
+  });
+  if(!response.ok)throw new Error(response.status===409?'核对依据已更新，请关闭窗口后重新读取记录。':response.status===403?'当前账号无权核对记录，或登录校验已失效。':'核对未完成，原记录仍然保留，请稍后重试。');
+  const body:unknown=await response.json();
+  if(!object(body)||!only(body,['executionId','outcome','checkedAt','reason','attentionKey'])||body.executionId!==executionId
+    ||!['pending','resolved','acknowledged'].includes(String(body.outcome))||typeof body.checkedAt!=='string'||!Number.isFinite(Date.parse(body.checkedAt))
+    ||typeof body.reason!=='string'||(body.attentionKey!==undefined&&(typeof body.attentionKey!=='string'||!/^[a-f0-9]{64}$/i.test(body.attentionKey)))
+    ||(body.outcome==='pending'&&typeof body.attentionKey!=='string'))throw new Error('费用核对响应无效，原记录仍然保留。');
+  return body as unknown as AgentSettlementReviewResult;
+}
 const uuid=(value:unknown):value is string=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 const only=(value:Record<string,unknown>,fields:string[])=>Object.keys(value).every(key=>fields.includes(key));
 export async function fetchAgentSettlementAttention(before?:string):Promise<AgentSettlementPage> {

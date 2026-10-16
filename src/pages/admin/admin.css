@@ -4,3 +4,5 @@
 @media(max-width:767px){.mf-section-tabs{gap:3px}.mf-section-tabs button{min-height:44px;font-size:11px;padding:8px 10px}.mf-record-card{padding:16px}.mf-record-actions .mf-button{flex:1;min-height:44px}.mf-admin-selector{max-width:none}}
 
 .mf-record-table tbody tr:hover{background:color-mix(in srgb,var(--mf-tint) 30%,transparent)}.mf-admin-tabs button:focus-visible,.mf-section-tabs button:focus-visible,.mf-select-record:focus-visible{outline:2px solid var(--mf-brand);outline-offset:2px}
+.mf-admin-attention .mf-card,.mf-settlement-review{min-width:0;overflow-wrap:anywhere}.mf-admin-attention pre{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere}.mf-settlement-review .mf-button{white-space:normal;min-height:44px}
+.mf-settlement-review .mf-dialog-footer .mf-button{width:100%}

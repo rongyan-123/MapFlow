@@ -34,4 +34,4 @@
 - [手机更多菜单](D:/tmp/mapflow-learning-role-library-20261016/final-learning-mobile-more.png)
 - [新角色的独立会话](D:/tmp/mapflow-learning-role-library-20261016/learning-new-role-long-name-desktop.png)
 
-日志、逐尺寸测量、接口核对和本地清理证据位于 `D:/tmp/mapflow-learning-role-library-20261016/`：`layout-review.json`、`creation-review.json`、`cleanup-review.json`、各轮红绿测试日志及构建日志。手机尺寸模拟不等同于 Android 真机键盘验收；尚未合入或发布本轮功能，两个固定 main 入口保留已发布版本。
+日志、逐尺寸测量、接口核对和本地清理证据位于 `D:/tmp/mapflow-learning-role-library-20261016/`：`layout-review.json`、`creation-review.json`、`cleanup-review.json`、各轮红绿测试日志及构建日志。手机尺寸模拟不等同于 Android 真机键盘验收。2026-10-16 随管理员回执核对修复合入并发布，前端发布版本 `2632500` 包含本轮改动；详见 [发布记录](2026-10-16-admin-settlement-review-deployment.md)。

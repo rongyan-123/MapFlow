@@ -1,7 +1,17 @@
 import {afterEach,expect,it,vi} from 'vitest';
-import {fetchAgentModelConfiguration,activateAgentModelProfile,saveAgentModelProfile,fetchAgentSettlementAttention} from './agentModelClient';
+import {fetchAgentModelConfiguration,activateAgentModelProfile,saveAgentModelProfile,fetchAgentSettlementAttention,reviewAgentSettlement} from './agentModelClient';
 import {configurationFixture} from '../test/agentModelFixture';
 afterEach(()=>vi.unstubAllGlobals());
+it('reviews the selected evidence version with CSRF and no model credentials',async()=>{
+ const executionId='01a14370-3646-7603-a29c-69dcc8bc6e49';
+ const result={executionId,outcome:'acknowledged',checkedAt:'2026-10-16T00:00:00Z',reason:'本版本记录已核对，原始依据继续保留。'};
+ const fetch=vi.fn().mockResolvedValue(Response.json(result));vi.stubGlobal('fetch',fetch);
+ const input={action:'acknowledge_audit' as const,expectedAttentionKey:'a'.repeat(64),note:'已核对停止请求，上游未知状态保留。'};
+ expect(await reviewAgentSettlement(executionId,input,'csrf-fixture')).toEqual(result);
+ expect(fetch.mock.calls[0]).toEqual([`/api/admin/agent-settlements/${executionId}/review`,expect.objectContaining({
+   method:'POST',credentials:'same-origin',body:JSON.stringify(input),headers:expect.objectContaining({'X-CSRF-Token':'csrf-fixture'})
+ })]);
+});
 it('reads administrator settlement pages without keys and rejects unexpected secret-bearing fields',async()=>{
  const page={pending:[],nextBefore:null,totalCount:0};
  const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify(page)));vi.stubGlobal('fetch',fetch);
