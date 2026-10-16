@@ -11,7 +11,7 @@ import {creationStorageKey,persistPendingCreation} from './pendingCreation';
 afterEach(()=>{vi.unstubAllGlobals();localStorage.clear();sessionStorage.clear();});
 const owner={accountId:'player-1',csrfToken:'csrf',userName:'小明',scene:'management' as const};
 const story={...conversation,conversationId:'22222222-2222-4222-8222-222222222222',scene:'management' as const,libraryEntryId:null,learningAreaId:null};
-function setup(){const client=new QueryClient({defaultOptions:{queries:{retry:false}}});return {client,...renderHook(()=>{const history=useConversationHistory(owner);return {history,actions:useConversationActions(history,false)};},{wrapper:({children})=><QueryClientProvider client={client}>{children}</QueryClientProvider>})};}
+function setup(){const client=new QueryClient({defaultOptions:{queries:{retry:false}}});return {client,...renderHook(()=>{const history=useConversationHistory(owner);return {history,actions:useConversationActions(history.actionContext,false)};},{wrapper:({children})=><QueryClientProvider client={client}>{children}</QueryClientProvider>})};}
 function reads(path:string){return new Response(JSON.stringify(path.includes('/characters')?{characters:[character]}:path.endsWith('/'+story.conversationId)?{...detail,conversation:story}:{conversations:[story],bootstrapState:'has_active'}));}
 it('blocks deletion when an Agent acceptance response is unknown',async()=>{
   const deletes:string[]=[];vi.stubGlobal('fetch',async(path:string,options?:RequestInit)=>{
