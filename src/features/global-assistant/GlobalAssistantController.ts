@@ -1,6 +1,6 @@
 import {QueryClient} from '@tanstack/react-query';
 import {openGlobalAssistant,fetchGlobalMessages,fetchGlobalChanges,GlobalAssistantApiError,type GlobalSnapshot,type GlobalChange} from '../../api/globalAssistantClient';
-import {AgentApiError,fetchAgentExecution,stopAgentExecution,resumeAgentExecution,type AgentCompletion,type AgentStatus} from '../../api/agentExecutionClient';
+import {AgentApiError,fetchAgentExecution,fetchAgentExecutionControl,stopAgentExecution,resumeAgentExecution,type AgentCompletion,type AgentStatus} from '../../api/agentExecutionClient';
 import {agentConversationRun,type AgentConversationRun,type AgentSendOptions} from '../../domains/conversations/agentRun';
 import type {GenerationSettingsState} from '../../domains/conversations/types';
 import {appendQuestion,questionsForVisit} from './questions';
@@ -107,8 +107,17 @@ export class GlobalAssistantController {
     await this.blockerAction(target,()=>fetchAgentExecution(target.executionId,target.conversationId));
   };
   resume=async(apiKey:string,target?:AgentStatus)=>{
-    if(!target||target.executionId===this.run?.getSnapshot().executionId){if(this.run){await this.run.retry(this.csrfToken,apiKey);await this.sync();}return;}
-    await this.blockerAction(target,()=>resumeAgentExecution(target.executionId,target.conversationId,this.csrfToken,apiKey));
+    if(!target||target.executionId===this.run?.getSnapshot().executionId){if(this.run){
+      const run=this.run,version=this.draftVersion;
+      const unaccepted=await run.retry(this.csrfToken,apiKey);
+      if(this.run===run&&unaccepted?.type==='reply'&&!this.snapshot.draft.trim()&&version===this.draftVersion)this.setDraft(unaccepted.message);
+      await this.sync();
+    }return;}
+    await this.blockerAction(target,async()=>{
+      const control=await fetchAgentExecutionControl(target.executionId,target.conversationId);
+      if(control?control.state!==target.state||!control.actions.canResume:target.error?.code!=='credential_required')return fetchAgentExecution(target.executionId,target.conversationId);
+      return resumeAgentExecution(target.executionId,target.conversationId,this.csrfToken,apiKey);
+    });
   };
   private stopIdentity(executionId:string){
     const key=`mapflow.global-assistant.stop.v1.${this.accountId}.${executionId}`;

@@ -12,6 +12,10 @@ export interface AgentCompletion {executionId:string;conversationId:string;gener
   maps:{treeId:string;libraryEntryId:string;title:string}[];usage:AgentUsage|null;settlement:AgentSettlement}
 export interface AgentStatus {executionId:string;conversationId:string;state:AgentState;funding:AgentFunding;modelId:string;result:AgentCompletion|null;
   error:{code:string;message:string;requestId:string}|null}
+export const agentControlReasons=['none','completed','stopped','credential_required','external_outcome_unknown','authentication','rate_limited',
+  'provider_balance_insufficient','network','context_window_exceeded','generation_failed','financial_reconciliation','conversation_not_current'] as const;
+export interface AgentExecutionControl {version:1;executionId:string;conversationId:string;state:AgentState;reason:typeof agentControlReasons[number];
+  actions:{canCheck:boolean;canStop:boolean;canResume:boolean;needsCredential:boolean}}
 export interface PublicAgentModel {profileId:string;profileVersion:number;modelId:string;displayName:string;contextWindow:number;maxOutputTokens:number|null}
 export interface AgentModelCatalogue {cash:PublicAgentModel[];defaultCash:PublicAgentModel|null;points:PublicAgentModel|null}
 export interface AgentExecutionCommand {clientActionId:string;expectedRevision:number;bindingVersion?:number;action:GenerationAction;funding:AgentFunding;profileId?:string;profileVersion?:number;
@@ -45,9 +49,14 @@ function errorMessage(code:string){
     global_assistant_cursor_invalid:'消息同步位置已失效，请重新读取最近消息。',
     global_assistant_revision_conflict:'最近消息已更新，本次请求尚未接受。请返回编辑后再发送。',
     context_window_exceeded:'当前模型上下文容量不足，请在模型设置中选择更大窗口的模型后重试。',
+    external_outcome_unknown:'上游未确认本次调用结果，原调用不会自动重发。可结束本轮后主动发送新请求；上游费用以服务商记录为准。',
+    authentication:'上游拒绝了 API Key，请核对 Key、接口地址和访问权限后重新发送。',
+    rate_limited:'上游请求过于频繁，请稍后主动重新发送。',
+    provider_balance_insufficient:'你的 API 服务商账户额度不足，请在服务商处核对。本站额度不影响 BYOK。',
+    network:'连接上游失败，请核对接口地址或稍后重新发送。',
   };
   if(globalMessages[code])return globalMessages[code];
-  return code==='execution_not_found'||code==='agent.execution_not_found'?'这段会话已删除或无法访问，请重新选择。':code==='server_network_unavailable'?'服务器网络异常，请稍后重试。':code==='cash_non_positive'?'现金额度不足，请充值后继续。':
+  return code==='execution_not_found'||code==='agent.execution_not_found'?'这段会话已删除或无法访问，请重新选择。':code==='server_network_unavailable'?'服务器网络异常，请稍后重试。':code==='cash_non_positive'?'本站现金额度不足。可以切换为自填 API Key，或补充本站额度后发送。':
     code==='credential_required'?'请打开配置并填写 API Key。':code==='awaiting_reconciliation'?'本次请求正在核对，请稍后查看。':'请求暂时失败，请稍后重试。';
 }
 const headers=(csrf:string)=>({Accept:'application/json','Content-Type':'application/json','X-CSRF-Token':csrf});
@@ -116,6 +125,22 @@ export async function acceptAgentExecution(conversation:string,command:AgentExec
 }
 export async function fetchAgentExecution(execution:string,conversation:string,signal?:AbortSignal):Promise<AgentStatus>{
   return status(await(await request(`${root}/${pathId(execution)}`,{signal})).json(),conversation,execution);
+}
+/** Kept separate so an already open old client still receives exactly the original status fields. */
+export async function fetchAgentExecutionControl(execution:string,conversation:string,signal?:AbortSignal):Promise<AgentExecutionControl|null>{
+  let response:Response;
+  try{response=await request(`${root}/${pathId(execution)}/control`,{signal,cache:'no-store'});}
+  catch(failure){if(failure instanceof AgentApiError&&failure.status===404&&failure.code==='route.not_found')return null;throw failure;}
+  const value:unknown=await response.json();
+  if(!record(value)||!exact(value,['version','executionId','conversationId','state','reason','actions'])||value.version!==1
+    ||value.executionId!==execution||value.conversationId!==conversation||!states.includes(value.state as AgentState)
+    ||!agentControlReasons.includes(value.reason as AgentExecutionControl['reason'])||!record(value.actions)
+    ||!exact(value.actions,['canCheck','canStop','canResume','needsCredential'])
+    ||[value.actions.canCheck,value.actions.canStop,value.actions.canResume,value.actions.needsCredential].some(value=>typeof value!=='boolean'))invalid();
+  const control=value as unknown as AgentExecutionControl;
+  if(control.actions.needsCredential&&!control.actions.canResume||terminal(control.state)&&(control.actions.canResume||control.actions.canStop)
+    ||control.reason==='external_outcome_unknown'&&control.actions.canResume)invalid();
+  return control;
 }
 export async function fetchActiveAgentExecution(conversation:string,signal?:AbortSignal):Promise<AgentStatus|null>{
   const value:unknown=await(await request(`/api/me/tavern/conversations/${pathId(conversation)}/executions`,{signal})).json();

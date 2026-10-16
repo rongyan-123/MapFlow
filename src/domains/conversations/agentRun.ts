@@ -2,8 +2,8 @@ import type {QueryClient} from '@tanstack/react-query';
 import {PublicUiError} from '../../lib/publicErrors';
 import type {GenerationAction,GenerationProcessEvent,TeachingCanvasState} from './types';
 import {StreamingPresentation} from './streamingPresentation';
-import {AgentApiError,acceptAgentExecution,attachAgentExecution,fetchActiveAgentExecution,fetchAgentExecution,resumeAgentExecution,stopAgentExecution,resolveAgentToolApproval,
-  type AgentCompletion,type AgentEvent,type AgentExecutionCommand,type AgentFunding,type AgentStatus,type AgentPayload} from '../../api/agentExecutionClient';
+import {AgentApiError,acceptAgentExecution,attachAgentExecution,fetchActiveAgentExecution,fetchAgentExecution,fetchAgentExecutionControl,resumeAgentExecution,stopAgentExecution,resolveAgentToolApproval,
+  type AgentCompletion,type AgentEvent,type AgentExecutionCommand,type AgentFunding,type AgentStatus,type AgentPayload,type AgentExecutionControl} from '../../api/agentExecutionClient';
 
 export type AgentSendOptions=Omit<AgentExecutionCommand,'clientActionId'|'expectedRevision'|'action'>;
 export interface AgentRunOptions {releaseTerminalPending?:boolean}
@@ -15,6 +15,7 @@ interface AgentRunSnapshot {
   draft:string;process:GenerationProcessEvent[];busy:boolean;stopped:boolean;stopRequested:boolean;error:unknown;completion:AgentCompletion|null;
   pendingApprovals:Extract<AgentPayload,{type:'approval_required'}>[];canvasPreview:TeachingCanvasState|null;
   completedAction:GenerationAction|null;confirmedUnaccepted:boolean;
+  control:AgentExecutionControl|null;controlAvailability:'unknown'|'ready'|'unsupported'|'unavailable';
 }
 const terminal=(state:AgentStatus['state'])=>['succeeded','stopped','failed'].includes(state);
 const safeFailure=(failure:unknown)=>failure instanceof AgentApiError?failure:
@@ -30,7 +31,8 @@ function restoreCommand(command:AgentExecutionCommand|undefined):SavedCommand|nu
 }
 /** The application owns progress; each mounted page owns only a disposable event reader. */
 export class AgentConversationRun {
-  private snapshot:AgentRunSnapshot={executionId:null,funding:null,modelId:null,state:null,pendingGeneration:null,rejectedGeneration:null,draft:'',process:[],busy:false,stopped:false,stopRequested:false,error:null,completion:null,pendingApprovals:[],canvasPreview:null,completedAction:null,confirmedUnaccepted:false};
+  private snapshot:AgentRunSnapshot={executionId:null,funding:null,modelId:null,state:null,pendingGeneration:null,rejectedGeneration:null,draft:'',process:[],busy:false,stopped:false,stopRequested:false,error:null,completion:null,pendingApprovals:[],canvasPreview:null,completedAction:null,confirmedUnaccepted:false,control:null,controlAvailability:'unknown'};
+  private controlEpoch=0;
   private listeners=new Set<()=>void>();private reader:AbortController|null=null;private presentation:StreamingPresentation|null=null;
   private restored:Promise<void>|null=null;private operation:SavedCommand|null=null;private sequence=0;private sending=false;
   private rejectedOperation:SavedCommand|null=null;
@@ -45,7 +47,12 @@ export class AgentConversationRun {
     this.listeners.add(listener);void this.restore().then(()=>this.watch());
     return()=>{this.listeners.delete(listener);if(!this.listeners.size)this.detach();};
   };
-  private set(patch:Partial<AgentRunSnapshot>){this.snapshot={...this.snapshot,...patch};this.listeners.forEach(listener=>listener());}
+  private set(patch:Partial<AgentRunSnapshot>){
+    if(patch.executionId!==undefined&&patch.executionId!==this.snapshot.executionId||patch.state!==undefined&&patch.state!==this.snapshot.state){
+      this.controlEpoch++;patch={control:null,controlAvailability:'unknown',...patch};
+    }
+    this.snapshot={...this.snapshot,...patch};this.listeners.forEach(listener=>listener());
+  }
   private persist(){try{sessionStorage.setItem(this.storageKey,JSON.stringify({executionId:this.snapshot.executionId,command:this.operation,stopRequested:this.snapshot.stopRequested,stopTarget:this.stopTarget,stopActionId:this.stopActionId,
     ...(this.options.releaseTerminalPending?{rejectedCommand:this.rejectedOperation,unacceptedActionId:this.rejectedOperation?.clientActionId??null}:{})}));}catch{/* Recovery can still discover the account-owned active execution. */}}
   markDeleted(){
@@ -99,13 +106,24 @@ export class AgentConversationRun {
       if(status.state!=='succeeded'||!status.result)return;
       if(this.snapshot.completion.settlement.status==='settled'&&status.result.settlement.status!=='settled')return;
     }
-    this.set({executionId:status.executionId,funding:status.funding,modelId:status.modelId,state:status.state,
+    this.set({executionId:status.executionId,funding:status.funding,modelId:status.modelId,state:status.state,control:null,controlAvailability:'unknown',
       rejectedGeneration:this.rejectedOperation,confirmedUnaccepted:!!this.rejectedOperation,busy:!terminal(status.state)&&status.state!=='awaiting_reconciliation',
       ...(terminal(status.state)?{stopRequested:false,pendingApprovals:[],...(status.state==='succeeded'?{}:{canvasPreview:null})}:{}),
       stopped:status.state==='stopped',completion:status.result,completedAction:status.result?this.operation?.action??null:null,
       pendingGeneration:status.state==='succeeded'||this.options.releaseTerminalPending&&terminal(status.state)?null:this.operation??{clientActionId:status.executionId,expectedRevision:0,action:{type:'reply',message:''}},
       error:status.error?new AgentApiError(status.error.code,400,status.error.requestId):null});this.persist();
+    void this.refreshControl(status);
   }
+  private async refreshControl(status:AgentStatus){
+    const epoch=this.epoch,reading=++this.controlEpoch;
+    try{const control=await fetchAgentExecutionControl(status.executionId,this.conversationId);
+      if(this.deleted||epoch!==this.epoch||reading!==this.controlEpoch||this.snapshot.executionId!==status.executionId||this.snapshot.state!==status.state)return;
+      if(control&&control.state!==this.snapshot.state)return;
+      this.set({control,controlAvailability:control?'ready':'unsupported'});
+    }catch{if(!this.deleted&&epoch===this.epoch&&reading===this.controlEpoch&&this.snapshot.executionId===status.executionId&&this.snapshot.state===status.state)this.set({control:null,controlAvailability:'unavailable'});}
+  }
+  canResume(){return this.snapshot.state==='awaiting_reconciliation'&&this.snapshot.funding==='byok'&&
+    (this.snapshot.control?.actions.canResume===true||this.snapshot.controlAvailability==='unsupported'&&this.snapshot.error instanceof AgentApiError&&this.snapshot.error.code==='credential_required');}
   /** A bounded global projection may discover work accepted by another device. */
   synchronizeStatus(status:AgentStatus,expectedExecutionId:string|null){
     if(this.deleted||this.sending||status.conversationId!==this.conversationId||this.snapshot.executionId!==expectedExecutionId)return;
@@ -131,15 +149,19 @@ export class AgentConversationRun {
     const command:AgentExecutionCommand={...options,clientActionId:crypto.randomUUID(),expectedRevision,action};
     this.operation=commandWithoutCredential(command);
     this.epoch++;this.sequence=0;this.pendingStopCsrf=null;this.stopActionId=null;this.stopTarget=null;this.stopping=false;this.detach();this.set({executionId:null,funding:options.funding,modelId:options.modelAccess?.model??null,state:null,pendingGeneration:this.operation,draft:'',process:[],busy:true,stopped:false,stopRequested:false,error:null,completion:null,pendingApprovals:[],canvasPreview:null,confirmedUnaccepted:false});
-    this.persist();await this.accept(command,csrf);return true;
+    this.persist();await this.accept(command,csrf);return !this.snapshot.confirmedUnaccepted;
   }
   private async accept(command:AgentExecutionCommand,csrf:string){
     this.sending=true;const epoch=this.epoch;
     try{const accepted=await acceptAgentExecution(this.conversationId,command,csrf);if(epoch!==this.epoch)return;this.applyStatus(accepted.execution);
       if(this.pendingStopCsrf||this.snapshot.stopRequested)await this.stop(this.pendingStopCsrf??csrf);else this.watch();}
     catch(failure){if(epoch===this.epoch){
+      const rejectedCash=command.funding==='cash'&&failure instanceof AgentApiError&&failure.status===402&&failure.code==='cash_non_positive';
       const rejectedGlobal=this.options.releaseTerminalPending&&failure instanceof AgentApiError&&['global_conversation_not_current','global_assistant_client_upgrade_required','global_assistant_migration_pending'].includes(failure.code);
-      if(rejectedGlobal){this.operation=null;this.set({busy:false,pendingGeneration:null,stopRequested:false});this.persist();}
+      if(rejectedCash){
+        this.operation=null;this.pendingStopCsrf=null;this.stopTarget=null;this.stopActionId=null;
+        this.set({busy:false,pendingGeneration:null,stopRequested:false,confirmedUnaccepted:true});this.persist();
+      }else if(rejectedGlobal){this.operation=null;this.set({busy:false,pendingGeneration:null,stopRequested:false});this.persist();}
       else if(this.options.releaseTerminalPending&&failure instanceof AgentApiError&&failure.code==='global_assistant_revision_conflict'&&failure.status===409){
         this.rejectedOperation=this.operation;this.operation=null;this.pendingStopCsrf=null;this.stopTarget=null;this.stopActionId=null;
         this.set({busy:false,stopRequested:false,pendingGeneration:null,rejectedGeneration:this.rejectedOperation,confirmedUnaccepted:true});
@@ -155,7 +177,7 @@ export class AgentConversationRun {
     if(this.snapshot.executionId){
       if(this.snapshot.state==='stopped'||this.snapshot.state==='failed')return;
       const execution=this.snapshot.executionId,epoch=this.epoch;
-      try{const status=this.snapshot.state==='awaiting_reconciliation'&&this.snapshot.funding==='byok'
+      try{const status=this.canResume()
           ?await resumeAgentExecution(this.snapshot.executionId,this.conversationId,csrf,apiKey)
           :await fetchAgentExecution(this.snapshot.executionId,this.conversationId);
         if(epoch!==this.epoch||execution!==this.snapshot.executionId)return;this.applyStatus(status);this.watch();}catch(failure){if(epoch===this.epoch&&execution===this.snapshot.executionId)this.fail(failure);}return;
@@ -164,6 +186,7 @@ export class AgentConversationRun {
     if(this.operation.funding==='byok'&&(!apiKey||!this.operation.modelAccess)){this.set({error:new AgentApiError('credential_required',400)});return;}
     const {modelAccess,...command}=this.operation;
     this.set({busy:true,error:null});await this.accept({...command,...(modelAccess?{modelAccess:{...modelAccess,apiKey:apiKey!}}:{})},csrf);
+    if(this.snapshot.confirmedUnaccepted&&!this.rejectedOperation)return command.action;
   }
   async stop(csrf:string){
     if(!this.snapshot.executionId){if(this.sending){this.pendingStopCsrf=csrf;this.set({stopRequested:true});this.persist();}return;}

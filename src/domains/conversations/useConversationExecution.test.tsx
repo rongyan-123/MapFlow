@@ -39,6 +39,39 @@ it('persists one command identity before a lost response and does not automatica
   const recovery=sessionStorage.getItem(`mapflow.agent.execution.v1.a.${conversationId}`);expect(recovery).toContain(sent.clientActionId);
   await act(async()=>{await Promise.resolve();});expect(commands).toHaveLength(1);view.unmount();
 });
+it('keeps a cash-rejected question editable and sends it with BYOK after the user switches funding',async()=>{
+  const commands:Array<Record<string,unknown>>=[];
+  vi.stubGlobal('fetch',async(_path:string,options?:RequestInit)=>{
+    if(options?.method==='POST'){
+      const command=JSON.parse(String(options.body));commands.push(command);
+      if(command.funding==='cash')return new Response(JSON.stringify({error:{code:'cash_non_positive',message:'Insufficient site balance'}}),{status:402});
+      return new Response(JSON.stringify({execution:{executionId:'55555555-5555-4555-8555-555555555555',conversationId,state:'stopped',funding:'byok',modelId:'user-model',result:null,error:null},replayed:false}));
+    }
+    return new Response(JSON.stringify({execution:null}));
+  });
+  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
+  const view=renderHook(({funding}:{funding:'cash'|'byok'})=>useConversationExecution({detail:saved,accountId:'negative-site-balance',csrfToken:'csrf-a',initialDraft:'保留这个问题',
+    modelSelection:{provider:'custom',apiKey:'synthetic-user-key',baseUrl:'https://models.example/v1',model:'user-model',settings:{},historyBytes:32768},
+    agentOptions:{funding,contextWindow:32000},onRecovered:vi.fn(),onCompleted:vi.fn(),onGraphChanged:vi.fn()}),
+    {initialProps:{funding:'cash' as 'cash'|'byok'},wrapper:({children})=><QueryClientProvider client={client}>{children}</QueryClientProvider>});
+  await act(async()=>view.result.current.runGeneration({type:'reply',message:view.result.current.message}));
+  expect(view.result.current.message).toBe('保留这个问题');expect(view.result.current.pendingGeneration).toBeNull();
+  view.rerender({funding:'byok'});
+  await act(async()=>view.result.current.runGeneration({type:'reply',message:view.result.current.message}));
+  expect(commands).toHaveLength(2);expect(commands[1]).toMatchObject({funding:'byok',action:{type:'reply',message:'保留这个问题'},modelAccess:{model:'user-model',apiKey:'synthetic-user-key'}});
+  expect(commands[1].clientActionId).not.toBe(commands[0].clientActionId);
+  expect(sessionStorage.getItem(`mapflow.agent.execution.v1.negative-site-balance.${conversationId}`)).not.toContain('synthetic-user-key');view.unmount();
+});
+it('restores the question from a previously stranded cash retry after a confirmed rejection',async()=>{
+  sessionStorage.setItem(`mapflow.agent.execution.v1.a.${conversationId}`,JSON.stringify({executionId:null,
+    command:{clientActionId:'44444444-4444-4444-8444-444444444444',expectedRevision:1,funding:'cash',action:{type:'reply',message:'升级前卡住的原问题'}}}));
+  vi.stubGlobal('fetch',async(_path:string,options?:RequestInit)=>options?.method==='POST'
+    ?new Response(JSON.stringify({error:{code:'cash_non_positive'}}),{status:402}):new Response(JSON.stringify({execution:null})));
+  const view=setup('byok');
+  await waitFor(()=>expect(view.result.current.pendingGeneration).not.toBeNull());
+  await act(async()=>view.result.current.runGeneration(view.result.current.pendingGeneration!.action,view.result.current.pendingGeneration!));
+  expect(view.result.current.pendingGeneration).toBeNull();expect(view.result.current.message).toBe('升级前卡住的原问题');view.unmount();
+});
 it.each(['accepted','response lost'] as const)('preserves a newer unsent draft after a delayed %s response',async(outcome)=>{
   let resolveResponse!:(response:Response)=>void;let rejectResponse!:(failure:Error)=>void;
   const response=new Promise<Response>((resolve,reject)=>{resolveResponse=resolve;rejectResponse=reject;});

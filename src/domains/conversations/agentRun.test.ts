@@ -1,12 +1,39 @@
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {AgentConversationRun} from './agentRun';
 import {AgentApiError,type AgentStatus,type AgentEvent,type AgentCompletion} from '../../api/agentExecutionClient';
-const api=vi.hoisted(()=>({fetchActiveAgentExecution:vi.fn(),fetchAgentExecution:vi.fn(),acceptAgentExecution:vi.fn(),attachAgentExecution:vi.fn(),stopAgentExecution:vi.fn(),resumeAgentExecution:vi.fn()}));
+const api=vi.hoisted(()=>({fetchActiveAgentExecution:vi.fn(),fetchAgentExecution:vi.fn(),fetchAgentExecutionControl:vi.fn(),acceptAgentExecution:vi.fn(),attachAgentExecution:vi.fn(),stopAgentExecution:vi.fn(),resumeAgentExecution:vi.fn()}));
 vi.mock('../../api/agentExecutionClient',async original=>({...await original<typeof import('../../api/agentExecutionClient')>(),...api}));
 const conversation='11111111-1111-4111-8111-111111111111',execution='22222222-2222-4222-8222-222222222222';
 const completion:AgentCompletion={executionId:execution,conversationId:conversation,generationId:'33333333-3333-4333-8333-333333333333',messageId:'44444444-4444-4444-8444-444444444444',answer:'Saved answer',maps:[],usage:null,
   settlement:{status:'pending_evidence',cashMicros:null,pointUnits:null,balanceMicros:null}};
 const status:AgentStatus={executionId:execution,conversationId:conversation,state:'running',funding:'cash',modelId:'original-model',result:null,error:null};
+
+it.each([false,true])('lets a confirmed cash rejection return to editing and a new BYOK send (global=%s)',async global=>{
+  api.acceptAgentExecution.mockRejectedValueOnce(new AgentApiError('cash_non_positive',402));
+  const run=new AgentConversationRun('owner',conversation,{releaseTerminalPending:global});
+  const action={type:'reply' as const,message:'Keep this question when my site balance is negative'};
+  expect(await run.send(action,0,{funding:'cash'},'csrf')).toBe(false);
+  expect(run.getSnapshot()).toMatchObject({pendingGeneration:null,busy:false,confirmedUnaccepted:true});
+  const original=api.acceptAgentExecution.mock.calls[0][1];
+  await run.retry('csrf','synthetic-user-key');
+  expect(api.acceptAgentExecution).toHaveBeenCalledOnce();
+  api.acceptAgentExecution.mockResolvedValueOnce({execution:{...status,funding:'byok'},replayed:false});
+  expect(await run.send(action,0,{funding:'byok',modelAccess:{apiKey:'synthetic-user-key',baseUrl:'https://models.example/v1',model:'byok-model',contextWindow:128000,reasoningProtocol:'none',reasoningSupported:false}},'csrf')).toBe(true);
+  const latest=api.acceptAgentExecution.mock.calls[1][1];
+  expect(latest.funding).toBe('byok');expect(latest.modelAccess?.apiKey).toBe('synthetic-user-key');
+  expect(latest.clientActionId).not.toBe(original.clientActionId);
+  expect(sessionStorage.getItem(`mapflow.agent.execution.v1.owner.${conversation}`)).not.toContain('synthetic-user-key');
+});
+it('checks an unknown BYOK call without offering or dispatching an impossible credential resume',async()=>{
+  const waiting={...status,funding:'byok' as const,state:'awaiting_reconciliation' as const};
+  api.fetchActiveAgentExecution.mockResolvedValueOnce(waiting);api.fetchAgentExecution.mockResolvedValueOnce(waiting);
+  api.fetchAgentExecutionControl.mockResolvedValueOnce({version:1,executionId:execution,conversationId:conversation,state:waiting.state,
+    reason:'external_outcome_unknown',actions:{canCheck:true,canStop:true,canResume:false,needsCredential:false}});
+  const run=new AgentConversationRun('owner',conversation);await run.restore();await Promise.resolve();
+  await run.retry('csrf','synthetic-original-key');
+  expect(api.resumeAgentExecution).not.toHaveBeenCalled();expect(api.acceptAgentExecution).not.toHaveBeenCalled();
+  expect(api.fetchAgentExecution).toHaveBeenCalled();
+});
 
 it('a missing saved execution terminates recovery and clears the old browser record', async () => {
   const key = 'mapflow.agent.execution.v1.owner.' + conversation;
@@ -32,7 +59,7 @@ it('a deleted event source stops reading instead of reconnecting indefinitely', 
   expect(api.attachAgentExecution).toHaveBeenCalledTimes(1);
   detach();
 });
-beforeEach(()=>{vi.clearAllMocks();sessionStorage.clear();api.fetchActiveAgentExecution.mockResolvedValue(null);api.fetchAgentExecution.mockResolvedValue(status);api.acceptAgentExecution.mockResolvedValue({execution:status,replayed:false});
+beforeEach(()=>{vi.clearAllMocks();sessionStorage.clear();api.fetchAgentExecutionControl.mockResolvedValue(null);api.fetchActiveAgentExecution.mockResolvedValue(null);api.fetchAgentExecution.mockResolvedValue(status);api.acceptAgentExecution.mockResolvedValue({execution:status,replayed:false});
   api.attachAgentExecution.mockImplementation((_id,_conversation,_after,_onEvent,signal:AbortSignal)=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true})));});
 afterEach(()=>{vi.useRealTimers();});
 it('ignores a detached reader delivering the old completion after a new execution starts',async()=>{

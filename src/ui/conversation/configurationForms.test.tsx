@@ -11,6 +11,19 @@ it('requires a complete user model draft and keeps the key in the supplied memor
   fireEvent.change(screen.getByLabelText('API Key'),{target:{value:' private-key '}});fireEvent.change(screen.getByLabelText('API URL'),{target:{value:'https://example.test/v1'}});fireEvent.change(screen.getByLabelText('上游模型'),{target:{value:'real-model'}});
   fireEvent.click(screen.getByRole('button',{name:'保存配置'}));expect(onChange).toHaveBeenCalledWith(expect.objectContaining({provider:'custom',apiKey:'private-key',model:'real-model'}));
 });
+it('applies BYOK connection and capabilities together only after a complete valid save',()=>{
+  const onChange=vi.fn();render(<ByokForm selection={{provider:'custom',apiKey:'synthetic-key',baseUrl:'https://example.test/v1',model:'user-model',settings:{},historyBytes:32768}}
+    capabilities={{contextWindow:'32000',maxOutputTokens:'',reasoningProtocol:'none',reasoningSupported:false}} onChange={onChange} csrfToken="csrf" />);
+  fireEvent.change(screen.getByLabelText('上下文窗口（Token）'),{target:{value:'64000'}});
+  fireEvent.change(screen.getByLabelText('模型输出上限（可选）'),{target:{value:'8000'}});
+  fireEvent.change(screen.getByLabelText('推理参数协议'),{target:{value:'openai_reasoning'}});
+  expect(onChange).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button',{name:'保存配置'}));
+  expect(onChange).toHaveBeenCalledWith(expect.objectContaining({apiKey:'synthetic-key',model:'user-model'}),
+    {contextWindow:'64000',maxOutputTokens:'8000',reasoningProtocol:'openai_reasoning',reasoningSupported:true});
+  onChange.mockClear();fireEvent.change(screen.getByLabelText('上下文窗口（Token）'),{target:{value:'0'}});
+  fireEvent.click(screen.getByRole('button',{name:'保存配置'}));expect(onChange).not.toHaveBeenCalled();expect(screen.getByRole('alert')).toHaveTextContent('上下文窗口');
+});
 it('saves the conversation profile at the displayed revision without replacing a started opening',async()=>{
   const requests:RequestInit[]=[];vi.stubGlobal('fetch',async(_path:string,options?:RequestInit)=>{requests.push(options!);return new Response(JSON.stringify(detail));});
   const updated=vi.fn();const client=new QueryClient();render(<QueryClientProvider client={client}><ConversationProfileForm detail={detail} csrfToken="csrf" onUpdated={updated} onConflict={async()=>{}} /></QueryClientProvider>);

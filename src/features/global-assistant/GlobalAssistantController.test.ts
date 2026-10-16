@@ -11,6 +11,24 @@ const changes=(patch:Record<string,unknown>={})=>({conversationId,bindingVersion
 const json=(value:unknown)=>new Response(JSON.stringify(value));
 afterEach(()=>{vi.unstubAllGlobals();localStorage.clear();sessionStorage.clear();});
 
+it.each(['','较新的未发送草稿'])('recovers a stranded cash question without replacing a newer draft (%s)',async draft=>{
+  sessionStorage.setItem(`mapflow.agent.execution.v1.owner.${conversationId}`,JSON.stringify({executionId:null,command:{clientActionId:firstId,
+    expectedRevision:10000,bindingVersion:2,action:{type:'reply',message:'原来卡住的问题'},funding:'cash'}}));
+  vi.stubGlobal('fetch',async(path:string,options?:RequestInit)=>{
+    if(path.endsWith('/open'))return json(snapshot);
+    if(path.includes('/changes?'))return json(changes());
+    if(path.endsWith('/executions')&&options?.method==='POST')return new Response(JSON.stringify({error:{code:'cash_non_positive'}}),{status:402});
+    if(path.endsWith('/executions'))return json({execution:null});
+    throw Error('Unexpected local fixture request');
+  });
+  const controller=new GlobalAssistantController('owner','csrf');const detach=controller.subscribe(()=>{});
+  await vi.waitFor(()=>expect(controller.getSnapshot().execution?.pendingGeneration).toBeTruthy());
+  if(draft)controller.setDraft(draft);
+  await controller.resume('synthetic-user-key');
+  expect(controller.getSnapshot().execution?.pendingGeneration).toBeNull();
+  expect(controller.getSnapshot().draft).toBe(draft||'原来卡住的问题');detach();
+});
+
 it('reads older messages and all incremental pages while retaining the draft and deduplicating stable message IDs',async()=>{
   const response=vi.fn().mockResolvedValueOnce(json(snapshot))
     .mockResolvedValueOnce(json({conversationId,bindingVersion:2,messages:[message(olderId,'更早的消息'),message(firstId,'旧投影')],completions:[],olderCursor:null}))

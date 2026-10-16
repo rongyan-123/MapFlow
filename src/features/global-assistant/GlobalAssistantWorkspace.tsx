@@ -2,6 +2,8 @@ import {useEffect,useLayoutEffect,useMemo,useRef,useState,useSyncExternalStore} 
 import {useQueryClient} from '@tanstack/react-query';
 import type {Navigate} from '../../app/useLocation';
 import type {AgentState,AgentStatus} from '../../api/agentExecutionClient';
+import {AgentApiError} from '../../api/agentExecutionClient';
+import {ExecutionRecovery} from '../../ui/conversation/ExecutionRecovery';
 import {useAgentModelConfiguration} from '../../domains/models/AgentModelContext';
 import {useSharedModelSelection} from '../../domains/models/ModelSelectionContext';
 import {approvalSummary} from '../../domains/conversations/approvalSummary';
@@ -24,16 +26,14 @@ import './global-assistant.css';
 
 const terminal=(state:AgentState|null|undefined)=>!!state&&['succeeded','stopped','failed'].includes(state);
 const stateLabels:Record<AgentState,string>={queued:'等待执行',running:'正在处理',recovering:'正在恢复原请求',awaiting_reconciliation:'原请求需要核对',ready_to_commit:'正在保存结果',succeeded:'结果已保存',stopped:'原请求已停止',failed:'原请求未完成'};
-type RequestIdentity=Pick<AgentStatus,'executionId'|'state'|'funding'|'modelId'>;
-function RequestCard({request,busy,error,stopRequested,onCheck,onStop,onCredential}:{request:RequestIdentity;busy:boolean;error:unknown;stopRequested?:boolean;onCheck:()=>void;onStop:()=>void;onCredential:()=>void}){
+type RequestIdentity=Pick<AgentStatus,'executionId'|'conversationId'|'state'|'funding'|'modelId'|'error'>;
+function RequestCard({request,accountId,busy,error,stopRequested,onCheck,onStop,onCredential}:{request:RequestIdentity;accountId:string;busy:boolean;error:unknown;stopRequested?:boolean;onCheck:()=>void;onStop:()=>void;onCredential:()=>void}){
   return <section className="mf-global-request" aria-label="原请求状态" data-execution-id={request.executionId}>
     <p role="status">{stateLabels[request.state]}{stopRequested?' · 停止尚待服务器确认':''}</p>
     <p className="mf-muted">原模型：<span>{request.modelId||'正在确认'}</span> · {request.funding==='cash'?'现金额度':request.funding==='points'?'平台积分':'自填 API Key'}</p>
     <details className="mf-usage"><summary>请求标识</summary><p>{request.executionId}</p></details>
-    {request.state==='awaiting_reconciliation'&&<p>核对沿用原请求；停止后可继续对话，已发生的费用仍按原规则核对。</p>}
-    {request.state==='stopped'&&<p className="mf-muted">可以继续发送。原费用证据和待核账事项保留。</p>}
-    {Boolean(error)&&<p role="alert" className="mf-status mf-status--error">{describePublicError(error)}</p>}
-    {!terminal(request.state)&&<div className="mf-runtime-actions"><Button disabled={busy} onClick={onCheck}>核对原请求</Button>{request.funding==='byok'&&<Button disabled={busy} onClick={onCredential}>补充 API Key</Button>}<Button disabled={busy} onClick={onStop}>{stopRequested?'重新确认停止':'停止原请求后继续'}</Button></div>}
+    {request.state==='stopped'&&<p className="mf-muted">可以继续发送。{request.funding==='byok'?'原上游调用依据保留，不扣本站额度。':'原费用证据和待核账事项保留。'}</p>}
+    <ExecutionRecovery {...request} accountId={accountId} legacyErrorCode={request.error?.code} error={error} busy={busy} stopRequested={stopRequested} onCheck={onCheck} onResume={onCredential} onStop={onStop} />
   </section>;
 }
 
@@ -77,7 +77,7 @@ export default function GlobalAssistantWorkspace({accountId,csrfToken,navigate}:
   useEffect(()=>{const focus=()=>void controller.sync();window.addEventListener('focus',focus);const timer=setInterval(focus,15000);return()=>{window.removeEventListener('focus',focus);clearInterval(timer);};},[controller]);
   const stop=(target?:AgentStatus)=>{if(window.confirm('停止原请求后可继续对话，已发生的费用仍按原规则核对。确定停止？'))void controller.stop(target);};
   const credentials=(target?:AgentStatus)=>{setCredentialTarget(target??null);model.change({funding:'byok'});setSettingsOpen(true);};
-  const currentRequest:RequestIdentity|null=execution?.executionId&&execution.state?{executionId:execution.executionId,state:execution.state,funding:execution.funding??'cash',modelId:execution.modelId??''}:null;
+  const currentRequest:RequestIdentity|null=execution?.executionId&&execution.state?{executionId:execution.executionId,conversationId:timeline?.conversationId??'',state:execution.state,funding:execution.funding??'cash',modelId:execution.modelId??'',error:execution.error instanceof AgentApiError?{code:execution.error.code,message:execution.error.message,requestId:execution.executionId}:null}:null;
   const renderCompletion=(completion:typeof completions[number])=><GlobalExecutionResult key={completion.executionId} completion={completion} accountId={accountId} csrfToken={csrfToken} navigate={navigate} />;
   return <section className="mf-global-assistant" data-composer-focused={focused}>
     <PageHeader title="MapFlow 助手" context={<span className="mf-muted mf-small">网站使用 · 学习规划</span>} actions={<Button variant="quiet" onClick={()=>{setCredentialTarget(null);setSettingsOpen(true);}}><Icon name="settings" /><span>模型设置</span></Button>} />
@@ -99,11 +99,11 @@ export default function GlobalAssistantWorkspace({accountId,csrfToken,navigate}:
         {!atLatest&&<div className="mf-runtime-actions"><Button onClick={()=>{const next=endIndex+40;setWindowEnd(next>=messages.length?null:messages[next-1].messageId);}}>显示较新的消息</Button><Button onClick={latest}>返回最新消息</Button></div>}
         {execution?.pendingGeneration?.action.type==='reply'&&execution.pendingGeneration.action.message&&<details className="mf-usage"><summary>本次原请求</summary><p className="mf-global-original">{execution.pendingGeneration.action.message}</p></details>}
         {execution?.rejectedGeneration?.action.type==='reply'&&<details className="mf-usage"><summary>尚未受理的原问题</summary><p className="mf-global-original">{execution.rejectedGeneration.action.message}</p></details>}
-        {currentRequest&&(!terminal(currentRequest.state)||currentRequest.state==='stopped'||currentRequest.state==='failed')&&<RequestCard request={currentRequest} busy={false} error={execution?.error} stopRequested={execution?.stopRequested} onCheck={()=>void controller.reconcile()} onStop={()=>stop()} onCredential={()=>credentials()} />}
-        {state.blockingExecutions.filter(item=>item.executionId!==currentRequest?.executionId).map(request=><RequestCard key={request.executionId} request={request} busy={state.requestActions[request.executionId]?.busy??false} error={state.requestActions[request.executionId]?.error} onCheck={()=>void controller.reconcile(request)} onStop={()=>stop(request)} onCredential={()=>credentials(request)} />)}
+        {currentRequest&&(!terminal(currentRequest.state)||currentRequest.state==='stopped'||currentRequest.state==='failed')&&<RequestCard accountId={accountId} request={currentRequest} busy={false} error={execution?.error} stopRequested={execution?.stopRequested} onCheck={()=>void controller.reconcile()} onStop={()=>stop()} onCredential={()=>credentials()} />}
+        {state.blockingExecutions.filter(item=>item.executionId!==currentRequest?.executionId).map(request=><RequestCard accountId={accountId} key={request.executionId} request={request} busy={state.requestActions[request.executionId]?.busy??false} error={state.requestActions[request.executionId]?.error} onCheck={()=>void controller.reconcile(request)} onStop={()=>stop(request)} onCredential={()=>credentials(request)} />)}
         {Boolean(execution?.error)&&(!currentRequest||currentRequest.state==='succeeded')&&<p role="alert" className="mf-status mf-status--error">{describePublicError(execution?.error)} <Button onClick={()=>setSettingsOpen(true)}>打开模型设置</Button>{!execution?.pendingGeneration&&<Button onClick={()=>void controller.reconcile()}>重新核对执行状态</Button>}</p>}
         {!execution?.busy&&!execution?.pendingGeneration&&execution?.rejectedGeneration&&(!execution.executionId||terminal(execution.state))&&<div className="mf-runtime-actions"><Button onClick={()=>void controller.returnRejectedToEdit()}>返回编辑</Button></div>}
-        {!execution?.busy&&execution?.pendingGeneration&&!execution.executionId&&<div className="mf-runtime-actions"><Button onClick={()=>void controller.resume(shared.selection.apiKey)}>查回原操作</Button><Button onClick={()=>credentials()}>补充 API Key</Button></div>}
+        {!execution?.busy&&execution?.pendingGeneration&&!execution.executionId&&<div className="mf-runtime-actions"><Button onClick={()=>void controller.resume(shared.selection.apiKey)}>查回原操作</Button>{execution.funding==='byok'&&<Button onClick={()=>credentials()}>补充 API Key</Button>}</div>}
         {execution?.pendingApprovals.map(({approval})=><div className="mf-approval" key={approval.approvalRequestId}><p>{approvalSummary(approval)}</p><div className="mf-row mf-wrap"><Button variant="primary" onClick={()=>{if(!approval.destructive||window.confirm('此操作会删除或替换已有内容，确定继续？'))void controller.approve(approval.approvalRequestId,true,approval.destructive);}}>{approval.destructive?'确认删除或替换':'确认修改'}</Button><Button onClick={()=>void controller.approve(approval.approvalRequestId,false,false)}>取消修改</Button></div></div>)}
         {Boolean(state.syncError)&&<p role="alert" className="mf-status mf-status--error">最近消息暂时未同步，已确认的回复和草稿已保留。 <Button onClick={()=>void controller.sync()}>重试同步</Button><Button onClick={()=>void controller.reload()}>重新读取最近消息</Button></p>}
         {atLatest&&!state.guidesDismissed&&!active&&<section className="mf-global-questions" aria-label="问一问"><h2>问一问 <span>从这里开始</span></h2>{state.questions.map((question,index)=><button key={question.id} type="button" aria-label={question.text} onClick={()=>{controller.chooseQuestion(question.text);composer.current?.focus();}}><span className="mf-question-icon"><Icon name={(['book','map','learn'] as const)[index%3]} /></span><span className="mf-question-copy"><strong>{question.text}</strong><small>{['认识 MapFlow','找到使用方法','规划学习方向'][index%3]}</small></span><Icon name="right" /></button>)}</section>}
@@ -116,7 +116,7 @@ export default function GlobalAssistantWorkspace({accountId,csrfToken,navigate}:
     {settingsOpen&&<Dialog title="模型设置" onClose={()=>setSettingsOpen(false)} dismissible={!settingsBusy}><div className="mf-stack">
       <p className="mf-muted mf-small">模型选择用于下一次发送；原请求沿用已接受的模型和资金通路。</p>
       <ModelSettings accountId={accountId} csrfToken={csrfToken} onWallet={()=>navigate('/wallet')} />
-      {(credentialTarget||execution?.state==='awaiting_reconciliation'&&execution.funding==='byok'||!execution?.executionId&&execution?.pendingGeneration&&execution.funding==='byok')&&<div className="mf-status mf-stack"><p>恢复原模型：{credentialTarget?.modelId??execution?.modelId??'原请求模型'}。请补回匹配原配置的 Key，再显式恢复。</p><Button disabled={!shared.selection.apiKey.trim()} onClick={()=>void controller.resume(shared.selection.apiKey,credentialTarget??undefined)}>恢复原请求</Button></div>}
+      {(credentialTarget||execution?.state==='awaiting_reconciliation'&&execution?.control?.actions.canResume===true||execution?.controlAvailability==='unsupported'&&execution?.error instanceof AgentApiError&&execution.error.code==='credential_required'||!execution?.executionId&&execution?.pendingGeneration&&execution.funding==='byok')&&<div className="mf-status mf-stack"><p>恢复原模型：{credentialTarget?.modelId??execution?.modelId??'原请求模型'}。请补回匹配原配置的 Key，再显式恢复。</p><Button disabled={!shared.selection.apiKey.trim()} onClick={()=>void controller.resume(shared.selection.apiKey,credentialTarget??undefined)}>恢复原请求</Button></div>}
       {timeline&&<details className="mf-global-parameters"><summary>生成参数</summary><GenerationSettingsForm conversationId={timeline.conversationId} settings={timeline.generationSettings} version={timeline.generationSettingsVersion} csrfToken={csrfToken} onUpdated={controller.patchSettings} onConflict={controller.reload} onBusyChange={setSettingsBusy} /></details>}
     </div></Dialog>}
   </section>;

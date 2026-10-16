@@ -54,6 +54,35 @@ it('opens one continuous assistant with model-only settings and three questions 
   expect(dialog.getByText('最大输出 Token')).toBeVisible();
   for(const label of ['角色与会话','历史与分支','会话设定','技能树与工具'])expect(dialog.queryByRole('button',{name:label})).not.toBeInTheDocument();
 });
+it('keeps a site-credit rejection editable and lets the user switch to BYOK in one model-settings save',async()=>{
+  const view=mount((path,options)=>{
+    if(path==='/api/me/agent-models')return new Response(JSON.stringify({cash:[profile],defaultCash:profile,points:null}));
+    if(path.endsWith('/executions')&&options?.method==='POST'){
+      const command=JSON.parse(String(options.body));
+      return command.funding==='cash'?new Response(JSON.stringify({error:{code:'cash_non_positive'}}),{status:402})
+        :new Response(JSON.stringify({execution:{...running,state:'stopped',funding:'byok'},replayed:false}));
+    }
+  });
+  await screen.findByText('这是已经保存的回复。');
+  fireEvent.change(screen.getByRole('textbox',{name:'消息'}),{target:{value:'额度透支后继续这个问题'}});
+  await waitFor(()=>expect(screen.getByRole('button',{name:'发送'})).toBeEnabled());
+  fireEvent.click(screen.getByRole('button',{name:'发送'}));
+  await screen.findByText('本站现金额度不足。可以切换为自填 API Key，或补充本站额度后发送。');
+  expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue('额度透支后继续这个问题');
+  fireEvent.click(screen.getByRole('button',{name:'模型设置'}));
+  fireEvent.change(screen.getByLabelText('资金通路'),{target:{value:'byok'}});
+  fireEvent.change(screen.getByLabelText('API Key'),{target:{value:'synthetic-user-key'}});
+  fireEvent.change(screen.getByLabelText('API URL'),{target:{value:'https://models.example/v1'}});
+  fireEvent.change(screen.getByLabelText('上游模型'),{target:{value:'user-model'}});
+  fireEvent.change(screen.getByLabelText('上下文窗口（Token）'),{target:{value:'64000'}});
+  fireEvent.click(screen.getByRole('button',{name:'保存配置'}));fireEvent.click(screen.getByRole('button',{name:'关闭'}));
+  await waitFor(()=>expect(screen.getByRole('button',{name:'发送'})).toBeEnabled());fireEvent.click(screen.getByRole('button',{name:'发送'}));
+  await waitFor(()=>expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue(''));
+  const commands=view.requests.filter(([path,options])=>path.endsWith('/executions')&&options?.method==='POST').map(([,options])=>JSON.parse(String(options?.body)));
+  expect(commands).toHaveLength(2);expect(commands[1]).toMatchObject({funding:'byok',action:{type:'reply',message:'额度透支后继续这个问题'},modelAccess:{apiKey:'synthetic-user-key',model:'user-model',contextWindow:64000}});
+  expect(commands[1].clientActionId).not.toBe(commands[0].clientActionId);
+  expect(JSON.stringify(localStorage)+JSON.stringify(sessionStorage)).not.toContain('synthetic-user-key');
+});
 it('keeps the question set stable while visiting and hides it only after an explicit send',async()=>{
   const view=mount((path,options)=>{
     if(path==='/api/me/agent-models')return new Response(JSON.stringify({cash:[profile],defaultCash:profile,points:null}));
@@ -75,8 +104,10 @@ it('keeps the question set stable while visiting and hides it only after an expl
   const next=within(screen.getByRole('region',{name:'问一问'})).getAllByRole('button').map(button=>button.textContent);
   expect(next.every(question=>!questions.includes(question))).toBe(true);
 });
-it('defers visit questions during an existing execution and exposes original-request recovery',async()=>{
+it.each(['credential_required','external_outcome_unknown'] as const)('defers visit questions and exposes only effective recovery for %s',async reason=>{
   mount(path=>{
+    if(path.endsWith('/control'))return new Response(JSON.stringify({version:1,executionId:running.executionId,conversationId,state:'awaiting_reconciliation',reason,
+      actions:{canCheck:true,canStop:true,canResume:reason==='credential_required',needsCredential:reason==='credential_required'}}));
     if(path.endsWith('/open'))return new Response(JSON.stringify({...snapshot,activeExecution:{...running,state:'awaiting_reconciliation',funding:'byok'},blockingExecutions:[{...running,state:'awaiting_reconciliation',funding:'byok'}],sendAvailability:{conversation:false,cash:true}}));
     if(path.endsWith('/executions'))return new Response(JSON.stringify({execution:{...running,state:'awaiting_reconciliation',funding:'byok'}}));
     if(path.includes('/events?'))return new Response(new ReadableStream({start(sink){sink.enqueue(new TextEncoder().encode(': heartbeat\n\n'));}}),{headers:{'Content-Type':'text/event-stream'}});
@@ -85,7 +116,8 @@ it('defers visit questions during an existing execution and exposes original-req
   expect(screen.queryByRole('region',{name:'问一问'})).not.toBeInTheDocument();
   expect(screen.getByRole('button',{name:'核对原请求'})).toBeVisible();
   expect(screen.getByRole('button',{name:'停止原请求后继续'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'补充 API Key'})).toBeVisible();
+  if(reason==='credential_required')expect(await screen.findByRole('button',{name:'补充 API Key'})).toBeVisible();
+  else{await screen.findByText(/上游未确认本次调用结果/);expect(screen.queryByRole('button',{name:'补充 API Key'})).not.toBeInTheDocument();}
   expect(screen.getByText('original-model')).toBeVisible();
   expect(screen.getByRole('button',{name:'发送'})).toBeDisabled();
 });

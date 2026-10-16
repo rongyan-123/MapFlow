@@ -157,7 +157,9 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
     if(agentOptions){
       await nativeRun.restore();
       if(retry&&nativeSnapshot?.state!=='failed'&&nativeSnapshot?.state!=='stopped'){
-        await nativeRun.retry(csrfToken,modelSelection.apiKey);return;
+        const unaccepted=await nativeRun.retry(csrfToken,modelSelection.apiKey);
+        if(unaccepted?.type==='reply'&&!message.trim()&&messageRevision.current===submittedMessageRevision)setMessage(unaccepted.message);
+        return;
       }
       if(retry)nativeRun.dismiss();
       try{

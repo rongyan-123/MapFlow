@@ -1,10 +1,26 @@
 import {afterEach,expect,it,vi} from 'vitest';
-import {acceptAgentExecution,attachAgentExecution,fetchActiveAgentExecution,fetchAgentExecution,fetchAgentModelCatalogue,stopAgentExecution,resolveAgentToolApproval,parseAgentCompletion} from './agentExecutionClient';
+import {acceptAgentExecution,attachAgentExecution,fetchActiveAgentExecution,fetchAgentExecution,fetchAgentExecutionControl,fetchAgentModelCatalogue,stopAgentExecution,resolveAgentToolApproval,parseAgentCompletion,parseAgentStatus} from './agentExecutionClient';
 
 const executionId='11111111-1111-4111-8111-111111111111';
 const conversationId='22222222-2222-4222-8222-222222222222';
 const eventId='33333333-3333-4333-8333-333333333333';
 const status={executionId,conversationId,state:'running',funding:'cash',modelId:'fixture-model',result:null,error:null};
+it('reads versioned recovery controls without changing the strict legacy status shape',async()=>{
+  const control={version:1,executionId,conversationId,state:'awaiting_reconciliation',reason:'external_outcome_unknown',actions:{canCheck:true,canStop:true,canResume:false,needsCredential:false}};
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(json(control)));
+  expect(await fetchAgentExecutionControl(executionId,conversationId)).toEqual(control);
+  expect(parseAgentStatus(status,conversationId)).toEqual(status);
+  expect(()=>parseAgentStatus({...status,actions:control.actions},conversationId)).toThrow('响应无效');
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(json({...control,actions:{...control.actions,canResume:true}})));
+  await expect(fetchAgentExecutionControl(executionId,conversationId)).rejects.toThrow('响应无效');
+});
+it('only treats an explicit unsupported route as an old server, never a credential or malformed response',async()=>{
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(json({error:{code:'route.not_found'}},404)));
+  expect(await fetchAgentExecutionControl(executionId,conversationId)).toBeNull();
+  for(const response of [json({error:{code:'execution_not_found'}},404),json({error:{code:'unauthorized'}},401),new Response('<html>login</html>',{status:200}),json({version:2})]){
+    vi.stubGlobal('fetch',vi.fn().mockResolvedValue(response));await expect(fetchAgentExecutionControl(executionId,conversationId)).rejects.toThrow();
+  }
+});
 it('validates a bounded completion answer reference using Unicode scalar offsets',()=>{
   const receipt={executionId,conversationId,generationId:eventId,messageId:eventId,answer:'😀前',maps:[],usage:null,settlement:{status:'no_site_charge',cashMicros:null,pointUnits:null,balanceMicros:null},answerRef:{messageId:eventId,totalChars:9000,nextOffset:2}};
   expect(parseAgentCompletion(receipt,conversationId)).toEqual(receipt);
