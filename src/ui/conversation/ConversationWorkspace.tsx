@@ -17,7 +17,7 @@ const tavernGuides=[{label:'继续故事',caption:'从角色的开场接着聊',
 export interface ConversationWorkspaceProps{
   scene:ConversationScene;title:string;draft:string;onDraftChange:(draft:string)=>void;onSend:()=>void;
   onStop?:()=>void;sending?:boolean;disabled?:boolean;sendDisabled?:boolean;modelLabel:string;onConfigure:()=>void;onNew:()=>void;onHistory:()=>void;onCanvas:()=>void;
-  welcome?:boolean;welcomeExtra?:ReactNode;children?:ReactNode;footerExtra?:ReactNode;headerContext?:ReactNode;headerExtra?:ReactNode;
+  welcome?:boolean;welcomeExtra?:ReactNode;children?:ReactNode;footerExtra?:ReactNode;headerContext?:ReactNode;headerExtra?:ReactNode;headerTitle?:ReactNode;
   history?:ReactNode;sidePane?:ReactNode;sidePaneWide?:boolean;resizeKey?:string;composerRef?:RefObject<HTMLTextAreaElement>;logRef?:RefObject<HTMLDivElement>;onScroll?:()=>void;
 }
 export function ConversationWorkspace(props:ConversationWorkspaceProps){
@@ -34,13 +34,13 @@ export function ConversationWorkspace(props:ConversationWorkspaceProps){
   const fill=(prompt:string)=>{props.onDraftChange(prompt);composer.current?.focus();};
   const sceneGuides=props.scene==='learning'?learningGuides:props.scene==='tavern'?tavernGuides:guides;
   return <section className="mf-conversation-workspace">
-    <PageHeader title={props.title} context={props.headerContext} actions={<>
+    <PageHeader title={props.title} titleControl={props.headerTitle} context={props.headerContext} actions={<>
       {props.headerExtra}<IconButton className="mf-chat-secondary" icon="menu" label="会话历史" onClick={props.onHistory} /><IconButton className="mf-chat-secondary" icon="plus" label="新建会话" onClick={props.onNew} />
       <IconButton icon="settings" label="配置" onClick={props.onConfigure} /><IconButton className="mf-chat-secondary" icon="edit" label="教学画布" onClick={props.onCanvas} /><IconButton className="mf-chat-more" icon="more" label="更多聊天操作" onClick={()=>setMoreOpen(true)} />
     </>} />
     <div className="mf-conversation-body">{props.history}<div className={`mf-chat-layout ${props.sidePane?'mf-chat-layout--split':''} ${props.sidePaneWide?'mf-chat-layout--wide':''}`}>{props.sidePane && <div ref={sidePane} className="mf-chat-side-pane">{props.sidePane}</div>}{props.sidePane&&props.resizeKey&&<ResizeHandle label="调整画布与聊天宽度" storageKey={props.resizeKey} remainingWidth={320} />}<div className="mf-chat-column">
       <div className="mf-chat-scroll" onScroll={props.onScroll} ref={props.logRef}>
-        {props.welcome && <div className="mf-chat-welcome"><span className="mf-welcome-mark"><Icon name={props.scene==='management'?'spark':props.scene==='learning'?'learn':'chat'} /></span><p className="mf-eyebrow">{props.scene==='management'?'YOUR LEARNING STARTS HERE':props.scene==='learning'?'ONE STEP AT A TIME':'A NEW CONVERSATION'}</p><h2>{props.scene==='management'?'下一步，你想学什么？':props.scene==='learning'?'从一个知识点，开始理解。':'选一个角色，开始新的故事。'}</h2><p>{props.scene==='management'?'告诉我你的目标，一起把它变成可以走的路。':props.scene==='learning'?'结合你的地图提问、练习，或用画布一起理清思路。':'从会话历史打开角色库，导入或管理角色；聊天设定在配置里。'}</p><div className="mf-guide-grid">{sceneGuides.map(guide=><button type="button" className="mf-guide" data-guide={guide.icon} key={guide.label} aria-label={guide.label} onClick={()=>fill(guide.prompt)}><span className="mf-guide-icon"><Icon name={guide.icon} /></span><span><strong>{guide.label}</strong><small>{guide.caption}</small></span><Icon name="right" /></button>)}</div>{props.welcomeExtra}</div>}
+        {props.welcome && <div className="mf-chat-welcome"><span className="mf-welcome-mark"><Icon name={props.scene==='management'?'spark':props.scene==='learning'?'learn':'chat'} /></span><p className="mf-eyebrow">{props.scene==='management'?'YOUR LEARNING STARTS HERE':props.scene==='learning'?'ONE STEP AT A TIME':'A NEW CONVERSATION'}</p><h2>{props.scene==='management'?'下一步，你想学什么？':props.scene==='learning'?'从一个知识点，开始理解。':'每个智能体，都有自己的对话。'}</h2><p>{props.scene==='management'?'告诉我你的目标，一起把它变成可以走的路。':props.scene==='learning'?'结合你的地图提问、练习，或用画布一起理清思路。':'在上方或侧栏切换智能体，各自的会话独立保留。角色库中新建、导入后，即可直接选用。'}</p><div className="mf-guide-grid">{sceneGuides.map(guide=><button type="button" className="mf-guide" data-guide={guide.icon} key={guide.label} aria-label={guide.label} onClick={()=>fill(guide.prompt)}><span className="mf-guide-icon"><Icon name={guide.icon} /></span><span><strong>{guide.label}</strong><small>{guide.caption}</small></span><Icon name="right" /></button>)}</div>{props.welcomeExtra}</div>}
         <div role="log" aria-label="对话消息" aria-live="polite" aria-relevant="additions" className="mf-chat-log">{props.children}</div>
       </div>
       <div className="mf-composer-area">{props.footerExtra}<form className="mf-composer" onSubmit={event=>{event.preventDefault();if(!props.disabled&&!props.sendDisabled&&!props.sending&&props.draft.trim())props.onSend();}}>
