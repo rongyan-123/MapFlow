@@ -166,6 +166,7 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
         if(agentOptions.funding==='byok'&&(!access||!Number.isSafeInteger(agentOptions.contextWindow)||!agentOptions.contextWindow||agentOptions.contextWindow<1))
           throw new TavernApiError(400,'tavern.model_access_required','请填写 API Key、模型和实际上下文窗口。');
         try{await canvas.flush();}catch{/* The canvas retains its manual draft and shows its own error; unrelated chat can proceed. */}
+        followLatest.current=true;
         const admitted=await nativeRun.send(action,detail.graph.revision,{funding:agentOptions.funding,
           ...(agentOptions.profileId?{profileId:agentOptions.profileId,profileVersion:agentOptions.profileVersion}:{}),
           ...(access?{modelAccess:{apiKey:access.apiKey,baseUrl:access.baseUrl,model:access.model,contextWindow:agentOptions.contextWindow!,
@@ -258,6 +259,16 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
   });
   const roleChangeAnchors = new Set((detail.roleChanges ?? []).flatMap(change => change.afterMessageId ? [change.afterMessageId] : []));
   const displayMessages = mergeContinuationMessages(activeMessages, roleChangeAnchors);
+  // Replace this transient question by request identity when durable history arrives, never by matching text.
+  const completed=nativeSnapshot?.completion;
+  const outgoingAction=pendingGeneration?.action??(completed&&!messagesById.has(completed.messageId)?nativeSnapshot?.completedAction:null);
+  const pendingInputSaved=!!pendingGeneration&&detail.generations.some(generation=>generation.clientActionId===pendingGeneration.clientActionId
+    &&activeMessages.some(message=>message.messageId===generation.inputMessageId));
+  const outgoingReply=outgoingAction?.type==='reply'&&outgoingAction.message.trim()&&!pendingInputSaved?{
+    message:outgoingAction.message,
+    status:pendingGeneration&&!busy?(stopped?'生成已停止':nativeSnapshot?.state==='failed'||generationFailed?'回复生成未完成':'发送状态待确认')
+      :nativeSnapshot&&busy&&!nativeSnapshot.executionId?'正在发送…':undefined,
+  }:null;
   const historicalAuthors = messageAuthors(activeMessages, detail.roleChanges ?? [], detail.character.characterId, detail.character.card.name);
   const activeLeaf = activeMessages[activeMessages.length - 1];
   const branchAnchors = activeMessages.filter(item => item.role === 'assistant');
@@ -317,7 +328,7 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
   }
   return {detail,message,setMessage,busy,draft,process,stopped,error,pendingGeneration,graphBusy,editing,setEditing,
     editContent,setEditContent,referenceActive,setReferenceActive,canvas,nativeSnapshot,nativeRun,agentOptions,legacyRecovery,
-    activeMessages,displayMessages,messagesById,roleChangeAnchors,historicalAuthors,activeLeaf,branchAnchors,selectedBranchAnchorId,
+    activeMessages,displayMessages,outgoingReply,messagesById,roleChangeAnchors,historicalAuthors,activeLeaf,branchAnchors,selectedBranchAnchorId,
     branchName,setBranchName,branchAnchorId,setBranchAnchorId,canReviseAssistant,canContinueAssistant,alternatives,activeAlternativeIndex,
     inputTooLarge,mayEdit,pendingReply,generationFailed,recovering,recoverSavedResult,runGeneration,stopGeneration,applyGraphMutation,saveEdit,cancelRetry,
     openTeachingCanvas,composer,pane,bottom,followLatest,setError};

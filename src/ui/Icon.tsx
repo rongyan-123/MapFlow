@@ -12,6 +12,7 @@ const paths = {
   down: 'm6 9 6 6 6-6',
   back: 'M19 12H5m5-5-5 5 5 5',
   menu: 'M4 6h16M4 12h16M4 18h16',
+  sidebar: 'M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1ZM9 3v18',
   close: 'm6 6 12 12M6 18 18 6',
   search: 'M17 10.5a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Zm-1 5.5 5 5',
   settings: 'M4 6h16M4 12h16M4 18h16M7 4v4m8 2v4m-7 2v4',

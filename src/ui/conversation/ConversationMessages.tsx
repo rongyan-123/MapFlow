@@ -20,8 +20,8 @@ function UsageSummary({completion}:{completion:AgentCompletion}){
   const fee=pending?'结果已保存，费用待核对。':completion.settlement.cashMicros!==null?`本次费用 ¥${formatAmountMicros(completion.settlement.cashMicros)}`:completion.settlement.pointUnits!==null?`本次消耗 ${formatCreditAmount(completion.settlement.pointUnits/1_000_000)} 积分`:'未扣本站额度。';
   return <details className="mf-usage"><summary>{fee} <span>用量明细</span></summary>{completion.usage&&<p>输入 {completion.usage.inputTokens} · 输出 {completion.usage.outputTokens} Token</p>}{completion.settlement.balanceMicros!==null&&<p>现金余额 ¥{formatAmountMicros(completion.settlement.balanceMicros)}</p>}</details>;
 }
-function Message({text,author,user,character}:{text:string;author:string;user:boolean;character?:State['detail']['character']}){
-  return <article className={`mf-message ${user?'mf-message--user':''}`}>{!user&&<CharacterAvatar name={author} character={character} />}<div><p className={user?'mf-sr-only':'mf-message-author'}>{author}</p><SafeMarkdown markdown={text} /></div></article>;
+function Message({text,author,user,character,status}:{text:string;author:string;user:boolean;character?:State['detail']['character'];status?:string}){
+  return <article className={`mf-message ${user?'mf-message--user':''}`}>{!user&&<CharacterAvatar name={author} character={character} />}<div><p className={user?'mf-sr-only':'mf-message-author'}>{author}</p><SafeMarkdown markdown={text} />{status&&<p className="mf-message-status">{status}</p>}</div></article>;
 }
 export function ConversationMessages({state,accountId,csrfToken,navigate,welcome=false}:{state:State;accountId:string;csrfToken:string;navigate:Navigate;welcome?:boolean}){
   const {detail}=state;const completion=state.nativeSnapshot?.completion;const completionInHistory=!!completion&&detail.graph.messages.some(message=>message.messageId===completion.messageId);
@@ -35,6 +35,7 @@ export function ConversationMessages({state,accountId,csrfToken,navigate,welcome
       {(detail.cashCharges??[]).filter(charge=>attached(charge.outputMessageId,message.messageId)&&!(detail.agentResults??[]).some(receipt=>receipt.generationId===charge.generationId)).map(charge=><details className="mf-usage" key={charge.generationId}><summary>本次费用 ¥{formatAmountMicros(charge.amountMicros)}</summary><p>现金余额 ¥{formatAmountMicros(charge.balanceAfterMicros)}</p></details>)}
       {(detail.roleChanges??[]).filter(change=>change.afterMessageId&&attached(change.afterMessageId,message.messageId)).map(change=><p className="mf-role-change" key={change.changeId}>已切换角色：{change.characterName}</p>)}
     </div>)}
+    {state.outgoingReply&&<Message user text={state.outgoingReply.message} status={state.outgoingReply.status} author={detail.conversation.userName} />}
     {!completionInHistory&&(state.draft||completion||state.busy)&&<><ProcessInfo events={state.process} live={state.busy} /><Message user={false} text={completion?.answer??state.draft} author={detail.character.card.name} character={detail.character} />{state.busy&&<p className="mf-thinking" role="status"><span className="mf-spinner" />正在生成…</p>}{completion&&<><AgentMapResults completion={completion} accountId={accountId} csrfToken={csrfToken} onNavigate={navigate} /><UsageSummary completion={completion} /></>}</>}
     <div ref={state.bottom} />
   </>;

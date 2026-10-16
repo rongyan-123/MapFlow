@@ -3,7 +3,7 @@ import { render,screen,fireEvent } from '@testing-library/react';
 import { expect,it,vi } from 'vitest';
 import { ConversationWorkspace } from './ConversationWorkspace';
 import { Dialog } from '../Dialog';
-function Controller({send=vi.fn()}:{send?:()=>void}){const [draft,setDraft]=useState('');const [config,setConfig]=useState(false);return <><ConversationWorkspace scene="management" title="全局助手" draft={draft} onDraftChange={setDraft} onSend={send} modelLabel="实际模型" onConfigure={()=>setConfig(true)} onNew={()=>{}} onHistory={()=>{}} onCanvas={()=>{}} welcome />{config && <Dialog title="配置" layout="workspace" onClose={()=>setConfig(false)}>模型接入</Dialog>}</>;}
+function Controller({send=vi.fn()}:{send?:()=>void}){const [draft,setDraft]=useState('');const [config,setConfig]=useState(false);return <><ConversationWorkspace scene="management" title="全局助手" draft={draft} onDraftChange={setDraft} onSend={send} modelLabel="实际模型" onConfigure={()=>setConfig(true)} onModelConfigure={()=>setConfig(true)} onNew={()=>{}} onHistory={()=>{}} onCanvas={()=>{}} welcome />{config && <Dialog title="配置" layout="workspace" onClose={()=>setConfig(false)}>模型接入</Dialog>}</>;}
 it('fills an editable prompt from a guide without starting a paid execution',()=>{
   const send=vi.fn();render(<Controller send={send} />);
   fireEvent.click(screen.getByRole('button',{name:'创建一张学习地图'}));

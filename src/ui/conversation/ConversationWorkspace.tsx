@@ -16,7 +16,8 @@ const learningGuides=[guides[2],guides[3],{label:'从当前地图开始',caption
 const tavernGuides=[{label:'继续故事',caption:'从角色的开场接着聊',prompt:'接着说说你的故事吧。',icon:'spark' as const},{label:'认识一下',caption:'和当前角色打个招呼',prompt:'你好，先介绍一下自己吧。',icon:'chat' as const},{label:'聊一个话题',caption:'按自己的兴趣展开',prompt:'我想和你聊聊：',icon:'book' as const},{label:'一起想办法',caption:'换个角度思考遇到的事',prompt:'我遇到了一件事，想听听你的看法：',icon:'learn' as const}];
 export interface ConversationWorkspaceProps{
   scene:ConversationScene;title:string;draft:string;onDraftChange:(draft:string)=>void;onSend:()=>void;
-  onStop?:()=>void;sending?:boolean;disabled?:boolean;sendDisabled?:boolean;modelLabel:string;onConfigure:()=>void;onNew:()=>void;onHistory:()=>void;onCanvas:()=>void;
+  onStop?:()=>void;sending?:boolean;disabled?:boolean;sendDisabled?:boolean;modelLabel:string;onConfigure:()=>void;onModelConfigure:()=>void;onNew:()=>void;onHistory:()=>void;onCanvas:()=>void;
+  historyLabel?:string;historyExpanded?:boolean;
   welcome?:boolean;welcomeExtra?:ReactNode;children?:ReactNode;footerExtra?:ReactNode;headerContext?:ReactNode;headerExtra?:ReactNode;headerTitle?:ReactNode;
   history?:ReactNode;sidePane?:ReactNode;sidePaneKind?:'canvas'|'map';sidePaneWide?:boolean;resizeKey?:string;composerRef?:RefObject<HTMLTextAreaElement>;logRef?:RefObject<HTMLDivElement>;onScroll?:()=>void;
 }
@@ -35,7 +36,7 @@ export function ConversationWorkspace(props:ConversationWorkspaceProps){
   const sceneGuides=props.scene==='learning'?learningGuides:props.scene==='tavern'?tavernGuides:guides;
   return <section className="mf-conversation-workspace">
     <PageHeader title={props.title} titleControl={props.headerTitle} context={props.headerContext} actions={<>
-      {props.headerExtra}<IconButton className="mf-chat-secondary" icon="menu" label="会话历史" onClick={props.onHistory} /><IconButton className="mf-chat-secondary" icon="plus" label="新建会话" onClick={props.onNew} />
+      {props.headerExtra}<Button variant="quiet" className="mf-history-toggle" aria-label={props.historyLabel??'会话历史'} title={props.historyLabel??'会话历史'} aria-expanded={props.historyExpanded??false} onClick={props.onHistory}><Icon name="sidebar" /><span>{props.historyLabel??'会话历史'}</span></Button><IconButton className="mf-chat-secondary" icon="plus" label="新建会话" onClick={props.onNew} />
       <IconButton icon="settings" label="配置" onClick={props.onConfigure} /><IconButton className="mf-chat-secondary" icon="edit" label="教学画布" onClick={props.onCanvas} /><IconButton className="mf-chat-more" icon="more" label="更多聊天操作" onClick={()=>setMoreOpen(true)} />
     </>} />
     <div className="mf-conversation-body">{props.history}<div data-side-pane={props.sidePane?props.sidePaneKind:undefined} className={`mf-chat-layout ${props.sidePane?'mf-chat-layout--split':''} ${props.sidePaneWide?'mf-chat-layout--wide':''}`}>{props.sidePane && <div ref={sidePane} className="mf-chat-side-pane">{props.sidePane}</div>}{props.sidePane&&props.resizeKey&&<ResizeHandle label="调整画布与聊天宽度" storageKey={props.resizeKey} remainingWidth={320} />}<div className="mf-chat-column">
@@ -45,7 +46,7 @@ export function ConversationWorkspace(props:ConversationWorkspaceProps){
       </div>
       <div className="mf-composer-area">{props.footerExtra}<form className="mf-composer" onSubmit={event=>{event.preventDefault();if(!props.disabled&&!props.sendDisabled&&!props.sending&&props.draft.trim())props.onSend();}}>
         <textarea ref={composer} aria-label="消息" rows={1} placeholder="输入你想聊的内容…" value={props.draft} disabled={props.disabled} onChange={event=>props.onDraftChange(event.target.value)} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&window.matchMedia('(min-width:768px)').matches){event.preventDefault();if(!props.disabled&&!props.sendDisabled&&!props.sending&&props.draft.trim())props.onSend();}}} />
-        <div className="mf-composer-bottom"><button type="button" className="mf-model-chip" onClick={props.onConfigure}><Icon name="spark" /><span>{props.modelLabel}</span><Icon name="down" /></button><small className="mf-desktop-only">Enter 发送 · Shift+Enter 换行</small>{props.sending?<IconButton icon="stop" label="停止生成" className="mf-send" onClick={props.onStop} />:<IconButton icon="arrow" label="发送" className="mf-send" type="submit" disabled={props.disabled||props.sendDisabled||!props.draft.trim()} />}</div>
+        <div className="mf-composer-bottom"><button type="button" className="mf-model-chip" title="选择模型" onClick={props.onModelConfigure}><Icon name="spark" /><span>{props.modelLabel}</span><Icon name="down" /></button><small className="mf-desktop-only">Enter 发送 · Shift+Enter 换行</small>{props.sending?<IconButton icon="stop" label="停止生成" className="mf-send" onClick={props.onStop} />:<IconButton icon="arrow" label="发送" className="mf-send" type="submit" disabled={props.disabled||props.sendDisabled||!props.draft.trim()} />}</div>
       </form><p className="mf-composer-note">AI 的建议可以参考，理解和判断属于你。</p></div>
     </div></div></div>
     {moreOpen&&<Dialog title="聊天操作" onClose={()=>setMoreOpen(false)}><div className="mf-stack"><Button onClick={()=>{setMoreOpen(false);props.onHistory();}}>查看会话历史</Button><Button onClick={()=>{setMoreOpen(false);props.onNew();}}>创建新会话</Button><Button onClick={()=>{setMoreOpen(false);props.onCanvas();}}>打开或收起教学画布</Button></div></Dialog>}
