@@ -30,7 +30,7 @@ export function useConversationHistory(owner:ConversationOwner){
     try{
       if(id)localStorage.setItem(selectionKey,id);else localStorage.removeItem(selectionKey);
       const agentId=characterId??conversations.find(story=>story.conversationId===id)?.characterId;
-      if(scene==='tavern'&&id&&agentId)localStorage.setItem(`${selectionKey}.character.${agentId}`,id);
+      if(scene!=='management'&&id&&agentId)localStorage.setItem(`${selectionKey}.character.${agentId}`,id);
     }catch{/* Selection is an optional preference. */}
   }
   function lastConversationForCharacter(characterId:string){
@@ -52,7 +52,7 @@ export function useConversationHistory(owner:ConversationOwner){
     try{return scene==='management'?await openManagementConversation({},csrfToken,signal):await openTreeConversation(areaId!,csrfToken,signal);}
     catch(error){if(error instanceof TavernApiError&&error.code==='tavern.history_cleared'){client.setQueryData<ConversationHistory>(historyKey,{conversations:[],bootstrapState:'cleared'});void history.refetch();}throw error;}
   }});
-  useEffect(()=>{if(!history.isSuccess||history.isFetching)return;if(conversationId&&!inScene)select(conversations[0]?.conversationId??null);else if(!conversationId&&conversations.length)select(conversations[0].conversationId);else if(scene==='tavern'&&inScene)select(conversationId);},[history.isSuccess,history.isFetching,conversationId,inScene,conversations[0]?.conversationId,scene]);
+  useEffect(()=>{if(!history.isSuccess||history.isFetching)return;if(conversationId&&!inScene)select(conversations[0]?.conversationId??null);else if(!conversationId&&conversations.length)select(conversations[0].conversationId);else if(scene!=='management'&&inScene)select(conversationId);},[history.isSuccess,history.isFetching,conversationId,inScene,conversations[0]?.conversationId,scene]);
   useEffect(()=>{const saved=defaultQuery.data;if(!saved||defaultApplied.current||defaultsBlocked||bootstrapState!=='never_created')return;defaultApplied.current=true;created(saved);void characters.refetch();},[defaultQuery.data,bootstrapState,defaultsBlocked]);
   function recovered(saved:ConversationDetail){
     if(deletedIds.current.has(saved.conversation.conversationId)||!belongs(saved.conversation))return;

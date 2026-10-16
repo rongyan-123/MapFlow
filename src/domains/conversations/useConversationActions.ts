@@ -1,6 +1,6 @@
 import { useRef,useState } from 'react';
 import { useMutation,useQueryClient } from '@tanstack/react-query';
-import { createConversation,createLearningConversation,deleteCharacter,deleteConversation,openManagementConversation,switchConversationCharacter } from '../../api/tavernClient';
+import { createConversation,createLearningConversation,deleteCharacter,deleteConversation,openManagementConversation } from '../../api/tavernClient';
 import { findTeachingCanvasPersistence } from '../canvas/persistence';
 import { agentConversationRun } from './agentRun';
 import { conversationRun } from './legacyRun';
@@ -23,8 +23,11 @@ export function useConversationActions(history:ReturnType<typeof useConversation
     const targetCharacter=characterOverride??selectedCharacter;
     const targetReady=scene==='management'||(targetCharacter?history.characters.data?.some(character=>character.characterId===targetCharacter.characterId):scene!=='tavern');
     if(creationLock.current||deletionLock.current||!creationReady||!targetReady)return false;
+    if(scene==='learning'&&pending.current?.characterId&&pending.current.characterId!==targetCharacter?.characterId){
+      setError(new PublicUiError('另一个角色的新建请求待确认，请先切回该角色重试新建。'));return false;
+    }
     creationLock.current=true;setCreating(true);setError(null);
-    const previous=scene==='tavern'&&detail?.character.characterId!==targetCharacter?.characterId?undefined:detail?.conversation;
+    const previous=scene!=='management'&&detail?.character.characterId!==targetCharacter?.characterId?undefined:detail?.conversation;
     try{
       const input={...(scene!=='management'&&targetCharacter?{characterId:targetCharacter.characterId}:{}),userName:previous?.userName??owner.userName,...(previous?.persona?{persona:previous.persona}:{}),...(previous?.vocabulary?{vocabulary:previous.vocabulary}:{}),greetingIndex:0};
       if(scene==='learning'||scene==='management'){
@@ -56,16 +59,13 @@ export function useConversationActions(history:ReturnType<typeof useConversation
   async function chooseCharacter(character:Character){
     if(scene==='management'||creationLock.current||deletionLock.current||settingsBusy||busy||!history.history.isSuccess||owner.available===false)return false;
     setCharacterId(character.characterId);setError(null);
-    if(scene==='tavern'){
+    setSwitching(character.characterId);
+    try{
       const existing=history.lastConversationForCharacter(character.characterId);
       if(existing)history.select(existing.conversationId);
       else return await create(character);
       return true;
-    }
-    if(!conversationId||detail?.character.characterId===character.characterId)return;
-    if(!detail)return;creationLock.current=true;setSwitching(character.characterId);
-    try{history.recovered(await switchConversationCharacter(conversationId,detail.graph.revision,character.characterId,csrfToken));}
-    catch(failure){setError(failure);void history.detailQuery.refetch();}finally{creationLock.current=false;setSwitching(null);}
+    }finally{setSwitching(null);}
   }
   const characterRemoval=useMutation({mutationFn:(id:string)=>deleteCharacter(id,csrfToken),onSuccess:(_receipt,id)=>{void client.cancelQueries({queryKey:history.charactersKey,exact:true});client.setQueryData<Character[]>(history.charactersKey,previous=>previous?.filter(character=>character.characterId!==id));if(characterId===id)setCharacterId(null);}});
   function imported(character:Character){void client.cancelQueries({queryKey:history.charactersKey,exact:true});client.setQueryData<Character[]>(history.charactersKey,previous=>[...(previous??[]).filter(item=>item.characterId!==character.characterId),character]);setCharacterId(character.characterId);}

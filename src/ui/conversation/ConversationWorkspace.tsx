@@ -35,8 +35,8 @@ export function ConversationWorkspace(props:ConversationWorkspaceProps){
   const fill=(prompt:string)=>{props.onDraftChange(prompt);composer.current?.focus();};
   const sceneGuides=props.scene==='learning'?learningGuides:props.scene==='tavern'?tavernGuides:guides;
   return <section className="mf-conversation-workspace">
-    <PageHeader title={props.title} titleControl={props.headerTitle} context={props.headerContext} actions={<>
-      {props.headerExtra}<Button variant="quiet" className="mf-history-toggle" aria-label={props.historyLabel??'会话历史'} title={props.historyLabel??'会话历史'} aria-expanded={props.historyExpanded??false} onClick={props.onHistory}><Icon name="sidebar" /><span>{props.historyLabel??'会话历史'}</span></Button><IconButton className="mf-chat-secondary" icon="plus" label="新建会话" onClick={props.onNew} />
+    <PageHeader title={props.title} titleControl={props.headerTitle} context={props.headerContext} leading={<Button variant="quiet" className="mf-history-toggle" aria-label={props.historyLabel??'会话历史'} title={props.historyLabel??'会话历史'} aria-expanded={props.historyExpanded??false} onClick={props.onHistory}><Icon name="sidebar" /><span>{props.historyLabel??'会话历史'}</span></Button>} actions={<>
+      {props.headerExtra&&<span className="mf-chat-header-extra">{props.headerExtra}</span>}<IconButton className="mf-chat-secondary" icon="plus" label="新建会话" onClick={props.onNew} />
       <IconButton icon="settings" label="配置" onClick={props.onConfigure} /><IconButton className="mf-chat-secondary" icon="edit" label="教学画布" onClick={props.onCanvas} /><IconButton className="mf-chat-more" icon="more" label="更多聊天操作" onClick={()=>setMoreOpen(true)} />
     </>} />
     <div className="mf-conversation-body">{props.history}<div data-side-pane={props.sidePane?props.sidePaneKind:undefined} className={`mf-chat-layout ${props.sidePane?'mf-chat-layout--split':''} ${props.sidePaneWide?'mf-chat-layout--wide':''}`}>{props.sidePane && <div ref={sidePane} className="mf-chat-side-pane">{props.sidePane}</div>}{props.sidePane&&props.resizeKey&&<ResizeHandle label="调整画布与聊天宽度" storageKey={props.resizeKey} remainingWidth={320} />}<div className="mf-chat-column">
@@ -49,6 +49,6 @@ export function ConversationWorkspace(props:ConversationWorkspaceProps){
         <div className="mf-composer-bottom"><button type="button" className="mf-model-chip" title="选择模型" onClick={props.onModelConfigure}><Icon name="spark" /><span>{props.modelLabel}</span><Icon name="down" /></button><small className="mf-desktop-only">Enter 发送 · Shift+Enter 换行</small>{props.sending?<IconButton icon="stop" label="停止生成" className="mf-send" onClick={props.onStop} />:<IconButton icon="arrow" label="发送" className="mf-send" type="submit" disabled={props.disabled||props.sendDisabled||!props.draft.trim()} />}</div>
       </form><p className="mf-composer-note">AI 的建议可以参考，理解和判断属于你。</p></div>
     </div></div></div>
-    {moreOpen&&<Dialog title="聊天操作" onClose={()=>setMoreOpen(false)}><div className="mf-stack"><Button onClick={()=>{setMoreOpen(false);props.onHistory();}}>查看会话历史</Button><Button onClick={()=>{setMoreOpen(false);props.onNew();}}>创建新会话</Button><Button onClick={()=>{setMoreOpen(false);props.onCanvas();}}>打开或收起教学画布</Button></div></Dialog>}
+    {moreOpen&&<Dialog title="聊天操作" onClose={()=>setMoreOpen(false)}><div className="mf-stack">{props.headerExtra&&<div className="mf-chat-extra-menu" onClick={()=>setMoreOpen(false)}>{props.headerExtra}</div>}<Button onClick={()=>{setMoreOpen(false);props.onHistory();}}>查看会话历史</Button><Button onClick={()=>{setMoreOpen(false);props.onNew();}}>创建新会话</Button><Button onClick={()=>{setMoreOpen(false);props.onCanvas();}}>打开或收起教学画布</Button></div></Dialog>}
   </section>;
 }
