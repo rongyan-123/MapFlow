@@ -17,3 +17,5 @@
 - 后端完整回归：134 个目标，1091 通过、0 失败、10 忽略、2 过滤。沿用此前已确认的 Windows 环境基线排除项 `chat_transport_distinguishes_dns_and_unreachable_network_from_connection_refusal` 和 `unreadable_journal_does_not_prevent_replaying_evidence_already_in_database`，过滤项未计为通过。后端实现提交为 `c6080cd86ed5bdd7aa8ca5d4d3d6e94d531906fc`。
 - 浏览器验收：使用实际构建和真实本地登录，拦截执行状态构造正常与失败场景；320/390/1024/1440px、浅色与深色均无横向溢出。正常状态无原请求卡片、保留停止按钮，失败状态显示核对提示。没有调用真实模型或更改生产数据。
 - 本机证据：`D:/tmp/mapflow-running-warning-audit-20261017/`，包括红绿测试、完整测试、构建与静态检查日志，以及 `browser-acceptance.json` 和 6 张界面截图。
+
+用户确认后已于 2026-10-17 发布，固定版本、生产副本验证与回退方式见 [发布记录](../research/2026-10-17-chat-error-visibility-deployment.md)。
