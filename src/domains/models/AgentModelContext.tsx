@@ -12,7 +12,7 @@ function useAgentConfiguration(accountId:string){
   const key=`mapflow.agent.selection.v1.${accountId}`;const [saved,setSaved]=useState(()=>readPreference(key));
   const catalogue=useQuery({queryKey:['me',accountId,'agent-models'],queryFn:({signal})=>fetchAgentModelCatalogue(signal),retry:false});
   const funding=saved.funding??(catalogue.data?.defaultCash?'cash':catalogue.data?.points?'points':'byok');
-  const cash=catalogue.data?.cash.find(model=>model.profileId===saved.profileId)??catalogue.data?.defaultCash;
+  const cash=saved.profileId?catalogue.data?.cash.find(model=>model.profileId===saved.profileId):catalogue.data?.defaultCash;
   const options:AgentConversationOptions={funding,...(funding==='cash'&&cash?{profileId:cash.profileId,profileVersion:cash.profileVersion,modelLabel:cash.displayName,modelId:cash.modelId}:{}),...(funding==='points'?{modelLabel:catalogue.data?.points?.displayName??'积分模型暂未配置',modelId:catalogue.data?.points?.modelId}:{}),...(funding==='byok'?{contextWindow:Number(saved.contextWindow)||undefined,maxOutputTokens:saved.maxOutputTokens.trim()?Number(saved.maxOutputTokens):null,reasoningProtocol:saved.reasoningProtocol,reasoningSupported:saved.reasoningSupported}:{})};
   function change(patch:Partial<Preference>){const next={...saved,funding,...patch};setSaved(next);try{localStorage.setItem(key,JSON.stringify(next));}catch{/* Current model choices remain usable. */}}
   return {catalogue,options,saved,change,cash};

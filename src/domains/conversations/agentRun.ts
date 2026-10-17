@@ -6,7 +6,7 @@ import {AgentApiError,acceptAgentExecution,attachAgentExecution,fetchActiveAgent
   type AgentCompletion,type AgentEvent,type AgentExecutionCommand,type AgentFunding,type AgentStatus,type AgentPayload,type AgentExecutionControl} from '../../api/agentExecutionClient';
 
 export type AgentSendOptions=Omit<AgentExecutionCommand,'clientActionId'|'expectedRevision'|'action'>;
-export interface AgentRunOptions {releaseTerminalPending?:boolean}
+export interface AgentRunOptions {releaseTerminalPending?:boolean;onModelUnavailable?:()=>void}
 type SavedCommand=Omit<AgentExecutionCommand,'modelAccess'>&{modelAccess?:Omit<NonNullable<AgentExecutionCommand['modelAccess']>,'apiKey'>};
 type PendingGeneration={clientActionId:string;expectedRevision:number;action:GenerationAction};
 interface AgentRunSnapshot {
@@ -157,10 +157,12 @@ export class AgentConversationRun {
       if(this.pendingStopCsrf||this.snapshot.stopRequested)await this.stop(this.pendingStopCsrf??csrf);else this.watch();}
     catch(failure){if(epoch===this.epoch){
       const rejectedCash=command.funding==='cash'&&failure instanceof AgentApiError&&failure.status===402&&failure.code==='cash_non_positive';
+      const rejectedModel=command.funding==='cash'&&failure instanceof AgentApiError&&failure.status===409&&failure.code==='agent_model.not_selectable';
       const rejectedGlobal=this.options.releaseTerminalPending&&failure instanceof AgentApiError&&['global_conversation_not_current','global_assistant_client_upgrade_required','global_assistant_migration_pending'].includes(failure.code);
-      if(rejectedCash){
+      if(rejectedCash||rejectedModel){
         this.operation=null;this.pendingStopCsrf=null;this.stopTarget=null;this.stopActionId=null;
         this.set({busy:false,pendingGeneration:null,stopRequested:false,confirmedUnaccepted:true});this.persist();
+        if(rejectedModel)this.options.onModelUnavailable?.();
       }else if(rejectedGlobal){this.operation=null;this.set({busy:false,pendingGeneration:null,stopRequested:false});this.persist();}
       else if(this.options.releaseTerminalPending&&failure instanceof AgentApiError&&failure.code==='global_assistant_revision_conflict'&&failure.status===409){
         this.rejectedOperation=this.operation;this.operation=null;this.pendingStopCsrf=null;this.stopTarget=null;this.stopActionId=null;
@@ -270,5 +272,7 @@ const runs=new WeakMap<QueryClient,Map<string,AgentConversationRun>>();
 export function agentConversationRun(client:QueryClient,account:string,conversation:string,options?:AgentRunOptions){
   let registry=runs.get(client);if(!registry){registry=new Map();runs.set(client,registry);}
   const key=JSON.stringify([account,conversation]);let run=registry.get(key);
-  if(!run){run=new AgentConversationRun(account,conversation,options);registry.set(key,run);}return run;
+  if(!run){run=new AgentConversationRun(account,conversation,{...options,onModelUnavailable:()=>{
+    void client.invalidateQueries({queryKey:['me',account,'agent-models']});options?.onModelUnavailable?.();
+  }});registry.set(key,run);}return run;
 }

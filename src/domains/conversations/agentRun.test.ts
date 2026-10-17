@@ -8,6 +8,15 @@ const completion:AgentCompletion={executionId:execution,conversationId:conversat
   settlement:{status:'pending_evidence',cashMicros:null,pointUnits:null,balanceMicros:null}};
 const status:AgentStatus={executionId:execution,conversationId:conversation,state:'running',funding:'cash',modelId:'original-model',result:null,error:null};
 
+it.each([false,true])('a disabled model releases the rejected command without retrying or switching models (global=%s)',async global=>{
+  api.acceptAgentExecution.mockRejectedValueOnce(new AgentApiError('agent_model.not_selectable',409));
+  const run=new AgentConversationRun('owner',conversation,{releaseTerminalPending:global});
+  expect(await run.send({type:'reply',message:'Keep my question'},0,{funding:'cash',profileId:'retired',profileVersion:1},'csrf')).toBe(false);
+  expect(run.getSnapshot()).toMatchObject({pendingGeneration:null,busy:false,confirmedUnaccepted:true});
+  await run.retry('csrf');expect(api.acceptAgentExecution).toHaveBeenCalledOnce();
+  expect(run.getSnapshot().error).toMatchObject({message:expect.stringMatching(/模型.*暂停|重新选择/)});
+});
+
 it.each([false,true])('lets a confirmed cash rejection return to editing and a new BYOK send (global=%s)',async global=>{
   api.acceptAgentExecution.mockRejectedValueOnce(new AgentApiError('cash_non_positive',402));
   const run=new AgentConversationRun('owner',conversation,{releaseTerminalPending:global});

@@ -164,6 +164,8 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
       if(retry)nativeRun.dismiss();
       try{
         if(action.type!=='reply')validateId(action.assistantMessageId);
+        if(agentOptions.funding==='cash'&&(!agentOptions.profileId||!agentOptions.profileVersion))
+          throw new TavernApiError(409,'agent_model.not_selectable','请在模型设置中重新选择可用的现金模型，问题已保留。');
         const access=agentOptions.funding==='byok'?selectedUserAccess(modelSelection):undefined;
         if(agentOptions.funding==='byok'&&(!access||!Number.isSafeInteger(agentOptions.contextWindow)||!agentOptions.contextWindow||agentOptions.contextWindow<1))
           throw new TavernApiError(400,'tavern.model_access_required','请填写 API Key、模型和实际上下文窗口。');

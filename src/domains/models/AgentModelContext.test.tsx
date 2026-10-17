@@ -16,3 +16,11 @@ it('reads each account preference independently',async()=>{
   localStorage.setItem('mapflow.agent.selection.v1.other',JSON.stringify({funding:'points',profileId:'',contextWindow:''}));
   vi.stubGlobal('fetch',async()=>new Response(JSON.stringify({cash:[cash],defaultCash:cash,points:null})));mount('a');await screen.findByText('真实模型');expect(screen.getByLabelText('资金')).toHaveValue('cash');
 });
+it('does not silently substitute the default when the explicitly selected paid model is no longer open',async()=>{
+  localStorage.setItem('mapflow.agent.selection.v1.a',JSON.stringify({funding:'cash',profileId:'retired',contextWindow:''}));
+  vi.stubGlobal('fetch',async()=>new Response(JSON.stringify({cash:[cash],defaultCash:cash,points:null})));mount('a');
+  await screen.findByLabelText('资金');
+  await new Promise(resolve=>setTimeout(resolve,30));
+  expect(screen.queryByText('真实模型')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('资金')).toHaveValue('cash');
+});

@@ -6,8 +6,12 @@ import AgentModelProfiles from './ModelsSection';
 import {configurationFixture} from '../../test/agentModelFixture';
 const api=vi.hoisted(()=>({fetchAgentModelConfiguration:vi.fn(),saveAgentModelProfile:vi.fn(),activateAgentModelProfile:vi.fn()}));
 vi.mock('../../api/agentModelClient',()=>api);
+vi.mock('../../api/agentModelCatalogClient',()=>({fetchModelCatalog:async()=>({schemaVersion:1,source:{generation:null},lastSync:null,candidates:[],recentBatches:[]})}));
 beforeEach(()=>{vi.clearAllMocks();api.fetchAgentModelConfiguration.mockResolvedValue(configurationFixture());});
 function open(){render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}})}><AgentModelProfiles csrfToken="csrf-fixture"/></QueryClientProvider>)}
+it('exposes the supplier catalogue in the existing model management route',async()=>{
+  open();expect(await screen.findByRole('region',{name:'上游聊天模型目录'})).toBeInTheDocument();
+});
 it('keeps the persisted active model visible when a tested switch fails',async()=>{
   const user=userEvent.setup();api.activateAgentModelProfile.mockRejectedValue(new Error('连接测试失败，原配置仍在使用。'));open();
   await screen.findByText('模型配置');

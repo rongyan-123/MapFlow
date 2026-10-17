@@ -6,11 +6,16 @@ import { useConversationExecution } from './useConversationExecution';
 afterEach(()=>{vi.unstubAllGlobals();sessionStorage.clear();});
 const conversationId='22222222-2222-4222-8222-222222222222';
 const saved={...detail,conversation:{...detail.conversation,conversationId}};
-function setup(funding:'cash'|'byok'='cash',initialDraft=''){
+function setup(funding:'cash'|'byok'='cash',initialDraft='',available=true){
   const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
   const recovered=vi.fn();
-  return {recovered,...renderHook(()=>useConversationExecution({detail:saved,accountId:'a',csrfToken:'csrf-a',initialDraft,modelSelection:{provider:'custom',apiKey:'',baseUrl:'',model:'',settings:{},historyBytes:32768},agentOptions:{funding,contextWindow:32000,profileId:'33333333-3333-4333-8333-333333333333',profileVersion:2},onRecovered:recovered,onCompleted:vi.fn(),onGraphChanged:vi.fn()}),{wrapper:({children})=><QueryClientProvider client={client}>{children}</QueryClientProvider>})};
+  return {recovered,...renderHook(()=>useConversationExecution({detail:saved,accountId:'a',csrfToken:'csrf-a',initialDraft,modelSelection:{provider:'custom',apiKey:'',baseUrl:'',model:'',settings:{},historyBytes:32768},agentOptions:{funding,contextWindow:32000,...(available?{profileId:'33333333-3333-4333-8333-333333333333',profileVersion:2}:{})},onRecovered:recovered,onCompleted:vi.fn(),onGraphChanged:vi.fn()}),{wrapper:({children})=><QueryClientProvider client={client}>{children}</QueryClientProvider>})};
 }
+it('a removed cash choice preserves the composer without silently sending the platform default',async()=>{
+  const commands:RequestInit[]=[];vi.stubGlobal('fetch',async(_path:string,options?:RequestInit)=>{if(options?.method==='POST')commands.push(options);return Response.json({execution:null});});
+  const view=setup('cash','保留这个问题',false);await act(async()=>view.result.current.runGeneration({type:'reply',message:'保留这个问题'}));
+  expect(commands).toEqual([]);expect(view.result.current.message).toBe('保留这个问题');expect(view.result.current.error).toBeTruthy();view.unmount();
+});
 it('takes an unsent entry-screen draft into the newly opened conversation without sending it',async()=>{
   const requests:RequestInit[]=[];vi.stubGlobal('fetch',async(_path:string,options?:RequestInit)=>{if(options)requests.push(options);return new Response(JSON.stringify({execution:null}));});
   const view=setup('cash','帮我创建地图，我想学 C');await waitFor(()=>expect(view.result.current.nativeSnapshot?.error).toBeNull());
@@ -52,7 +57,7 @@ it('keeps a cash-rejected question editable and sends it with BYOK after the use
   const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
   const view=renderHook(({funding}:{funding:'cash'|'byok'})=>useConversationExecution({detail:saved,accountId:'negative-site-balance',csrfToken:'csrf-a',initialDraft:'保留这个问题',
     modelSelection:{provider:'custom',apiKey:'synthetic-user-key',baseUrl:'https://models.example/v1',model:'user-model',settings:{},historyBytes:32768},
-    agentOptions:{funding,contextWindow:32000},onRecovered:vi.fn(),onCompleted:vi.fn(),onGraphChanged:vi.fn()}),
+    agentOptions:{funding,contextWindow:32000,...(funding==='cash'?{profileId:'selected-cash',profileVersion:1}:{})},onRecovered:vi.fn(),onCompleted:vi.fn(),onGraphChanged:vi.fn()}),
     {initialProps:{funding:'cash' as 'cash'|'byok'},wrapper:({children})=><QueryClientProvider client={client}>{children}</QueryClientProvider>});
   await act(async()=>view.result.current.runGeneration({type:'reply',message:view.result.current.message}));
   expect(view.result.current.message).toBe('保留这个问题');expect(view.result.current.pendingGeneration).toBeNull();

@@ -43,6 +43,7 @@ function invalid():never {throw new Error('执行响应无效，请重新读取�
 function pathId(identity:string){if(!uuid(identity))invalid();return encodeURIComponent(identity);}
 function errorMessage(code:string){
   const globalMessages:Record<string,string>={
+    'agent_model.not_selectable':'这个模型已暂停开放，问题已保留。请重新选择模型后发送。',
     global_conversation_not_current:'当前助手对话已更新，请重新读取最近消息。草稿已保留。',
     global_assistant_client_upgrade_required:'助手页面已更新，请刷新页面后继续。草稿已保留。',
     global_assistant_migration_pending:'原助手请求尚未结束，请先核对或停止原请求。',
