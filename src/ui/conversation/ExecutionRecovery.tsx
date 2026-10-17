@@ -20,7 +20,7 @@ export function ExecutionRecovery(props:Props){
   const terminal=['succeeded','stopped','failed'].includes(props.state);
   const resume=matched?.actions.canResume===true||unsupported&&props.funding==='byok'&&props.state==='awaiting_reconciliation'&&props.legacyErrorCode==='credential_required';
   const credential=resume&&(matched?.actions.needsCredential===true||!matched);
-  const reason=matched?.reason;
+  const reason=terminal||props.state==='awaiting_reconciliation'?matched?.reason:undefined;
   const failure=reason&&['external_outcome_unknown','authentication','rate_limited','provider_balance_insufficient','network','context_window_exceeded'].includes(reason)
     ?new AgentApiError(reason,400):props.error;
   return <>

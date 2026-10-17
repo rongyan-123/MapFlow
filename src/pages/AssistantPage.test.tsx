@@ -31,6 +31,35 @@ function mount(handle?:(path:string,options?:RequestInit)=>Response|Promise<Resp
 }
 afterEach(()=>{vi.unstubAllGlobals();localStorage.clear();sessionStorage.clear();});
 
+it.each(['queued','running','recovering','ready_to_commit'])('keeps normal %s generation free of recovery cards while retaining its stop button',async state=>{
+  const execution={...running,state};
+  const view=mount(path=>{
+    if(path.endsWith('/open'))return new Response(JSON.stringify({...snapshot,activeExecution:execution,sendAvailability:{conversation:false,cash:true}}));
+    if(path.endsWith('/executions'))return new Response(JSON.stringify({execution}));
+    if(path.endsWith('/control'))return new Response(JSON.stringify({version:1,executionId,conversationId,state,reason:'external_outcome_unknown',actions:{canCheck:true,canStop:true,canResume:false,needsCredential:false}}));
+    if(path.includes('/events?'))return new Response(new ReadableStream({start(sink){sink.enqueue(new TextEncoder().encode(': heartbeat\n\n'));}}),{headers:{'Content-Type':'text/event-stream'}});
+  });
+  await screen.findByRole('button',{name:'停止生成'});
+  await waitFor(()=>expect(view.requests.some(([path])=>path.endsWith('/control'))).toBe(true));
+  expect(screen.queryByRole('region',{name:'原请求状态'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'核对原请求'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  view.unmount();view.client.clear();
+});
+
+it('keeps a genuinely failed saved execution visible for diagnosis',async()=>{
+  sessionStorage.setItem(`mapflow.agent.execution.v1.owner.${conversationId}`,JSON.stringify({executionId}));
+  const failed={...running,state:'failed',error:{code:'generation_failed',message:'本次生成未完成',requestId:executionId}};
+  const view=mount(path=>{
+    if(path===`/api/me/agent-executions/${executionId}`)return new Response(JSON.stringify(failed));
+    if(path.endsWith('/control'))return new Response(JSON.stringify({version:1,executionId,conversationId,state:'failed',reason:'external_outcome_unknown',actions:{canCheck:true,canStop:false,canResume:false,needsCredential:false}}));
+  });
+  expect(await screen.findByRole('region',{name:'原请求状态'})).toBeVisible();
+  expect(await screen.findByText(/上游未确认本次调用结果/)).toBeVisible();
+  expect(screen.queryByRole('button',{name:'补充 API Key'})).not.toBeInTheDocument();
+  view.unmount();view.client.clear();
+});
+
 it('opens one continuous assistant with model-only settings and three questions after saved messages',async()=>{
   const {requests}=mount();
   expect(await screen.findByText('这是已经保存的回复。')).toBeVisible();
@@ -197,7 +226,7 @@ it('keeps a rejected draft separate from another device request and offers expli
     fireEvent.click(screen.getByRole('button',{name:'停止原请求后继续'}));
     fireEvent.click(await screen.findByRole('button',{name:'返回编辑'}));
     await waitFor(()=>expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue(`处理别设备请求时写的新草稿\n${rejectedText}`));
-    expect(screen.getByText('原请求已停止')).toBeVisible();
+    expect(screen.queryByRole('region',{name:'原请求状态'})).not.toBeInTheDocument();
     expect(view.requests.filter(([path,options])=>path.endsWith('/executions')&&options?.method==='POST')).toHaveLength(0);
   }finally{confirm.mockRestore();view.unmount();view.client.clear();}
 });
