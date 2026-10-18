@@ -4,6 +4,10 @@ const FALLBACK_MESSAGE = '请求暂时失败，请稍后重试。';
 export class PublicUiError extends Error {}
 
 const messages: Readonly<Record<string, string>> = {
+  'support.invalid_request': '请检查填写的内容后重试。',
+  'support.not_found': '这条消息或反馈不存在，可能已被移除。',
+  'support.request_conflict': '这次提交已经处理，请刷新后核对；新内容请重新提交。',
+  'support.unavailable': '消息服务暂时不可用，请稍后重试。',
   'server.network_unavailable': '服务器网络异常，请稍后重试。',
   'model_access.connection_failed': '无法连接你设置的模型，请检查 API Key 和接口地址后重试。',
   'admin.invitation_already_redeemed': '该邀请码已被使用，无法撤销。',

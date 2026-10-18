@@ -7,6 +7,7 @@
 - [固定工作区入口](workflow/workspace-entry.md)
 - [当前生产与未部署改动](current-release.md)
 - [BYOK 历史会话恢复与发布验收](research/2026-10-18-byok-conversation-recovery-deployment.md)
+- [反馈回复与消息中心验收（待部署）](research/2026-10-18-feedback-notifications.md)
 - [生产与收款入口](workflow/production.md)
 - [2026-10-18 本机整理结果](workflow/2026-10-18-repository-closeout.md)
 - [模型选择边界](workflow/chat-model-selection.md)
@@ -23,6 +24,7 @@
 - [会话持久删除](specs/2026-10-13-chat-layout-and-conversation-deletion-design.md)
 - [BYOK 执行隔离](specs/2026-10-16-byok-execution-design.md)
 - [异常卡片显示条件](specs/2026-10-17-chat-error-visibility-design.md)
+- [反馈回复与消息中心](specs/2026-10-18-feedback-notifications-design.md)
 
 模型目录、参数合同和持久验证见后端 docs/operations/chat-model-catalog.md。
 

@@ -2,6 +2,7 @@ import type { SVGProps } from 'react';
 
 const paths = {
   chat: 'M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-2 2V11.5a9.5 9.5 0 0 1 19 0ZM7 9h9M7 13h6',
+  bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4',
   map: 'm3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6ZM9 3v15M15 6v15',
   book: 'M12 5C9 2 4 3 3 4v15c3-2 6-1 9 1 3-2 6-3 9-1V4c-3-2-6-1-9 1ZM12 5v15',
   learn: 'm2 8 10-5 10 5-10 5L2 8ZM6 10v6c4 4 8 4 12 0v-6M22 8v8',

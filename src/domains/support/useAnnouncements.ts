@@ -1,11 +1,9 @@
-import {useEffect,useState} from 'react';
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {getAnnouncements,markAnnouncementRead} from '../../api/announcementsClient';
+import {supportKey} from './useFeedback';
 export function useAnnouncements(accountId?:string,csrfToken=''){
-  const client=useQueryClient();const key=['announcements',accountId??null];const [dismissed,setDismissed]=useState(false);
-  useEffect(()=>setDismissed(false),[accountId]);
+  const client=useQueryClient();const key=['announcements',accountId??null];
   const query=useQuery({queryKey:key,queryFn:getAnnouncements,enabled:!!accountId,staleTime:60_000,retry:false});
-  const read=useMutation({mutationFn:(ids:string[])=>Promise.all(ids.map(id=>markAnnouncementRead(id,csrfToken))),onSettled:()=>client.invalidateQueries({queryKey:key})});
-  const unreadIds=query.data?.unreadIds??[];const current=query.data?.items.find(item=>item.announcementId===unreadIds[0]);
-  return {query,read,current,unreadIds,dismissed,setDismissed};
+  const read=useMutation({mutationFn:(ids:string[])=>Promise.all(ids.map(id=>markAnnouncementRead(id,csrfToken))),onSettled:()=>Promise.all([client.invalidateQueries({queryKey:key}),client.invalidateQueries({queryKey:[...supportKey(accountId??''),'unread']}),client.invalidateQueries({queryKey:[...supportKey(accountId??''),'notifications']})])});
+  return {query,read};
 }

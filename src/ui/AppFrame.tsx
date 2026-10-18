@@ -3,8 +3,9 @@ import { Dialog } from './Dialog';
 import { Icon, type IconName } from './Icon';
 import { IconButton } from './Button';
 import { BrandMark } from './BrandMark';
+import { NotificationBell } from './support/NotificationBell';
 
-export const FrameContext = createContext<{ openNavigation: () => void } | null>(null);
+export const FrameContext = createContext<{ openNavigation: () => void; onNotifications?:()=>void; unreadCount?:number } | null>(null);
 export interface NavigationItem { href: string; label: string; shortLabel?: string; icon: IconName; active?: boolean }
 
 export interface AppFrameProps {
@@ -17,10 +18,12 @@ export interface AppFrameProps {
   onTheme: (source: HTMLElement) => void;
   onHelp: () => void;
   onMarketing: () => void;
+  onNotifications?: () => void;
+  unreadCount?: number;
   chatMode?: boolean;
 }
 
-export function AppFrame({ children, items, tools, accountName, navigate, onAccount, onTheme, onHelp, onMarketing, chatMode = false }: AppFrameProps) {
+export function AppFrame({ children, items, tools, accountName, navigate, onAccount, onTheme, onHelp, onMarketing, onNotifications, unreadCount, chatMode = false }: AppFrameProps) {
   const [navigationOpen, setNavigationOpen] = useState(false);
   const viewport = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -53,10 +56,11 @@ export function AppFrame({ children, items, tools, accountName, navigate, onAcco
     <nav aria-label="业务导航">{items.map(link)}</nav>
     <p className="mf-navigation-caption">工具与账号</p><nav aria-label="账号工具">{tools.map(link)}</nav>
     <div className="mf-sidebar-bottom"><button className="mf-navigation-link" onClick={() => { setNavigationOpen(false); onMarketing(); }}><Icon name="home" />产品首页</button><button className="mf-navigation-link" onClick={() => { setNavigationOpen(false); onHelp(); }}><Icon name="help" />帮助与反馈</button>
+      {onNotifications&&<NotificationBell showLabel unreadCount={unreadCount} onClick={()=>{setNavigationOpen(false);onNotifications();}} />}
       <div className="mf-account"><button className="mf-account-profile" onClick={() => { setNavigationOpen(false); onAccount(); }}><span className="mf-avatar">{accountName.slice(0,1).toUpperCase()}</span><span><strong>{accountName}</strong><small>你的学习空间</small></span></button><IconButton icon="moon" label="切换浅色和深色主题" onClick={event=>onTheme(event.currentTarget)} /></div>
     </div>
   </aside>;
-  return <FrameContext.Provider value={{ openNavigation: () => setNavigationOpen(true) }}><div ref={viewport} className={`mf-app ${chatMode ? 'mf-app--chat' : ''}`}>
+  return <FrameContext.Provider value={{ openNavigation: () => setNavigationOpen(true),onNotifications,unreadCount }}><div ref={viewport} className={`mf-app ${chatMode ? 'mf-app--chat' : ''}`}>
     {navigation}<main className="mf-main">{children}<nav className="mf-bottom-navigation" aria-label="手机主导航">{items.slice(0,4).map(item => <a key={item.href} href={item.href} aria-current={item.active ? 'page' : undefined} className={item.active ? 'is-active' : ''} onClick={event => { event.preventDefault(); follow(item.href); }}><Icon name={item.icon} /><span>{item.shortLabel ?? item.label}</span></a>)}</nav></main>
     {navigationOpen && <Dialog title="MapFlow" layout="drawer" onClose={() => setNavigationOpen(false)}>{navigation}</Dialog>}
   </div></FrameContext.Provider>;
