@@ -61,7 +61,7 @@ export function AppFrame({ children, items, tools, accountName, navigate, onAcco
     </div>
   </aside>;
   return <FrameContext.Provider value={{ openNavigation: () => setNavigationOpen(true),onNotifications,unreadCount }}><div ref={viewport} className={`mf-app ${chatMode ? 'mf-app--chat' : ''}`}>
-    {navigation}<main className="mf-main">{children}<nav className="mf-bottom-navigation" aria-label="手机主导航">{items.slice(0,4).map(item => <a key={item.href} href={item.href} aria-current={item.active ? 'page' : undefined} className={item.active ? 'is-active' : ''} onClick={event => { event.preventDefault(); follow(item.href); }}><Icon name={item.icon} /><span>{item.shortLabel ?? item.label}</span></a>)}</nav></main>
+    {navigation}<main className="mf-main">{children}<nav className="mf-bottom-navigation" aria-label="手机主导航">{items.slice(0,4).map(item => <a key={item.href} href={item.href} aria-current={item.active ? 'page' : undefined} className={item.active ? 'is-active' : ''} onClick={event => { event.preventDefault(); follow(item.href); }}><Icon name={item.icon} /><span>{item.shortLabel ?? item.label}</span></a>)}{items.length>4&&<button type="button" aria-label="更多" aria-expanded={navigationOpen} aria-current={items.slice(4).some(item=>item.active)?'page':undefined} className={items.slice(4).some(item=>item.active)?'is-active':''} onClick={()=>setNavigationOpen(true)}><Icon name="more" /><span>更多</span></button>}</nav></main>
     {navigationOpen && <Dialog title="MapFlow" layout="drawer" onClose={() => setNavigationOpen(false)}>{navigation}</Dialog>}
   </div></FrameContext.Provider>;
 }

@@ -1,0 +1,52 @@
+# SDD ledger — plan: docs/superpowers/plans/2026-10-18-english-world-v1.md
+
+- 用户已授权：新工作区按方案0.2实现；独立本地Compose/数据库/测试额度积分；真实调用和真实结算；本地验收后部署生产。
+- 新工作区：D:/MapFlow-worktrees/english-world-v1-20261018/frontend（base 1f491ae65181），server（base 9620ae2d8433），同名分支 codex/english-world-v1-20261018。旧56b8工作区及三份文档保持原位，已逐文件摘要核对复制。
+- 任务分工：根代理负责迁移、英语世界领域/HTTP/集成；ew_backend_execution 负责共享执行/Worker/结算；ew_frontend 负责前端；ew_local_ops 负责专属本地Compose/脚本/环境。禁止交叉修改负责文件，接口更改先通知。
+- 冻结接口：共享 AcceptDomainExecution/FrozenDomainInput/AgentExecutionDomain(stage,commit,terminate)；接受与领域结果均使用调用者的 SQLx transaction，不在领域回调提交或联网。
+- Pre-flight：共享任务依赖0063中性schema；领域依赖其回调与0064业务schema；UI依赖公共JSON合同。旧PublicAgentExecution DTO保持；应用层要为runner/service配置同一领域adapter。
+- Ruling：用户明确要求新工作区，覆盖worktree技能的既有工作区优先建议；从当前最新main建成双工作区，原工作区不移动。
+- Ruling：用户已确认设计与开发，无需重复方案审批；执行计划进一步细化已批准范围。语音仍是独立后续工作包，本次验收文本核心。
+- Ruling：采用独立pipeline任务安排主持与NPC，子任务私有候选完成不代表游戏已应用；正式 applying task 的提交身份必须与turn和execution一致。
+- 环境：Docker Desktop残留socket已精确备份旋转，未删除容器/卷/WSL磁盘。独立pgvector PG16数据库端口55464，64项迁移通过；只导入模型配置和受保护的供应商凭证，没有生产用户数据。Rust安装为C:/Users/Administrator/.rustup/toolchains/stable-x86_64-pc-windows-msvc/bin。
+- 验证：schema先在真实数据库确认缺表后实现，3/3绿；纯领域先确认模块缺失再实现，7/7绿（世界引用、选词约束、角色知识隔离、行为验证、死亡规则、Unicode词位）。日志D:/tmp/mapflow-english-world-v1-20261018/domain。
+- 共享执行代理报告：contexts/domain_adapter/runtime_contract共25/25绿，含现金/积分/BYOK、同事务应用、停止、故障日志恢复；还在做既有接口兼容回归。
+- 前端代理报告：路由/手机入口/创建13绿，API合同5绿，持久操作去重红绿；全套既有lazy加载测试在资源竞争下有超时，最终需处理验证。npm网络失败后的部分目录保存在任务cache，node_modules指向固定前端已安装依赖，未改依赖。
+- Ruling：中性context不能混入旧酒馆公开execution投影；旧账号现金队列仍跨context串行。功能开关MAPFLOW_ENGLISH_WORLD_ENABLED，生产默认关闭，独立本地显式开启。
+- 当前：正在实现领域编排/HTTP与个人词库；本地脚本已通过隔离数据库的真实账户/资金种子测试，开发库账户尚未开始付费AI调用。未提交代码，未修改生产。
+- 23:10更新：领域文件已落选词/剧本/验收、主持/NPC候选、原子存档与回档、翻译预约及公开投影。lifecycle接口已观察缺导出红；第一轮编译中修正测试临时借用，尚未宣称生命周期绿。config开关先E0609缺字段红后补字段，待整套验证。
+- 学习代理已观察8个真实DB行为测试红（骨架Invalid），正在实现真实FSRS与单题消费/按位置义项拆分。fsrs6.6.2固定，新增依赖按Rust1.85兼容锁定，仍需Linux镜像实际编译。
+- UI完整101测试文件719通过/1跳过，类型和构建通过；只用HTTP fixture做了多尺寸浏览器布局，不算真实后端验收。ops脚本5/5，包括并发赋额钱包行锁；专属app尚未启动。
+- 审查新增ruling：自由文本不能只信disclosedFactIds。增加不可见事实原文阻断及独立play validator（approved/coherent/issues）验整个回合，拒绝即丢弃整回合、重建角色记忆。只有validator可最终apply，NPC输出只存候选。
+- 并发主线：后端main cbdf62a、前端main726f91f，新0063_byok_financial_attention已发布schema63。结束组装后先完整备份并验证恢复，再整合main，把本任务原0063/64迁移改0064/65；专属dev库需备份重建，禁止改_sqlx_migrations校验和。
+- 当前分工更新：ops代理接HTTP/service/runtime/app/server装配与测试；根继续领域与迁移；backend代理做learning/FSRS及共享兼容；frontend代理在最终UI验证后独立审查领域并添加adversarial测试。
+- 23:45后验证进展：final-domain-green.log 34/34（adversarial11、pure9、HTTP8、lifecycle6），包括复盘候选独立审计、世界公开字段保护、NPC知识正式合并、上一问时序、游戏写入后故障完整回滚及原staged提交只生效一次、历史超过200句仍可查旧NPC词。config6/schema3此前绿，main整合后仍需全跑。
+- 前端冻结全套724 passed/1 skipped；build/typecheck绿，workspace16绿。新发现管理员资金列表旧parser不接受EW的conversationId:null，前端代理在追加最小nullable兼容红绿，最终产物需重建。
+- 共享执行与学习专项179绿，后加debrief上一问学习解锁修复由backend代理完成红绿中；后台EW现金pending核账正在补回归，保留main已上线BYOK隔离。
+- Linux预热发现真实MSRV：fsrs6.6.2用let chains，Rust1.85实际E0658，不能仅信metadata。Cargo MSRV与CI切1.88；release Rust基底已实拉固定digest af306cfa71d987911a781c37b59d7d67d934f49684058f96cf72079c3626bfe0。第二预热已越过FSRS编译，尚未终结；保留第一失败证据。
+- 构建必要输入：release Dockerfile补两行COPY skills/teaching-drawing与assets/payment-qr（均受跟踪，原main未发布内容需要）。所有preflight以dev-dirty标识，不是最终发布SHA，不启动业务。
+- lint：已实跑全库Clippy收集；旧生产收尾日志证实诸多既有Windows/新Rust警告，按最小范围只清本任务新增警告，禁止为追全仓零警告重构无关代码。根库专项lint整理中。未提交、未真实付费、未写生产。
+- 整合完成：前端HEAD快进至726f91fdb4d10bb553080dbfa347866256146b6f，后端至cbdf62a664bcf91c6ee823ebfcb9df1c8b4b3aa0；两仓库均成功恢复原暂存状态，无冲突。完整产品ZIP逐文件独立解压核对SHA-256，未提交补丁与stash保留；忽略的22份本地运行文件在受限备份后确认原位摘要不变。恢复清单位于任务cache/before-main-integration；固定入口检查通过。
+- 迁移现为0063_byok_financial_attention（主线）、0064_agent_execution_contexts、0065_english_world。旧开发库仍是旧编号64，仅作备份源，不允许新应用直接连接；下一步按可恢复脚本备份、独立恢复验证后重建65。历史日志中的旧64事实不改写。
+- Linux预热最终通过Rust1.88完整release编译，镜像ID 700a332afa7accd7903a125e27b3bf0ee34d8be74420d3852a8c2060e4c454cf；它是旧快照的预检镜像，不用作本地真实调用或生产发布。最新源码需重新构建。
+- 冻结后补充：管理员资金列表nullable conversationId兼容14项测试与build绿，debrief上一问学习记录修正38项绿，EW管理员现金pending原调用核对新增测试绿。main整合后执行完整最终回归。
+- 第一轮post-main全套后端148目标：1184通过、11失败、11忽略；11个失败名称全部属于此前生产收尾12个基线集合，无新增；既有unreadable_journal案例本轮通过。完整日志domain/post-main-full-test.log；严格Clippy按配置实跑，Rust1.97的既有警告仍阻断（新领域模块未报），不称全绿。格式修正lib排序和测试fixture后通过。
+- post-main前端全套726通过、1跳过，typecheck/build、workspace16通过；本地infra使用新binary的5项真实数据库集成通过。前端该轮HTTP均为fixture，仍未算真实后端验证。
+- 独立审查发现4项实质缺口，先修后发布：writing题及到期列表提前给答案、半写pending日志/扫描后文件消失阻断恢复、父任务停止与child停止之间的崩溃窗口、audit_only聚合成无金额settled。写作泄漏已复现红后BE12项绿，FE合同和UI27项绿；日志空/截断及文件消失均已有效红；停止窗口实际重启dispatch(1,1)而期望(0,0)红。后三项正在修复回归，候选镜像构建暂停，没有真实模型付费或生产写入。
+- 本地数据库65重建已完成：先完整dump，独立恢复全表行数和内容摘要一致，再原位保留archive64_20261018t162047z、建同名空dev迁移65。63/64/65 SHA-384与源码相符，仅五类模型配置摘要完全匹配导入；新dev账户及execution均0。原运行私密配置未改，证据在受限.runtime/backups/rebuild65_20261018t162047z，backendSha字段是当时main base，不代表未提交feature发布身份。
+- 四项审查修复完成：journal3/3、post-review-feature-green十目标94/94，独立review已逐日志复验；FE731通过/1跳过、worker217通过/1跳过，类型/构建与workspace16绿。Windows worker最初缺锁内optional native binding；隔离cache补官方精确1.2.4且SHA512匹配原lock后真Vitest217绿，不改共享依赖或产品lock。
+- 第一业务candidate已Linux编译/镜像证明（3292b93e…，dev-dirty-260dade3e9a2），398web文件逐项匹配236ac2a…前端摘要。它是明确未提交snapshot的本地候选，不是最终发布SHA。
+- 首次真实HTTPS注册503复现后定位为本地direct IP模式与Caddy X-Real-IP冲突；仅本地Caddy剥离forwarding头，注册登录与重复seed均绿，账户100100000现金micros/10000000000积分units。生产代理策略不动。
+- 首次真实cash-world在selector诚实失败：真实HarnessRunner只允许128字节，而完整UUID命名键198字节。calls/receipts/usages/charges全0，没有费用；原world 01a14fdf-d136-7e32-9c23-5ff724d2621f和操作保留。BE生成长键及admission接受129字节两条有效红、真正DSH入口旧198字节也实际红；修为保留全部身份维度的canonical SHA256键ew:64hex（67字节），冻结guard128。BE15+8=23绿，实际冻结输出送worker真实入口验绿中。新候选后用原world显式生成新version，不覆盖原失败请求或重造世界；累计调用/预算继承，不SQL补学习数据。
+- 最终全库验证仍在收尾：第二轮全量中一个既有native tool并发测试出现journal started尚未投影为DB行的额外失败（首次全量通过），已安排独立复查；不擅自算既有基线。只有全部运行输入冻结、无人改写test executable的最后一轮作为最终整体验证。
+- 原生 SDK 合同验证完成：198 字节旧键在真正 HarnessRunner 入口报错，67 字节新键实际完成一次本地 HTTP 模型调用并持久保存 checkpoint，Worker 全套 218 通过、1 跳过，类型和构建通过。最终 LF fixture SHA-256 为 509bc8ae6a70e80c0b68daeece935cd82bbc0817f1eb48a3e57baef4c388d00d；47 文件源码清单为 53c6d4d58bd56cd4d209e8e36a12bcdc208ea333707ff9a8e034f70d5686aee5。原生 SDK 的本地 HTTP fixture 仅验证协议，不当作供应商真实费用。
+- 新本地候选 077635715e51（dev-dirty-2cb58320a1d1）已实际接通供应商：原失败创建请求重放两次均没有新调用或费用；在原世界明确创建新版本后，5 次调用、5 份回执与 5 笔现金费用共 111110 micros。剧本未通过受限修订，原 pipeline 诚实失败并停止验收；不称 ready 或完整 E2E 已通过。原失败版本、审计和费用不改写，正在提取具体验收失败原因。
+- 既有 native tool 并发测试在不改源的独立复查中通过（map-tool-concurrency-recheck.log）；最后一轮全套已冻结源码重新运行（final-frozen-full-test.log）。生产仍未写入，后续必须先通过真实本地游戏与现金/积分闭环、隔离迁移和兼容回退验收。
+- 真实剧本失败已逐字段定位并交叉复核：两次 writer 的唯一结构问题均为 `rules[1].trigger=reveals_traveller_identity`，原程序只接受 `identity_exposed` 等四个枚举；编剧提示未明确完整枚举，中途语义审查还发现了可见事实与时间线矛盾。保持原安全规则与三次尝试上限，补全编剧合同，并仅给编剧携带明确标记 `unaccepted_candidate` 的草稿、具体 field/actual/allowed 或独立审查 issues，不把它作为正式历史。
+- 回归按真实失败写：writer-contract-feedback-red.log 实际得到 Null 而非 `/rules/1/trigger`；修复后四目标 38/38 通过，包含原草稿拒绝、结构修复、语义退回和最终 sealed ready，原拒绝审计不改。fmt、all-target check、Clippy 编译通过，新模块与新测试没有诊断；旧警告继续以原生产日志逐项证明。
+- writer 修复前最后一次完整回归为 148 目标、1192 通过、11 个既有失败、11 忽略，并发 native tool 本轮通过。该记录 `final-frozen-full-test.log` 因后续 writer 修复不作为最终源码全套；修复后的完整运行写入 `writer-feedback-final-full-test.log`，运行期间禁止其他 Cargo test 重编。
+- 新 candidate 8809d2a027fd（dev-dirty-9223f9077e0a）已完成 Linux 构建与 runtime 证明，711 输入逐项一致，398 个静态产物仍为 236ac2a。等待在原世界显式生成下一版本续真实 E2E；旧 077、失败版本、5 次调用与 111110 micros 费用继续保留。兼容回退旧 UI 的实际 395 文件已只读提取并逐项比对；旧费用页不支持中性 pending 的 nullable conversation ID，必须另验新 core 的真实管理员核账通路并记录这一回退限制，不能伪造会话 ID 或隐藏待核账条目。
+- 实际本地闭环 PASS：`writer-contract-real-e2e.log` 退出 0，world ready 后现金开局／词译／英文行动／中文死亡／独立复盘／回档／积分行动／个人词库／真实阅读题与自评 1 全部完成。累计 25 calls、22 cash receipts、25 charges（其中 3 points），现金 270474 micros、积分 6824 units；余额差与原调用、settlement、两类 ledger 逐笔相符。各操作双重重放及两个旧失败 run 重放均无新增调用、扣费或 recall；旧世界、旧分支及失败账目原样保留。
+- writer 修复及真正 SDK 证据已再次独立只读复核，无新增实质缺陷。当前全套仍在运行；最终提交前完整产品 ZIP 已独立恢复逐文件验证，FE 889 文件 SHA-256 7ad29ddd34f9213501a3b74cb1718592b463fcbc162954fae1b8bbacb5a36d53，BE 610 文件 ae2b76d33d44af9eeb8a09cdac0dda82f894ba0a82ff2e5f185dc417e4f7e416，存于任务 cache/before-final-commit。生产未写入，继续隔离迁移、旧区、兼容回退和空闲切换门禁。
+- 最终源码全量完成：`writer-feedback-final-full-test.log` 148 目标、1193 通过、11 个既有环境失败、11 忽略；fmt、all-target check、all-target/all-feature Clippy 编译退出 0，严格 Clippy 的 77 条旧诊断如实记录在 `final-commit-clippy-strict.log`。后端已正式提交 `5258e3efab05bb635482233a3ebc0c7c1e15e4e0`；实际密钥值扫描与私有目录排除通过，未把 runtime 或历史测试日志提交。
+- 真实 UI 完成原生网络验收：390/1440 明暗主题的当前分支、旧死亡复盘、6 存档、Market 翻译和词库均无 schema alert／横溢。唯一操作者另签发 1 道 writing 题，保存结果 lemma=null、题面无英文答案，保持未答，reading recall 仍 1。模型参考价格初始共享组件空加载态显示暂不可用；真实 pricing GET 200、51 模型 schema 合法，数据载入后价格三行和真实余额正常，无本次 EW callback 缺失，不改源码。

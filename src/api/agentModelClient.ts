@@ -53,7 +53,7 @@ export const saveAgentModelProfile=(body:{profile:AgentModelProfile;apiKey?:stri
   method:'POST',headers:headers(csrf),body:JSON.stringify(body)});
 
 export interface AgentSettlementAttention {
-  executionId:string;accountId:string;conversationId:string;funding:'cash'|'points'|'byok';status:string;
+  executionId:string;accountId:string;conversationId:string|null;funding:'cash'|'points'|'byok';status:string;
   cashMicros:number|null;pointUnits:number|null;checkedAt:string|null;attentionKey:string;reason:string;
   diagnostic:Record<string,unknown>;
   calls:{callId:string;status:string;usage:import('./agentExecutionClient').AgentUsage|null;
@@ -90,7 +90,7 @@ export async function fetchAgentSettlementAttention(before?:string):Promise<Agen
     ||!(body.nextBefore===null||uuid(body.nextBefore))||!nonnegative(body.totalCount))throw invalid();
   for(const row of body.pending) {
     if(!object(row)||!only(row,['executionId','accountId','conversationId','funding','status','cashMicros','pointUnits','checkedAt','attentionKey','reason','diagnostic','calls'])
-      ||!['executionId','accountId','conversationId'].every(key=>uuid(row[key]))||!['cash','points','byok'].includes(String(row.funding))
+      ||!['executionId','accountId'].every(key=>uuid(row[key]))||!(row.conversationId===null||uuid(row.conversationId))||!['cash','points','byok'].includes(String(row.funding))
       ||!['pending_evidence','pending_posting','settled','no_site_charge','audit_only'].includes(String(row.status))
       ||!['cashMicros','pointUnits'].every(key=>row[key]===null||nonnegative(row[key]))
       ||!(row.checkedAt===null||typeof row.checkedAt==='string')||typeof row.attentionKey!=='string'||typeof row.reason!=='string'

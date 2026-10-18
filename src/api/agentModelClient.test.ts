@@ -20,6 +20,22 @@ it('reads administrator settlement pages without keys and rejects unexpected sec
  fetch.mockResolvedValue(new Response(JSON.stringify({...page,apiKey:'must not be displayed'})));
  await expect(fetchAgentSettlementAttention()).rejects.toThrow();
 });
+const worldCashAttention={
+ executionId:'01a14370-3646-7603-a29c-69dcc8bc6e49',accountId:'01a13d99-c669-7892-a45b-24b9ef2337a4',conversationId:null,
+ funding:'cash',status:'pending_evidence',cashMicros:null,pointUnits:null,checkedAt:'2026-10-18T12:00:00Z',
+ attentionKey:'a'.repeat(64),reason:'英语世界原调用金额依据待核对。',diagnostic:{},
+ calls:[{callId:'5a074b1e-b4cb-43f7-9d64-2a446d919ea9',status:'completed',usage:{inputTokens:100,outputTokens:20},receipts:[]}],
+};
+it('reads a real-shaped English world cash attention record without a conversation identity',async()=>{
+ const page={pending:[worldCashAttention],nextBefore:null,totalCount:1};
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json(page)));
+ expect(await fetchAgentSettlementAttention()).toEqual(page);
+});
+it('still rejects a non-null malformed conversation identity in settlement attention',async()=>{
+ const page={pending:[{...worldCashAttention,conversationId:'not-a-conversation-uuid'}],nextBefore:null,totalCount:1};
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json(page)));
+ await expect(fetchAgentSettlementAttention()).rejects.toThrow('费用核对响应无效。');
+});
 it('uses a CSRF protected activation with the stored epoch and never sends keys on reads',async()=>{
   const fetch=vi.fn().mockImplementation(()=>Promise.resolve(new Response(JSON.stringify(configurationFixture()),{headers:{'content-type':'application/json'}})));vi.stubGlobal('fetch',fetch);
   await fetchAgentModelConfiguration();
