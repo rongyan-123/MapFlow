@@ -5,16 +5,16 @@
 | 内容 | 生产冻结值 |
 | --- | --- |
 | 前端产品提交 | 71b1d8cc9cd8c016bb1ee4bef8f85db4bec7fa17 |
-| 后端产品提交 | a8ec71f98a93c132726f4050d29f1efaac32f655 |
+| 后端产品提交 | 03f181e4c340b88ae7f7ae46546c26b6d766d8b2 |
 | Worker 提交 | 8a5c4054cd7e91d8c0c7443a43c8efabc61865e6 |
-| 镜像 | mapflow-server:feedback-notifications-20261018 |
-| 镜像 ID | sha256:6defe8eefb74bd44c84dfc9a24c6ea6c5b44ea69281794b9f4847bc3a0db7cce |
-| 数据库发布版本 | schema62 |
-| 发布与验收 | [反馈回复与消息中心](research/2026-10-18-feedback-notifications.md) |
+| 镜像 | mapflow-server:byok-financial-attention-20261018 |
+| 镜像 ID | sha256:824aa5dd8a21a3cabd87e33d722de8693f178498b8b54c78c396f1317009549c |
+| 数据库发布版本 | schema63 |
+| 发布与验收 | [BYOK 资金提醒隔离](research/2026-10-18-byok-financial-attention-deployment.md) |
 
 当时开放 47 个现金模型，默认 DeepSeek V4.1 Flash。当前数量以服务端目录为准；积分和 BYOK 的收费边界沿用原规则。
 
-本次反馈后端以原线上 d1e8fd22 为基础，只加入 main 的 8614119 反馈补丁；冻结于后端 release/feedback-notifications-20261018 标签。Worker、资金通路和模型配置保持原版。切换前两次确认无排队、生成、恢复或旧聊天任务，并在停止空闲应用前锁定生成受理表，防止并发新请求进入。
+本次以后端 a8ec71f9 为基础，只加入 main 的 5e0c0f8 资金提醒修复；冻结于后端 release/byok-financial-attention-20261018 标签。BYOK 原始记录保留，但历史和新请求都不进入本站资金待核对队列。前端、Worker、资金配置及模型目录保持原版。切换前两次确认无活动会话，并锁定生成受理表直至空闲旧应用停止。
 
 ## main 新增，尚未部署
 
@@ -26,6 +26,7 @@
 
 | 日期 | 内容 | 记录 |
 | --- | --- | --- |
+| 2026-10-18 | BYOK 历史与新请求退出本站资金核对队列 | [发布](research/2026-10-18-byok-financial-attention-deployment.md) |
 | 2026-10-18 | 反馈历史、管理员回复与消息铃铛 | [发布](research/2026-10-18-feedback-notifications.md) |
 | 2026-10-18 | BYOK 历史会话自动解锁与前端恢复编辑 | [发布](research/2026-10-18-byok-conversation-recovery-deployment.md) |
 | 2026-10-17 | 多模型目录、参数合同和持久验证 | [发布](research/2026-10-17-model-catalog-deployment.md) |
