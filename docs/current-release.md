@@ -4,12 +4,13 @@
 
 | 内容 | 生产冻结值 |
 | --- | --- |
-| 前端产品提交 | 56623a234c62f018e7008ea0356fc68cb513b124 |
-| 后端及 Worker 提交 | 8a5c4054cd7e91d8c0c7443a43c8efabc61865e6 |
-| 镜像 | mapflow-server:model-catalog-20261017-8a5c405 |
-| 镜像 ID | sha256:c54dc5ebf5f227bf402b11a4b1767a2a6f4fabdd0ca19826f93a2ceb7bcb5639 |
+| 前端产品提交 | bf30276f18ccf82edd674b07d3dc927c0c45d430 |
+| 后端产品提交 | d1e8fd22d9ccac94b4d77be0ee4a8ad55e1e1bff |
+| Worker 提交 | 8a5c4054cd7e91d8c0c7443a43c8efabc61865e6 |
+| 镜像 | mapflow-server:byok-unblock-20261018 |
+| 镜像 ID | sha256:b551abd3f7274497701d1a19fe3a3d861d4cc7ad37f0938a03b9058cafe2632a |
 | 数据库发布版本 | schema61 |
-| 发布与验收 | [多模型目录发布](research/2026-10-17-model-catalog-deployment.md) |
+| 发布与验收 | [BYOK 历史会话恢复](research/2026-10-18-byok-conversation-recovery-deployment.md) |
 
 当时开放 47 个现金模型，默认 DeepSeek V4.1 Flash。当前数量以服务端目录为准；积分和 BYOK 的收费边界沿用原规则。
 
@@ -17,12 +18,13 @@
 
 2026-10-18 仓库收尾整合后端学习画布增强：新学习会话事务内默认启用画布；默认教师和已有学习角色获得画布教学指导。前端默认展开并调用授权接口此前已经上线。
 
-本轮更新文档和整理本地资料，没有据此切换生产镜像。后续发布应选择明确的新后端 SHA，并验证执行恢复、画布权限和当前用户数据保留。
+本次 BYOK 后端发布以原线上 8a5c405 为父提交，仅包含执行调度修复；与主线 fd00b5d 的 runner 完全相同。学习画布增强仍待单独发布验收。部署提交已保存在后端 release/byok-unblock-20261018 标签中。
 
 ## 最近已发布内容
 
 | 日期 | 内容 | 记录 |
 | --- | --- | --- |
+| 2026-10-18 | BYOK 历史会话自动解锁与前端恢复编辑 | [发布](research/2026-10-18-byok-conversation-recovery-deployment.md) |
 | 2026-10-17 | 多模型目录、参数合同和持久验证 | [发布](research/2026-10-17-model-catalog-deployment.md) |
 | 2026-10-17 | 正常生成隐藏异常卡片 | [发布](research/2026-10-17-chat-error-visibility-deployment.md) |
 | 2026-10-17 | BYOK 隔离与停止收尾 | [发布](research/2026-10-17-byok-recovery-deployment.md) |

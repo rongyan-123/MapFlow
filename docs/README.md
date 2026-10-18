@@ -6,6 +6,7 @@
 
 - [固定工作区入口](workflow/workspace-entry.md)
 - [当前生产与未部署改动](current-release.md)
+- [BYOK 历史会话恢复与发布验收](research/2026-10-18-byok-conversation-recovery-deployment.md)
 - [生产与收款入口](workflow/production.md)
 - [2026-10-18 本机整理结果](workflow/2026-10-18-repository-closeout.md)
 - [模型选择边界](workflow/chat-model-selection.md)
