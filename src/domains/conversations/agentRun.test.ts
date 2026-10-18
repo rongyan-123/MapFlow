@@ -44,6 +44,26 @@ it('checks an unknown BYOK call without offering or dispatching an impossible cr
   expect(api.fetchAgentExecution).toHaveBeenCalled();
 });
 
+it.each(['failed','stopped'] as const)('unlocks a restored BYOK conversation after the old round is %s, without replaying it',async terminalState=>{
+  const command={clientActionId:'old-byok-action',expectedRevision:0,funding:'byok' as const,action:{type:'reply' as const,message:'Preserve my original question'}};
+  sessionStorage.setItem(`mapflow.agent.execution.v1.owner.${conversation}`,JSON.stringify({executionId:execution,command}));
+  api.fetchAgentExecution.mockResolvedValueOnce({...status,funding:'byok',state:'awaiting_reconciliation'});
+  const run=new AgentConversationRun('owner',conversation);await run.restore();
+  expect(run.getSnapshot().pendingGeneration).not.toBeNull();
+  api.fetchAgentExecution.mockResolvedValueOnce({...status,funding:'byok',state:terminalState,error:{code:'external_outcome_unknown',message:'Original provider result unknown',requestId:execution}});
+  await run.checkStatus();
+  expect(run.getSnapshot()).toMatchObject({state:terminalState,pendingGeneration:null,busy:false,interruptedGeneration:{action:command.action}});
+  expect(api.acceptAgentExecution).not.toHaveBeenCalled();expect(api.resumeAgentExecution).not.toHaveBeenCalled();
+  api.fetchAgentExecution.mockResolvedValueOnce({...status,funding:'byok'});await run.checkStatus();
+  expect(run.getSnapshot()).toMatchObject({state:terminalState,pendingGeneration:null});
+  const next='66666666-6666-4666-8666-666666666666';
+  api.acceptAgentExecution.mockResolvedValueOnce({execution:{...status,executionId:next,funding:'byok'},replayed:false});
+  expect(await run.send({type:'reply',message:'A new explicit question'},0,{funding:'byok'},'csrf')).toBe(true);
+  expect(api.acceptAgentExecution).toHaveBeenCalledOnce();
+  expect(api.acceptAgentExecution.mock.calls[0][1].clientActionId).not.toBe(command.clientActionId);
+  expect(run.getSnapshot()).toMatchObject({executionId:next,interruptedGeneration:null});
+});
+
 it('a missing saved execution terminates recovery and clears the old browser record', async () => {
   const key = 'mapflow.agent.execution.v1.owner.' + conversation;
   sessionStorage.setItem(key, JSON.stringify({ executionId: execution }));

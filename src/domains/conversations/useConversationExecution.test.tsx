@@ -27,6 +27,22 @@ it('keeps the message editable after an invalid BYOK preflight and sends no comm
   expect(view.result.current.message).toBe('我的问题');expect(view.result.current.error).toBeTruthy();
   expect(fetchMock.mock.calls.every(call=>(call[1] as RequestInit|undefined)?.method!=='POST')).toBe(true);
 });
+it.each(['','用户已经写好的新问题'])('returns a failed BYOK question without sending it or replacing the newer draft %s',async newerDraft=>{
+  const executionId='55555555-5555-4555-8555-555555555555';
+  sessionStorage.setItem(`mapflow.agent.execution.v1.a.${conversationId}`,JSON.stringify({executionId,
+    command:{clientActionId:'historical-byok',expectedRevision:1,funding:'byok',action:{type:'reply',message:'原来的问题，请保留'}}}));
+  const requests:Array<RequestInit|undefined>=[];
+  vi.stubGlobal('fetch',async(_path:string,options?:RequestInit)=>{requests.push(options);return Response.json({executionId,conversationId,state:'failed',funding:'byok',modelId:'fixture-model',result:null,
+    error:{code:'generation_failed',message:'原调用结果未知',requestId:executionId}});});
+  const view=setup('byok',newerDraft);
+  await waitFor(()=>expect(view.result.current.nativeSnapshot?.state).toBe('failed'));
+  await waitFor(()=>expect(view.result.current.message).toBe(newerDraft||'原来的问题，请保留'));
+  expect(view.result.current.pendingGeneration).toBeNull();
+  expect(view.result.current.busy).toBe(false);
+  expect(requests.every(request=>request?.method!=='POST')).toBe(true);
+  view.unmount();
+});
+
 it('reads a saved legacy request before admitting new Agent commands after an upgrade',async()=>{
   const actionId='44444444-4444-4444-8444-444444444444';const storageKey=`mapflow.tavern.pending.v1.a.${conversationId}`;
   sessionStorage.setItem(storageKey,JSON.stringify({clientActionId:actionId,expectedRevision:1,action:{type:'reply',message:'旧请求'}}));

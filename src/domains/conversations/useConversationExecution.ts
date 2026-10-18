@@ -47,6 +47,13 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
   const [message, updateMessage] = useState(initialDraft);
   const messageRevision=useRef(0);
   function setMessage(value:string){messageRevision.current++;updateMessage(value);}
+  const restoredInterruption=useRef<string|null>(null);
+  useEffect(()=>{
+    const interrupted=nativeSnapshot?.interruptedGeneration;
+    if(!interrupted||restoredInterruption.current===interrupted.clientActionId)return;
+    restoredInterruption.current=interrupted.clientActionId;
+    if(interrupted.action.type==='reply'&&!message.trim())setMessage(interrupted.action.message);
+  },[nativeSnapshot?.interruptedGeneration?.clientActionId]);
   const [referenceActive, setReferenceActive] = useState(!!nodeReference);
   useEffect(() => { setReferenceActive(!!nodeReference); }, [nodeReference?.id, nodeReference?.title]);
   const [recovering, setRecovering] = useState(false);

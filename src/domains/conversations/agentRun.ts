@@ -11,7 +11,7 @@ type SavedCommand=Omit<AgentExecutionCommand,'modelAccess'>&{modelAccess?:Omit<N
 type PendingGeneration={clientActionId:string;expectedRevision:number;action:GenerationAction};
 interface AgentRunSnapshot {
   executionId:string|null;funding:AgentFunding|null;modelId:string|null;state:AgentStatus['state']|null;
-  pendingGeneration:PendingGeneration|null;rejectedGeneration:PendingGeneration|null;
+  pendingGeneration:PendingGeneration|null;rejectedGeneration:PendingGeneration|null;interruptedGeneration:PendingGeneration|null;
   draft:string;process:GenerationProcessEvent[];busy:boolean;stopped:boolean;stopRequested:boolean;error:unknown;completion:AgentCompletion|null;
   pendingApprovals:Extract<AgentPayload,{type:'approval_required'}>[];canvasPreview:TeachingCanvasState|null;
   completedAction:GenerationAction|null;confirmedUnaccepted:boolean;
@@ -31,7 +31,7 @@ function restoreCommand(command:AgentExecutionCommand|undefined):SavedCommand|nu
 }
 /** The application owns progress; each mounted page owns only a disposable event reader. */
 export class AgentConversationRun {
-  private snapshot:AgentRunSnapshot={executionId:null,funding:null,modelId:null,state:null,pendingGeneration:null,rejectedGeneration:null,draft:'',process:[],busy:false,stopped:false,stopRequested:false,error:null,completion:null,pendingApprovals:[],canvasPreview:null,completedAction:null,confirmedUnaccepted:false,control:null,controlAvailability:'unknown'};
+  private snapshot:AgentRunSnapshot={executionId:null,funding:null,modelId:null,state:null,pendingGeneration:null,rejectedGeneration:null,interruptedGeneration:null,draft:'',process:[],busy:false,stopped:false,stopRequested:false,error:null,completion:null,pendingApprovals:[],canvasPreview:null,completedAction:null,confirmedUnaccepted:false,control:null,controlAvailability:'unknown'};
   private controlEpoch=0;
   private listeners=new Set<()=>void>();private reader:AbortController|null=null;private presentation:StreamingPresentation|null=null;
   private restored:Promise<void>|null=null;private operation:SavedCommand|null=null;private sequence=0;private sending=false;
@@ -59,7 +59,7 @@ export class AgentConversationRun {
     this.deleted=true;this.epoch++;this.detach();this.operation=null;this.rejectedOperation=null;this.pendingStopCsrf=null;this.stopTarget=null;this.stopActionId=null;
     this.restorationFailed=false;
     this.set({executionId:null,state:null,pendingGeneration:null,draft:'',process:[],busy:false,stopped:false,stopRequested:false,
-      completion:null,completedAction:null,pendingApprovals:[],canvasPreview:null,rejectedGeneration:null,confirmedUnaccepted:false,error:new AgentApiError('execution_not_found',404)});
+      completion:null,completedAction:null,pendingApprovals:[],canvasPreview:null,rejectedGeneration:null,interruptedGeneration:null,confirmedUnaccepted:false,error:new AgentApiError('execution_not_found',404)});
     try{sessionStorage.removeItem(this.storageKey);}catch{/* Optional browser recovery record. */}
   }
   private fail(failure:unknown){if(failure instanceof AgentApiError&&failure.status===404){this.markDeleted();return;}this.set({error:safeFailure(failure)});}
@@ -101,16 +101,18 @@ export class AgentConversationRun {
     }
   }
   private applyStatus(status:AgentStatus){
-    if(this.options.releaseTerminalPending&&this.snapshot.executionId===status.executionId&&this.snapshot.state&&terminal(this.snapshot.state)&&status.state!==this.snapshot.state)return;
+    if((this.options.releaseTerminalPending||this.snapshot.funding==='byok')&&this.snapshot.executionId===status.executionId&&this.snapshot.state&&terminal(this.snapshot.state)&&status.state!==this.snapshot.state)return;
     if(this.snapshot.executionId===status.executionId&&this.snapshot.completion){
       if(status.state!=='succeeded'||!status.result)return;
       if(this.snapshot.completion.settlement.status==='settled'&&status.result.settlement.status!=='settled')return;
     }
+    const interruptedByok=status.funding==='byok'&&(status.state==='failed'||status.state==='stopped');
     this.set({executionId:status.executionId,funding:status.funding,modelId:status.modelId,state:status.state,control:null,controlAvailability:'unknown',
       rejectedGeneration:this.rejectedOperation,confirmedUnaccepted:!!this.rejectedOperation,busy:!terminal(status.state)&&status.state!=='awaiting_reconciliation',
       ...(terminal(status.state)?{stopRequested:false,pendingApprovals:[],...(status.state==='succeeded'?{}:{canvasPreview:null})}:{}),
       stopped:status.state==='stopped',completion:status.result,completedAction:status.result?this.operation?.action??null:null,
-      pendingGeneration:status.state==='succeeded'||this.options.releaseTerminalPending&&terminal(status.state)?null:this.operation??{clientActionId:status.executionId,expectedRevision:0,action:{type:'reply',message:''}},
+      interruptedGeneration:interruptedByok?this.operation??this.snapshot.interruptedGeneration:null,
+      pendingGeneration:status.state==='succeeded'||interruptedByok||this.options.releaseTerminalPending&&terminal(status.state)?null:this.operation??{clientActionId:status.executionId,expectedRevision:0,action:{type:'reply',message:''}},
       error:status.error?new AgentApiError(status.error.code,400,status.error.requestId):null});this.persist();
     void this.refreshControl(status);
   }
@@ -148,7 +150,7 @@ export class AgentConversationRun {
     if(action.type==='reply'&&(!action.message.trim()||action.message.includes('\0'))){this.set({error:new PublicUiError('请输入有效消息。')});return false;}
     const command:AgentExecutionCommand={...options,clientActionId:crypto.randomUUID(),expectedRevision,action};
     this.operation=commandWithoutCredential(command);
-    this.epoch++;this.sequence=0;this.pendingStopCsrf=null;this.stopActionId=null;this.stopTarget=null;this.stopping=false;this.detach();this.set({executionId:null,funding:options.funding,modelId:options.modelAccess?.model??null,state:null,pendingGeneration:this.operation,draft:'',process:[],busy:true,stopped:false,stopRequested:false,error:null,completion:null,pendingApprovals:[],canvasPreview:null,confirmedUnaccepted:false});
+    this.epoch++;this.sequence=0;this.pendingStopCsrf=null;this.stopActionId=null;this.stopTarget=null;this.stopping=false;this.detach();this.set({executionId:null,funding:options.funding,modelId:options.modelAccess?.model??null,state:null,pendingGeneration:this.operation,interruptedGeneration:null,draft:'',process:[],busy:true,stopped:false,stopRequested:false,error:null,completion:null,pendingApprovals:[],canvasPreview:null,confirmedUnaccepted:false});
     this.persist();await this.accept(command,csrf);return !this.snapshot.confirmedUnaccepted;
   }
   private async accept(command:AgentExecutionCommand,csrf:string){
@@ -215,7 +217,7 @@ export class AgentConversationRun {
     this.persist();return action;
   }
   dismiss(){if(this.snapshot.busy||this.snapshot.state==='awaiting_reconciliation')return;
-    this.epoch++;this.detach();this.operation=null;this.rejectedOperation=null;this.stopTarget=null;this.set({pendingGeneration:null,rejectedGeneration:null,error:null,draft:'',process:[],state:null,executionId:null,stopped:false,stopRequested:false,confirmedUnaccepted:false});this.persist();}
+    this.epoch++;this.detach();this.operation=null;this.rejectedOperation=null;this.stopTarget=null;this.set({pendingGeneration:null,rejectedGeneration:null,interruptedGeneration:null,error:null,draft:'',process:[],state:null,executionId:null,stopped:false,stopRequested:false,confirmedUnaccepted:false});this.persist();}
   private detach(){this.presentation?.flush();this.reader?.abort();this.reader=null;this.presentation?.dispose();this.presentation=null;}
   private watch(){
     if(this.deleted||!this.listeners.size||this.reader||!this.snapshot.executionId||!this.snapshot.state)return;
