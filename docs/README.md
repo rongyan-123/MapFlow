@@ -7,6 +7,7 @@
 - [固定工作区入口](workflow/workspace-entry.md)
 - [当前生产与未部署改动](current-release.md)
 - [英语世界文本版与真实本地验收](implementation/2026-10-18-english-world-local-acceptance.md)
+- [英语世界发布与兼容回退验收](research/2026-10-19-english-world-deployment.md)
 - [英语世界公共接口](contracts/english-world-v1.md)
 - [BYOK 历史会话恢复与发布验收](research/2026-10-18-byok-conversation-recovery-deployment.md)
 - [BYOK 资金提醒隔离与发布验收](research/2026-10-18-byok-financial-attention-deployment.md)
