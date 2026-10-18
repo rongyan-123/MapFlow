@@ -4,28 +4,29 @@
 
 | 内容 | 生产冻结值 |
 | --- | --- |
-| 前端产品提交 | bf30276f18ccf82edd674b07d3dc927c0c45d430 |
-| 后端产品提交 | d1e8fd22d9ccac94b4d77be0ee4a8ad55e1e1bff |
+| 前端产品提交 | 71b1d8cc9cd8c016bb1ee4bef8f85db4bec7fa17 |
+| 后端产品提交 | a8ec71f98a93c132726f4050d29f1efaac32f655 |
 | Worker 提交 | 8a5c4054cd7e91d8c0c7443a43c8efabc61865e6 |
-| 镜像 | mapflow-server:byok-unblock-20261018 |
-| 镜像 ID | sha256:b551abd3f7274497701d1a19fe3a3d861d4cc7ad37f0938a03b9058cafe2632a |
-| 数据库发布版本 | schema61 |
-| 发布与验收 | [BYOK 历史会话恢复](research/2026-10-18-byok-conversation-recovery-deployment.md) |
+| 镜像 | mapflow-server:feedback-notifications-20261018 |
+| 镜像 ID | sha256:6defe8eefb74bd44c84dfc9a24c6ea6c5b44ea69281794b9f4847bc3a0db7cce |
+| 数据库发布版本 | schema62 |
+| 发布与验收 | [反馈回复与消息中心](research/2026-10-18-feedback-notifications.md) |
 
 当时开放 47 个现金模型，默认 DeepSeek V4.1 Flash。当前数量以服务端目录为准；积分和 BYOK 的收费边界沿用原规则。
 
-## main 新增，尚未部署
+本次反馈后端以原线上 d1e8fd22 为基础，只加入 main 的 8614119 反馈补丁；冻结于后端 release/feedback-notifications-20261018 标签。Worker、资金通路和模型配置保持原版。切换前两次确认无排队、生成、恢复或旧聊天任务，并在停止空闲应用前锁定生成受理表，防止并发新请求进入。
 
-2026-10-18 完成反馈历史、管理员回复和消息中心：桌面及手机铃铛显示未读公告与回复；旧公告读取兼容，普通公告自动弹窗移除。配套后端为 8614119c5ca35ac748cb654a2cf2f69f3feb8e5c，需要迁移 0062，先后端再前端。详见[验收](research/2026-10-18-feedback-notifications.md)。用户取消了同轮收款监控讨论，该部分不在待发布范围内。
+## main 新增，尚未部署
 
 2026-10-18 仓库收尾整合后端学习画布增强：新学习会话事务内默认启用画布；默认教师和已有学习角色获得画布教学指导。前端默认展开并调用授权接口此前已经上线。
 
-本次 BYOK 后端发布以原线上 8a5c405 为父提交，仅包含执行调度修复；与主线 fd00b5d 的 runner 完全相同。学习画布增强仍待单独发布验收。部署提交已保存在后端 release/byok-unblock-20261018 标签中。
+此前 BYOK 后端发布以原线上 8a5c405 为父提交，仅包含执行调度修复；与主线 fd00b5d 的 runner 完全相同。反馈发布继续沿用这一修复。学习画布增强仍待单独发布验收。
 
 ## 最近已发布内容
 
 | 日期 | 内容 | 记录 |
 | --- | --- | --- |
+| 2026-10-18 | 反馈历史、管理员回复与消息铃铛 | [发布](research/2026-10-18-feedback-notifications.md) |
 | 2026-10-18 | BYOK 历史会话自动解锁与前端恢复编辑 | [发布](research/2026-10-18-byok-conversation-recovery-deployment.md) |
 | 2026-10-17 | 多模型目录、参数合同和持久验证 | [发布](research/2026-10-17-model-catalog-deployment.md) |
 | 2026-10-17 | 正常生成隐藏异常卡片 | [发布](research/2026-10-17-chat-error-visibility-deployment.md) |
