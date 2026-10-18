@@ -1,3 +1,5 @@
+> 历史记录：本页记录 2026-10-11 的范围和结果。当前代码、生产身份与操作入口请先读[当前文档](../current-release.md)；本文不能单独作为现在的发布指令。
+
 # Learning map checkpoint
 
 Observed RED failures: missing owned-map search, delayed area joins redirecting a newer page, a removed node remaining in the URL, editable notes during a pending save, a version reload overwriting a draft, missing learning-map details/progress/reference actions, and an earlier background response consuming a newer area's reference.

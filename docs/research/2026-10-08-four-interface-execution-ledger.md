@@ -1,3 +1,5 @@
+> 历史记录：本页记录 2026-10-08 的范围和结果。当前代码、生产身份与操作入口请先读[当前文档](../current-release.md)；本文不能单独作为现在的发布指令。
+
 # Four-interface refactor execution ledger
 
 ## Authority and worktrees

@@ -1,91 +1,58 @@
 # MapFlow
 
-MapFlow 是一个面向真实用户、现已正式开放的技能树学习平台。线上版本运行于 [xxian.fun](https://xxian.fun)，所有人都可以直接访问网站并浏览公共技能树；需要保存个人树库、学习进度或使用 AI 生成器时，可以在站内注册账号。
+MapFlow 是技能树学习平台，线上入口为 [xxian.fun](https://xxian.fun/)。用户可以浏览公共地图、保存私人学习地图，在学习区通过聊天和画布学习，也可以在独立酒馆使用自己的角色。
 
-当前网站运行在 Linux 笔记本，通过现有 FRP 隧道对外提供服务。前后端统一从 `main` 发布，聊天布局、手机适配、会话删除及最新生产验证见 [2026-10-13 发布记录](docs/research/2026-10-13-chat-ui-deployment.md)；模型目录和参考价见 [模型记录](docs/deployment/2026-10-08-model-catalog-pricing.md)。旧阿里云部署流程保持停用。
+全局助手负责网站使用咨询、学习方向和长期规划，并可调用工具整理或生成学习地图；知识点教学由学习区承担。全局助手是平台固定智能体，个人角色库不包含它。
 
-## 固定代码入口
+## 开发入口
 
-本机前端固定目录是 `D:/MapFlow-publish`，后端是 `D:/mapflow-server`，均保持最新整合 `main`。开始开发或审计前运行 `npm run workspace:check`；功能修改在从最新 main 建立的独立 worktree 和 `codex/` 分支完成，合入后再次核对固定入口。已有会话及其目录路径保留。
+| 仓库 | 本机固定目录 | 内容 |
+| --- | --- | --- |
+| MapFlow | D:/MapFlow-publish | 前端、MCP 接入资料和平台集成 |
+| mapflow-server | D:/mapflow-server | Rust 后端、DSH Worker、知识检索与部署 |
+| skill-tree-engine | D:/skill-tree-engine | 生成引擎与共享运行契约 |
 
-带日期的整合目录与历史开发目录保留供原任务使用。使用时核对真实 HEAD，不能将其名称或旧交接中的路径当作最新主线。操作和恢复规则见 [工作区入口说明](docs/workflow/workspace-entry.md) 与 [AGENTS.md](AGENTS.md)。
+固定目录保持最新整合 main。先读 [AGENTS.md](AGENTS.md)，运行 `python D:/MapFlow-publish/scripts/workspace_entry.py`，再在独立 codex/ 分支和 worktree 开发；优先复用空闲工作区。详见[工作区规则](docs/workflow/workspace-entry.md)。已有 Codex 会话及关联目录保留。
 
-## 当前主线
+## 当前产品
 
-`main` 是服务器产品前端的唯一主线，包含：
+- 全局助手：单一持续对话、轮换引导、平台知识检索，保留模型选择。
+- 公共书库与我的地图：搜索筛选、关系布局、按块布局、私人进度与笔记。
+- 学习聊天：按学习区隔离会话，默认展开画布并请求开启 AI 绘图。
+- 独立酒馆：完整个人角色库直接选择，各角色会话独立且允许新建；画布默认收起。
+- 账号、模型与额度：注册登录、模型配置、现金/积分/BYOK 通路和充值。
+- 管理后台：用户与额度、请求观测、金额核对、模型目录验证和助手知识库。
+- 暖纸浅色、石墨深色主题，桌面和手机共用界面组件。
 
-- 公共技能树池与完整示例树；
-- 公开注册、账号登录与安全会话（注册页可直接领取邀请码）；
-- 与账号绑定的个人树库；
-- 每个用户相互隔离的节点完成进度；
-- 显式 AI 技能树生成器：填写固定需求、审阅规划，并在确认后后台生成个人技能树。
+可选模型以服务端当前目录为准。开放选择和默认模型分别设置，价格记录不代表可用性。BYOK 不扣本站现金，服务商仍按用户提供的凭据计费。
 
-首版生成器使用用户自己的 DeepSeek API Key，并固定连接 DeepSeek 官方接口；Key 只保存在当前生成窗口的内存中，不写入浏览器存储或服务端数据库。重新规划和细节调整发生在正式生成之前，生成完成的技能树默认只进入当前用户的个人树库。
+旧显式生成器和早期界面方案不是当前前端入口。旧接口是否继续兼容，以后端实现和现行合同为准。
 
-浏览器中的显示状态不代表权限。账号、个人数据和后续管理员功能均由服务端验证，修改前端代码不能绕过后端鉴权。
+## 代码与验证
 
-## 线上使用
+src/app 管路由，src/pages 组织页面，src/domains 管业务状态和共享场景，src/api 管接口契约，src/ui 管公共组件。产品文件范围用 git ls-files 确认；ignored 的 SDK、下载包、私有配置和验收产物不属于产品源码。
 
-直接访问 [xxian.fun](https://xxian.fun) 即可开始使用：
+在独立工作区运行：
 
-- 公共技能树和示例内容无需登录即可浏览；
-- 需要保存个人学习进度、建立个人树库或使用 AI 生成器时，在网站内注册账号即可；
-- 注册页面提供直接领取邀请码的入口，无需另外申请或等待人工发放。
-
-## 本地开发
-
-先检查固定入口，再进入独立开发工作区：
-
-```bash
-npm run workspace:check
-npm install
-npm run dev
-```
-
-开发服务器默认把 `/api` 转发到 `http://127.0.0.1:3000`。需要使用其他 MapFlow Server 地址时，设置 `MAPFLOW_API_TARGET` 后再启动 Vite。
-
-当前 `main` 面向服务器产品，不保证脱离后端后提供完整功能。
-
-## 原单人静态看板
-
-原来的无后端单人看板保存在 Git 标签 `standalone-v0.1.0`：
-
-```bash
-git switch --detach standalone-v0.1.0
-npm install
-npm run dev
-```
-
-该标签是历史稳定版本，不再与服务器产品同步开发。需要修改、导入或生成自己的技能树时，可以让 Claude Code、Codex 或其他 Agent 阅读该版本的 README 和项目结构后完成。
-
-## 使用生成 Skill
-
-仓库仍提供 `skills/skill-tree-generator/`。在支持 Skill 的 Agent 中打开仓库后，可以直接提出：
-
-> 帮我生成一棵学习 XX 的技能树。
-
-Skill 会引导确认学习方向和目标，并生成符合 MapFlow 数据结构的技能树。
-
-## 仓库边界
-
-- `MapFlow`：公开前端与生成 Skill；
-- `mapflow-server`：私有账号、数据、平台适配器、HTTP 与部署逻辑；
-- `skill-tree-engine`：私有、宿主无关的 A/B/C 技能树生成引擎。
-
-服务端固定依赖经过验证的 Engine commit，不跟随浮动分支。
-
-## 验证
-
-```bash
-npm test
+```powershell
+npm ci
+npm test -- --maxWorkers=3 --minWorkers=1
+npm run typecheck
 npm run build
 npm run workspace:test
 ```
 
-## 技术栈
+项目没有独立的前端 lint 脚本。开发服务器默认把 /api 转发至 http://127.0.0.1:3000，需要其他地址时设置 MAPFLOW_API_TARGET。界面验收应覆盖桌面、手机、两套主题和真实交互。
 
-React 18 · TypeScript · Vite · React Flow · Tailwind CSS · TanStack Query
+## 文档与发布
+
+- [文档目录](docs/README.md)
+- [新会话交接](HANDOVER.md)
+- [当前生产版本](docs/current-release.md)
+- [生产与收款入口](docs/workflow/production.md)
+
+本机 main 最新不表示已经部署。旧阿里云 CI 不是当前发布入口。原单人静态看板保存在 standalone-v0.1.0 标签，仅作历史版本，不在固定主目录切换到旧标签开发。
 
 ## 许可证
 
-MIT
+MIT。

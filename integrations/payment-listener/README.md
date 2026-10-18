@@ -1,27 +1,21 @@
-# MapFlow 收款监听工作区
+# 收款监听源码与运行入口
 
-此目录汇总安卓与 V免签监听材料。分支 `codex/payment-listener-20261006` 从 MapFlow 钱包分支建立。2026-10-06 已在 Windows MuMu 跑通微信、支付宝真实收款通知，网站与 Vmq 运行在 Linux 笔记本，自动充值回调已发布；真实网站订单的自动到账仍等待用户付款验收。当前状态以 [自动充值部署记录](../../docs/deployment/2026-10-06-vmq-auto-topup.md) 为准；下文的 Linux 虚拟机探索属于历史记录。
+更新：2026-10-18。本目录保留 V免签服务端、安卓通知监听端及历史虚拟机脚本的源码，代码已经合入 main；开发不需要切回旧钱包或监听分支。
 
-## 目录与来源
+当前运行方式是 Windows MuMu 监听微信／支付宝通知，通过 SSH 转发连接 Linux 笔记本的 Vmq 服务，再由 MapFlow Server 验证订单并处理额度。Windows 自动启动脚本已独立放到 D:/MapFlow-operations/vmq-relay/Connect-Vmq.ps1，由 MapFlow-Vmq-Relay 任务启动。它不依赖旧 worktree 的代码。当前生产版本和运维步骤见[运行入口](../../docs/workflow/production.md)与[当前发布](../../docs/current-release.md)。
 
 | 路径 | 内容 |
 | --- | --- |
-| `vmq-server/` | V免签服务端完整源码、订单匹配保护、后台“待核实收款”界面、测试和[接入交接记录](vmq-server/docs/mapflow-listener-handoff.md)。来源为本机 `MapFlow-publish/Vmq` 的 `codex/vmq-payment-listener`，提交 `b0c8618`；上游为 [szvone/Vmq](https://github.com/szvone/Vmq)。 |
-| `android-monitor/` | 优化版安卓通知监听端完整源码、Gradle wrapper、单元测试、README、LICENSE 和 NOTICE。来源为本机 `MapFlow-publish/VmqForks/Nanying666-Vmq-App-Optimized`；其 [README](android-monitor/README.md) 记录上游与功能。 |
-| `local-vm/` | Bliss 15/16 的 QEMU 启动脚本备份。脚本含原电脑的绝对路径，在另一台电脑使用前须改路径与 KVM/OVMF 配置。 |
+| vmq-server/ | V免签服务端、金额匹配和待核实保护；[接入合同](vmq-server/docs/mapflow-listener-handoff.md)。 |
+| android-monitor/ | 优化版通知监听源码、Gradle wrapper、测试及来源说明。 |
+| local-vm/ | 早期 Linux Bliss 虚拟机脚本，保留作历史资料，不是当前收款设备。 |
 
-这里只提交源码、文档和启动脚本。Gradle/Maven 缓存、构建产物、APK、ISO、虚拟磁盘、UEFI 变量及账号数据均未复制进 Git。`vmq-server/src/main/webapp/v.apk` 是原 V免签服务端仓库自带的旧安装包，不能代表当前优化版安卓监听端；优化版 APK 应由源码构建。
+仓库只存源码和说明。通讯密钥、微信登录数据、虚拟磁盘、安装包、编译缓存和私有部署材料单独管理，不随 Git 提交。原服务端内自带的 v.apk 是上游旧文件，不代表当前安装的安卓端。
 
-## 2026-10-06 状态
+## 接入与验证
 
-- V免签服务端的模拟支付事件、重复上报、无匹配金额及后台待核实行为已经有测试；真实微信／支付宝收款事件、MapFlow 回调与自动入账均未通过验收。详细规则和测试记录在 `vmq-server/docs/mapflow-listener-handoff.md`。
-- Android 11 x86_64 模拟器可安装优化版监控端，通知权限自测和向本机测试服务的心跳曾通过。这只证明监听端的部分链路可运行。
-- 微信 8.0.78/8.0.79 在 Android Studio x86_64 模拟器的 `libndk_translation` 中崩溃；Bliss OS 15 曾登录后在 `libhoudini.so` 崩溃；Bliss OS 16 可进入登录页，但登录期间 `com.tencent.mm:push` ANR，安卓曾卡死。Bliss 16 网络已显示“已验证”，因此不能单凭登录转圈判为断网。
-- [V免签原项目](https://github.com/szvone/Vmq)明确支持模拟器挂机，但没有给出当前 Linux 主机和微信版本的端到端成功记录。用户没有备用安卓手机；下一项本机候选是 Waydroid 配合可用的 ARM 转译层，仍需实测。不能据现有失败断言所有本地虚拟安卓都无法运行微信。
+当前回调已实现，不再是“等待开发”：后端 GET /api/wallet/payments/vmq/notify 会检查签名、充值申请、渠道、金额及 Vmq 已付订单，再在同一事务中处理订单、余额、流水和审计。重复回调不能重复入账。不匹配或无法确认归属的收款进入人工核实；用户点击“已付款”不能直接加额度。
 
-## 在另一台电脑继续
+2026-10-18 的入口迁移已完成两次新进程启动验证：SSH 监听、服务 HTTP 200、MuMu 在线和 ADB reverse 均通过，任务的登录触发、重试策略、运行身份和权限保持原值。本轮未发生新的真实付款；连接测试不等于自动入账验收。早期真实通知、人工核实和展示队列分别记录于[自动充值记录](../../docs/deployment/2026-10-06-vmq-auto-topup.md)及[展示队列记录](../../docs/deployment/2026-10-06-payment-display-queue.md)。
 
-1. 拉取本分支，先在 `integrations/payment-listener/vmq-server` 运行 `mvn test`、`mvn package`；在 `integrations/payment-listener/android-monitor` 安装 JDK 17、Android SDK 34 后运行 `./gradlew testDebugUnitTest assembleDebug lintDebug`。
-2. 若要恢复原有 Bliss 测试机，须从原电脑**单独安全复制** `/home/rong/.local/share/bliss-os/bliss15-wechat.qcow2`、`/home/rong/.local/share/bliss-os16-test/bliss16-wechat.qcow2` 及各自的 `OVMF_VARS_4M.fd`，核对脚本中的绝对路径；磁盘可能包含微信登录数据，不应上传公开 Git 仓库。
-3. 优先验证本地安卓桌面、网络、ARM 包启动，再依次验证微信登录、重启后保持登录、后台通知、V免签真实到账回调。支付宝也须单独验收。一次失败保留日志和软件版本。
-4. MapFlow 接入时让到账通知先进入“待核实”，由管理员根据支付平台流水确认，再通过现有钱包审批流程入账；具体边界见交接记录。
+修改 Vmq 源码时在 vmq-server/ 执行 mvn test、mvn package；修改安卓端时按 android-monitor/README.md 配置 JDK/Android SDK，执行对应测试、构建和 lint。迁移设备另行验证通知权限、后台心跳、实际收款与网站订单，不能靠模拟通知宣称真实付款成功。

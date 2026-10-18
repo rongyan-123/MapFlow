@@ -1,3 +1,5 @@
+> 历史记录：本页记录 2026-10-07 的范围和结果。当前代码、生产身份与操作入口请先读[当前文档](../current-release.md)；本文不能单独作为现在的发布指令。
+
 # 共享教学画布与流式过程
 
 日期：2026-10-07。已合入两仓库 main 并发布到笔记本上的 https://xxian.fun。发布结果与来源以笔记本私有目录 `releases/20261007-teaching-canvas-ui/` 中的 provenance.json、production-passed.json 为准；首次画布发布保存在 `releases/20261007-teaching-canvas/`。

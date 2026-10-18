@@ -1,6 +1,6 @@
 # 全局助手与管理员知识库验收记录
 
-日期：2026-10-15。范围以已确认的 [设计](../specs/2026-10-15-global-assistant-guidance-design.md) 和 [实现计划](../superpowers/plans/2026-10-15-global-assistant-guidance.md) 为准。本文记录本地隔离验收与独立复审；随后已获授权并完成生产发布，实际迁移、运行及回退证据见 [生产发布记录](2026-10-15-global-assistant-guidance-deployment.md)。下文保留本地验收时的环境与检查限制，不将本地结果冒充生产结果。
+日期：2026-10-15。范围以已确认的 [设计](../specs/2026-10-15-global-assistant-guidance-design.md) 和 [实现计划](https://github.com/rongyan-123/MapFlow/blob/5e962568c15e4da411d8054c662317cbeb861720/docs/superpowers/plans/2026-10-15-global-assistant-guidance.md) 为准。本文记录本地隔离验收与独立复审；随后已获授权并完成生产发布，实际迁移、运行及回退证据见 [生产发布记录](2026-10-15-global-assistant-guidance-deployment.md)。下文保留本地验收时的环境与检查限制，不将本地结果冒充生产结果。
 
 ## 产品行为
 

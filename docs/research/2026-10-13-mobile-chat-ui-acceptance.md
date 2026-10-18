@@ -1,6 +1,8 @@
+> 历史记录：本页记录 2026-10-13 的范围和结果。当前代码、生产身份与操作入口请先读[当前文档](../current-release.md)；本文不能单独作为现在的发布指令。
+
 # 手机聊天界面重构验收
 
-日期：2026-10-13。设计已由用户确认：[手机设计](../specs/2026-10-13-mobile-chat-ui-design.md)。前端基础版本 dcd5b7f，开发分支 codex/mobile-chat-ui-20261013。手机改动现已合并 main 并完成公网部署，见 [发布记录](2026-10-13-mobile-chat-ui-deployment.md)。
+日期：2026-10-13。设计已由用户确认：[手机设计](https://github.com/rongyan-123/MapFlow/blob/5e962568c15e4da411d8054c662317cbeb861720/docs/specs/2026-10-13-mobile-chat-ui-design.md)。前端基础版本 dcd5b7f，开发分支 codex/mobile-chat-ui-20261013。手机改动现已合并 main 并完成公网部署，见 [发布记录](2026-10-13-mobile-chat-ui-deployment.md)。
 
 ## 实际变化
 

@@ -1,3 +1,5 @@
+> 历史记录：本页记录 2026-10-13 的范围和结果。当前代码、生产身份与操作入口请先读[当前文档](../../current-release.md)；本文不能单独作为现在的发布指令。
+
 # 聊天 UI 与会话删除验收
 
 日期：2026-10-13。前端分支：`codex/chat-ui-and-session-deletion-20261013`；后端分支：`codex/conversation-deletion-20261013`。

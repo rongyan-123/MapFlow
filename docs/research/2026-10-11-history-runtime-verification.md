@@ -1,3 +1,5 @@
+> 历史记录：本页记录 2026-10-11 的范围和结果。当前代码、生产身份与操作入口请先读[当前文档](../current-release.md)；本文不能单独作为现在的发布指令。
+
 # History and request ownership checkpoint
 
 The latest main mobile commits `183a744` and `13e3bba` remain integrated. This checkpoint adds visible scene histories and keeps an owned request alive when the visible chat is unmounted.
