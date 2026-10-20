@@ -18,6 +18,8 @@
 .mf-agent-history-entry>span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 .mf-agent-history-entry>.mf-icon{width:17px;height:17px}
 .mf-agent-history-entry>.mf-icon:last-child{width:13px;height:13px}
+.mf-configuration-dialog .mf-dialog-navigation{min-width:0;max-width:100%}
+@media(max-width:767px){.mf-configuration-dialog .mf-dialog-navigation{touch-action:pan-x pinch-zoom;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:var(--mf-line) transparent}.mf-configuration-dialog .mf-dialog-navigation::-webkit-scrollbar{height:4px}.mf-configuration-dialog .mf-dialog-navigation::-webkit-scrollbar-thumb{background:var(--mf-line);border-radius:8px}}
 .mf-character-library .mf-dialog-body{flex-direction:column}
 .mf-character-library .mf-dialog-navigation{width:100%;padding:12px 18px;border-right:0;border-bottom:1px solid var(--mf-line);overflow:visible}
 .mf-library-tabs{display:flex;gap:8px;width:100%;min-width:0}

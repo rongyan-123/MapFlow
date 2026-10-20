@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { IconButton } from './Button';
 
@@ -10,11 +10,12 @@ export interface DialogProps {
   layout?: 'dialog' | 'workspace' | 'drawer';
   headerLeading?: ReactNode;
   navigation?: ReactNode;
+  navigationRef?: RefObject<HTMLElement>;
   footer?: ReactNode;
   className?: string;
 }
 
-export function Dialog({ title, children, onClose, dismissible = true, layout = 'dialog', headerLeading, navigation, footer, className = '' }: DialogProps) {
+export function Dialog({ title, children, onClose, dismissible = true, layout = 'dialog', headerLeading, navigation, navigationRef, footer, className = '' }: DialogProps) {
   const labelId = useId();
   const panel = useRef<HTMLElement>(null);
   const layer = useRef<HTMLDivElement>(null);
@@ -59,7 +60,7 @@ export function Dialog({ title, children, onClose, dismissible = true, layout = 
   return createPortal(<div ref={layer} role="presentation" className={`mf-modal-layer mf-modal-layer--${layout}`} onMouseDown={event => { if (event.target === event.currentTarget && canDismiss.current) close.current(); }}>
     <section ref={panel} className={`mf-dialog mf-dialog--${layout} ${className}`} role="dialog" aria-modal="true" aria-labelledby={labelId} tabIndex={-1}>
       <div className="mf-dialog-header">{headerLeading}<h2 id={labelId}>{title}</h2><IconButton icon="close" label="关闭" disabled={!dismissible} onClick={onClose} /></div>
-      <div className="mf-dialog-body">{navigation && <nav className="mf-dialog-navigation">{navigation}</nav>}<div className="mf-dialog-content">{children}</div></div>
+      <div className="mf-dialog-body">{navigation && <nav ref={navigationRef} className="mf-dialog-navigation">{navigation}</nav>}<div className="mf-dialog-content">{children}</div></div>
       {footer && <div className="mf-dialog-footer">{footer}</div>}
     </section>
   </div>, document.body);
