@@ -20,6 +20,7 @@ interface Window {
 }
 
 interface ImportMetaEnv {
+  readonly VITE_ENGLISH_WORLD_ENABLED?: string;
   readonly VITE_TURNSTILE_SITE_KEY?: string;
 }
 

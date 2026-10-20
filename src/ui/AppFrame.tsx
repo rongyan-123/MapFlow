@@ -17,13 +17,14 @@ export interface AppFrameProps {
   onAccount: () => void;
   onTheme: (source: HTMLElement) => void;
   onHelp: () => void;
+  onAgentGuide?: () => void;
   onMarketing: () => void;
   onNotifications?: () => void;
   unreadCount?: number;
   chatMode?: boolean;
 }
 
-export function AppFrame({ children, items, tools, accountName, navigate, onAccount, onTheme, onHelp, onMarketing, onNotifications, unreadCount, chatMode = false }: AppFrameProps) {
+export function AppFrame({ children, items, tools, accountName, navigate, onAccount, onTheme, onHelp, onAgentGuide, onMarketing, onNotifications, unreadCount, chatMode = false }: AppFrameProps) {
   const [navigationOpen, setNavigationOpen] = useState(false);
   const viewport = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -54,7 +55,7 @@ export function AppFrame({ children, items, tools, accountName, navigate, onAcco
   const navigation = <aside className="mf-sidebar" aria-label="全局导航">
     <button className="mf-brand" onClick={() => follow(items[0]?.href ?? '/')}><span className="mf-brand-mark"><BrandMark /></span>MapFlow</button>
     <nav aria-label="业务导航">{items.map(link)}</nav>
-    <p className="mf-navigation-caption">工具与账号</p><nav aria-label="账号工具">{tools.map(link)}</nav>
+    <p className="mf-navigation-caption">工具与账号</p><nav aria-label="账号工具">{tools.map(link)}{onAgentGuide&&<button type="button" className="mf-navigation-link" onClick={()=>{setNavigationOpen(false);onAgentGuide();}}><Icon name="book" /><span>Skill / MCP 接入</span></button>}</nav>
     <div className="mf-sidebar-bottom"><button className="mf-navigation-link" onClick={() => { setNavigationOpen(false); onMarketing(); }}><Icon name="home" />产品首页</button><button className="mf-navigation-link" onClick={() => { setNavigationOpen(false); onHelp(); }}><Icon name="help" />帮助与反馈</button>
       {onNotifications&&<NotificationBell showLabel unreadCount={unreadCount} onClick={()=>{setNavigationOpen(false);onNotifications();}} />}
       <div className="mf-account"><button className="mf-account-profile" onClick={() => { setNavigationOpen(false); onAccount(); }}><span className="mf-avatar">{accountName.slice(0,1).toUpperCase()}</span><span><strong>{accountName}</strong><small>你的学习空间</small></span></button><IconButton icon="moon" label="切换浅色和深色主题" onClick={event=>onTheme(event.currentTarget)} /></div>

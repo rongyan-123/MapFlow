@@ -6,6 +6,7 @@
 
 - [固定工作区入口](workflow/workspace-entry.md)
 - [当前生产与未部署改动](current-release.md)
+- [手机全屏画布与 Skill/MCP 入口本地验收（待用户确认、未部署）](research/2026-10-20-mobile-canvas-access-local-acceptance.md)
 - [英语世界文本版与真实本地验收](implementation/2026-10-18-english-world-local-acceptance.md)
 - [英语世界发布、用户反馈与停用记录](research/2026-10-19-english-world-deployment.md)
 - [英语世界公共接口](contracts/english-world-v1.md)
@@ -25,6 +26,7 @@
 - [共享聊天核心](specs/2026-10-16-chat-scene-core-design.md)
 - [独立智能体会话](specs/2026-10-16-tavern-agent-conversations-design.md)
 - [学习画布和主题动画](specs/2026-10-16-learning-canvas-theme-transition-design.md)
+- [手机画布与接入教程修复](specs/2026-10-20-mobile-canvas-access-design.md)
 - [会话持久删除](specs/2026-10-13-chat-layout-and-conversation-deletion-design.md)
 - [BYOK 执行隔离](specs/2026-10-16-byok-execution-design.md)
 - [异常卡片显示条件](specs/2026-10-17-chat-error-visibility-design.md)

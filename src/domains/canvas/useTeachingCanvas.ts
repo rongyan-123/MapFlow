@@ -25,17 +25,18 @@ export function useTeachingCanvas(conversationId: string, csrfToken: string, gra
     return () => controller.abort();
   }, [conversationId, graphRevision, persistence]);
   const show = async () => {
-    await persistence.show();
-    const loaded = persistence.getSnapshot();
-    if (loaded.deleted || !loaded.document) return;
+    const current = persistence.getSnapshot();
+    if (current.deleted || current.deletionPreparing) return;
+    // Visibility changes on the user's click, never on an asynchronous read result.
     setOpen(true);
+    await persistence.show();
   };
   const enableDrawing = async () => {
     await persistence.show();
     const loaded = persistence.getSnapshot();
     if (!loaded.deleted && loaded.document && !loaded.document.enabled) await persistence.save(undefined, true);
   };
-  return { ...snapshot, document: preview ?? snapshot.document, open, wide, show, enableDrawing,
+  return { ...snapshot, document: preview ?? snapshot.document, open, wide, show, reload: () => persistence.show(true), enableDrawing,
     save: persistence.save, flush: persistence.flush, queue: persistence.queue,
     prepareDeletion: persistence.prepareDeletion, cancelDeletion: persistence.cancelDeletion,
     markDeleted: persistence.markDeleted, setOpen, setWide, setPreview };

@@ -9,6 +9,7 @@ export interface CanvasPersistenceSnapshot {
   deletionPreparing: boolean;
   deleted: boolean;
   error: unknown;
+  errorKind: 'read' | 'save' | null;
 }
 
 const sessions = new WeakMap<QueryClient, Map<string, TeachingCanvasPersistence>>();
@@ -38,6 +39,7 @@ export class TeachingCanvasPersistence {
   private savedDocument: TeachingCanvasState | null;
   private listeners = new Set<() => void>();
   private queuedElements: Record<string, unknown>[] | null = null;
+  private queuedEnabled: boolean | undefined;
   private pendingSave: Promise<void> | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private mounts = 0;
@@ -46,7 +48,7 @@ export class TeachingCanvasPersistence {
 
   constructor(private conversationId: string, private csrfToken: string, initial?: TeachingCanvasState, private release?: () => void) {
     this.snapshot = { document: initial?.enabled || initial?.elements.length ? initial : null,
-      saving: false, dirty: false, deletionPreparing: false, deleted: false, error: null };
+      saving: false, dirty: false, deletionPreparing: false, deleted: false, error: null, errorKind: null };
     this.savedDocument = this.snapshot.document;
   }
   getSnapshot = () => this.snapshot;
@@ -54,7 +56,7 @@ export class TeachingCanvasPersistence {
   setAccess(csrfToken: string, readOnly: boolean) { this.csrfToken = csrfToken; this.readOnly = readOnly; }
   private publish(patch: Partial<CanvasPersistenceSnapshot> = {}) {
     this.snapshot = { ...this.snapshot, ...patch, saving: this.loading || this.pendingSave !== null,
-      dirty: this.queuedElements !== null || this.pendingSave !== null };
+      dirty: this.queuedElements !== null || this.queuedEnabled !== undefined || this.pendingSave !== null };
     this.listeners.forEach(listener => listener());
   }
   retain() { this.mounts++; }
@@ -67,42 +69,51 @@ export class TeachingCanvasPersistence {
   private releaseIfClean() {
     if (!this.mounts && !this.snapshot.dirty && !this.snapshot.deletionPreparing) this.release?.();
   }
-  refresh(previous: TeachingCanvasState, saved: TeachingCanvasState) {
+  refresh(previous: TeachingCanvasState | null, saved: TeachingCanvasState) {
     if (!this.snapshot.deleted && !this.snapshot.deletionPreparing && !this.snapshot.dirty && this.snapshot.document === previous) {
       this.savedDocument = saved;
       this.publish({ document: saved });
     }
   }
-  async show() {
+  async show(forceRead = false) {
     if (this.snapshot.deleted || this.snapshot.deletionPreparing) return;
-    this.loading = true; this.publish({ error: null });
+    this.loading = true;
+    this.publish(this.snapshot.errorKind === 'save' ? {} : { error: null, errorKind: null });
     try {
-      const saved = this.snapshot.document ?? await fetchTeachingCanvas(this.conversationId);
-      if (!this.snapshot.deleted) { this.savedDocument ??= saved; this.publish({ document: saved }); }
-    } catch (failure) { if (!this.snapshot.deleted) this.publish({ error: failure }); }
+      const previous = this.snapshot.document;
+      const saved = !forceRead && previous ? previous : await fetchTeachingCanvas(this.conversationId);
+      this.refresh(previous, saved);
+    } catch (failure) { this.reportReadError(failure); }
     finally { this.loading = false; this.publish(); }
   }
-  reportReadError(failure: unknown) { if (!this.snapshot.deleted) this.publish({ error: failure }); }
-  private async persist(enabled?: boolean) {
+  reportReadError(failure: unknown) {
+    if (!this.snapshot.deleted && this.snapshot.errorKind !== 'save') this.publish({ error: failure, errorKind: 'read' });
+  }
+  private async persist() {
     if (this.readOnly || this.snapshot.deleted) return;
     if (this.pendingSave) await this.pendingSave;
-    if (this.readOnly || this.snapshot.deleted || !this.savedDocument || (!this.queuedElements && enabled === undefined)) return;
+    if (this.readOnly || this.snapshot.deleted || !this.savedDocument || (!this.queuedElements && this.queuedEnabled === undefined)) return;
     const elements = this.queuedElements ?? undefined; this.queuedElements = null;
+    const enabled = this.queuedEnabled; this.queuedEnabled = undefined;
     const document = this.savedDocument;
     const writing = saveTeachingCanvas(this.conversationId, { ...document, enabled: enabled ?? document.enabled }, this.csrfToken, elements)
       .then(saved => {
         if (!this.snapshot.deleted) {
           this.savedDocument = saved;
-          this.publish({ document: this.queuedElements ? { ...saved, elements: this.queuedElements } : saved });
+          this.publish({ document: this.queuedElements ? { ...saved, elements: this.queuedElements } : saved, error: null, errorKind: null });
         }
       })
       .catch(failure => {
-        if (!this.snapshot.deleted) { this.queuedElements ??= elements ?? null; this.publish({ error: failure }); }
+        if (!this.snapshot.deleted) {
+          this.queuedElements ??= elements ?? null;
+          this.queuedEnabled ??= enabled;
+          this.publish({ error: failure, errorKind: 'save' });
+        }
         throw failure;
       }).finally(() => { this.pendingSave = null; this.publish(); });
-    this.pendingSave = writing; this.publish({ error: null });
+    this.pendingSave = writing; this.publish();
     await writing;
-    if (this.queuedElements) await this.persist();
+    if (this.queuedElements || this.queuedEnabled !== undefined) await this.persist();
   }
   flush = async () => { clearTimeout(this.timer); await this.persist(); };
   queue = (elements: Record<string, unknown>[]) => {
@@ -113,11 +124,12 @@ export class TeachingCanvasPersistence {
   };
   save = async (elements?: Record<string, unknown>[], enabled?: boolean) => {
     if (this.readOnly || this.snapshot.deleted || this.snapshot.deletionPreparing) return;
+    if (enabled !== undefined) this.queuedEnabled = enabled;
     if (elements) {
       this.queuedElements = elements;
       this.publish({ document: this.snapshot.document ? { ...this.snapshot.document, elements } : null });
     }
-    try { await this.persist(enabled); } catch { /* Retain the draft and expose the failed write. */ }
+    try { await this.persist(); } catch { /* Retain the draft and expose the failed write. */ }
   };
   prepareDeletion = async () => {
     if (this.snapshot.deleted) return;
@@ -135,8 +147,8 @@ export class TeachingCanvasPersistence {
     this.releaseIfClean();
   };
   markDeleted = () => {
-    clearTimeout(this.timer); this.queuedElements = null; this.savedDocument = null;
-    this.publish({ deleted: true, deletionPreparing: false, document: null, error: null });
+    clearTimeout(this.timer); this.queuedElements = null; this.queuedEnabled = undefined; this.savedDocument = null;
+    this.publish({ deleted: true, deletionPreparing: false, document: null, error: null, errorKind: null });
     this.releaseIfClean();
   };
 }

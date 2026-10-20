@@ -10,6 +10,35 @@ vi.mock('@excalidraw/excalidraw', () => ({
 }));
 afterEach(() => { cleanup(); localStorage.clear(); vi.useRealTimers(); });
 
+it('shows a failed save inside the canvas and keeps it until the saved state is confirmed', async () => {
+  const document = { revision: 1, enabled: true, elements: [] };
+  const onRetrySave = vi.fn(async () => {});
+  const props = { document, busy: false, saving: false, wide: true, onSave: async () => {}, onChange: () => {}, onClose: () => {}, onWidth: () => {}, onRetrySave };
+  const view = render(<TeachingCanvasPanel {...props} />);
+  view.rerender(<TeachingCanvasPanel {...props} dirty error={new Error('offline')} errorKind="save" />);
+  expect(screen.getByRole('alert')).toHaveTextContent('画布尚未保存');
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: '重试保存' })));
+  expect(onRetrySave).toHaveBeenCalledOnce();
+  expect(screen.getByRole('alert')).toHaveTextContent('画布尚未保存');
+  view.rerender(<TeachingCanvasPanel {...props} dirty saving error={new Error('offline')} errorKind="save" />);
+  expect(screen.getByRole('button', { name: '重试保存' })).toBeDisabled();
+  view.rerender(<TeachingCanvasPanel {...props} document={{ ...document, revision: 2 }} />);
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('已保存');
+});
+
+it('allows retrying a read in read-only history while continuing to forbid saving', async () => {
+  const onReload = vi.fn(async () => {});
+  render(<TeachingCanvasPanel document={{revision:1,enabled:true,elements:[]}} busy={false} saving={false} wide readOnly
+    error={new Error('read offline')} errorKind="read" onReload={onReload}
+    onSave={async()=>{}} onChange={()=>{}} onClose={()=>{}} onWidth={()=>{}} />);
+  const retry = screen.getByRole('button', { name: '重新读取' });
+  expect(retry).toBeEnabled();
+  await act(async () => fireEvent.click(retry));
+  expect(onReload).toHaveBeenCalledOnce();
+  expect(screen.getByRole('checkbox', { name: '允许 AI 绘图' })).toBeDisabled();
+});
+
 it('fits the saved diagram after the editor has loaded its elements and viewport', () => {
   vi.useFakeTimers();
   const elements = [{ id: 'lesson', type: 'rectangle', x: 0, y: 0, width: 900, height: 100 }];

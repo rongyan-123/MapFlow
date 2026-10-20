@@ -55,6 +55,35 @@ it('opens a learning canvas and persists enabled AI drawing on entry', async () 
   expect(screen.getByRole('textbox', { name: '消息' })).toBeEnabled();
 });
 
+it('keeps a mobile learning canvas closed while enabling drawing, and toggles it without losing the chat draft', async () => {
+  vi.stubGlobal('innerWidth', 390);
+  const { requests } = mount();
+  await screen.findByText('请用茶。');
+  await waitFor(() => expect(requests.some(request => request.options?.method === 'PATCH')).toBe(true));
+  expect(screen.queryByRole('region', { name: '教学画布' })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: '还没发出去的问题' } });
+  fireEvent.click(screen.getByRole('button', { name: '教学画布' }));
+  await screen.findByRole('region', { name: '教学画布' });
+  expect(screen.getByRole('checkbox', { name: '允许 AI 绘图' })).toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: '教学画布' }));
+  expect(screen.queryByRole('region', { name: '教学画布' })).not.toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('还没发出去的问题');
+});
+
+it('preserves the chosen closed state when the viewport changes between phone and desktop', async () => {
+  vi.stubGlobal('innerWidth', 390);
+  mount('learning', true);
+  await screen.findByText('请用茶。');
+  const toggle=screen.getByRole('button',{name:'教学画布'});
+  fireEvent.click(toggle);
+  await screen.findByRole('region',{name:'教学画布'});
+  fireEvent.click(toggle);
+  vi.stubGlobal('innerWidth', 1440);
+  fireEvent(window,new Event('resize'));
+  expect(screen.queryByRole('region',{name:'教学画布'})).not.toBeInTheDocument();
+  expect(toggle).toHaveAttribute('aria-expanded','false');
+});
+
 it('honors closing the canvas and revoking drawing until the learning page is entered again', async () => {
   const view = mount();
   const permission = await screen.findByRole('checkbox', { name: '允许 AI 绘图' });

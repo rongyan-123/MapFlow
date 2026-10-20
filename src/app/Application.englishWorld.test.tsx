@@ -5,7 +5,7 @@ import { IdentityProvider, SESSION_QUERY_KEY } from '../domains/identity/Identit
 import { ewIds, ewWorldList } from '../domains/englishWorld/testFixtures';
 import Application from './Application';
 
-afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); sessionStorage.clear(); window.history.replaceState({}, '', '/'); });
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); localStorage.clear(); sessionStorage.clear(); window.history.replaceState({}, '', '/'); });
 function open(address: string, authenticated: boolean) {
   window.history.replaceState({}, '', address);
   const requests: string[] = [];
@@ -28,8 +28,16 @@ it('keeps the English World deep link behind the existing login boundary', () =>
   expect(requests.some(path => path.includes('/english-world'))).toBe(false);
 });
 it('mounts the independent page under the shared frame and marks its navigation active', async () => {
+  vi.stubEnv('VITE_ENGLISH_WORLD_ENABLED', 'true');
   open('/english-world', true);
   await screen.findByRole('heading', { name: '博物馆之夜' }, { timeout: 5000 });
   const navigation = within(screen.getByRole('navigation', { name: '业务导航' }));
   expect(navigation.getByRole('link', { name: '英语世界' })).toHaveAttribute('aria-current', 'page');
+});
+it('keeps the withdrawn feature unavailable by default without fetching its data', async () => {
+  vi.stubEnv('VITE_ENGLISH_WORLD_ENABLED', 'false');
+  const requests = open('/english-world', true);
+  await screen.findByRole('heading', { name: '英语世界暂未开放' });
+  expect(screen.queryByRole('link', { name: '英语世界' })).not.toBeInTheDocument();
+  expect(requests.some(path => path.includes('/english-world'))).toBe(false);
 });

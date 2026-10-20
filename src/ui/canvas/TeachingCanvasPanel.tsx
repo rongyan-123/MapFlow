@@ -7,6 +7,7 @@ import '@excalidraw/excalidraw/index.css';
 import CanvasShortcuts from './CanvasShortcuts';
 import type { TeachingCanvasState } from '../../domains/conversations/types';
 import { Button } from '../Button';
+import { CanvasFeedback, type CanvasFeedbackProps } from './CanvasFeedback';
 
 function materialize(elements: Record<string, unknown>[]) {
   const saved = new Map(elements.filter(element => typeof element.version === 'number' && typeof element.seed === 'number').map(element => [element.id, element]));
@@ -29,9 +30,9 @@ function canvasTheme(): 'dark' | 'light' {
   return ['light', 'ivory'].includes(window.document.documentElement.dataset.mapflowTheme ?? '') ? 'light' : 'dark';
 }
 
-function TeachingCanvasPanel({ document, busy, saving, wide, accountId, readOnly = false, onSave, onChange, onClose, onWidth }: {
+function TeachingCanvasPanel({ document, busy, saving, wide, accountId, readOnly = false, dirty = false, error, errorKind, onRetrySave, onReload, onSave, onChange, onClose, onWidth }: CanvasFeedbackProps & {
   accountId?:string; document: TeachingCanvasState; busy: boolean; saving: boolean; wide: boolean;
-  readOnly?: boolean;
+  readOnly?: boolean; dirty?: boolean;
   onSave: (elements?: Record<string, unknown>[], enabled?: boolean) => Promise<void>;
   onChange: (elements: Record<string, unknown>[]) => void;
   onClose: () => void; onWidth: () => void;
@@ -62,7 +63,8 @@ function TeachingCanvasPanel({ document, busy, saving, wide, accountId, readOnly
     if (elements.length) api.current.scrollToContent(elements, { fitToContent: true, animate: true });
   }, [document]);
   return <section ref={root} tabIndex={-1} aria-label="教学画布" className="mf-teaching-canvas">
-    <div className="mf-canvas-toolbar"><strong>教学画布</strong><span role="status">{readOnly?'仅查看历史':busy?'AI 正在讲解 · 画布暂为只读':saving?'保存中…':'自动保存'}</span><CanvasShortcuts api={api} root={root} busy={busy||readOnly} accountId={accountId} /><label><input type="checkbox" aria-label="允许 AI 绘图" checked={document.enabled} disabled={busy||saving||readOnly} onChange={event=>void onSave(undefined,event.target.checked)} />允许 AI 绘图</label><Button variant="quiet" className="mf-desktop-only" onClick={onWidth}>{wide?'收窄画布':'放宽画布'}</Button><Button variant="quiet" onClick={onClose}>收起画布</Button></div>
+    <div className="mf-canvas-toolbar"><strong>教学画布</strong><span role="status">{readOnly?'仅查看历史':errorKind==='save'?'保存失败':saving?'保存中…':dirty?'未保存':busy?'AI 正在讲解 · 画布暂为只读':'已保存'}</span><CanvasShortcuts api={api} root={root} busy={busy||readOnly} accountId={accountId} /><label><input type="checkbox" aria-label="允许 AI 绘图" checked={document.enabled} disabled={busy||saving||readOnly} onChange={event=>void onSave(undefined,event.target.checked)} />允许 AI 绘图</label><Button variant="quiet" className="mf-desktop-only" onClick={onWidth}>{wide?'收窄画布':'放宽画布'}</Button><Button variant="quiet" className="mf-canvas-close" onClick={onClose}>收起画布</Button></div>
+    <CanvasFeedback error={error} errorKind={errorKind} saving={saving} readOnly={readOnly||busy} onRetrySave={onRetrySave} onReload={onReload} />
     <div className="mf-canvas-editor" onPointerDownCapture={event => { userEditing.current=!busy && !readOnly; if((event.target as HTMLElement).tagName==='CANVAS')root.current?.focus({preventScroll:true}); }} onKeyDownCapture={() => { userEditing.current = !busy && !readOnly; }}>
       <Excalidraw excalidrawAPI={instance => { api.current = instance; }} langCode="zh-CN" theme={theme} viewModeEnabled={busy || readOnly}
         initialData={{ elements: initial.current, scrollToContent: true, appState: { viewBackgroundColor: '#ffffff' } }}
@@ -87,4 +89,5 @@ function TeachingCanvasPanel({ document, busy, saving, wide, accountId, readOnly
 
 // Text streaming must not rerender the whiteboard. These callbacks use the same story's stable refs/setters.
 export default memo(TeachingCanvasPanel, (previous, next) => previous.accountId === next.accountId && previous.document === next.document
-  && previous.busy === next.busy && previous.saving === next.saving && previous.wide === next.wide && previous.readOnly === next.readOnly);
+  && previous.busy === next.busy && previous.saving === next.saving && previous.wide === next.wide && previous.readOnly === next.readOnly
+  && previous.dirty === next.dirty && previous.error === next.error && previous.errorKind === next.errorKind);

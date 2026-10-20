@@ -57,9 +57,10 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
   const [referenceActive, setReferenceActive] = useState(!!nodeReference);
   useEffect(() => { setReferenceActive(!!nodeReference); }, [nodeReference?.id, nodeReference?.title]);
   const [recovering, setRecovering] = useState(false);
+  const isMobile = useIsMobile();
   const learningScene = (detail.conversation.scene ?? (detail.conversation.libraryEntryId ? 'learning' : 'tavern')) === 'learning';
   const canvas = useTeachingCanvas(detail.conversation.conversationId, csrfToken, detail.graph.revision, detail.canvas,
-    { readOnly, initiallyOpen: learningScene && !readOnly, queryClient, accountId });
+    { readOnly, initiallyOpen: learningScene && !readOnly && !isMobile, queryClient, accountId });
   const learningCanvasOpened = useRef(false);
   useEffect(() => {
     if (!learningScene || readOnly || busy || pendingGeneration || learningCanvasOpened.current) return;
@@ -88,7 +89,6 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
   const bottom = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLDivElement>(null);
   // 手机端输入区保持紧凑，模型选择和参数从统一抽屉进入。
-  const isMobile = useIsMobile();
   const composer = useRef<HTMLTextAreaElement>(null);
   const followLatest = useRef(true);
   useEffect(() => {
