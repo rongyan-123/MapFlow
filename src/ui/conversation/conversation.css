@@ -18,6 +18,28 @@
 .mf-agent-history-entry>span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 .mf-agent-history-entry>.mf-icon{width:17px;height:17px}
 .mf-agent-history-entry>.mf-icon:last-child{width:13px;height:13px}
+.mf-agent-entry-scene{display:none}
+.mf-agent-entry-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mf-chat-action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.mf-chat-action{flex-direction:column;align-items:flex-start;justify-content:flex-start;min-width:0;min-height:140px;padding:16px;gap:12px;text-align:left;border-radius:14px;white-space:normal}
+.mf-chat-action-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--mf-tint);color:var(--mf-brand)}
+.mf-chat-action-copy{display:flex;flex-direction:column;gap:6px;min-width:0;overflow-wrap:anywhere}
+.mf-chat-action-copy strong{font-size:13px;line-height:1.5;font-weight:600}
+.mf-chat-action-copy small{font-size:12px;line-height:1.65;font-weight:400;color:var(--mf-muted)}
+@media(max-width:767px){
+ .mf-conversation-workspace--tavern .mf-page-header{height:68px;min-height:68px;padding:0 12px;gap:8px}
+ .mf-conversation-workspace--tavern .mf-page-header>.mf-icon-button,.mf-conversation-workspace--tavern .mf-page-header>.mf-notification-bell,.mf-conversation-workspace--tavern .mf-chat-more{width:44px;min-width:44px;height:44px;min-height:44px}
+ .mf-conversation-workspace--tavern .mf-page-header-actions{gap:8px}
+ .mf-conversation-workspace--tavern .mf-chat-configure,.mf-conversation-workspace--tavern .mf-canvas-toggle{display:none}
+ .mf-conversation-workspace--tavern .mf-agent-history-entry{border:0;box-shadow:none;background:transparent;padding:0;gap:9px;max-width:none;height:48px}
+ .mf-conversation-workspace--tavern .mf-agent-history-entry>.mf-icon:first-child{width:32px;height:36px;padding:8px;border-radius:10px;background:var(--mf-tint);color:var(--mf-brand)}
+ .mf-conversation-workspace--tavern .mf-agent-entry-label{display:flex;flex-direction:column;gap:3px;line-height:1.3}
+ .mf-conversation-workspace--tavern .mf-agent-entry-scene{display:block;font-size:12px;font-weight:400;color:var(--mf-muted)}
+ .mf-conversation-workspace--tavern .mf-agent-entry-name{font-size:15px;line-height:21px;font-weight:650}
+ .mf-conversation-workspace--tavern .mf-agent-history-entry>.mf-icon:last-child{width:12px;height:12px}
+ .mf-conversation-workspace--tavern .mf-chat-more{border:1px solid var(--mf-line);background:var(--mf-surface-bg);border-radius:13px;box-shadow:var(--mf-edge-light)}
+ .mf-chat-actions .mf-dialog-content{padding:18px}
+}
 .mf-configuration-dialog .mf-dialog-navigation{min-width:0;max-width:100%}
 @media(max-width:767px){.mf-configuration-dialog .mf-dialog-navigation{touch-action:pan-x pinch-zoom;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:var(--mf-line) transparent}.mf-configuration-dialog .mf-dialog-navigation::-webkit-scrollbar{height:4px}.mf-configuration-dialog .mf-dialog-navigation::-webkit-scrollbar-thumb{background:var(--mf-line);border-radius:8px}}
 .mf-character-library .mf-dialog-body{flex-direction:column}

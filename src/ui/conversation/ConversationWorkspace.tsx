@@ -37,10 +37,16 @@ export function ConversationWorkspace(props:ConversationWorkspaceProps){
   useLayoutEffect(()=>{const field=composer.current;if(!field)return;field.style.height='auto';field.style.height=`${Math.min(144,Math.max(44,field.scrollHeight))}px`;},[props.draft,composer]);
   const fill=(prompt:string)=>{props.onDraftChange(prompt);composer.current?.focus();};
   const sceneGuides=props.scene==='learning'?learningGuides:props.scene==='tavern'?tavernGuides:guides;
-  return <section className="mf-conversation-workspace">
+  const tavernActions:Array<{label:string;caption:string;icon:IconName;onClick:()=>void;expanded?:boolean}>=[
+    {label:'新建会话',caption:'为当前智能体另开一段聊天',icon:'plus',onClick:props.onNew},
+    {label:'会话历史',caption:'查看当前智能体的其他聊天',icon:'chat',onClick:props.onHistory},
+    {label:'教学画布',caption:props.canvasExpanded?'已展开 · 点击收起':'未展开 · 点击打开',icon:'edit',onClick:props.onCanvas,expanded:props.canvasExpanded??false},
+    {label:'聊天配置',caption:'角色、模型、工具与会话设置',icon:'settings',onClick:props.onConfigure},
+  ];
+  return <section className={`mf-conversation-workspace${props.scene==='tavern'?' mf-conversation-workspace--tavern':''}`}>
     <PageHeader title={props.title} titleControl={props.headerTitle} context={props.headerContext} leading={!props.historyInTitle&&<Button variant="quiet" className="mf-history-toggle" aria-label={props.historyLabel??'会话历史'} title={props.historyLabel??'会话历史'} aria-expanded={props.historyExpanded??false} onClick={props.onHistory}><Icon name="sidebar" /><span>{props.historyLabel??'会话历史'}</span></Button>} actions={<>
       {props.headerExtra&&<span className="mf-chat-header-extra">{props.headerExtra}</span>}<IconButton className="mf-chat-secondary" icon="plus" label="新建会话" onClick={props.onNew} />
-      <IconButton icon="settings" label="配置" onClick={props.onConfigure} /><IconButton className="mf-canvas-toggle" icon="edit" label="教学画布" aria-expanded={props.canvasExpanded??false} onClick={props.onCanvas} /><IconButton className="mf-chat-more" icon="more" label="更多聊天操作" onClick={()=>setMoreOpen(true)} />
+      <IconButton className="mf-chat-configure" icon="settings" label="配置" onClick={props.onConfigure} /><IconButton className="mf-canvas-toggle" icon="edit" label="教学画布" aria-expanded={props.canvasExpanded??false} onClick={props.onCanvas} /><IconButton className="mf-chat-more" icon="more" label="更多聊天操作" aria-haspopup="dialog" aria-expanded={moreOpen} onClick={()=>setMoreOpen(true)} />
     </>} />
     <div className="mf-conversation-body">{props.history}<div data-side-pane={props.sidePane?props.sidePaneKind:undefined} className={`mf-chat-layout ${props.sidePane?'mf-chat-layout--split':''} ${props.sidePaneWide?'mf-chat-layout--wide':''}`}>{props.sidePane && <div ref={sidePane} className="mf-chat-side-pane">{props.sidePane}</div>}{props.sidePane&&props.resizeKey&&!isMobile&&<ResizeHandle label="调整画布与聊天宽度" storageKey={props.resizeKey} remainingWidth={320} />}<div className="mf-chat-column" hidden={canvasCoversChat}>
       <div className="mf-chat-scroll" onScroll={props.onScroll} ref={props.logRef}>
@@ -52,6 +58,18 @@ export function ConversationWorkspace(props:ConversationWorkspaceProps){
         <div className="mf-composer-bottom"><button type="button" className="mf-model-chip" title="选择模型" onClick={props.onModelConfigure}><Icon name="spark" /><span>{props.modelLabel}</span><Icon name="down" /></button><small className="mf-desktop-only">Enter 发送 · Shift+Enter 换行</small>{props.sending?<IconButton icon="stop" label="停止生成" className="mf-send" onClick={props.onStop} />:<IconButton icon="arrow" label="发送" className="mf-send" type="submit" disabled={props.disabled||props.sendDisabled||!props.draft.trim()} />}</div>
       </form><p className="mf-composer-note">AI 的建议可以参考，理解和判断属于你。</p></div>
     </div></div></div>
-    {moreOpen&&<Dialog title="聊天操作" onClose={()=>setMoreOpen(false)}><div className="mf-stack">{props.headerExtra&&<div className="mf-chat-extra-menu" onClick={()=>setMoreOpen(false)}>{props.headerExtra}</div>}<Button onClick={()=>{setMoreOpen(false);props.onHistory();}}>查看会话历史</Button><Button onClick={()=>{setMoreOpen(false);props.onNew();}}>创建新会话</Button><Button onClick={()=>{setMoreOpen(false);props.onCanvas();}}>打开或收起教学画布</Button></div></Dialog>}
+    {moreOpen&&<Dialog title="聊天操作" className={props.scene==='tavern'?'mf-chat-actions':undefined} onClose={()=>setMoreOpen(false)}>
+      <div className="mf-stack">
+        {props.headerExtra&&<div className="mf-chat-extra-menu" onClick={()=>setMoreOpen(false)}>{props.headerExtra}</div>}
+        {props.scene==='tavern'?<div className="mf-chat-action-grid">{tavernActions.map(action=><Button key={action.label} className="mf-chat-action" aria-expanded={action.expanded} onClick={()=>{setMoreOpen(false);action.onClick();}}>
+          <span className="mf-chat-action-icon"><Icon name={action.icon} /></span>
+          <span className="mf-chat-action-copy"><strong>{action.label}</strong><small>{action.caption}</small></span>
+        </Button>)}</div>:<>
+          <Button onClick={()=>{setMoreOpen(false);props.onHistory();}}>查看会话历史</Button>
+          <Button onClick={()=>{setMoreOpen(false);props.onNew();}}>创建新会话</Button>
+          <Button onClick={()=>{setMoreOpen(false);props.onCanvas();}}>打开或收起教学画布</Button>
+        </>}
+      </div>
+    </Dialog>}
   </section>;
 }
