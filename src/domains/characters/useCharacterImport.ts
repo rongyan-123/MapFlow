@@ -67,8 +67,9 @@ export function useCharacterImport({csrfToken,onImported,initialBrowseOfficial=f
   async function confirm() {
     if (!preview || saving) return;
     setSaving(true); setError(null);
-    try { onImported(await importCharacter(preview.card, preview.sourceFile, csrfToken)); }
-    catch (failure) { setError(failure); setSaving(false); }
+    try { onImported(await importCharacter(preview.card, preview.sourceFile, csrfToken)); setPreview(null); }
+    catch (failure) { setError(failure); }
+    finally { setSaving(false); }
   }
   function receiveDroppedFiles(files: FileList) {
     if (saving || !files.length) return;

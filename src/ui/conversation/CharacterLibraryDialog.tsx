@@ -5,12 +5,11 @@ import { Dialog } from '../Dialog';
 import { CharacterAvatar } from './CharacterPresentation';
 import { CharacterCardSources } from './CharacterCardSources';
 
-export default function CharacterLibraryDialog({characters,selected,busy,changingRole=false,feedback,onSelect,onImport,onBrowseOfficial,onCreate,onEdit,onDelete,onClose}:{characters:Character[];selected?:string;busy:boolean;changingRole?:boolean;feedback?:ReactNode;onSelect:(character:Character)=>void;onImport:()=>void;onBrowseOfficial:()=>void;onCreate:()=>void;onEdit:(character:Character,renameOnly:boolean)=>void;onDelete:(character:Character)=>void;onClose:()=>void}){
-  return <Dialog title="角色库" className="mf-character-library" onClose={onClose} dismissible={!changingRole}>
+export default function CharacterLibraryDialog({characters,selected,busy,changingRole=false,feedback,onSelect,onImport,onBrowseOfficial,onCreate,onEdit,onDelete,onClose,activePanel='library',onLibrary,children}:{characters:Character[];selected?:string;busy:boolean;changingRole?:boolean;feedback?:ReactNode;onSelect:(character:Character)=>void;onImport:()=>void;onBrowseOfficial:()=>void;onCreate:()=>void;onEdit:(character:Character,renameOnly:boolean)=>void;onDelete:(character:Character)=>void;onClose:()=>void;activePanel?:'library'|'import'|'create';onLibrary?:()=>void;children?:ReactNode}){
+  return <Dialog title="角色库" className="mf-character-library" onClose={onClose} dismissible={!changingRole} navigation={<div className="mf-library-tabs" role="group" aria-label="角色库操作"><Button variant={activePanel==='library'?'primary':'secondary'} aria-pressed={activePanel==='library'} disabled={busy} onClick={onLibrary}>我的角色</Button><Button variant={activePanel==='import'?'primary':'secondary'} aria-pressed={activePanel==='import'} disabled={busy} onClick={onImport}>导入角色卡</Button><Button variant={activePanel==='create'?'primary':'secondary'} aria-pressed={activePanel==='create'} disabled={busy} onClick={onCreate}>创建角色卡</Button></div>}>
     <div className="mf-stack">
-      <div className="mf-row mf-wrap"><Button variant="primary" disabled={busy} onClick={onImport}>导入角色卡</Button><Button disabled={busy} onClick={onCreate}>创建角色卡</Button></div>
       {feedback}
-      <div className="mf-character-library-layout">
+      {activePanel==='library'?<div className="mf-character-library-layout">
         <section className="mf-stack" aria-label="我的角色">
           <h3 className="mf-character-library-heading">我的角色 <span className="mf-muted mf-small">{characters.length}</span></h3>
           {!characters.length?<p className="mf-status">角色库还为空。导入一张角色卡，或创建自己的角色。</p>:characters.map(character=><article className="mf-character-record" key={character.characterId}>
@@ -19,7 +18,7 @@ export default function CharacterLibraryDialog({characters,selected,busy,changin
           </article>)}
         </section>
         <CharacterCardSources onBrowseOfficial={onBrowseOfficial} busy={busy} />
-      </div>
+      </div>:children}
     </div>
   </Dialog>;
 }

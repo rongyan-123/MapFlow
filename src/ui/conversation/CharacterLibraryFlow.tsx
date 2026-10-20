@@ -3,12 +3,14 @@ import type { Character, ConversationDetail } from '../../domains/conversations/
 import { describePublicError } from '../../lib/publicErrors';
 import { Button } from '../Button';
 import { Dialog } from '../Dialog';
+import { useCharacterCreation } from '../../domains/characters/useCharacterCreation';
+import { useCharacterImport } from '../../domains/characters/useCharacterImport';
 import CharacterLibraryDialog from './CharacterLibraryDialog';
-import CardImportDialog from './CardImportDialog';
-import CreateCharacterDialog from './CreateCharacterDialog';
+import { CharacterImportForm } from './CardImportDialog';
+import { CharacterCreationForm } from './CreateCharacterDialog';
 import EditCharacterDialog from './EditCharacterDialog';
 
-type Panel = { kind: 'library' | 'import' | 'official' | 'create' }
+type Panel = { kind: 'library' | 'import' | 'create' }
   | { kind: 'edit'; character: Character; renameOnly: boolean }
   | { kind: 'delete'; character: Character };
 
@@ -30,22 +32,21 @@ interface Props {
 
 export default function CharacterLibraryFlow(props: Props) {
   const [panel, setPanel] = useState<Panel>({ kind: 'library' });
-  if (panel.kind === 'library') return <CharacterLibraryDialog
-    characters={props.characters} selected={props.selected} busy={props.busy} changingRole={props.changingRole}
+  const creation = useCharacterCreation({ csrfToken: props.csrfToken, onCreated: character => { props.onImported(character); setPanel({ kind: 'library' }); } });
+  const importing = useCharacterImport({ csrfToken: props.csrfToken, onImported: character => { props.onImported(character); setPanel({ kind: 'library' }); } });
+  const saving = creation.saving || importing.saving;
+  if (panel.kind === 'library' || panel.kind === 'import' || panel.kind === 'create') return <CharacterLibraryDialog
+    characters={props.characters} selected={props.selected} busy={props.busy || saving} changingRole={props.changingRole || saving}
     feedback={props.feedback} onSelect={props.onSelect} onClose={props.onClose}
-    onImport={() => setPanel({ kind: 'import' })} onBrowseOfficial={() => setPanel({ kind: 'official' })}
+    activePanel={panel.kind} onLibrary={() => setPanel({ kind: 'library' })}
+    onImport={() => setPanel({ kind: 'import' })} onBrowseOfficial={() => { importing.setBrowseOfficial(true); setPanel({ kind: 'import' }); }}
     onCreate={() => setPanel({ kind: 'create' })}
     onEdit={(character, renameOnly) => setPanel({ kind: 'edit', character, renameOnly })}
     onDelete={character => { props.removal.reset(); setPanel({ kind: 'delete', character }); }}
-  />;
-  if (panel.kind === 'import' || panel.kind === 'official') return <CardImportDialog
-    csrfToken={props.csrfToken} initialBrowseOfficial={panel.kind === 'official'}
-    onImported={character => { props.onImported(character); setPanel({ kind: 'library' }); }}
-    onClose={() => setPanel({ kind: 'library' })}
-  />;
-  if (panel.kind === 'create') return <CreateCharacterDialog csrfToken={props.csrfToken}
-    onCreated={character => { props.onImported(character); props.onClose(); }} onClose={props.onClose}
-  />;
+  >
+    {panel.kind === 'create' && <CharacterCreationForm state={creation} />}
+    {panel.kind === 'import' && <CharacterImportForm state={importing} />}
+  </CharacterLibraryDialog>;
   if (panel.kind === 'edit') return <EditCharacterDialog character={panel.character} renameOnly={panel.renameOnly}
     conversation={props.conversation?.character.characterId === panel.character.characterId ? props.conversation : undefined}
     csrfToken={props.csrfToken} onConflict={props.onConflict}

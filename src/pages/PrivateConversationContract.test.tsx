@@ -154,7 +154,8 @@ describe.each(['tavern', 'learning'] as const)('%s page shared conversation cont
     fireEvent.change(screen.getByRole('textbox', { name: '角色名称' }), { target: { value: '新增伙伴' } });
     fireEvent.change(screen.getByRole('textbox', { name: '角色设定（提示词）' }), { target: { value: '一起交流。' } });
     fireEvent.click(screen.getByRole('button', { name: '保存角色卡' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await screen.findByRole('heading', { name: '新增伙伴' });
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }));
     expect(within(selector()).getByRole('option', { name: '新增伙伴' })).toBeInTheDocument();
     expect(screen.getByText('逻辑伙伴的聊天内容')).toBeVisible();
     expect(view.writes().filter(request => request.path === collection)).toEqual([]);
@@ -213,16 +214,19 @@ describe.each(['tavern', 'learning'] as const)('%s page shared conversation cont
     expect(view.writes()).toEqual([]);
   });
 
-  it('shares the full role list between the phone header and history drawer', async () => {
+  it('opens the full role library through each scene phone entry and returns after selection', async () => {
     vi.stubGlobal('innerWidth', 390);
     mount();
     await screen.findByText('逻辑伙伴的聊天内容');
-    expect(within(screen.getByRole('combobox', { name: '切换智能体' })).getByRole('option', { name: unusedRole.card.name })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '会话历史' }));
+    if (scene === 'learning') expect(within(screen.getByRole('combobox', { name: '切换智能体' })).getByRole('option', { name: unusedRole.card.name })).toBeInTheDocument();
+    else expect(screen.getByRole('button', { name: '智能体与会话' })).toHaveTextContent(roleA.card.name);
+    fireEvent.click(screen.getByRole('button', { name: scene === 'tavern' ? '智能体与会话' : '会话历史' }));
     const drawer = screen.getByRole('dialog', { name: '会话历史' });
+    expect(within(drawer).getByRole('option', { name: unusedRole.card.name })).toBeInTheDocument();
     fireEvent.change(within(drawer).getByRole('combobox', { name: '当前智能体' }), { target: { value: roleB.characterId } });
     await screen.findByText('阅读伙伴的聊天内容');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: '切换智能体' })).toHaveValue(roleB.characterId);
+    if (scene === 'learning') expect(screen.getByRole('combobox', { name: '切换智能体' })).toHaveValue(roleB.characterId);
+    else expect(screen.getByRole('button', { name: '智能体与会话' })).toHaveTextContent(roleB.card.name);
   });
 });

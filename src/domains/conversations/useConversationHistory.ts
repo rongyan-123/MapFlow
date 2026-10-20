@@ -54,7 +54,19 @@ export function useConversationHistory(owner:ConversationOwner){
     try{return await scope.openDefault(signal);}
     catch(error){if(error instanceof TavernApiError&&error.code==='tavern.history_cleared'){client.setQueryData<ConversationHistory>(historyKey,{conversations:[],bootstrapState:'cleared'});void history.refetch();}throw error;}
   }});
-  useEffect(()=>{if(!history.isSuccess||history.isFetching)return;if(conversationId&&!inScene)select(conversations[0]?.conversationId??null);else if(!conversationId&&conversations.length)select(conversations[0].conversationId);else if(scene!=='management'&&inScene)select(conversationId);},[history.isSuccess,history.isFetching,conversationId,inScene,conversations[0]?.conversationId,scene]);
+  useEffect(()=>{
+    if(!history.isSuccess||history.isFetching)return;
+    // A cache notification can render an older selection before React applies a new one.
+    // Only repair absent selections; remembering an existing one must never select it again.
+    const available=historyItems(client.getQueryData<HistoryCache>(historyKey)).filter(belongs).filter(item=>!deletedIds.current.has(item.conversationId));
+    const selected=available.find(item=>item.conversationId===conversationId);
+    if(conversationId&&!selected)select(available[0]?.conversationId??null);
+    else if(!conversationId&&available.length)select(available[0].conversationId);
+    else if(scene!=='management'&&selected){
+      const characterKey=`${selectionKey}.character.${selected.characterId}`;
+      try{if(!localStorage.getItem(characterKey))localStorage.setItem(characterKey,selected.conversationId);}catch{/* Selection is an optional preference. */}
+    }
+  },[history.isSuccess,history.isFetching,conversationId,inScene,conversations[0]?.conversationId,scene]);
   useEffect(()=>{const saved=defaultQuery.data;if(!saved||defaultApplied.current||defaultsBlocked||bootstrapState!=='never_created')return;defaultApplied.current=true;created(saved);void characters.refetch();},[defaultQuery.data,bootstrapState,defaultsBlocked]);
   function recovered(saved:ConversationDetail){
     if(deletedIds.current.has(saved.conversation.conversationId)||!belongs(saved.conversation))return;

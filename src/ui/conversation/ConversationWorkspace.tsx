@@ -18,7 +18,7 @@ const tavernGuides=[{label:'继续故事',caption:'从角色的开场接着聊',
 export interface ConversationWorkspaceProps{
   scene:ConversationScene;title:string;draft:string;onDraftChange:(draft:string)=>void;onSend:()=>void;
   onStop?:()=>void;sending?:boolean;disabled?:boolean;sendDisabled?:boolean;modelLabel:string;onConfigure:()=>void;onModelConfigure:()=>void;onNew:()=>void;onHistory:()=>void;onCanvas:()=>void;
-  historyLabel?:string;historyExpanded?:boolean;canvasExpanded?:boolean;
+  historyLabel?:string;historyExpanded?:boolean;historyInTitle?:boolean;canvasExpanded?:boolean;
   welcome?:boolean;welcomeExtra?:ReactNode;children?:ReactNode;footerExtra?:ReactNode;headerContext?:ReactNode;headerExtra?:ReactNode;headerTitle?:ReactNode;
   history?:ReactNode;sidePane?:ReactNode;sidePaneKind?:'canvas'|'map';sidePaneWide?:boolean;resizeKey?:string;composerRef?:RefObject<HTMLTextAreaElement>;logRef?:RefObject<HTMLDivElement>;onScroll?:()=>void;
 }
@@ -38,7 +38,7 @@ export function ConversationWorkspace(props:ConversationWorkspaceProps){
   const fill=(prompt:string)=>{props.onDraftChange(prompt);composer.current?.focus();};
   const sceneGuides=props.scene==='learning'?learningGuides:props.scene==='tavern'?tavernGuides:guides;
   return <section className="mf-conversation-workspace">
-    <PageHeader title={props.title} titleControl={props.headerTitle} context={props.headerContext} leading={<Button variant="quiet" className="mf-history-toggle" aria-label={props.historyLabel??'会话历史'} title={props.historyLabel??'会话历史'} aria-expanded={props.historyExpanded??false} onClick={props.onHistory}><Icon name="sidebar" /><span>{props.historyLabel??'会话历史'}</span></Button>} actions={<>
+    <PageHeader title={props.title} titleControl={props.headerTitle} context={props.headerContext} leading={!props.historyInTitle&&<Button variant="quiet" className="mf-history-toggle" aria-label={props.historyLabel??'会话历史'} title={props.historyLabel??'会话历史'} aria-expanded={props.historyExpanded??false} onClick={props.onHistory}><Icon name="sidebar" /><span>{props.historyLabel??'会话历史'}</span></Button>} actions={<>
       {props.headerExtra&&<span className="mf-chat-header-extra">{props.headerExtra}</span>}<IconButton className="mf-chat-secondary" icon="plus" label="新建会话" onClick={props.onNew} />
       <IconButton icon="settings" label="配置" onClick={props.onConfigure} /><IconButton className="mf-canvas-toggle" icon="edit" label="教学画布" aria-expanded={props.canvasExpanded??false} onClick={props.onCanvas} /><IconButton className="mf-chat-more" icon="more" label="更多聊天操作" onClick={()=>setMoreOpen(true)} />
     </>} />

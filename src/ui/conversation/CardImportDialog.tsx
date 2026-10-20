@@ -6,13 +6,17 @@ import { Dialog } from '../Dialog';
 import { CharacterAvatar,CompatibilityReport } from './CharacterPresentation';
 import { CharacterCardSources } from './CharacterCardSources';
 export default function CardImportDialog(props:{csrfToken:string;onImported:(character:Character)=>void;onClose:()=>void;initialBrowseOfficial?:boolean}){
-  const state=useCharacterImport(props);const {preview}=state;
-  return <Dialog title="导入角色卡" onClose={props.onClose} dismissible={!state.saving}><div className="mf-stack">
+  const state=useCharacterImport(props);
+  return <Dialog title="导入角色卡" onClose={props.onClose} dismissible={!state.saving}><CharacterImportForm state={state} /></Dialog>;
+}
+export function CharacterImportForm({state}:{state:ReturnType<typeof useCharacterImport>}){
+  const {preview}=state;
+  return <div className="mf-stack">
     <div className="mf-card-drop" data-dragging={state.dragging} aria-label="拖拽导入角色卡" onDragEnter={event=>{event.preventDefault();state.dragDepth.current++;state.setDragging(true);}} onDragOver={event=>event.preventDefault()} onDragLeave={event=>{event.preventDefault();if(--state.dragDepth.current<=0){state.dragDepth.current=0;state.setDragging(false);}}} onDrop={event=>{event.preventDefault();state.dragDepth.current=0;state.setDragging(false);state.receiveDroppedFiles(event.dataTransfer.files);}}><label className="mf-field">选择角色卡<input type="file" accept=".json,.png,application/json,image/png" disabled={state.saving} onChange={event=>void state.choose(event.target.files?.[0])} /></label><p className="mf-muted mf-small">选择原始 PNG 或 JSON 文件，也可以拖到这里。</p></div>
     <div className="mf-row mf-wrap"><Button onClick={()=>state.setBrowseOfficial(!state.browseOfficial)} aria-expanded={state.browseOfficial}>浏览官方角色卡</Button></div>
     {state.browseOfficial&&<section className="mf-stack"><h3>官方角色卡</h3>{state.catalogLoading&&<p role="status" className="mf-status">正在读取角色目录…</p>}{Boolean(state.catalogError)&&<div role="alert" className="mf-status mf-status--error">{describePublicError(state.catalogError)} <Button onClick={()=>state.setCatalogRevision(value=>value+1)}>重试</Button></div>}<div className="mf-official-cards">{state.catalog?.map(card=><button type="button" className="mf-official-card" key={card.id} disabled={state.downloadingId!==null||state.saving} onClick={()=>void state.download(card)}><strong>{card.name}</strong><small>{state.downloadingId===card.id?'正在下载…':card.description}</small></button>)}</div></section>}
     {state.reading&&<p role="status" className="mf-status">正在本地读取…</p>}{Boolean(state.error)&&<p role="alert" className="mf-status mf-status--error">{describePublicError(state.error)}</p>}
     {preview&&<section className="mf-stack" aria-label="导入预览"><div className="mf-row"><CharacterAvatar previewUrl={state.avatarUrl} name={preview.card.name} large /><div><h3>{preview.card.name}</h3><p className="mf-muted mf-small">{preview.sourceInfo.fileName} · {preview.sourceInfo.sourceFormat.toUpperCase()} · {(preview.sourceInfo.fileSize/1024).toFixed(1)} KiB</p>{state.avatarUrl&&<a href={state.avatarUrl} target="_blank" rel="noreferrer" className="mf-text-action">查看 PNG 原图</a>}</div></div><p className="mf-role-description">{preview.card.description||'没有角色描述。'}</p><div><h4>默认开场白</h4><p className="mf-role-description">{preview.card.firstMessage||'没有开场白，可直接发送第一条消息。'}</p></div><p className="mf-muted mf-small">{preview.card.alternateGreetings.length} 个备选开场白 · {preview.card.lorebook.filter(entry=>entry.enabled).length} 条启用的基础世界书</p>{preview.card.creatorNotes&&<details><summary>作者说明</summary><p className="mf-role-description">{preview.card.creatorNotes}</p></details>}<CompatibilityReport warnings={preview.card.warnings} /><Button variant="primary" disabled={state.saving||state.reading} onClick={()=>void state.confirm()}>{state.saving?'正在导入…':'确认导入'}</Button></section>}
     <CharacterCardSources />
-  </div></Dialog>;
+  </div>;
 }

@@ -68,7 +68,7 @@ it('exposes communities and opens the official catalog directly from the role li
   await screen.findByRole('button',{name:/官方示例向导/});
   expect(requests.some(([path])=>path.endsWith('/index.json'))).toBe(true);
   expect(requests.every(([,options])=>!options?.method||options.method==='GET')).toBe(true);
-  fireEvent.click(screen.getByRole('button',{name:'关闭'}));
+  fireEvent.click(screen.getByRole('button',{name:'我的角色'}));
   expect(screen.getByRole('dialog',{name:'角色库'})).toBeVisible();
 });
 it('keeps the global assistant fixed without a role library or role selector',async()=>{

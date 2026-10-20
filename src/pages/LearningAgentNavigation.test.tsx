@@ -178,7 +178,8 @@ it('makes a newly created learning role selectable immediately after leaving the
   fireEvent.change(screen.getByRole('textbox', { name: '角色名称' }), { target: { value: '围棋伙伴' } });
   fireEvent.change(screen.getByRole('textbox', { name: '角色设定（提示词）' }), { target: { value: '陪我复盘围棋。' } });
   fireEvent.click(screen.getByRole('button', { name: '保存角色卡' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await screen.findByRole('heading', { name: '围棋伙伴' });
+  fireEvent.click(screen.getByRole('button', { name: '关闭' }));
   const selector = within(screen.getByRole('complementary')).getByRole('combobox');
   const added = within(selector).getByRole('option', { name: '围棋伙伴' });
   expect(view.requests.filter(request => request.options?.method === 'POST' && request.path.endsWith('/conversations'))).toHaveLength(0);
