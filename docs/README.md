@@ -6,9 +6,10 @@
 
 - [固定工作区入口](workflow/workspace-entry.md)
 - [当前生产与未部署改动](current-release.md)
-- [手机全屏画布与 Skill/MCP 入口本地验收（待用户确认、未部署）](research/2026-10-20-mobile-canvas-access-local-acceptance.md)
-- [酒馆合并入口、角色库切换与新建会话本地验收（待用户确认、未部署）](research/2026-10-20-tavern-ui-local-acceptance.md)
-- [手机酒馆四入口顶栏与文字操作面板验收（待用户确认、未部署）](research/2026-10-21-mobile-tavern-header-local-acceptance.md)
+- [手机界面正式发布与 HTTP 待办](research/2026-10-21-mobile-ui-deployment.md)
+- [手机全屏画布与 Skill/MCP 入口本地验收](research/2026-10-20-mobile-canvas-access-local-acceptance.md)
+- [酒馆合并入口、角色库切换与新建会话本地验收](research/2026-10-20-tavern-ui-local-acceptance.md)
+- [手机酒馆四入口顶栏与文字操作面板验收](research/2026-10-21-mobile-tavern-header-local-acceptance.md)
 - [英语世界文本版与真实本地验收](implementation/2026-10-18-english-world-local-acceptance.md)
 - [英语世界发布、用户反馈与停用记录](research/2026-10-19-english-world-deployment.md)
 - [英语世界公共接口](contracts/english-world-v1.md)
