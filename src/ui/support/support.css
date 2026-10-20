@@ -7,6 +7,9 @@
 .mf-guide-directory [aria-current=page]{background:var(--mf-tint);color:var(--mf-brand)}
 .mf-guide-layout article>h2{font-family:var(--mf-font-display);font-size:26px;font-weight:600}
 .mf-guide-layout article p{line-height:1.9}
+.mf-guide-next{--mf-brand:#9b4c32;--mf-brand-bg:linear-gradient(145deg,#a95639,#8d412b);--mf-on-brand:#fffaf5;justify-content:space-between;min-height:54px;width:100%;padding:15px 20px;margin-top:10px;gap:16px;text-align:left}
+.mf-guide-next span{min-width:0;overflow-wrap:anywhere}
+.mf-guide-next:focus-visible{outline-color:var(--mf-ink)}
 .mf-agent-guide .mf-dialog-header>h2{flex:1;min-width:0}
 .mf-guide-menu-toggle{min-height:44px;gap:6px;padding:8px 10px;font-size:13px;flex-shrink:0}
 .mf-guide-menu-toggle svg{width:17px;height:17px}

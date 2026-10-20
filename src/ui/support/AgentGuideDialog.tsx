@@ -15,10 +15,19 @@ export default function AgentGuideDialog({ onClose, initialSectionId = 'quick-st
   const [copied, setCopied] = useState('');
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const section = agentGuide.find(item => item.id === selected) ?? agentGuide[3];
+  const nextSection = agentGuide[agentGuide.indexOf(section) + 1];
 
   useEffect(() => {
     if (!isMobile) setDirectoryOpen(false);
   }, [isMobile]);
+
+  const selectSection = (id: string) => {
+    setSelected(id);
+    setCopied('');
+    setDirectoryOpen(false);
+    const content = article.current?.closest('.mf-dialog-content');
+    if (content) content.scrollTop = 0;
+  };
 
   const directory = <nav id={directoryId} className="mf-guide-directory" aria-label="接入教程目录">
     {groups.map((group, index) => <section key={group} data-testid={`mcp-guide-group-${['understand', 'connect', 'manage', 'account'][index]}`}>
@@ -27,13 +36,7 @@ export default function AgentGuideDialog({ onClose, initialSectionId = 'quick-st
         type="button"
         key={item.id}
         aria-current={item.id === section.id ? 'page' : undefined}
-        onClick={() => {
-          setSelected(item.id);
-          setCopied('');
-          setDirectoryOpen(false);
-          const content = article.current?.closest('.mf-dialog-content');
-          if (content) content.scrollTop = 0;
-        }}
+        onClick={() => selectSection(item.id)}
       >{item.title}</button>)}
     </section>)}
   </nav>;
@@ -62,6 +65,9 @@ export default function AgentGuideDialog({ onClose, initialSectionId = 'quick-st
           <Button onClick={() => void navigator.clipboard.writeText(section.command!).then(() => setCopied('命令已复制')).catch(() => setCopied('请选中命令手动复制'))}>复制命令</Button>
           {copied && <span role="status">{copied}</span>}
         </div>}
+        {nextSection ? <Button variant="primary" className="mf-guide-next" onClick={() => selectSection(nextSection.id)}>
+          <span>下一节：{nextSection.title}</span><Icon name="right" />
+        </Button> : <p role="status" className="mf-small mf-muted">已读到最后一节</p>}
       </article>
     </div>
     {isMobile && directoryOpen && <Dialog title="教程目录" layout="drawer" className="mf-guide-drawer" onClose={() => setDirectoryOpen(false)}>
