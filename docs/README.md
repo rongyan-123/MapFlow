@@ -6,6 +6,7 @@
 
 - [固定工作区入口](workflow/workspace-entry.md)
 - [当前生产与未部署改动](current-release.md)
+- [待核对记录用户名发布与 Git 整理](research/2026-10-21-settlement-account-name-deployment.md)
 - [手机界面正式发布与 HTTP 跳转](research/2026-10-21-mobile-ui-deployment.md)
 - [手机全屏画布与 Skill/MCP 入口本地验收](research/2026-10-20-mobile-canvas-access-local-acceptance.md)
 - [酒馆合并入口、角色库切换与新建会话本地验收](research/2026-10-20-tavern-ui-local-acceptance.md)
