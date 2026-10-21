@@ -19,14 +19,14 @@ def render_table(values, prefix=()):
     return lines
 
 
-def prepare(source: Path, output: Path):
+def prepare(source: Path, output: Path, proxy_name: str):
     original = tomllib.loads(source.read_text(encoding='utf-8'))
     if not isinstance(original.get('serverAddr'), str) or not isinstance(original.get('serverPort'), int):
         raise ValueError('Source must contain the current FRP server address and port.')
     # A separate client must not reuse the existing client's management listener.
     common = {key: original[key] for key in ['serverAddr', 'serverPort', 'user', 'auth', 'transport'] if key in original}
     common['loginFailExit'] = True
-    proxy = {'name': 'mapflow-http-redirect', 'type': 'http', 'localIP': '127.0.0.1',
+    proxy = {'name': proxy_name, 'type': 'http', 'localIP': '127.0.0.1',
              'localPort': 18090, 'customDomains': ['xxian.fun'],
              'transport': {'useEncryption': True, 'useCompression': True}}
     # Port 18090 expects HTTP, not the PROXY v2 header required by HTTPS port 18443.
@@ -43,8 +43,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--proxy-name', required=True, help='Exact tunnel name assigned by the provider; do not rename it.')
     arguments = parser.parse_args()
-    prepare(arguments.source, arguments.output)
+    prepare(arguments.source, arguments.output, arguments.proxy_name)
     print(f'Prepared {arguments.output}; no service was started and the original configuration is unchanged.')
 
 
