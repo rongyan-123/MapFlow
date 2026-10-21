@@ -6,6 +6,7 @@
 
 - [固定工作区入口](workflow/workspace-entry.md)
 - [当前生产与未部署改动](current-release.md)
+- [消息全部已读正式发布](research/2026-10-21-notification-read-actions-deployment.md)
 - [待核对记录用户名发布与 Git 整理](research/2026-10-21-settlement-account-name-deployment.md)
 - [消息全部已读与单条操作稳定性设计](specs/2026-10-21-notification-read-actions-design.md)
 - [消息全部已读与单条确认本地验收](research/2026-10-21-notification-read-actions-local-acceptance.md)
