@@ -1,10 +1,80 @@
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
-import {render,screen,fireEvent,waitFor,act} from '@testing-library/react';
+import {render,screen,fireEvent,waitFor,act,within} from '@testing-library/react';
 import {afterEach,expect,it,vi} from 'vitest';
 import {AnnouncementsDialog,FeedbackDialog} from './SupportDialogs';
 import {useNotificationCount} from '../../domains/support/useNotifications';
+import {NotificationsDialog} from './NotificationsDialog';
 afterEach(()=>{vi.unstubAllGlobals();vi.useRealTimers();});
 const wrap=({children}:{children:React.ReactNode})=><QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}>{children}</QueryClientProvider>;
+it.each(['messages','announcements'])('clears a failed single read after all-read succeeds in %s',async(entry)=>{
+  let isRead=false;
+  vi.stubGlobal('fetch',async(path:string,options?:RequestInit)=>{
+    if(options?.method==='POST'){
+      if(!path.endsWith('/read-all'))return new Response(null,{status:503});
+      isRead=true;return new Response(null,{status:204});
+    }
+    if(path.endsWith('/count'))return Response.json({unreadCount:isRead?0:1});
+    if(path==='/api/announcements')return Response.json({items:[{announcementId:'a',title:'公告',content:'正文',createdAt:'2026-10-21T09:00:00Z',isRead}],unreadIds:isRead?[]:['a']});
+    return Response.json({items:[{notificationId:'announcement:a',kind:'announcement',title:'公告',preview:'正文',createdAt:'2026-10-21T09:00:00Z',isRead,targetId:'a'}],nextCursor:null});
+  });
+  render(entry==='messages'?<NotificationsDialog accountId="owner" csrfToken="csrf" onClose={vi.fn()} onFeedback={vi.fn()} />:<AnnouncementsDialog accountId="owner" csrfToken="csrf" onClose={vi.fn()} />,{wrapper:wrap});
+  fireEvent.click(await screen.findByRole('button',{name:'标记已读'}));
+  await screen.findByRole('alert');
+  const allRead=screen.getByRole('button',{name:'全部已读'});
+  await waitFor(()=>expect(allRead).toBeEnabled());
+  fireEvent.click(allRead);
+  await waitFor(()=>expect(screen.getByRole('button',{name:'已读'})).toBeDisabled());
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+it('can mark all announcements read while keeping feedback replies unread',async()=>{
+  const items=[{announcementId:'a',title:'公告',content:'正文',createdAt:'2026-10-21T09:00:00Z',isRead:false}];const writes:unknown[]=[];
+  vi.stubGlobal('fetch',async(path:string,options?:RequestInit)=>{
+    if(options?.method==='POST'){const body=JSON.parse(String(options.body));writes.push(body);if(body.kind==='announcement')items.forEach(item=>item.isRead=true);return new Response(null,{status:204});}
+    if(path.endsWith('/count'))return Response.json({unreadCount:1+items.filter(item=>!item.isRead).length});
+    return Response.json({items,unreadIds:items.filter(item=>!item.isRead).map(item=>item.announcementId)});
+  });
+  function Counter(){const count=useNotificationCount('owner');return <p>未读消息 {count.data}</p>;}
+  render(<><Counter /><AnnouncementsDialog accountId="owner" csrfToken="csrf" onClose={vi.fn()} /></>,{wrapper:wrap});
+  await screen.findByText('未读消息 2');
+  fireEvent.click(screen.getByRole('button',{name:'全部已读'}));
+  await screen.findByText('未读消息 1');
+  expect(writes).toEqual([{kind:'announcement'}]);
+  expect(screen.getByRole('button',{name:'全部已读'})).toBeDisabled();
+});
+it('shares single-message read changes with the cached legacy announcement entry',async()=>{
+  let isRead=false;
+  vi.stubGlobal('fetch',async(path:string,options?:RequestInit)=>{
+    if(options?.method==='POST'){isRead=true;return new Response(null,{status:204});}
+    if(path.endsWith('/count'))return Response.json({unreadCount:isRead?0:1});
+    if(path==='/api/announcements')return Response.json({items:[{announcementId:'a',title:'旧公告入口',content:'正文',createdAt:'2026-10-21T09:00:00Z',isRead}],unreadIds:isRead?[]:['a']});
+    return Response.json({items:[{notificationId:'announcement:a',kind:'announcement',title:'消息入口',preview:'正文',createdAt:'2026-10-21T09:00:00Z',isRead,targetId:'a'}],nextCursor:null});
+  });
+  render(<><AnnouncementsDialog accountId="owner" csrfToken="csrf" onClose={vi.fn()} /><NotificationsDialog accountId="owner" csrfToken="csrf" onClose={vi.fn()} onFeedback={vi.fn()} /></>,{wrapper:wrap});
+  const announcements=screen.getByRole('dialog',{name:'全部公告'});
+  const messages=screen.getByRole('dialog',{name:'消息中心'});
+  await within(announcements).findByText('旧公告入口');await within(messages).findByText('消息入口');
+  fireEvent.click(within(messages).getByRole('button',{name:'标记已读'}));
+  await waitFor(()=>expect(within(announcements).getByRole('button',{name:'已读'})).toBeDisabled());
+});
+it('keeps an acknowledged announcement control in place and never reads the following announcement',async()=>{
+  const items=[{announcementId:'first',title:'第一条公告',content:'第一条正文',createdAt:'2026-10-21T09:00:00Z',isRead:false},{announcementId:'second',title:'第二条公告',content:'第二条正文',createdAt:'2026-10-21T08:00:00Z',isRead:false}];
+  const writes:string[]=[];
+  vi.stubGlobal('fetch',async(path:string,options?:RequestInit)=>{
+    if(options?.method==='POST'){writes.push(path);items.find(item=>path.includes(`/${item.announcementId}/`))!.isRead=true;return new Response(null,{status:204});}
+    return Response.json({items,unreadIds:items.filter(item=>!item.isRead).map(item=>item.announcementId)});
+  });
+  render(<AnnouncementsDialog accountId="owner" csrfToken="csrf" onClose={vi.fn()} />,{wrapper:wrap});
+  const first=(await screen.findByText('第一条公告')).closest('article')!;
+  const second=screen.getByText('第二条公告').closest('article')!;
+  const originalControl=within(first).getByRole('button',{name:'标记已读'});
+  fireEvent.click(originalControl);
+  fireEvent.click(originalControl);
+  await waitFor(()=>expect(within(first).getByRole('button',{name:'已读'})).toBeDisabled());
+  expect(originalControl).toBeInTheDocument();
+  fireEvent.click(originalControl);
+  expect(within(second).getByRole('button',{name:'标记已读'})).toBeEnabled();
+  expect(writes).toEqual(['/api/announcements/first/read']);
+});
 it('lets a returning user see submitted feedback and its waiting state',async()=>{
   vi.stubGlobal('fetch',async()=>new Response(JSON.stringify({items:[{feedbackId:'feedback-1',username:'用户',content:'希望手机按钮再大一些',createdAt:'2026-10-18T09:00:00Z',replyCount:0}],nextCursor:null})));
   render(<FeedbackDialog accountId="owner" csrfToken="csrf" onClose={vi.fn()} />,{wrapper:wrap});

@@ -40,3 +40,4 @@ export async function getNotificationPage(kind:NotificationKind,after?:string){r
 export async function getNotificationDetail(id:string):Promise<NotificationDetail>{const value=await json('/api/me/notifications/'+encodeURIComponent(id));if(!record(value)||!strings(value,['notificationId','title','content']))return invalid();return value as unknown as NotificationDetail;}
 export async function getUnreadNotificationCount(){const value=await json('/api/me/notifications/count');if(!record(value)||!count(value.unreadCount))return invalid();return value.unreadCount;}
 export async function markNotificationsRead(notificationIds:string[],csrfToken:string){await send('/api/me/notifications/read',post(csrfToken,{notificationIds}));}
+export async function markAllNotificationsRead(kind:NotificationKind,csrfToken:string){await send('/api/me/notifications/read-all',post(csrfToken,{kind}));}
