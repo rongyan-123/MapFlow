@@ -53,7 +53,7 @@ export const saveAgentModelProfile=(body:{profile:AgentModelProfile;apiKey?:stri
   method:'POST',headers:headers(csrf),body:JSON.stringify(body)});
 
 export interface AgentSettlementAttention {
-  executionId:string;accountId:string;conversationId:string|null;funding:'cash'|'points'|'byok';status:string;
+  executionId:string;accountId:string;username?:string|null;conversationId:string|null;funding:'cash'|'points'|'byok';status:string;
   cashMicros:number|null;pointUnits:number|null;checkedAt:string|null;attentionKey:string;reason:string;
   diagnostic:Record<string,unknown>;
   calls:{callId:string;status:string;usage:import('./agentExecutionClient').AgentUsage|null;
@@ -82,15 +82,18 @@ const uuid=(value:unknown):value is string=>typeof value==='string'&&/^[0-9a-f]{
 const only=(value:Record<string,unknown>,fields:string[])=>Object.keys(value).every(key=>fields.includes(key));
 export async function fetchAgentSettlementAttention(before?:string):Promise<AgentSettlementPage> {
   if(before!==undefined&&!uuid(before))throw new Error('费用核对游标无效。');
-  const response=await apiFetch(`/api/admin/agent-settlements${before?`?before=${encodeURIComponent(before)}`:''}`,{credentials:'same-origin',headers:{Accept:'application/json'}});
+  const query=new URLSearchParams({includeAccountNames:'true'});
+  if(before)query.set('before',before);
+  const response=await apiFetch(`/api/admin/agent-settlements?${query}`,{credentials:'same-origin',headers:{Accept:'application/json'}});
   if(!response.ok)throw new Error('费用核对记录暂时无法读取。');
   const body:unknown=await response.json();
   const invalid=()=>new Error('费用核对响应无效。');
   if(!object(body)||!only(body,['pending','nextBefore','totalCount'])||!Array.isArray(body.pending)
     ||!(body.nextBefore===null||uuid(body.nextBefore))||!nonnegative(body.totalCount))throw invalid();
   for(const row of body.pending) {
-    if(!object(row)||!only(row,['executionId','accountId','conversationId','funding','status','cashMicros','pointUnits','checkedAt','attentionKey','reason','diagnostic','calls'])
+    if(!object(row)||!only(row,['executionId','accountId','username','conversationId','funding','status','cashMicros','pointUnits','checkedAt','attentionKey','reason','diagnostic','calls'])
       ||!['executionId','accountId'].every(key=>uuid(row[key]))||!(row.conversationId===null||uuid(row.conversationId))||!['cash','points','byok'].includes(String(row.funding))
+      ||!(row.username===undefined||row.username===null||typeof row.username==='string')
       ||!['pending_evidence','pending_posting','settled','no_site_charge','audit_only'].includes(String(row.status))
       ||!['cashMicros','pointUnits'].every(key=>row[key]===null||nonnegative(row[key]))
       ||!(row.checkedAt===null||typeof row.checkedAt==='string')||typeof row.attentionKey!=='string'||typeof row.reason!=='string'

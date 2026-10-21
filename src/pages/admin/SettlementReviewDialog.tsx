@@ -37,6 +37,7 @@ export default function SettlementReviewDialog({ accountId, csrfToken, record, o
     footer={editable && record.status === 'audit_only' && <Button form={formId} type="submit" variant="primary" disabled={!note.trim() || busy}>确认已核对，归档本次提醒</Button>}>
     <div className="mf-stack">
       <p className="mf-small">执行：{record.executionId}</p>
+      <p className="mf-small">账号：{record.username?.trim() || '用户名暂不可用'} · {record.accountId}</p>
       <p className="mf-small">资金通路：{record.funding === 'byok' ? '用户自带 Key（BYOK）' : record.funding === 'cash' ? '现金额度' : '平台积分'}{record.status === 'audit_only' && ' · 仅审计，本站不扣费'}</p>
       <p role={review.data ? 'status' : undefined} className="mf-status">{review.data?.reason ?? record.reason}</p>
       {editable && <>

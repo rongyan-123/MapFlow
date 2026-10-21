@@ -31,7 +31,7 @@ export default function AdminAttention({ accountId, csrfToken }: { accountId: st
         <div className="mf-stack">{page.pending.map(execution => <article className="mf-card mf-stack" key={execution.executionId}>
           <h3>{execution.reason}</h3>
           <p className="mf-small">执行：{execution.executionId}</p>
-          <p className="mf-small">账号：{execution.accountId} · {fundingLabels[execution.funding]} · {settlementLabels[execution.status] ?? execution.status} · 最近核对 {execution.checkedAt ? new Date(execution.checkedAt).toLocaleString() : '尚未核对'}</p>
+          <p className="mf-small">账号：{execution.username?.trim() || '用户名暂不可用'} · {execution.accountId} · {fundingLabels[execution.funding]} · {settlementLabels[execution.status] ?? execution.status} · 最近核对 {execution.checkedAt ? new Date(execution.checkedAt).toLocaleString() : '尚未核对'}</p>
           {execution.calls.map(call => <div key={call.callId}>
             <strong className="mf-small">{call.callId} · {callLabels[call.status] ?? call.status}</strong>
             <p className="mf-small">{call.usage ? `输入 ${call.usage.inputTokens} · 输出 ${call.usage.outputTokens} Token` : '用量尚未提供'}</p>

@@ -12,6 +12,38 @@ const record = {
   calls: [{ callId: '5a074b1e-b4cb-43f7-9d64-2a446d919ea9', status: 'dispatched', receipts: [], usage: { inputTokens: 45581, outputTokens: 3256 } }],
 };
 
+it('shows each account name and ID in the list and the selected review dialog', async () => {
+  const secondAccountId = '01a148b5-ca0c-7ea3-93dc-1516808b1a80';
+  vi.stubGlobal('fetch', async (path: string) => Response.json(path.endsWith('/model-balance')
+    ? { status: 'disabled', availableBalanceUsd: null, checkedAt: '2026-10-16T00:00:00Z' }
+    : { pending: [{ ...record, username: '用户甲', funding: 'cash' }, {
+      ...record, executionId: '01a15c20-e185-7290-bab3-a6f839a84678', accountId: secondAccountId, username: 'Veritus', funding: 'cash',
+    }], nextBefore: null, totalCount: 2 }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><AdminAttention accountId="admin" csrfToken="csrf-fixture" /></QueryClientProvider>);
+  fireEvent.click(await screen.findByRole('button', { name: '查看待核对记录' }));
+  const firstIdentity = screen.getByText(`账号：用户甲 · ${record.accountId}`, { exact: false });
+  expect(firstIdentity).toBeVisible();
+  const secondIdentity = screen.getByText(`账号：Veritus · ${secondAccountId}`, { exact: false });
+  expect(secondIdentity).toBeVisible();
+  fireEvent.click(within(secondIdentity.closest('article')!).getByRole('button', { name: '核对这笔记录' }));
+  const dialog = within(screen.getByRole('dialog', { name: '核对执行记录' }));
+  expect(dialog.getByText(`账号：Veritus · ${secondAccountId}`)).toBeVisible();
+  expect(dialog.queryByText('用户甲', { exact: false })).not.toBeInTheDocument();
+});
+
+it.each([undefined, null, ''])('keeps the account ID visible when a name is unavailable (%s)', async username => {
+  vi.stubGlobal('fetch', async (path: string) => Response.json(path.endsWith('/model-balance')
+    ? { status: 'disabled', availableBalanceUsd: null, checkedAt: '2026-10-16T00:00:00Z' }
+    : { pending: [{ ...record, username }], nextBefore: null, totalCount: 1 }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><AdminAttention accountId="admin" csrfToken="csrf-fixture" /></QueryClientProvider>);
+  fireEvent.click(await screen.findByRole('button', { name: '查看待核对记录' }));
+  expect(screen.getByText(`账号：用户名暂不可用 · ${record.accountId}`, { exact: false })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '核对这笔记录' }));
+  expect(within(screen.getByRole('dialog', { name: '核对执行记录' })).getByText(`账号：用户名暂不可用 · ${record.accountId}`)).toBeVisible();
+});
+
 it('gives the administrator an action for a BYOK audit record with an unresolved call', async () => {
   vi.stubGlobal('fetch', async (path: string) => Response.json(path.endsWith('/model-balance')
     ? { status: 'disabled', availableBalanceUsd: null, checkedAt: '2026-10-16T00:00:00Z' }

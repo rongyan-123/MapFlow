@@ -16,7 +16,7 @@ it('reads administrator settlement pages without keys and rejects unexpected sec
  const page={pending:[],nextBefore:null,totalCount:0};
  const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify(page)));vi.stubGlobal('fetch',fetch);
  expect(await fetchAgentSettlementAttention()).toEqual(page);
- expect(fetch.mock.calls[0]).toEqual(['/api/admin/agent-settlements',expect.objectContaining({credentials:'same-origin'})]);
+ expect(fetch.mock.calls[0]).toEqual(['/api/admin/agent-settlements?includeAccountNames=true',expect.objectContaining({credentials:'same-origin'})]);
  fetch.mockResolvedValue(new Response(JSON.stringify({...page,apiKey:'must not be displayed'})));
  await expect(fetchAgentSettlementAttention()).rejects.toThrow();
 });
@@ -26,6 +26,21 @@ const worldCashAttention={
  attentionKey:'a'.repeat(64),reason:'英语世界原调用金额依据待核对。',diagnostic:{},
  calls:[{callId:'5a074b1e-b4cb-43f7-9d64-2a446d919ea9',status:'completed',usage:{inputTokens:100,outputTokens:20},receipts:[]}],
 };
+it('requests account names on every settlement page and accepts only a string or null name',async()=>{
+ const page={pending:[{...worldCashAttention,username:'Veritus'}],nextBefore:null,totalCount:1};
+ const fetch=vi.fn().mockResolvedValue(Response.json(page));vi.stubGlobal('fetch',fetch);
+ expect(await fetchAgentSettlementAttention(worldCashAttention.executionId)).toEqual(page);
+ expect(fetch.mock.calls[0][0]).toBe(`/api/admin/agent-settlements?includeAccountNames=true&before=${worldCashAttention.executionId}`);
+ for(const username of [null,'用户甲']) {
+   const response={...page,pending:[{...worldCashAttention,username}]};
+   fetch.mockResolvedValue(Response.json(response));
+   expect(await fetchAgentSettlementAttention()).toEqual(response);
+ }
+ for(const username of [12,{apiKey:'not-a-name'}]) {
+   fetch.mockResolvedValue(Response.json({...page,pending:[{...worldCashAttention,username}]}));
+   await expect(fetchAgentSettlementAttention()).rejects.toThrow('费用核对响应无效。');
+ }
+});
 it('reads a real-shaped English world cash attention record without a conversation identity',async()=>{
  const page={pending:[worldCashAttention],nextBefore:null,totalCount:1};
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(Response.json(page)));
