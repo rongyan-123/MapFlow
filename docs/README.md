@@ -4,6 +4,8 @@
 
 ## 当前开发与生产
 
+- [公开阅读与搜索入口设计（本地，尚未部署）](specs/2026-10-25-public-pages-seo-design.md)
+- [公开阅读与搜索入口本地验收](research/2026-10-25-public-reading-seo-local.md)
 - [固定工作区入口](workflow/workspace-entry.md)
 - [当前生产与未部署改动](current-release.md)
 - [消息全部已读正式发布](research/2026-10-21-notification-read-actions-deployment.md)

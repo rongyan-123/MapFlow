@@ -1,6 +1,7 @@
+import {learningGuide} from "../../domains/support/agentGuide";
 import {useState} from 'react';
 import type {Navigate} from '../../app/useLocation';
 import {Dialog} from '../Dialog';
 import {Button} from '../Button';
-const steps=[{title:'选一条路线',description:'从公共书库浏览地图，查看节点内容与知识关系。浏览不会修改个人数据。',path:'/library',action:'浏览公共书库'},{title:'留下自己的副本',description:'把公共地图加入“我的地图”，拥有独立的进度和笔记。也可以告诉全局助手自己的目标，创建新地图。',path:'/maps',action:'打开我的地图'},{title:'围绕节点学习',description:'进入学习区，与助手提问、练习或使用画布。确认修改后才会更新地图，消息和学习记录保留在账号中。',path:'/learning',action:'进入学习区'},{title:'继续向前',description:'记录已掌握的节点，整理笔记，再从地图选下一步。也可以接入本地 Agent 协助维护进度。',path:'/assistant',action:'打开全局助手'}];
+const steps=learningGuide;
 export default function LearningGuideDialog({onClose,navigate}:{onClose:()=>void;navigate:Navigate}){const [index,setIndex]=useState(0);const step=steps[index];return <Dialog title="开始使用 MapFlow" onClose={onClose}><div className="mf-stack"><p className="mf-eyebrow">{index+1} / {steps.length}</p><h2>{step.title}</h2><p>{step.description}</p><Button variant="primary" onClick={()=>{onClose();navigate(step.path);}}>{step.action}</Button><div className="mf-row mf-row--between"><Button disabled={!index} onClick={()=>setIndex(index-1)}>上一步</Button>{index<steps.length-1?<Button onClick={()=>setIndex(index+1)}>下一步</Button>:<Button onClick={onClose}>完成引导</Button>}</div></div></Dialog>;}
