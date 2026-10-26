@@ -22,3 +22,8 @@ __pycache__/
 !.vscode/extensions.json
 .superpowers/
 /StudyHeaven_v1.0_理论换代文档包_2026-08-21.zip
+
+# Generated from shared public reading content.
+/public/public-content.json
+/public/public-site.css
+/public/public-site.js

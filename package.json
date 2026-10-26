@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "predev": "node scripts/copy-excalidraw-assets.mjs",
-    "prebuild": "node scripts/copy-excalidraw-assets.mjs",
+    "predev": "node scripts/copy-excalidraw-assets.mjs && node scripts/copy-public-content.mjs",
+    "prebuild": "node scripts/copy-excalidraw-assets.mjs && node scripts/copy-public-content.mjs",
     "dev": "vite --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
