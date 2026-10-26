@@ -225,10 +225,12 @@ export class AgentConversationRun {
       if(this.pendingSettlement()){const reader=new AbortController();this.reader=reader;void this.readSettlement(reader,this.snapshot.executionId);}
       return;
     }
-    const reader=new AbortController();this.reader=reader;
-    const execution=this.snapshot.executionId;
-    const presentation=new StreamingPresentation((draft,process)=>{if(this.currentReader(reader,execution))this.set({draft,process});});this.presentation=presentation;
-    presentation.answer(this.snapshot.draft);presentation.flush();presentation.restore(this.snapshot.process);
+    const reader=new AbortController();
+    const execution=this.snapshot.executionId,{draft,process}=this.snapshot;
+    const presentation=new StreamingPresentation((draft,process)=>{if(this.currentReader(reader,execution))this.set({draft,process});});
+    // Seed before activating the reader so initialization cannot overwrite the saved presentation.
+    presentation.answer(draft);presentation.flush();presentation.restore(process);
+    this.reader=reader;this.presentation=presentation;
     void this.read(reader,presentation,execution);
   }
   private currentReader(reader:AbortController,execution:string){return this.reader===reader&&!reader.signal.aborted&&this.snapshot.executionId===execution;}

@@ -207,6 +207,37 @@ it('detaches only the reader on navigation and restores the same execution from 
   const detachAgain=run.subscribe(()=>{});await vi.waitFor(()=>expect(api.attachAgentExecution).toHaveBeenCalledTimes(2));
   expect(api.attachAgentExecution.mock.calls[1][2]).toBe(7);expect(api.acceptAgentExecution).not.toHaveBeenCalled();detachAgain();
 });
+it.each([false,true])('keeps received reasoning, tool progress and answer when returning to a streaming conversation (global=%s)',async global=>{
+  vi.useFakeTimers();api.fetchActiveAgentExecution.mockResolvedValue(status);
+  const readers:Array<(event:AgentEvent)=>void>=[];
+  api.attachAgentExecution.mockImplementation((_id,_conversation,_after,onEvent,signal:AbortSignal)=>{readers.push(onEvent);return new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}));});
+  const run=new AgentConversationRun('owner',conversation,{releaseTerminalPending:global});
+  let detach=run.subscribe(()=>{});
+  try{
+    await run.restore();expect(readers).toHaveLength(1);
+    const deliver=(reader:number,sequence:number,payload:AgentEvent['payload'])=>readers[reader]({executionId:execution,eventId:crypto.randomUUID(),sequence,payload});
+    deliver(0,1,{type:'reasoning_delta',text:'先确认学习目标'});
+    deliver(0,2,{type:'tool_process',toolName:'read_canvas',state:'started',callId:'read-1'});
+    deliver(0,3,{type:'text_delta',text:'正在整理已有知识'});
+    expect(run.getSnapshot().draft).toBe('');
+    detach();
+    const receivedProcess=[{type:'reasoning',text:'先确认学习目标'},{type:'tool',name:'read_canvas',state:'started'}];
+    expect(run.getSnapshot()).toMatchObject({draft:'正在整理已有知识',process:receivedProcess});
+    const notifications:Array<{draft:string;process:unknown[]}>=[];
+    detach=run.subscribe(()=>{const {draft,process}=run.getSnapshot();notifications.push({draft,process});});
+    await Promise.resolve();expect(readers).toHaveLength(2);
+    expect(run.getSnapshot()).toMatchObject({draft:'正在整理已有知识',process:receivedProcess});
+    expect(notifications.every(snapshot=>snapshot.draft==='正在整理已有知识'&&JSON.stringify(snapshot.process)===JSON.stringify(receivedProcess))).toBe(true);
+    expect(api.attachAgentExecution.mock.calls[1][2]).toBe(3);
+    deliver(0,4,{type:'reasoning_delta',text:'旧读取器的迟到事件'});
+    deliver(1,4,{type:'reasoning_delta',text:'再补充例子'});
+    deliver(1,5,{type:'tool_process',toolName:'read_canvas',state:'completed',callId:'read-1'});
+    deliver(1,6,{type:'text_delta',text:'，继续学习。'});
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(run.getSnapshot()).toMatchObject({draft:'正在整理已有知识，继续学习。',process:[...receivedProcess,{type:'reasoning',text:'再补充例子'},{type:'tool',name:'read_canvas',state:'completed'}]});
+    expect(api.acceptAgentExecution).not.toHaveBeenCalled();expect(api.stopAgentExecution).not.toHaveBeenCalled();expect(api.resumeAgentExecution).not.toHaveBeenCalled();
+  }finally{detach();}
+});
 it('reloads a saved execution identity by GET, including a completed result with unknown fees',async()=>{
   const first=new AgentConversationRun('owner',conversation);await first.send({type:'reply',message:'Question'},0,{funding:'cash'},'csrf');
   api.fetchAgentExecution.mockResolvedValue({...status,state:'succeeded',result:completion});
