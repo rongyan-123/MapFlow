@@ -47,7 +47,7 @@ it('does not restore another account legacy selection',async()=>{
   localStorage.setItem('mapflow.console.state.v1.other-account',JSON.stringify({version:1,view:'personal',selectedLibraryEntryId:'foreign-entry'}));
   open('/console',true);await screen.findByRole('heading',{name:'找一张地图，开始探索。'});
 });
-it('puts a restored owned learning area into the address so the mobile chat shell is selected',async()=>{
+it('restores an owned learning area and preserves list entries through browser back and forward',async()=>{
   const area={areaId:'owned-area',libraryEntryId:'owned-area',title:'记住的学习区',available:true,createdAt:'2026-10-14T10:00:00Z'};
   window.history.replaceState({},'','/learning');localStorage.setItem('mapflow.learning.area.v1.a',area.areaId);
   vi.stubGlobal('fetch',async(path:string)=>new Response(JSON.stringify(path.endsWith('/learning-areas')?{areas:[area]}:path==='/api/me/tree-library'?{entries:[]}:path.endsWith('/characters')?{characters:[]}:path.includes('/learning-areas/')?{conversations:[],bootstrapState:'cleared'}:{})));
@@ -60,4 +60,17 @@ it('puts a restored owned learning area into the address so the mobile chat shel
   await screen.findByRole('button',{name:'进入学习区'});
   expect(window.location.pathname+window.location.search).toBe('/learning');
   expect(screen.queryByRole('combobox',{name:'切换学习区'})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'进入学习区'}));
+  await screen.findByRole('combobox',{name:'切换学习区'});
+  const historyLength=window.history.length;
+  act(()=>window.history.back());
+  await waitFor(()=>expect(window.location.pathname+window.location.search).toBe('/learning'));
+  await screen.findByRole('button',{name:'进入学习区'});
+  act(()=>window.history.forward());
+  await waitFor(()=>expect(window.location.pathname+window.location.search).toBe('/learning?area=owned-area'));
+  await screen.findByRole('combobox',{name:'切换学习区'});
+  act(()=>window.history.back());
+  await waitFor(()=>expect(window.location.pathname+window.location.search).toBe('/learning'));
+  expect(await screen.findByRole('button',{name:'进入学习区'})).toBeVisible();
+  expect(window.history.length).toBe(historyLength);
 });

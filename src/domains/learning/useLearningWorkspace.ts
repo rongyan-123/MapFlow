@@ -16,7 +16,10 @@ export function useLearningWorkspace(accountId:string,csrfToken:string,requested
   },[storageKey,requestedAreaId]);
   const areasKey=['me',accountId,'learning','areas'] as const;
   const areas=useQuery({queryKey:areasKey,queryFn:({signal})=>fetchLearningAreas(signal),staleTime:30_000,retry:false});
-  const area=areas.data?.find(item=>item.areaId===selection);
+  const requestChanged=previousRequest.current.storageKey!==storageKey||previousRequest.current.requestedAreaId!==requestedAreaId;
+  // A new address must not expose the previous area's selection to route effects.
+  const effectiveSelection=requestChanged?requestedAreaId??(previousRequest.current.storageKey!==storageKey?rememberedArea():null):selection;
+  const area=areas.data?.find(item=>item.areaId===effectiveSelection);
   const maps=usePersonalCatalog(accountId,area?.available?area.libraryEntryId:undefined);
   function select(areaId:string|null){setSelection(areaId);setMapVisible(false);try{if(areaId)localStorage.setItem(storageKey,areaId);else localStorage.removeItem(storageKey);}catch{/* Optional preference; server membership controls access. */}}
   const creation=useMutation({mutationFn:(entryId:string)=>createLearningArea(entryId,csrfToken),onSuccess:async(saved)=>{
