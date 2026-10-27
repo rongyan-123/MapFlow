@@ -4,6 +4,7 @@ import {useEffect,useRef} from 'react';
 export default function PanelResizeHandle({label,storageKey,minWidth=320,remainingWidth=360,panelSelector}:{label:string;storageKey:string;minWidth?:number;remainingWidth?:number;panelSelector?:string}) {
   const handle=useRef<HTMLDivElement>(null);
   const drag=useRef<{x:number;width:number;pointer:number}|null>(null);
+  const preferredWidth=useRef<number|null>(null);
   const panel=()=>panelSelector?handle.current?.parentElement?.querySelector<HTMLElement>(panelSelector):handle.current?.previousElementSibling as HTMLElement|null;
   const clamp=(width:number)=>{
     const available=handle.current?.parentElement?.getBoundingClientRect().width??0;
@@ -11,14 +12,15 @@ export default function PanelResizeHandle({label,storageKey,minWidth=320,remaini
   };
   function apply(width:number,persist:boolean) {
     const target=panel();if(!target)return;
-    const bounded=clamp(width);target.style.setProperty('--panel-width',`${bounded}px`);
+    const bounded=clamp(width);preferredWidth.current=persist?bounded:width;target.style.setProperty('--panel-width',`${bounded}px`);
     handle.current?.setAttribute('aria-valuenow',String(bounded));
     if(persist){try{localStorage.setItem(storageKey,String(bounded));}catch{/* Resizing remains available without storage. */}}
   }
   useEffect(()=>{
     const target=panel();if(!target)return;
+    preferredWidth.current=null;
     try{const saved=Number(localStorage.getItem(storageKey));if(Number.isFinite(saved)&&saved>=minWidth)apply(saved,false);}catch{/* Use CSS defaults. */}
-    const resize=()=>{const width=parseFloat(target.style.getPropertyValue('--panel-width'));if(Number.isFinite(width))apply(width,false);};
+    const resize=()=>{const width=parseFloat(target.style.getPropertyValue('--panel-width'));if(Number.isFinite(width))apply(preferredWidth.current??width,false);else preferredWidth.current=null;};
     const observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(resize);
     if(handle.current?.parentElement)observer?.observe(handle.current.parentElement);
     return()=>{observer?.disconnect();delete document.documentElement.dataset.mapflowResizing;};
@@ -35,5 +37,5 @@ export default function PanelResizeHandle({label,storageKey,minWidth=320,remaini
     onPointerUp={event=>{const start=drag.current;if(!start)return;apply(start.width+event.clientX-start.x,true);drag.current=null;delete document.documentElement.dataset.mapflowResizing;event.currentTarget.releasePointerCapture?.(event.pointerId);}}
     onPointerCancel={()=>{drag.current=null;delete document.documentElement.dataset.mapflowResizing;}}
     onKeyDown={event=>{if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();apply((panel()?.getBoundingClientRect().width??minWidth)+(event.key==='ArrowLeft'?-20:20),true);}}}
-    onDoubleClick={()=>{panel()?.style.removeProperty('--panel-width');try{localStorage.removeItem(storageKey);}catch{/* Keep CSS defaults. */}}} />;
+    onDoubleClick={()=>{preferredWidth.current=null;panel()?.style.removeProperty('--panel-width');try{localStorage.removeItem(storageKey);}catch{/* Keep CSS defaults. */}}} />;
 }
