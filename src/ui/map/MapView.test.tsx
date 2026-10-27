@@ -14,6 +14,20 @@ const snapshot:LearningTreeSnapshot={
 beforeEach(()=>{vi.stubGlobal('ResizeObserver',class{observe(){}unobserve(){}disconnect(){}});});
 afterEach(()=>{vi.unstubAllGlobals();localStorage.clear();});
 
+it('places map actions and dismissible feedback in the existing page header without a second bar',async()=>{
+  const header=document.createElement('header');document.body.append(header);
+  const complete=vi.fn().mockResolvedValue(undefined),restore=vi.fn().mockResolvedValue(undefined);
+  try{
+    const view=render(<MapView snapshot={snapshot} displayMode="personal" accountId="account" toolbarTarget={header} onSetCompleted={complete} onSetProgress={restore} />);
+    const toolbar=within(header).getByRole('toolbar',{name:'地图工具'});
+    expect(view.container.querySelector('[role="toolbar"]')).toBeNull();
+    fireEvent.click(within(toolbar).getByRole('button',{name:'全部点亮'}));
+    await waitFor(()=>expect(complete).toHaveBeenCalledWith('node',true));
+    expect(await within(header).findByRole('button',{name:'撤销本次点亮'})).toBeVisible();
+    expect(view.container.querySelector('[role="toolbar"]')).toBeNull();
+  }finally{header.remove();}
+});
+
 it('lights in one click without confirmation and restores zero and partial progress without changing completed nodes',async()=>{
   const saved:LearningTreeSnapshot={...snapshot,nodes:['zero','partial','done'].map(id=>({...snapshot.nodes[0],id,title:id})),progress:[
     {node_id:'partial',status:'in_progress',progress_percent:35,evidence:''},

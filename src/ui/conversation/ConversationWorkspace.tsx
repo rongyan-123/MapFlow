@@ -19,7 +19,7 @@ export interface ConversationWorkspaceProps{
   scene:ConversationScene;title:string;draft:string;onDraftChange:(draft:string)=>void;onSend:()=>void;
   onStop?:()=>void;sending?:boolean;disabled?:boolean;sendDisabled?:boolean;modelLabel:string;onConfigure:()=>void;onModelConfigure:()=>void;onNew:()=>void;onHistory:()=>void;onCanvas:()=>void;
   historyLabel?:string;historyExpanded?:boolean;historyInTitle?:boolean;canvasExpanded?:boolean;
-  welcome?:boolean;welcomeExtra?:ReactNode;children?:ReactNode;footerExtra?:ReactNode;headerContext?:ReactNode;headerExtra?:ReactNode;headerLeading?:ReactNode;headerTitle?:ReactNode;
+  welcome?:boolean;welcomeExtra?:ReactNode;children?:ReactNode;footerExtra?:ReactNode;headerContext?:ReactNode;headerExtra?:ReactNode;headerLeading?:ReactNode;headerTitle?:ReactNode;headerTools?:ReactNode;
   history?:ReactNode;sidePane?:ReactNode;sidePaneKind?:'canvas'|'map';sidePaneWide?:boolean;resizeKey?:string;composerRef?:RefObject<HTMLTextAreaElement>;logRef?:RefObject<HTMLDivElement>;onScroll?:()=>void;
 }
 export function ConversationWorkspace(props:ConversationWorkspaceProps){
@@ -48,7 +48,7 @@ export function ConversationWorkspace(props:ConversationWorkspaceProps){
     {label:'聊天配置',caption:'角色、模型、工具与会话设置',icon:'settings',onClick:props.onConfigure},
   ];
   return <section className={`mf-conversation-workspace${props.scene==='tavern'?' mf-conversation-workspace--tavern':learning?' mf-conversation-workspace--learning':''}`}>
-    <PageHeader title={props.title} titleControl={props.headerTitle} context={props.headerContext} leading={learning?<>{props.headerLeading}{(isMobile||!props.historyExpanded)&&historyToggle}</>:!props.historyInTitle&&historyToggle} actions={<>
+    <PageHeader title={props.title} titleControl={props.headerTools?undefined:props.headerTitle} tools={props.headerTools} context={props.headerContext} leading={learning?<>{props.headerLeading}{(isMobile||!props.historyExpanded)&&historyToggle}</>:!props.historyInTitle&&historyToggle} actions={<>
       {props.headerExtra&&<span className="mf-chat-header-extra">{props.headerExtra}</span>}<IconButton className="mf-chat-secondary" icon="plus" label="新建会话" onClick={props.onNew} />
       <IconButton className="mf-chat-configure" icon="settings" label="配置" onClick={props.onConfigure} /><IconButton className="mf-canvas-toggle" icon="edit" label="教学画布" aria-expanded={props.canvasExpanded??false} onClick={props.onCanvas} /><IconButton className="mf-chat-more" icon="more" label="更多聊天操作" aria-haspopup="dialog" aria-expanded={moreOpen} onClick={()=>setMoreOpen(true)} />
     </>} />
@@ -72,6 +72,7 @@ export function ConversationWorkspace(props:ConversationWorkspaceProps){
           <Button onClick={()=>{setMoreOpen(false);props.onHistory();}}>查看会话历史</Button>
           <Button onClick={()=>{setMoreOpen(false);props.onNew();}}>创建新会话</Button>
           <Button onClick={()=>{setMoreOpen(false);props.onCanvas();}}>打开或收起教学画布</Button>
+          {props.headerTools&&<Button onClick={()=>{setMoreOpen(false);props.onConfigure();}}>聊天配置</Button>}
         </>}
       </div>
     </Dialog>}

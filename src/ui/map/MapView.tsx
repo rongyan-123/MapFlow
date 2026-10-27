@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { progressPercentForNode, type LearningTreeSnapshot, type TreeLayoutMode, type TreeDisplayMode } from '../../types/learning';
 import { Button, IconButton } from '../Button';
 import MapCanvas from './MapCanvas';
@@ -9,6 +10,7 @@ import CompletionCelebration from './CompletionCelebration';
 import { describePublicError } from '../../lib/publicErrors';
 import { useBulkNodeCompletion } from '../../domains/maps/useBulkNodeCompletion';
 import MapBulkActions from './MapBulkActions';
+import { Icon } from '../Icon';
 
 interface Props {
   snapshot: LearningTreeSnapshot;
@@ -24,13 +26,16 @@ interface Props {
   progressPending?: boolean;
   completionPending?: boolean;
   error?: unknown;
+  toolbarTarget?: HTMLElement | null;
+  toolbarHostRef?: RefObject<HTMLElement>;
 }
 
 function MapFeedback({ text, isError, pending }: { text: string; isError: boolean; pending: boolean }) {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
-  return <div className={`mf-map-feedback ${isError ? 'mf-map-feedback--error' : ''}`} role={isError ? 'alert' : 'status'}>
+  return <div className={`mf-map-feedback ${isError ? 'mf-map-feedback--error' : ''}`} aria-label={text} data-pending={pending} role={isError ? 'alert' : 'status'}>
     <span title={text}>{text}</span>
+    {pending && <span className="mf-map-feedback-count" aria-hidden="true">{text.match(/\d+\/\d+/)?.[0] ?? '保存中'}</span>}
     {!pending && <IconButton icon="close" label="关闭地图提示" onClick={event => {
       const toolbar = event.currentTarget.closest('[role="toolbar"]');
       setDismissed(true);
@@ -41,8 +46,14 @@ function MapFeedback({ text, isError, pending }: { text: string; isError: boolea
 
 export default function MapView({
   snapshot, displayMode, accountId, entryId, csrfToken, initialNodeId, initialLayout,
-  onLearn, onSetCompleted, onSetProgress, progressPending, completionPending, error,
+  onLearn, onSetCompleted, onSetProgress, progressPending, completionPending, error, toolbarTarget, toolbarHostRef,
 }: Props) {
+  const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const target = toolbarHostRef?.current ?? null;
+    if (headerTarget !== target) setHeaderTarget(target);
+  });
+  const target = toolbarHostRef ? headerTarget : toolbarTarget;
   const [layout, setLayout] = useState<TreeLayoutMode>(initialLayout ?? 'relationship');
   const [selectedId, setSelectedId] = useState<string | null>(initialNodeId ?? null);
   const [detailsOpen, setDetailsOpen] = useState(Boolean(initialNodeId));
@@ -123,11 +134,10 @@ export default function MapView({
     }
   }
 
-  return <div className="mf-map-view">
-    <div className="mf-map-controls" role="toolbar" aria-label="地图工具">
+  const toolbar = <div className="mf-map-controls" role="toolbar" aria-label="地图工具">
       <div className="mf-map-toolbar-actions"><Button className="mf-block-sort-button" variant={layout === 'blocks' ? 'primary' : 'secondary'}
-        aria-pressed={layout === 'blocks'} title={layout === 'blocks' ? '再次点击恢复知识关系' : '按学习块整理地图节点'}
-        onClick={() => setLayout(previous => previous === 'blocks' ? 'relationship' : 'blocks')}>按块排序</Button>
+        aria-label="按块排序" aria-pressed={layout === 'blocks'} title={layout === 'blocks' ? '再次点击恢复知识关系' : '按学习块整理地图节点'}
+        onClick={() => setLayout(previous => previous === 'blocks' ? 'relationship' : 'blocks')}><Icon name="map" /><span className="mf-map-action-label">按块排序</span></Button>
       {bulkAvailable && <MapBulkActions key={bulkKey} disabled={Boolean(saving || completionPending || progressPending || !snapshot.nodes.length)}
         allCompleted={snapshot.nodes.every(node => progressPercentForNode(snapshot.progress.find(item => item.node_id === node.id)) === 100)}
         undoCount={bulk.undoCount} onLight={bulk.light} onUndo={bulk.undo} />}</div>
@@ -139,7 +149,9 @@ export default function MapView({
       </div> : <span className="mf-muted mf-small">{snapshot.nodes.length} 个节点 · {layout === 'blocks'
         ? (snapshot.node_block_assignments?.length ? '再次点击恢复知识关系' : '暂无节点分组，仍显示知识关系')
         : '点击节点查看内容'}</span>}
-    </div>
+    </div>;
+  return <div className="mf-map-view">
+    {target ? createPortal(toolbar, target) : target === undefined ? toolbar : null}
     <div className="mf-map-stage">
       <div className="mf-map-canvas">{snapshot.nodes.length
         ? <MapCanvas snapshot={snapshot} displayMode={displayMode} layoutMode={layout} selectedNodeId={selectedId}
@@ -147,7 +159,7 @@ export default function MapView({
         : <p className="mf-empty">这张地图还没有节点。</p>}</div>
       {selected && detailsOpen && <aside ref={detailPanel} className="mf-map-detail-panel" aria-label="节点详情" tabIndex={-1}
         onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setDetailsOpen(false); } }}>
-        <div className="mf-map-detail-header"><span>节点详情</span><IconButton icon="down" label="收起节点详情" onClick={() => setDetailsOpen(false)} /></div>
+        <div className="mf-map-detail-header"><span>节点详情</span><div className="mf-map-detail-header-actions"><IconButton icon="close" label="取消节点选择" onClick={() => { setSelectedId(null); setNoteOpen(false); }} /><IconButton icon="down" label="收起节点详情" onClick={() => setDetailsOpen(false)} /></div></div>
         <div className="mf-map-detail-content"><NodeDetails key={`${accountId}.${entryId ?? ''}.${snapshot.tree.id}.${selected.id}`} snapshot={snapshot} selectedNodeId={selected.id}
           displayMode={displayMode}
           onSetCompleted={onSetCompleted ? (nodeId, completed) => void saveNodeProgress(nodeId, completed ? 100 : 0, () => onSetCompleted(nodeId, completed)) : undefined}
