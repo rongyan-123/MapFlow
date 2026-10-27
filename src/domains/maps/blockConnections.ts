@@ -1,21 +1,38 @@
 import type { Edge } from '@xyflow/react';
-import type { SkillEdge } from '../../types/learning';
+import type { SkillEdge, TreeLayoutMode } from '../../types/learning';
 
 export interface ConnectionRect { x: number; y: number; width: number; height: number }
 interface Point { x: number; y: number }
-export type BlockConnection = Edge<{ relation: 'incoming' | 'outgoing'; lane: number }, 'blockConnection'>;
+export type BlockConnection = Edge<{ relation: 'neutral' | 'incoming' | 'outgoing'; lane: number; edgeType: string }, 'blockConnection'>;
 
-export function buildBlockConnections(edges: SkillEdge[], selectedNodeId: string | null): BlockConnection[] {
-  if (!selectedNodeId) return [];
-  return edges.filter((edge) => edge.source_node_id === selectedNodeId || edge.target_node_id === selectedNodeId)
-    .map((edge, lane) => ({
+export function buildBlockConnections(edges: SkillEdge[], selectedNodeId: string | null, layoutMode: TreeLayoutMode = 'blocks'): BlockConnection[] {
+  if (layoutMode === 'blocks' && !selectedNodeId) return [];
+  const groups = new Map<string, SkillEdge[]>();
+  for (const edge of edges) {
+    const group = groups.get(edge.source_node_id) ?? [];
+    group.push(edge);
+    groups.set(edge.source_node_id, group);
+  }
+  const lanes = new Map<string, number>();
+  for (const group of groups.values()) {
+    group.sort((first, second) => first.id.localeCompare(second.id));
+    group.forEach((edge, index) => lanes.set(edge.id, group.length > 1 ? index * 4 / (group.length - 1) : 0));
+  }
+  const visible = layoutMode === 'blocks' ? edges.filter(edge => edge.source_node_id === selectedNodeId || edge.target_node_id === selectedNodeId) : edges;
+  return visible.map((edge) => ({
       id: edge.id,
       source: edge.source_node_id,
       target: edge.target_node_id,
       type: 'blockConnection',
       selectable: false,
-      zIndex: 2,
-      data: { relation: edge.target_node_id === selectedNodeId ? 'incoming' : 'outgoing', lane },
+      zIndex: edge.edge_type === 'prerequisite' && (edge.source_node_id === selectedNodeId || edge.target_node_id === selectedNodeId) ? 2 : 1,
+      data: {
+        relation: edge.edge_type !== 'prerequisite' || !selectedNodeId ? 'neutral'
+          : edge.target_node_id === selectedNodeId ? 'incoming'
+          : edge.source_node_id === selectedNodeId ? 'outgoing' : 'neutral',
+        lane: lanes.get(edge.id) ?? 0,
+        edgeType: edge.edge_type,
+      },
     }));
 }
 

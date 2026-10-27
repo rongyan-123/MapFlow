@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import {
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   ReactFlow,
@@ -33,6 +34,7 @@ import SkillNodeComponent, {
 import { getReadableInitialZoom,getStartingViewport } from '../../domains/maps/viewport';
 import BlockConnectionEdge from './BlockConnectionEdge';
 import { buildBlockConnections } from '../../domains/maps/blockConnections';
+import { getNodeReadiness } from '../../domains/maps/nodeReadiness';
 
 interface BlockLaneData extends Record<string, unknown> {
   name: string;
@@ -80,6 +82,10 @@ export default function SkillTreeCanvas({
     () => new Map(snapshot.progress.map((item) => [item.node_id, item])),
     [snapshot.progress],
   );
+  const readiness = useMemo(
+    () => getNodeReadiness(snapshot.nodes.map(node => node.id), snapshot.edges, snapshot.progress),
+    [snapshot.nodes, snapshot.edges, snapshot.progress],
+  );
   const blockNameByNodeId = useMemo(() => {
     const blockNameById = new Map(
       (snapshot.blocks ?? []).map((block) => [block.id, block.name]),
@@ -115,15 +121,15 @@ export default function SkillTreeCanvas({
     return computeTreeLayout(snapshot.nodes, snapshot.edges);
   }, [blockLayout.positions, layoutMode, snapshot.edges, snapshot.nodes]);
   const blockConnections = useMemo(
-    () => buildBlockConnections(snapshot.edges, selectedNodeId),
-    [snapshot.edges, selectedNodeId],
+    () => buildBlockConnections(snapshot.edges, selectedNodeId, layoutMode),
+    [snapshot.edges, selectedNodeId, layoutMode],
   );
   const connectionRoles = useMemo(() => {
     const roles = new Map<string, 'focus' | 'incoming' | 'outgoing'>();
-    if (layoutMode !== 'blocks' || !selectedNodeId) return roles;
+    if (!selectedNodeId) return roles;
     for (const edge of blockConnections) {
-      if (edge.source !== selectedNodeId) roles.set(edge.source, 'incoming');
-      if (edge.target !== selectedNodeId) roles.set(edge.target, 'outgoing');
+      if (edge.data?.relation === 'incoming') roles.set(edge.source, 'incoming');
+      if (edge.data?.relation === 'outgoing') roles.set(edge.target, 'outgoing');
     }
     roles.set(selectedNodeId, 'focus');
     return roles;
@@ -163,6 +169,7 @@ export default function SkillTreeCanvas({
         data: {
           node,
           progress: progressMap.get(node.id) ?? null,
+          ready: readiness.get(node.id) ?? true,
           isCurrent: node.id === snapshot.current_node_id,
           displayMode,
           layoutMode,
@@ -182,42 +189,13 @@ export default function SkillTreeCanvas({
       layoutMode,
       positions,
       progressMap,
+      readiness,
       snapshot.current_node_id,
       snapshot.nodes,
       selectedNodeId,
     ],
   );
-  const generatedEdges = useMemo<Edge[]>(
-    () => {
-      if (layoutMode === 'blocks') return blockConnections;
-      return snapshot.edges.map((edge) => {
-        const sourceStatus = progressMap.get(edge.source_node_id)?.status;
-        const mastered = sourceStatus === 'mastered';
-        const completed = sourceStatus === 'completed';
-        if (displayMode === 'showcase') {
-          return {
-            id: edge.id,
-            source: edge.source_node_id,
-            target: edge.target_node_id,
-            type: 'smoothstep',
-            style: { stroke: 'var(--mf-map-edge)', strokeWidth: 1.8 },
-          };
-        }
-        return {
-          id: edge.id,
-          source: edge.source_node_id,
-          target: edge.target_node_id,
-          type: 'smoothstep',
-          animated: completed || mastered,
-          style: {
-            stroke: mastered ? 'var(--mf-map-mastery)' : completed ? 'var(--mf-map-complete)' : 'var(--mf-map-edge)',
-            strokeWidth: completed || mastered ? 2 : 1.2,
-          },
-        };
-      });
-    },
-    [blockConnections, displayMode, layoutMode, progressMap, snapshot.edges],
-  );
+  const generatedEdges = blockConnections;
 
   const [nodes, setNodes, onNodesChange] = useNodesState<
     SkillFlowNode | BlockLaneFlowNode
@@ -342,13 +320,13 @@ export default function SkillTreeCanvas({
       proOptions={{ hideAttribution: true }}
       ariaLabelConfig={{'controls.ariaLabel':'地图操作','controls.zoomIn.ariaLabel':'放大地图','controls.zoomOut.ariaLabel':'缩小地图','controls.fitView.ariaLabel':'显示整张地图','controls.interactive.ariaLabel':'切换地图拖动','minimap.ariaLabel':'地图总览'}}
     >
-      {layoutMode === 'blocks' && selectedNodeId && <div className="mf-map-legend"><span>前置流入</span><span>→ 选中节点 →</span><span>后置流出</span></div>}
+      {selectedNodeId && <div className="mf-map-legend"><span>直接前置</span><span>→ 选中节点 →</span><span>直接后续</span></div>}
       <FitViewWhenReady
         fitGraphView={fitGraphView}
         fitViewKey={fitViewKey}
         isGraphVisible={isGraphVisible}
       />
-      <Background color="var(--mf-map-edge)" gap={24} size={.8} />
+      <Background variant={BackgroundVariant.Lines} color="color-mix(in srgb, var(--mf-map-edge) 30%, transparent)" gap={24} size={.8} />
       <Controls className="mf-flow-controls" />
       <MiniMap
         nodeColor={(node) => {
@@ -357,6 +335,7 @@ export default function SkillTreeCanvas({
           }
           if (displayMode === 'showcase') return 'var(--mf-map-incoming)';
           const flowNode = node as SkillFlowNode;
+          if (flowNode.data.ready === false) return 'var(--mf-map-edge)';
           const status = flowNode.data.progress?.status ?? 'not_started';
           if (status === 'mastered') return 'var(--mf-map-mastery)';
           if (status === 'completed') return 'var(--mf-map-complete)';

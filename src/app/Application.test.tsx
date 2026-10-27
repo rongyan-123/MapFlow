@@ -54,4 +54,10 @@ it('puts a restored owned learning area into the address so the mobile chat shel
   const client=new QueryClient({defaultOptions:{queries:{retry:false}}});client.setQueryData(SESSION_QUERY_KEY,{account:{playerId:'a',username:'用户',status:'active',isAdmin:false},csrfToken:'csrf'});
   render(<QueryClientProvider client={client}><IdentityProvider><Application /></IdentityProvider></QueryClientProvider>);
   await screen.findByRole('combobox',{name:'切换学习区'});await waitFor(()=>expect(window.location.pathname+window.location.search).toBe('/learning?area=owned-area'));
+  const back=screen.getByRole('button',{name:'返回学习区列表'});
+  expect(screen.getByRole('heading',{level:1,name:'学习聊天'}).compareDocumentPosition(back)&Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+  fireEvent.click(back);
+  await screen.findByRole('button',{name:'进入学习区'});
+  expect(window.location.pathname+window.location.search).toBe('/learning');
+  expect(screen.queryByRole('combobox',{name:'切换学习区'})).not.toBeInTheDocument();
 });

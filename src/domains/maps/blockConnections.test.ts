@@ -9,19 +9,53 @@ const dependencies: SkillEdge[] = [
 ];
 
 describe('块布局关联线', () => {
-  it('只展示直接关联线，并保留前置到后置的真实方向', () => {
-    expect(buildBlockConnections(dependencies, 'selected').map(({ source, target, data }) => ({ source, target, relation: data?.relation }))).toEqual([
-      { source: 'before', target: 'selected', relation: 'incoming' },
-      { source: 'selected', target: 'after', relation: 'outgoing' },
-    ]);
+  it('保留旧按块行为：未选不画边，选中只画该节点局部关系', () => {
     expect(buildBlockConnections(dependencies, null)).toEqual([]);
     expect(buildBlockConnections(dependencies, 'missing')).toEqual([]);
+    expect(buildBlockConnections(dependencies, 'selected').map(edge => [edge.id, edge.data?.relation])).toEqual([
+      ['in', 'incoming'], ['out', 'outgoing'],
+    ]);
+    const related = { ...dependencies[0], id: 'related', edge_type: 'related' };
+    expect(buildBlockConnections([...dependencies, related], 'selected').map(edge => [edge.id, edge.data?.relation])).toEqual([
+      ['in', 'incoming'], ['out', 'outgoing'], ['related', 'neutral'],
+    ]);
+  });
+  it('默认保留全部真实连接，只高亮选中节点的直接前置和直接后续', () => {
+    expect(buildBlockConnections(dependencies, 'selected', 'relationship').map(({ source, target, data }) => ({ source, target, relation: data?.relation }))).toEqual([
+      { source: 'before', target: 'selected', relation: 'incoming' },
+      { source: 'selected', target: 'after', relation: 'outgoing' },
+      { source: 'after', target: 'unrelated', relation: 'neutral' },
+    ]);
+    expect(buildBlockConnections(dependencies, null, 'relationship').map(edge => [edge.id, edge.data?.relation])).toEqual([
+      ['in', 'neutral'], ['out', 'neutral'], ['other', 'neutral'],
+    ]);
+    expect(buildBlockConnections(dependencies, 'missing', 'relationship').map(edge => edge.data?.relation)).toEqual(['neutral', 'neutral', 'neutral']);
   });
 
   it('切换选中节点后重新判断进出关系', () => {
-    expect(buildBlockConnections(dependencies, 'after').map(({ id, data }) => [id, data?.relation])).toEqual([
-      ['out', 'incoming'], ['other', 'outgoing'],
+    expect(buildBlockConnections(dependencies, 'after', 'relationship').map(({ id, data }) => [id, data?.relation])).toEqual([
+      ['in', 'neutral'], ['out', 'incoming'], ['other', 'outgoing'],
     ]);
+  });
+
+  it('related和未知类型保留原边，但不能伪装为前置知识', () => {
+    const edges = [
+      ...dependencies,
+      { ...dependencies[0], id: 'related', edge_type: 'related' },
+      { ...dependencies[1], id: 'unknown', edge_type: 'future_relation' },
+    ];
+    const selected = buildBlockConnections(edges, 'selected', 'relationship');
+    expect(selected.map(edge => [edge.id, edge.source, edge.target])).toEqual(edges.map(edge => [edge.id, edge.source_node_id, edge.target_node_id]));
+    expect(selected.filter(edge => edge.id === 'related' || edge.id === 'unknown').map(edge => edge.data?.relation)).toEqual(['neutral', 'neutral']);
+  });
+
+  it('局部路由有界且切换选择不会让连线路径跳动', () => {
+    const edges = Array.from({ length: 170 }, (_, index) => ({ ...dependencies[0], id: `edge-${String(index).padStart(3, '0')}`, target_node_id: `target-${index}` }));
+    const normal = buildBlockConnections(edges, null, 'relationship');
+    const selected = buildBlockConnections(edges, 'before', 'relationship');
+    expect(normal.map(edge => edge.data?.lane)).toEqual(selected.map(edge => edge.data?.lane));
+    expect(normal.every(edge => edge.data!.lane >= 0 && edge.data!.lane <= 4)).toBe(true);
+    expect(new Set(normal.map(edge => edge.data?.lane)).size).toBe(170);
   });
 });
 

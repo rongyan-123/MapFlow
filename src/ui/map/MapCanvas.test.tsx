@@ -51,6 +51,7 @@ vi.mock('@xyflow/react', async () => {
 
   function ReactFlow({
     nodes,
+    edges,
     onInit,
     onMoveEnd,
     onNodeClick,
@@ -58,6 +59,7 @@ vi.mock('@xyflow/react', async () => {
     reference,
   }: {
     nodes: unknown[];
+    edges: Array<{ id: string; source: string; target: string; data?: { relation?: string } }>;
     onInit?: (instance: typeof flowInstance) => void;
     onMoveEnd?: (event: unknown, viewport: { x: number; y: number; zoom: number }) => void;
     onNodeClick?: (event: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => void;
@@ -70,6 +72,8 @@ vi.mock('@xyflow/react', async () => {
 
     return (
       <div ref={reference} data-testid="skill-tree-flow" data-node-count={nodes.length}>
+        <div aria-label="地图连接">{edges.map(edge => <output key={edge.id} aria-label={`连接 ${edge.id}`} data-relation={edge.data?.relation}>{edge.source} → {edge.target}</output>)}</div>
+        {(nodes as Array<{id:string;type?:string;data:{ready?:boolean;progress?:{progress_percent?:number}|null}}>).filter(node=>node.type==='skill').map(node=><div key={node.id}><output aria-label={`节点 ${node.id} 准备状态`} data-ready={node.data.ready} data-progress={node.data.progress?.progress_percent} /><button onClick={event=>onNodeClick?.(event,node as unknown as {id:string;position:{x:number;y:number}})}>选择节点 {node.id}</button></div>)}
         <button onClick={() => onMoveEnd?.({}, { x: 72, y: -31, zoom: 0.63 })}>移动地图</button>
         {nodes.length > 0 && <button onClick={event => onNodeClick?.(event, nodes[0] as { id: string; position: { x: number; y: number } })}>选择地图节点</button>}
         {children}
@@ -78,7 +82,8 @@ vi.mock('@xyflow/react', async () => {
   }
 
   return {
-    Background: () => null,
+    Background: ({variant}:{variant?:string}) => <div aria-label="地图网格" data-variant={variant} />,
+    BackgroundVariant: { Lines: 'lines' },
     Controls: () => null,
     MiniMap: () => null,
     ReactFlow:React.forwardRef((props:React.ComponentProps<typeof ReactFlow>,ref:React.ForwardedRef<HTMLDivElement>)=><ReactFlow {...props} reference={ref} />),
@@ -124,6 +129,54 @@ const snapshot = {
 } satisfies LearningTreeSnapshot;
 
 describe('SkillTreeCanvas', () => {
+  it('updates readiness from prerequisite progress while preserving a waiting node progress and selection', async () => {
+    const graph: LearningTreeSnapshot = { ...snapshot, nodes: [{ ...snapshot.nodes[0], id: 'before' }, snapshot.nodes[0]],
+      edges: [{ id: 'dependency', source_node_id: 'before', target_node_id: 'node-1', edge_type: 'prerequisite', label: null }],
+      progress: [{ node_id: 'before', progress_percent: 99, status: 'in_progress', evidence: '' }, { node_id: 'node-1', progress_percent: 100, status: 'completed', evidence: '' }],
+    };
+    const select = vi.fn();
+    const props = { snapshot: graph, layoutMode: 'relationship' as const, displayMode: 'personal' as const, selectedNodeId: null, isGraphVisible: true, onSelectNode: select };
+    const view = render(<SkillTreeCanvas {...props} />);
+    await waitFor(() => expect(screen.getByLabelText('节点 node-1 准备状态')).toHaveAttribute('data-ready', 'false'));
+    expect(screen.getByLabelText('节点 before 准备状态')).toHaveAttribute('data-ready', 'true');
+    expect(screen.getByLabelText('节点 node-1 准备状态')).toHaveAttribute('data-progress', '100');
+    fireEvent.click(screen.getByRole('button', { name: '选择节点 node-1' }));
+    expect(select).toHaveBeenCalledWith('node-1');
+    view.rerender(<SkillTreeCanvas {...props} snapshot={{ ...graph, progress: graph.progress.map(item => ({ ...item, progress_percent: 100, status: 'completed' })) }} />);
+    await waitFor(() => expect(screen.getByLabelText('节点 node-1 准备状态')).toHaveAttribute('data-ready', 'true'));
+    expect(screen.getByLabelText('节点 node-1 准备状态')).toHaveAttribute('data-progress', '100');
+  });
+  it('keeps real edges neutral by default and highlights only direct prerequisites in either layout', async () => {
+    const connected = { ...snapshot, current_node_id: null,
+      nodes: [{ ...snapshot.nodes[0], id: 'before' }, snapshot.nodes[0], { ...snapshot.nodes[0], id: 'after' }],
+      edges: [
+        { id: 'in', source_node_id: 'before', target_node_id: 'node-1', edge_type: 'prerequisite', label: null },
+        { id: 'out', source_node_id: 'node-1', target_node_id: 'after', edge_type: 'prerequisite', label: null },
+        { id: 'related', source_node_id: 'before', target_node_id: 'node-1', edge_type: 'related', label: null },
+      ],
+    } satisfies LearningTreeSnapshot;
+    const props = { snapshot: connected, displayMode: 'personal' as const, isGraphVisible: true, onSelectNode: () => {} };
+    const view = render(<SkillTreeCanvas {...props} layoutMode="relationship" selectedNodeId={null} />);
+    for (const layoutMode of ['relationship', 'blocks'] as const) {
+      view.rerender(<SkillTreeCanvas {...props} layoutMode={layoutMode} selectedNodeId={null} />);
+      if (layoutMode === 'blocks') await waitFor(() => expect(screen.queryByLabelText('连接 in')).not.toBeInTheDocument());
+      else {
+        await waitFor(() => expect(screen.getByLabelText('连接 in')).toHaveAttribute('data-relation', 'neutral'));
+        expect(screen.getByLabelText('连接 out')).toHaveTextContent('node-1 → after');
+        expect(screen.getByLabelText('连接 related')).toHaveAttribute('data-relation', 'neutral');
+      }
+      view.rerender(<SkillTreeCanvas {...props} layoutMode={layoutMode} selectedNodeId="node-1" />);
+      await waitFor(() => expect(screen.getByLabelText('连接 in')).toHaveAttribute('data-relation', 'incoming'));
+      expect(screen.getByLabelText('连接 out')).toHaveAttribute('data-relation', 'outgoing');
+      expect(screen.getByLabelText('连接 related')).toHaveAttribute('data-relation', 'neutral');
+      expect(screen.getByText('直接前置')).toBeVisible();
+      expect(screen.getByText('直接后续')).toBeVisible();
+      view.rerender(<SkillTreeCanvas {...props} layoutMode={layoutMode} selectedNodeId={null} />);
+      if (layoutMode === 'blocks') await waitFor(() => expect(screen.queryByLabelText('连接 in')).not.toBeInTheDocument());
+      else await waitFor(() => expect(screen.getByLabelText('连接 in')).toHaveAttribute('data-relation', 'neutral'));
+    }
+    expect(screen.getByLabelText('地图网格')).toHaveAttribute('data-variant', 'lines');
+  });
   afterEach(()=>vi.unstubAllGlobals());
   beforeEach(() => {
     flowProbe.fitView.mockClear();

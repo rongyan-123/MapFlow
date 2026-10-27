@@ -2,9 +2,42 @@ import { useState } from 'react';
 import { render,screen,fireEvent,within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect,it,vi } from 'vitest';
-import { ConversationWorkspace } from './ConversationWorkspace';
+import { ConversationWorkspace, type ConversationWorkspaceProps } from './ConversationWorkspace';
 import { Dialog } from '../Dialog';
 function Controller({send=vi.fn(),scene='management'}:{send?:()=>void;scene?:'management'|'tavern'}){const [draft,setDraft]=useState('');const [config,setConfig]=useState(false);return <><ConversationWorkspace scene={scene} title={scene==='tavern'?'学习助手':'全局助手'} draft={draft} onDraftChange={setDraft} onSend={send} modelLabel="实际模型" onConfigure={()=>setConfig(true)} onModelConfigure={()=>setConfig(true)} onNew={()=>{}} onHistory={()=>{}} onCanvas={()=>{}} welcome />{config && <Dialog title="配置" layout="workspace" onClose={()=>setConfig(false)}>模型接入</Dialog>}</>;}
+
+it('keeps independently adjusted map and canvas widths when switching panels', () => {
+  vi.stubGlobal('innerWidth', 1440);
+  const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    return new DOMRect(0, 0, parseFloat(this.style.getPropertyValue('--panel-width')) || 1200, 800);
+  });
+  const resizeKey = 'mapflow.layout.canvas.resize-test';
+  localStorage.setItem(resizeKey, '600');
+  localStorage.setItem(`${resizeKey}.map`, '500');
+  const props: ConversationWorkspaceProps = { scene: 'learning', title: '学习聊天', draft: '稍后发送', onDraftChange: () => {}, onSend: () => {}, modelLabel: '测试模型', onConfigure: () => {}, onModelConfigure: () => {}, onNew: () => {}, onHistory: () => {}, onCanvas: () => {}, resizeKey };
+  try {
+    const view = render(<ConversationWorkspace {...props} sidePaneKind="map" sidePane={<div>学习地图</div>} />);
+    const mapResize = screen.getByRole('separator', { name: '调整地图与聊天宽度' });
+    expect(mapResize).toHaveAttribute('aria-valuenow', '500');
+    fireEvent.keyDown(mapResize, { key: 'ArrowRight' });
+    expect(localStorage.getItem(`${resizeKey}.map`)).toBe('520');
+    view.rerender(<ConversationWorkspace {...props} sidePaneKind="canvas" sidePaneWide={false} sidePane={<div>教学画布</div>} />);
+    expect(screen.getByRole('separator', { name: '调整画布与聊天宽度' })).toHaveAttribute('aria-valuenow', '600');
+    expect(localStorage.getItem(resizeKey)).toBe('600');
+    view.rerender(<ConversationWorkspace {...props} sidePaneKind="map" sidePane={<div>学习地图</div>} />);
+    expect(screen.getByRole('separator', { name: '调整地图与聊天宽度' })).toHaveAttribute('aria-valuenow', '520');
+    view.rerender(<ConversationWorkspace {...props} sidePaneKind="canvas" sidePaneWide={false} sidePane={<div>教学画布</div>} />);
+    expect(screen.getByRole('separator', { name: '调整画布与聊天宽度' })).toHaveAttribute('aria-valuenow', '600');
+    view.rerender(<ConversationWorkspace {...props} sidePaneKind="canvas" sidePaneWide sidePane={<div>教学画布</div>} />);
+    expect(localStorage.getItem(resizeKey)).toBeNull();
+    expect(localStorage.getItem(`${resizeKey}.map`)).toBe('520');
+    expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('稍后发送');
+  } finally {
+    localStorage.clear();
+    bounds.mockRestore();
+    vi.unstubAllGlobals();
+  }
+});
 
 it('酒馆从更多面板进入聊天配置，关闭后保留草稿并返回更多按钮',async()=>{
   const user=userEvent.setup();

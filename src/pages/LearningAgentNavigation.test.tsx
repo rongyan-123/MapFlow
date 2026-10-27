@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -23,7 +24,7 @@ function savedDetail(story: Conversation, agent: Character): ConversationDetail 
     messages: detail.graph.messages.map(message => ({ ...message, characterId: message.role === 'assistant' ? agent.characterId : null,
       ...(message.messageId === 'message-assistant-1' ? { content: `${agent.card.name}的学习记录` } : {}) })) } };
 }
-function mountLearning(stories = [storyA], agents = [agentA, agentB], options: { available?: boolean; failCharactersOnce?: boolean } = {}) {
+function mountLearning(stories = [storyA], agents = [agentA, agentB], options: { available?: boolean; failCharactersOnce?: boolean; withMap?: boolean } = {}) {
   const records = new Map(stories.map(story => [story.conversationId, savedDetail(story, agents.find(agent => agent.characterId === story.characterId)!)]));
   let characterFailures = options.failCharactersOnce ? 1 : 0;
   const requests: Array<{ path: string; options?: RequestInit }> = [];
@@ -61,11 +62,44 @@ function mountLearning(stories = [storyA], agents = [agentA, agentB], options: {
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(SESSION_QUERY_KEY, { account: { playerId: accountId, username: '小明', status: 'active', isAdmin: false }, csrfToken: 'csrf' });
+  function LearningLayout() {
+    const [mapVisible, setMapVisible] = useState(false);
+    return <SceneWorkspace owner={{ accountId, csrfToken: 'csrf', userName: '小明', scene: 'learning', areaId, available: options.available ?? true }} navigate={vi.fn()}
+      headerExtra={options.withMap && <button onClick={() => setMapVisible(previous => !previous)}>{mapVisible ? '返回学习聊天' : '查看学习地图'}</button>}
+      mapVisible={mapVisible} mapPane={<section aria-label="学习地图">当前学习地图</section>} />;
+  }
   const element = <QueryClientProvider client={client}><IdentityProvider><AgentModelProvider accountId={accountId}><ModelSelectionProvider accountId={accountId}>
-    <SceneWorkspace owner={{ accountId, csrfToken: 'csrf', userName: '小明', scene: 'learning', areaId, available: options.available ?? true }} navigate={vi.fn()} />
+    <LearningLayout />
   </ModelSelectionProvider></AgentModelProvider></IdentityProvider></QueryClientProvider>;
   return { ...render(element), requests, records, client, element };
 }
+
+it('closes history when the learning map opens and lets the learner restore it without losing a draft', async () => {
+  const { requests } = mountLearning([storyA], [agentA, agentB], { withMap: true });
+  await screen.findByText('逻辑向导的学习记录');
+  fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: '尚未发送的学习问题' } });
+  expect(screen.getByRole('complementary')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '查看学习地图' }));
+  await waitFor(() => expect(screen.queryByRole('complementary')).not.toBeInTheDocument());
+  expect(screen.getByRole('region', { name: '学习地图' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '展开会话历史' }));
+  expect(screen.getByRole('complementary')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '返回学习聊天' }));
+  expect(screen.getByRole('complementary')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '查看学习地图' }));
+  await waitFor(() => expect(screen.queryByRole('complementary')).not.toBeInTheDocument());
+  expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('尚未发送的学习问题');
+  expect(requests.filter(request => request.options?.method === 'POST' && request.path.endsWith('/executions'))).toEqual([]);
+});
+
+it('opens the learning map before a conversation exists without starting an execution', async () => {
+  const { requests } = mountLearning([], [agentA, agentB], { withMap: true });
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('还没有会话，先新建一段对话。'));
+  fireEvent.click(screen.getByRole('button', { name: '查看学习地图' }));
+  expect(await screen.findByRole('region', { name: '学习地图' })).toBeVisible();
+  expect(screen.getByRole('button', { name: '发送' })).toBeDisabled();
+  expect(requests.filter(request => request.options?.method === 'POST' && request.path.endsWith('/executions'))).toEqual([]);
+});
 
 it('lists every library role in learning chat, including a role with no conversations', async () => {
   mountLearning();

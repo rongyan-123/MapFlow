@@ -1,5 +1,5 @@
 .mf-map-view {
-  --mf-map-paper: #fbfaf6;
+  --mf-map-paper: #f1f2ef;
   --mf-map-surface: #fffefa;
   --mf-map-ink: #343640;
   --mf-map-muted: #6d6c76;
@@ -75,7 +75,7 @@
 .mf-map-selection { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 60%; }
 .mf-map-selection-title { overflow: hidden; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid var(--mf-map-line); border-radius: 10px; color: var(--mf-map-ink); background: var(--mf-map-paper); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .mf-map-stage { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
-.mf-map-canvas { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; background: var(--mf-map-ambient), var(--mf-map-paper); }
+.mf-map-canvas { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; background: var(--mf-map-paper); }
 .mf-map-canvas .react-flow__pane { background: transparent; }
 .mf-map-canvas .react-flow__background { opacity: .55; }
 
@@ -226,3 +226,10 @@
   .mf-map-view *, .mf-map-view *::before, .mf-map-view *::after { animation: none!important; transition: none!important; }
   .mapflow-connection-flow, .mf-map-celebration-sweep, .mf-map-celebration-rays { display: none; }
 }
+
+.mapflow-block-connection[data-relation='neutral'] .mapflow-connection-line{stroke-width:1.3;opacity:.72}
+.mf-map-node[data-mapflow-readiness='waiting']{--node-accent:var(--mf-map-muted);--node-surface:color-mix(in srgb,var(--mf-map-line) 38%,var(--mf-map-surface));--node-highlight:var(--mf-map-surface);border-color:var(--mf-map-line);box-shadow:inset 0 1px 0 #ffffff20}
+.mf-map-node[data-mapflow-readiness='waiting']::after{display:none}
+.mf-map-node[data-mapflow-readiness='waiting'] .mf-node-icon{filter:grayscale(1);opacity:.8}
+.mf-node-readiness{display:flex;align-items:center;gap:4px;margin-top:5px;color:var(--mf-map-muted);font-size:9px;line-height:1.4}
+.mf-node-readiness>span{filter:grayscale(1)}

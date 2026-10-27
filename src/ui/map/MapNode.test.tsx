@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import SkillNodeComponent, { type SkillFlowNode } from './MapNode';
 
@@ -56,6 +56,23 @@ function renderNode(displayMode: 'showcase' | 'personal', title?: string) {
 }
 
 describe('SkillNode 渲染', () => {
+  it.each([[35, 'in_progress', '进行中'], [100, 'completed', '已完成']] as const)('前置未完成时保留%s%%进度和点击，点亮后更新展示', (percent, status, label) => {
+    const node = makeFlowNode('personal');
+    node.data.ready = false;
+    node.data.progress = { node_id: node.id, progress_percent: percent, status, evidence: '' };
+    const select = vi.fn();
+    const props = { data: node.data, selected: false } as React.ComponentProps<typeof SkillNodeComponent>;
+    const view = render(<div onClick={select}><SkillNodeComponent {...props} /></div>);
+    expect(screen.getByText('前置未完成，仍可查看')).toBeVisible();
+    expect(screen.getByText(`${percent}%`)).toBeVisible();
+    expect(screen.getByText(label)).toBeVisible();
+    fireEvent.click(screen.getByRole('heading', { name: '测试节点' }));
+    expect(select).toHaveBeenCalledOnce();
+    view.rerender(<div onClick={select}><SkillNodeComponent {...props} data={{ ...node.data, ready: true }} /></div>);
+    expect(screen.queryByText('前置未完成，仍可查看')).not.toBeInTheDocument();
+    expect(screen.getByText(`${percent}%`)).toBeVisible();
+    expect(screen.getByText(label)).toBeVisible();
+  });
   it('public preview shows the depth and does not claim personal progress', () => {
     renderNode('showcase');
     expect(screen.getByText(/Understand/)).toBeVisible();
