@@ -102,6 +102,7 @@
 .mf-map-node {
   --branch-fill: var(--mf-branch-blue-fill);
   --node-accent: var(--mf-branch-blue);
+  --mf-map-node-muted: color-mix(in srgb, var(--mf-map-ink) 90%, var(--branch-fill));
   --node-surface: var(--branch-fill);
   --node-highlight: color-mix(in srgb, var(--branch-fill) 91%, var(--node-accent));
   position: relative;
@@ -134,7 +135,7 @@
 .mf-node-title { flex: 1; min-width: 0; }
 .mf-node-heading { display: -webkit-box; overflow: hidden; margin: 0; color: var(--mf-map-ink); font-size: 13px; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; white-space: normal; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .mf-node-depth, .mf-node-progress { display: inline-block; margin: 6px 5px 0 0; color: var(--mf-map-node-muted); font-size: 9px; line-height: 1.5; }
-.mf-node-progress { color: var(--node-accent); font-variant-numeric: tabular-nums; font-weight: 650; }
+.mf-node-progress { color: color-mix(in srgb, var(--node-accent), var(--mf-map-ink)); font-variant-numeric: tabular-nums; font-weight: 650; }
 .mf-node-state { position: absolute; top: -12px; right: 12px; display: inline-flex; align-items: center; gap: 4px; min-height: 21px; padding: 2px 7px; border: 1px solid color-mix(in srgb, var(--node-accent) 40%, var(--mf-map-line)); border-radius: 20px; color: var(--node-accent); background: var(--mf-map-surface); font-size: 9px; font-weight: 650; }
 .mf-node-state .mf-icon { width: 12px; height: 12px; }
 .mf-node-progress-line { position: absolute; left: 14px; right: 14px; bottom: 9px; height: 2px; overflow: hidden; border-radius: 2px; background: color-mix(in srgb, var(--node-accent) 10%, var(--mf-map-surface)); }
@@ -261,7 +262,7 @@
 
 .mf-map-node[data-mapflow-readiness='waiting'] { --node-surface: color-mix(in srgb, var(--branch-fill) 88%, var(--mf-map-paper)); border-color: color-mix(in srgb, var(--node-accent) 60%, var(--branch-fill)); box-shadow: inset 0 1px 0 #ffffff25, 0 3px 8px #15213c0c; }
 .mf-map-node[data-mapflow-readiness='waiting']::after { display: none; }
-.mf-node-readiness{display:flex;align-items:center;gap:4px;margin-top:5px;color:var(--mf-map-muted);font-size:9px;line-height:1.4}
+.mf-node-readiness{display:flex;align-items:center;gap:4px;margin-top:5px;color:var(--mf-map-node-muted);font-size:9px;line-height:1.4}
 .mf-node-readiness>span{filter:grayscale(1)}
 
 .mf-map-legend > span:first-child::before { height:0; border-top:2px dashed currentColor; background:none; }
