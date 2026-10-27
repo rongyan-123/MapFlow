@@ -24,7 +24,7 @@ function savedDetail(story: Conversation, agent: Character): ConversationDetail 
     messages: detail.graph.messages.map(message => ({ ...message, characterId: message.role === 'assistant' ? agent.characterId : null,
       ...(message.messageId === 'message-assistant-1' ? { content: `${agent.card.name}的学习记录` } : {}) })) } };
 }
-function mountLearning(stories = [storyA], agents = [agentA, agentB], options: { available?: boolean; failCharactersOnce?: boolean; withMap?: boolean } = {}) {
+function mountLearning(stories = [storyA], agents = [agentA, agentB], options: { available?: boolean; failCharactersOnce?: boolean; withMap?: boolean; initialMapVisible?: boolean } = {}) {
   const records = new Map(stories.map(story => [story.conversationId, savedDetail(story, agents.find(agent => agent.characterId === story.characterId)!)]));
   let characterFailures = options.failCharactersOnce ? 1 : 0;
   const requests: Array<{ path: string; options?: RequestInit }> = [];
@@ -63,7 +63,7 @@ function mountLearning(stories = [storyA], agents = [agentA, agentB], options: {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(SESSION_QUERY_KEY, { account: { playerId: accountId, username: '小明', status: 'active', isAdmin: false }, csrfToken: 'csrf' });
   function LearningLayout() {
-    const [mapVisible, setMapVisible] = useState(false);
+    const [mapVisible, setMapVisible] = useState(options.initialMapVisible ?? false);
     return <SceneWorkspace owner={{ accountId, csrfToken: 'csrf', userName: '小明', scene: 'learning', areaId, available: options.available ?? true }} navigate={vi.fn()}
       headerExtra={options.withMap && <button onClick={() => setMapVisible(previous => !previous)}>{mapVisible ? '返回学习聊天' : '查看学习地图'}</button>}
       mapVisible={mapVisible} mapPane={<section aria-label="学习地图">当前学习地图</section>} />;
@@ -90,6 +90,28 @@ it('closes history when the learning map opens and lets the learner restore it w
   await waitFor(() => expect(screen.queryByRole('complementary')).not.toBeInTheDocument());
   expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('尚未发送的学习问题');
   expect(requests.filter(request => request.options?.method === 'POST' && request.path.endsWith('/executions'))).toEqual([]);
+});
+
+it.each([false, true])('restores the map width after history closes, including initial map visibility %s', async initialMapVisible => {
+  const storageKey = `mapflow.layout.canvas.${accountId}.map`;
+  localStorage.setItem(storageKey, '681');
+  const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    const room = this.classList.contains('mf-chat-layout') && document.querySelector('.mf-history-sidebar') ? 936 : 1171;
+    return new DOMRect(0, 0, parseFloat(this.style.getPropertyValue('--panel-width')) || room, 800);
+  });
+  try {
+    mountLearning([storyA], [agentA, agentB], { withMap: true, initialMapVisible });
+    if (!initialMapVisible) {
+      await screen.findByText('逻辑向导的学习记录');
+      fireEvent.click(screen.getByRole('button', { name: '查看学习地图' }));
+    }
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '展开会话历史' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('separator', { name: '调整地图与聊天宽度' })).toHaveAttribute('aria-valuenow', '681');
+    expect(localStorage.getItem(storageKey)).toBe('681');
+  } finally {
+    bounds.mockRestore();
+  }
 });
 
 it('opens the learning map before a conversation exists without starting an execution', async () => {
