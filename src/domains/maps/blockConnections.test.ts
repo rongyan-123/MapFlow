@@ -9,6 +9,11 @@ const dependencies: SkillEdge[] = [
 ];
 
 describe('块布局关联线', () => {
+  it('carries completion independently from the stable branch and selected relation',()=>{
+    const edges=buildBlockConnections(dependencies,'selected','relationship',undefined,new Set(['before']));
+    expect(edges[0].data).toMatchObject({relation:'incoming',sourceLit:true,targetLit:false});
+    expect(edges[1].data).toMatchObject({relation:'outgoing',sourceLit:false,targetLit:false});
+  });
   it('keeps each cross-branch endpoint in its own branch color without changing the dependency direction',()=>{
     const branches=new Map([
       ['before',{key:'category:a',label:'基础',tone:'teal' as const}],

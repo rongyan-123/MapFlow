@@ -8,6 +8,18 @@ const geometry=vi.hoisted(()=>({nodes:[
 ]}));
 vi.mock('@xyflow/react',()=>({useStore:()=>geometry.nodes}));
 
+it('keeps unfinished ports neutral and only sends colored flow from a completed source',()=>{
+  const props={id:'edge',source:'a',target:'b',data:{relation:'outgoing',edgeType:'prerequisite',lane:0,sourceTone:'teal',targetTone:'violet',sourceLit:false,targetLit:false}} as React.ComponentProps<typeof BlockConnectionEdge>;
+  const view=render(<svg><BlockConnectionEdge {...props} /></svg>);
+  expect(view.container.querySelector('[data-port="source"]')).toHaveStyle({fill:'var(--mf-map-unlit-accent)'});
+  expect(view.container.querySelector('[data-port="target"]')).toHaveStyle({fill:'var(--mf-map-unlit-accent)'});
+  expect(view.container.querySelectorAll('.mapflow-connection-flow')).toHaveLength(0);
+  view.rerender(<svg><BlockConnectionEdge {...props} data={{...props.data!,sourceLit:true}} /></svg>);
+  expect(view.container.querySelector('[data-port="source"]')).toHaveStyle({fill:'var(--mf-branch-teal)'});
+  expect(view.container.querySelector('[data-port="target"]')).toHaveStyle({fill:'var(--mf-map-unlit-accent)'});
+  expect(view.container.querySelectorAll('.mapflow-connection-flow')).toHaveLength(3);
+});
+
 it('uses the real orthogonal route for every flow layer and updates ports when a card moves',()=>{
   const props={id:'edge',source:'a',target:'b',data:{relation:'incoming',edgeType:'prerequisite',lane:0,sourceTone:'teal',targetTone:'violet'}} as React.ComponentProps<typeof BlockConnectionEdge>;
   const view=render(<svg><BlockConnectionEdge {...props} /></svg>);

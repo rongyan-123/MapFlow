@@ -7,6 +7,8 @@ import NodeNoteDialog from './NodeNoteDialog';
 import MapProgressOverview from './MapProgressOverview';
 import CompletionCelebration from './CompletionCelebration';
 import { describePublicError } from '../../lib/publicErrors';
+import { useBulkNodeCompletion } from '../../domains/maps/useBulkNodeCompletion';
+import MapBulkActions from './MapBulkActions';
 
 interface Props {
   snapshot: LearningTreeSnapshot;
@@ -51,6 +53,17 @@ export default function MapView({
   const detailPanel = useRef<HTMLElement>(null);
   const detailButton = useRef<HTMLButtonElement>(null);
   const selected = snapshot.nodes.find(node => node.id === selectedId);
+  const bulkAvailable = displayMode === 'personal' && Boolean(onSetCompleted && onSetProgress);
+  const bulkKey = bulkAvailable ? `mapflow.bulk-completion.v1.${accountId}.${entryId ?? snapshot.tree.id}.${snapshot.tree.id}` : undefined;
+  const bulkScope = saveScope.current;
+  const bulk = useBulkNodeCompletion({ snapshot, storageKey: bulkKey, onSetCompleted, onSetProgress,
+    blocked: Boolean(saving || completionPending || progressPending),
+    onBusyChange: busy => {
+      if (!bulkScope.active || saveScope.current !== bulkScope) return;
+      bulkScope.saving = busy;
+      setSaving(busy);
+    },
+  });
 
   useEffect(() => {
     setSelectedId(initialNodeId ?? null);
@@ -80,6 +93,7 @@ export default function MapView({
     setSaving(true);
     try {
       await persist();
+      if (source.active && saveScope.current === source) bulk.forgetNode(nodeId);
       if (source.active && saveScope.current === source && nextPercent === 100 && previousPercent < 100) {
         setCelebration({ title: node.title, sequence: ++celebrationSequence.current });
       }
@@ -93,9 +107,12 @@ export default function MapView({
 
   return <div className="mf-map-view">
     <div className="mf-map-controls">
-      <Button className="mf-block-sort-button" variant={layout === 'blocks' ? 'primary' : 'secondary'}
+      <div className="mf-map-toolbar-actions"><Button className="mf-block-sort-button" variant={layout === 'blocks' ? 'primary' : 'secondary'}
         aria-pressed={layout === 'blocks'} title={layout === 'blocks' ? '再次点击恢复知识关系' : '按学习块整理地图节点'}
         onClick={() => setLayout(previous => previous === 'blocks' ? 'relationship' : 'blocks')}>按块排序</Button>
+      {bulkAvailable && <MapBulkActions key={bulkKey} disabled={Boolean(saving || completionPending || progressPending || !snapshot.nodes.length)}
+        allCompleted={snapshot.nodes.every(node => progressPercentForNode(snapshot.progress.find(item => item.node_id === node.id)) === 100)}
+        undoCount={bulk.undoCount} onLight={bulk.light} onUndo={bulk.undo} />}</div>
       {selected ? <div className="mf-map-selection">
         <button ref={detailButton} type="button" className="mf-map-selection-title" aria-expanded={detailsOpen}
           aria-label={`查看节点详情：${selected.title}`} onClick={() => setDetailsOpen(true)}>{selected.title}</button>
@@ -104,6 +121,9 @@ export default function MapView({
         ? (snapshot.node_block_assignments?.length ? '再次点击恢复知识关系' : '暂无节点分组，仍显示知识关系')
         : '点击节点查看内容'}</span>}
     </div>
+    {bulk.busy && <p role="status" className="mf-map-bulk-status">{bulk.notice} · {bulk.processed}/{bulk.total}</p>}
+    {!bulk.busy && bulk.notice && <p role="status" className="mf-map-bulk-status">{bulk.notice}</p>}
+    {bulk.error && <p role="alert" className="mf-map-bulk-status mf-status--error">{bulk.error}</p>}
     {Boolean(error) && <p role="alert" className="mf-status mf-status--error">{describePublicError(error)}</p>}
     <div className="mf-map-stage">
       <div className="mf-map-canvas">{snapshot.nodes.length

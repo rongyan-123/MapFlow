@@ -4,9 +4,9 @@ import type { BranchTone, NodeBranch } from './branchColors';
 
 export interface ConnectionRect { x: number; y: number; width: number; height: number }
 interface Point { x: number; y: number }
-export type BlockConnection = Edge<{ relation: 'neutral' | 'incoming' | 'outgoing'; lane: number; edgeType: string; sourceTone?: BranchTone; targetTone?: BranchTone; hasFocus?: boolean }, 'blockConnection'>;
+export type BlockConnection = Edge<{ relation: 'neutral' | 'incoming' | 'outgoing'; lane: number; edgeType: string; sourceTone?: BranchTone; targetTone?: BranchTone; sourceLit?: boolean; targetLit?: boolean; hasFocus?: boolean }, 'blockConnection'>;
 
-export function buildBlockConnections(edges: SkillEdge[], selectedNodeId: string | null, layoutMode: TreeLayoutMode = 'blocks', branches?: ReadonlyMap<string, NodeBranch>): BlockConnection[] {
+export function buildBlockConnections(edges: SkillEdge[], selectedNodeId: string | null, layoutMode: TreeLayoutMode = 'blocks', branches?: ReadonlyMap<string, NodeBranch>, litNodes?: ReadonlySet<string>): BlockConnection[] {
   if (layoutMode === 'blocks' && !selectedNodeId) return [];
   const groups = new Map<string, SkillEdge[]>();
   for (const edge of edges) {
@@ -35,6 +35,8 @@ export function buildBlockConnections(edges: SkillEdge[], selectedNodeId: string
         edgeType: edge.edge_type,
         sourceTone: branches?.get(edge.source_node_id)?.tone,
         targetTone: branches?.get(edge.target_node_id)?.tone,
+        sourceLit: litNodes ? litNodes.has(edge.source_node_id) : true,
+        targetLit: litNodes ? litNodes.has(edge.target_node_id) : true,
         hasFocus: !!selectedNodeId,
       },
     }));

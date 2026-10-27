@@ -26,6 +26,8 @@ const paths = {
   help: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9 9a3 3 0 0 1 6 0c0 2-3 2-3 5m0 3h.01',
   code: 'm8 6-6 6 6 6m8-12 6 6-6 6M14 4l-4 16',
   check: 'm5 12 4 4L19 6',
+  lock: 'M6 10h12v11H6V10Zm3 0V6a3 3 0 0 1 6 0v4m-3 4v3',
+  unlock: 'M6 10h12v11H6V10Zm3 0V6a3 3 0 0 1 5.8-1M12 14v3',
   clock: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM12 7v5l3 2',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
   stop: 'M6 6h12v12H6V6Z',

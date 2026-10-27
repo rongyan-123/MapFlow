@@ -56,6 +56,21 @@ function renderNode(displayMode: 'showcase' | 'personal', title?: string) {
 }
 
 describe('SkillNode 渲染', () => {
+  it.each([
+    ['not_started',0,'false'],
+    ['in_progress',35,'false'],
+    ['completed',100,'true'],
+    ['mastered',100,'true'],
+  ] as const)('only lights a personal %s node according to its saved completion', (status,percent,lit)=>{
+    const node=makeFlowNode('personal');
+    node.data.branchTone='rose';node.data.ready=false;
+    node.data.progress={node_id:node.id,status,progress_percent:percent,evidence:''};
+    const props={data:node.data,selected:true} as React.ComponentProps<typeof SkillNodeComponent>;
+    const view=render(<SkillNodeComponent {...props} />);
+    expect(view.container.firstElementChild).toHaveAttribute('data-mapflow-lit',lit);
+    expect(view.container.firstElementChild).toHaveAttribute('data-branch-tone','rose');
+    expect(screen.getByText(`${percent}%`)).toBeVisible();
+  });
   it('preserves its branch identity while waiting and while changing learning status',()=>{
     const node=makeFlowNode('personal');node.data.branchTone='teal';node.data.ready=false;
     const props={data:node.data,selected:false} as React.ComponentProps<typeof SkillNodeComponent>;
@@ -72,13 +87,13 @@ describe('SkillNode 渲染', () => {
     const select = vi.fn();
     const props = { data: node.data, selected: false } as React.ComponentProps<typeof SkillNodeComponent>;
     const view = render(<div onClick={select}><SkillNodeComponent {...props} /></div>);
-    expect(screen.getByText('前置未完成，仍可查看')).toBeVisible();
+    expect(screen.getByText('前置未完成')).toBeVisible();
     expect(screen.getByText(`${percent}%`)).toBeVisible();
     expect(screen.getByText(label)).toBeVisible();
     fireEvent.click(screen.getByRole('heading', { name: '测试节点' }));
     expect(select).toHaveBeenCalledOnce();
     view.rerender(<div onClick={select}><SkillNodeComponent {...props} data={{ ...node.data, ready: true }} /></div>);
-    expect(screen.queryByText('前置未完成，仍可查看')).not.toBeInTheDocument();
+    expect(screen.queryByText('前置未完成')).not.toBeInTheDocument();
     expect(screen.getByText(`${percent}%`)).toBeVisible();
     expect(screen.getByText(label)).toBeVisible();
   });

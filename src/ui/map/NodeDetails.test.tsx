@@ -40,6 +40,12 @@ const snapshot: LearningTreeSnapshot = {
 };
 
 describe('NodeDetailPanel 知识聊天入口', () => {
+  it('focuses the detailed-progress field when the user opens it',async()=>{
+    const user=userEvent.setup();
+    render(<NodeDetailPanel snapshot={snapshot} selectedNodeId="node-1" displayMode="personal" onSetProgress={vi.fn()} />);
+    await user.click(screen.getByRole('button',{name:'填写详细进度'}));
+    expect(screen.getByRole('spinbutton',{name:'节点完成百分比'})).toHaveFocus();
+  });
   it('在个人树节点详情中点击聊天入口会通知上层', async () => {
     const user = userEvent.setup();
     const onOpenChat = vi.fn();

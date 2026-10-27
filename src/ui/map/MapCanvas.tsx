@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import {
+  progressPercentForNode,
+} from '../../types/learning';
+import {
   Background,
   BackgroundVariant,
   Controls,
@@ -84,6 +87,9 @@ export default function SkillTreeCanvas({
     () => new Map(snapshot.progress.map((item) => [item.node_id, item])),
     [snapshot.progress],
   );
+  const litNodes = useMemo(() => displayMode === 'personal'
+    ? new Set(snapshot.nodes.filter(node => progressPercentForNode(progressMap.get(node.id)) === 100).map(node => node.id))
+    : undefined, [displayMode, snapshot.nodes, progressMap]);
   const readiness = useMemo(
     () => getNodeReadiness(snapshot.nodes.map(node => node.id), snapshot.edges, snapshot.progress),
     [snapshot.nodes, snapshot.edges, snapshot.progress],
@@ -123,8 +129,8 @@ export default function SkillTreeCanvas({
     return computeTreeLayout(snapshot.nodes, snapshot.edges);
   }, [blockLayout.positions, layoutMode, snapshot.edges, snapshot.nodes]);
   const blockConnections = useMemo(
-    () => buildBlockConnections(snapshot.edges, selectedNodeId, layoutMode, branches),
-    [snapshot.edges, selectedNodeId, layoutMode, branches],
+    () => buildBlockConnections(snapshot.edges, selectedNodeId, layoutMode, branches, litNodes),
+    [snapshot.edges, selectedNodeId, layoutMode, branches, litNodes],
   );
   const connectionRoles = useMemo(() => {
     const roles = new Map<string, 'focus' | 'incoming' | 'outgoing'>();
@@ -338,6 +344,7 @@ export default function SkillTreeCanvas({
             return (node.data as BlockLaneData).color ?? 'var(--mf-map-edge)';
           }
           const flowNode = node as SkillFlowNode;
+          if (displayMode === 'personal' && progressPercentForNode(flowNode.data.progress) < 100) return 'var(--mf-map-unlit-accent)';
           return `var(--mf-branch-${flowNode.data.branchTone??'blue'})`;
         }}
         maskColor="color-mix(in srgb, var(--mf-map-paper) 75%, transparent)"

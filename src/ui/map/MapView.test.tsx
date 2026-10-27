@@ -13,6 +13,130 @@ const snapshot:LearningTreeSnapshot={
 beforeEach(()=>{vi.stubGlobal('ResizeObserver',class{observe(){}unobserve(){}disconnect(){}});});
 afterEach(()=>{vi.unstubAllGlobals();localStorage.clear();});
 
+it('confirms bulk lighting and can restore the original zero and partial progress without changing completed nodes',async()=>{
+  const saved:LearningTreeSnapshot={...snapshot,nodes:['zero','partial','done'].map(id=>({...snapshot.nodes[0],id,title:id})),progress:[
+    {node_id:'partial',status:'in_progress',progress_percent:35,evidence:''},
+    {node_id:'done',status:'completed',progress_percent:100,evidence:''},
+  ]};
+  const complete=vi.fn().mockResolvedValue(undefined),restore=vi.fn().mockResolvedValue(undefined);
+  render(<MapView snapshot={saved} displayMode="personal" accountId="account" entryId="entry" onSetCompleted={complete} onSetProgress={restore} />);
+  fireEvent.click(screen.getByRole('button',{name:'全部点亮'}));
+  let dialog=screen.getByRole('dialog',{name:'全部点亮'});
+  expect(within(dialog).getByText('确定要点亮全部节点吗？建议一个个节点开始学，全部点亮后，可能影响学习你的学习计划。且可回退。如果要查看学习全景，建议去【学习清单总览】看')).toBeVisible();
+  expect(complete).not.toHaveBeenCalled();
+  fireEvent.click(within(dialog).getByRole('button',{name:'取消'}));
+  expect(complete).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button',{name:'全部点亮'}));
+  dialog=screen.getByRole('dialog',{name:'全部点亮'});
+  fireEvent.click(within(dialog).getByRole('button',{name:'确认点亮'}));
+  await waitFor(()=>expect(complete.mock.calls).toEqual([['zero',true],['partial',true]]));
+  const undo=await screen.findByRole('button',{name:'撤销本次点亮'});
+  await waitFor(()=>expect(undo).toBeEnabled());
+  fireEvent.click(undo);
+  await waitFor(()=>expect(restore.mock.calls).toEqual([['zero',0],['partial',35]]));
+  await waitFor(()=>expect(screen.queryByRole('button',{name:'撤销本次点亮'})).not.toBeInTheDocument());
+});
+
+it('keeps undo after reload, isolates it by account and map, and does not repeat writes on mount',async()=>{
+  const complete=vi.fn().mockResolvedValue(undefined),restore=vi.fn().mockResolvedValue(undefined);
+  const props={snapshot,displayMode:'personal' as const,accountId:'first',entryId:'entry',onSetCompleted:complete,onSetProgress:restore};
+  const first=render(<MapView {...props} />);
+  fireEvent.click(screen.getByRole('button',{name:'全部点亮'}));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'确认点亮'}));
+  await waitFor(()=>expect(screen.getByRole('button',{name:'撤销本次点亮'})).toBeEnabled());
+  first.unmount();
+  const second=render(<MapView {...props} />);
+  expect(screen.getByRole('button',{name:'撤销本次点亮'})).toBeEnabled();
+  expect(complete).toHaveBeenCalledTimes(1);
+  second.rerender(<MapView {...props} accountId="another-account" />);
+  expect(screen.queryByRole('button',{name:'撤销本次点亮'})).not.toBeInTheDocument();
+  second.rerender(<MapView {...props} entryId="another-map" />);
+  expect(screen.queryByRole('button',{name:'撤销本次点亮'})).not.toBeInTheDocument();
+  second.rerender(<MapView {...props} />);
+  fireEvent.click(screen.getByRole('button',{name:'撤销本次点亮'}));
+  await waitFor(()=>expect(restore).toHaveBeenCalledWith('node',0));
+  expect(complete).toHaveBeenCalledTimes(1);
+});
+
+it('stops after a failed bulk request and keeps attempted nodes recoverable without claiming success',async()=>{
+  const saved={...snapshot,nodes:['first','uncertain','untouched'].map(id=>({...snapshot.nodes[0],id,title:id})),
+    progress:[{node_id:'uncertain',status:'in_progress' as const,progress_percent:35,evidence:''}]};
+  const complete=vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('Lost response'));
+  const restore=vi.fn().mockResolvedValue(undefined);
+  render(<MapView snapshot={saved} displayMode="personal" accountId="account" onSetCompleted={complete} onSetProgress={restore} />);
+  fireEvent.click(screen.getByRole('button',{name:'全部点亮'}));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'确认点亮'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('1/3');
+  expect(screen.queryByText('已点亮全部节点，可撤销本次点亮。')).not.toBeInTheDocument();
+  expect(complete.mock.calls).toEqual([['first',true],['uncertain',true]]);
+  fireEvent.click(screen.getByRole('button',{name:'撤销本次点亮'}));
+  await waitFor(()=>expect(restore.mock.calls).toEqual([['first',0],['uncertain',35]]));
+});
+
+it('prevents duplicate and single-node writes during a bulk save and stops the queue when its map changes',async()=>{
+  let finish!:()=>void;
+  const complete=vi.fn(()=>new Promise<void>(resolve=>{finish=resolve;})),restore=vi.fn().mockResolvedValue(undefined);
+  const twoNodes={...snapshot,nodes:[snapshot.nodes[0],{...snapshot.nodes[0],id:'next'}]};
+  const props={snapshot:twoNodes,displayMode:'personal' as const,accountId:'account',entryId:'old',initialNodeId:'node',onSetCompleted:complete,onSetProgress:restore};
+  const view=render(<MapView {...props} />);
+  fireEvent.click(screen.getByRole('button',{name:'全部点亮'}));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'确认点亮'}));
+  expect(screen.getByRole('button',{name:'全部点亮'})).toBeDisabled();
+  expect(screen.getByRole('button',{name:'正在保存…'})).toBeDisabled();
+  fireEvent.click(screen.getByRole('button',{name:'全部点亮'}));
+  expect(complete).toHaveBeenCalledTimes(1);
+  view.rerender(<MapView {...props} entryId="new" snapshot={{...twoNodes,tree:{...twoNodes.tree,id:'new-tree'}}} />);
+  await act(async()=>finish());
+  expect(complete.mock.calls).toEqual([['node',true]]);
+  expect(screen.queryByRole('button',{name:'撤销本次点亮'})).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'标记为已完成'})).toBeEnabled();
+});
+
+it('does not begin bulk writes if the browser cannot retain a recoverable checkpoint',async()=>{
+  const storage=vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw new DOMException('Full','QuotaExceededError');});
+  const complete=vi.fn().mockResolvedValue(undefined),restore=vi.fn().mockResolvedValue(undefined);
+  try{
+    render(<MapView snapshot={snapshot} displayMode="personal" accountId="account" onSetCompleted={complete} onSetProgress={restore} />);
+    fireEvent.click(screen.getByRole('button',{name:'全部点亮'}));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'确认点亮'}));
+    expect(await screen.findByRole('alert')).toHaveTextContent('无法保存撤销记录');
+    expect(complete).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button',{name:'撤销本次点亮'})).not.toBeInTheDocument();
+  }finally{storage.mockRestore();}
+});
+
+it('keeps failed undo entries available and removes later manual edits from the undo record',async()=>{
+  const complete=vi.fn().mockResolvedValue(undefined);
+  const restore=vi.fn().mockRejectedValueOnce(new Error('Unavailable')).mockResolvedValue(undefined);
+  render(<MapView snapshot={snapshot} displayMode="personal" accountId="account" initialNodeId="node" onSetCompleted={complete} onSetProgress={restore} />);
+  fireEvent.click(screen.getByRole('button',{name:'全部点亮'}));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'确认点亮'}));
+  await waitFor(()=>expect(screen.getByRole('button',{name:'撤销本次点亮'})).toBeEnabled());
+  fireEvent.click(screen.getByRole('button',{name:'撤销本次点亮'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('恢复');
+  expect(screen.getByRole('button',{name:'撤销本次点亮'})).toBeEnabled();
+  fireEvent.click(screen.getByRole('button',{name:'填写详细进度'}));
+  fireEvent.change(screen.getByRole('spinbutton',{name:'节点完成百分比'}),{target:{value:'60'}});
+  fireEvent.click(screen.getByRole('button',{name:'保存详细进度'}));
+  await waitFor(()=>expect(restore).toHaveBeenLastCalledWith('node',60));
+  await waitFor(()=>expect(screen.queryByRole('button',{name:'撤销本次点亮'})).not.toBeInTheDocument());
+});
+
+it('preserves a newer percentage from another view when undoing a previous bulk light',async()=>{
+  const initial={...snapshot,progress:[{node_id:'node',status:'in_progress' as const,progress_percent:35,evidence:''}]};
+  const complete=vi.fn().mockResolvedValue(undefined),restore=vi.fn().mockResolvedValue(undefined);
+  const props={snapshot:initial,displayMode:'personal' as const,accountId:'account',onSetCompleted:complete,onSetProgress:restore};
+  const view=render(<MapView {...props} />);
+  fireEvent.click(screen.getByRole('button',{name:'全部点亮'}));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'确认点亮'}));
+  await waitFor(()=>expect(screen.getByRole('button',{name:'撤销本次点亮'})).toBeEnabled());
+  view.rerender(<MapView {...props} snapshot={{...initial,progress:[{...initial.progress[0],progress_percent:60}]}} />);
+  fireEvent.click(screen.getByRole('button',{name:'撤销本次点亮'}));
+  await waitFor(()=>expect(screen.queryByRole('button',{name:'撤销本次点亮'})).not.toBeInTheDocument());
+  expect(restore).not.toHaveBeenCalled();
+  expect(screen.getByRole('status')).toHaveTextContent('保留之后调整的进度');
+});
+
 it('sorts the real map into learning blocks from one button and can return to relationships',async()=>{
   render(<MapView snapshot={snapshot} displayMode="personal" accountId="account" />);
   const sort=screen.getByRole('button',{name:'按块排序'});
