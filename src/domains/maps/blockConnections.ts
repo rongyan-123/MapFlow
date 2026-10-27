@@ -1,11 +1,12 @@
 import type { Edge } from '@xyflow/react';
 import type { SkillEdge, TreeLayoutMode } from '../../types/learning';
+import type { BranchTone, NodeBranch } from './branchColors';
 
 export interface ConnectionRect { x: number; y: number; width: number; height: number }
 interface Point { x: number; y: number }
-export type BlockConnection = Edge<{ relation: 'neutral' | 'incoming' | 'outgoing'; lane: number; edgeType: string }, 'blockConnection'>;
+export type BlockConnection = Edge<{ relation: 'neutral' | 'incoming' | 'outgoing'; lane: number; edgeType: string; sourceTone?: BranchTone; targetTone?: BranchTone; hasFocus?: boolean }, 'blockConnection'>;
 
-export function buildBlockConnections(edges: SkillEdge[], selectedNodeId: string | null, layoutMode: TreeLayoutMode = 'blocks'): BlockConnection[] {
+export function buildBlockConnections(edges: SkillEdge[], selectedNodeId: string | null, layoutMode: TreeLayoutMode = 'blocks', branches?: ReadonlyMap<string, NodeBranch>): BlockConnection[] {
   if (layoutMode === 'blocks' && !selectedNodeId) return [];
   const groups = new Map<string, SkillEdge[]>();
   for (const edge of edges) {
@@ -32,74 +33,76 @@ export function buildBlockConnections(edges: SkillEdge[], selectedNodeId: string
           : edge.source_node_id === selectedNodeId ? 'outgoing' : 'neutral',
         lane: lanes.get(edge.id) ?? 0,
         edgeType: edge.edge_type,
+        sourceTone: branches?.get(edge.source_node_id)?.tone,
+        targetTone: branches?.get(edge.target_node_id)?.tone,
+        hasFocus: !!selectedNodeId,
       },
     }));
 }
 
-type Cubic = [Point, Point, Point, Point];
-
-function curveRoute(curves: Cubic[]) {
-  const start = curves[0][0];
-  const end = curves[curves.length - 1][3];
-  const path = `M ${start.x} ${start.y} ` + curves.map(([, a, b, endPoint]) =>
-    `C ${a.x} ${a.y} ${b.x} ${b.y} ${endPoint.x} ${endPoint.y}`,
-  ).join(' ');
-  // 与 SVG 同一条三次曲线的采样，用于检查卡片安全间隙。
-  const points = curves.flatMap(([p0, p1, p2, p3]) => {
-    const steps = Math.max(32, Math.ceil((Math.hypot(p1.x - p0.x, p1.y - p0.y) + Math.hypot(p2.x - p1.x, p2.y - p1.y) + Math.hypot(p3.x - p2.x, p3.y - p2.y)) / 8));
-    return Array.from({ length: steps + 1 }, (_, index) => {
-      const t = index / steps;
-      const u = 1 - t;
-      return {
-        x: u ** 3 * p0.x + 3 * u ** 2 * t * p1.x + 3 * u * t ** 2 * p2.x + t ** 3 * p3.x,
-        y: u ** 3 * p0.y + 3 * u ** 2 * t * p1.y + 3 * u * t ** 2 * p2.y + t ** 3 * p3.y,
-      };
-    });
-  });
-  return { start, end, path, points };
+function orthogonalRoute(vertices: Point[]) {
+  const points: Point[] = [];
+  for (const point of vertices) {
+    const last = points[points.length - 1];
+    if (last && last.x === point.x && last.y === point.y) continue;
+    const before = points[points.length - 2];
+    if (before && last && (before.x === last.x && last.x === point.x || before.y === last.y && last.y === point.y)) points.pop();
+    points.push(point);
+  }
+  const start = points[0];
+  const end = points[points.length - 1];
+  const path = `M ${start.x} ${start.y} ` + points.slice(1).map(point => `L ${point.x} ${point.y}`).join(' ');
+  const length = points.slice(1).reduce((total, point, index) => total + Math.abs(point.x - points[index].x) + Math.abs(point.y - points[index].y), 0);
+  return { start, end, path, points, length };
 }
 
 function intersects(points: Point[], obstacles: ConnectionRect[]) {
-  return points.some(({ x, y }) => obstacles.some((rect) =>
-    x > rect.x - 12 && x < rect.x + rect.width + 12 &&
-    y > rect.y - 12 && y < rect.y + rect.height + 12,
-  ));
+  return points.slice(1).some((end, index) => {
+    const start = points[index];
+    return obstacles.some(rect => start.x === end.x
+      ? start.x > rect.x && start.x < rect.x + rect.width && Math.max(start.y, end.y) > rect.y && Math.min(start.y, end.y) < rect.y + rect.height
+      : start.y > rect.y && start.y < rect.y + rect.height && Math.max(start.x, end.x) > rect.x && Math.min(start.x, end.x) < rect.x + rect.width);
+  });
 }
 
 export function getBlockConnectionRoute(source: ConnectionRect, target: ConnectionRect, obstacles: ConnectionRect[], lane = 0) {
   const sameRow = Math.abs(source.y - target.y) < Math.min(source.height, target.height) / 2;
   const down = target.y >= source.y;
-  const direction = down ? 1 : -1;
-  const start = { x: source.x + source.width / 2, y: source.y + (sameRow || down ? source.height : 0) };
-  const end = { x: target.x + target.width / 2, y: target.y + (sameRow || !down ? target.height : 0) };
-  const spread = (lane % 5) * 10;
-  if (sameRow) {
-    const bendY = Math.max(start.y, end.y) + 76 + spread;
-    return curveRoute([[start, { x: start.x, y: bendY }, { x: end.x, y: bendY }, end]]);
-  }
-  const bend = Math.max(48, Math.abs(end.y - start.y) * 0.45);
-  const sway = Math.abs(start.x - end.x) < 40 ? 32 + spread : spread;
-  const direct = curveRoute([[start, { x: start.x + sway, y: start.y + direction * bend }, { x: end.x - sway, y: end.y - direction * bend }, end]]);
-  if (!intersects(direct.points, obstacles)) return direct;
+  const sourceDirection = sameRow || down ? 1 : -1;
+  const targetDirection = sameRow || !down ? 1 : -1;
+  const start = { x: source.x + source.width / 2, y: source.y + (sourceDirection === 1 ? source.height : 0) };
+  const end = { x: target.x + target.width / 2, y: target.y + (targetDirection === 1 ? target.height : 0) };
+  const blockers = [...obstacles.map(rect => ({ x: rect.x - 12, y: rect.y - 12, width: rect.width + 24, height: rect.height + 24 })), source, target];
+  const exitY = start.y + sourceDirection * (20 + lane * 2);
+  const entryY = end.y + targetDirection * (20 + lane * 2);
+  const middleY = sameRow ? Math.max(start.y, end.y) + 56 + lane * 6 : (start.y + end.y) / 2 + lane * 4;
+  const direct = orthogonalRoute(start.x === end.x && !sameRow
+    ? [start, { x: start.x, y: exitY }, { x: start.x + lane * 8, y: exitY }, { x: end.x + lane * 8, y: entryY }, { x: end.x, y: entryY }, end]
+    : [start, { x: start.x, y: middleY }, { x: end.x, y: middleY }, end]);
+  if (!intersects(direct.points, blockers)) return direct;
 
-  // 跨多排时，从两端的排间空隙转入空列，避免曲线穿过中间卡片。
-  const exitY = start.y + direction * (48 + spread);
-  const entryY = end.y - direction * (48 + spread);
-  const corridorGap = 18 + lane * 7;
-  const candidates = [...new Set(obstacles.flatMap((rect) => [rect.x - corridorGap, rect.x + rect.width + corridorGap]))]
-    .sort((a, b) => (Math.abs(a - start.x) + Math.abs(a - end.x)) - (Math.abs(b - start.x) + Math.abs(b - end.x)));
-  for (const corridorX of candidates) {
-    const exit = { x: corridorX, y: exitY + direction * 28 };
-    const entry = { x: corridorX, y: entryY - direction * 28 };
-    const leftmost = Math.min(...obstacles.map((rect) => rect.x));
-    const rightmost = Math.max(...obstacles.map((rect) => rect.x + rect.width));
-    const bow = corridorX < leftmost ? -24 : corridorX > rightmost ? 24 : 0;
-    const routed = curveRoute([
-      [start, { x: start.x, y: exitY }, { x: corridorX, y: exitY }, exit],
-      [exit, { x: corridorX + bow, y: exit.y + (entry.y - exit.y) / 3 }, { x: corridorX + bow, y: exit.y + (entry.y - exit.y) * 2 / 3 }, entry],
-      [entry, { x: corridorX, y: entryY }, { x: end.x, y: entryY }, end],
-    ]);
-    if (!intersects(routed.points, obstacles)) return routed;
+  // Share the same port directions while routing through clear row/column gutters.
+  const gap = 18 + lane * 7;
+  const corridors = [...new Set(blockers.flatMap(rect => [rect.x - gap, rect.x + rect.width + gap]))]
+    .sort((first, second) => Math.abs(first - start.x) + Math.abs(first - end.x) - Math.abs(second - start.x) - Math.abs(second - end.x));
+  for (const corridorX of corridors) {
+    const routed = orthogonalRoute([start, { x: start.x, y: exitY }, { x: corridorX, y: exitY }, { x: corridorX, y: entryY }, { x: end.x, y: entryY }, end]);
+    if (!intersects(routed.points, blockers)) return routed;
   }
+  // A dragged card can obstruct the nearest exit. Try the other open row gutters.
+  const exitRows = [...new Set(blockers.flatMap(rect => [rect.y - gap, rect.y + rect.height + gap]))]
+    .filter(y => (y - start.y) * sourceDirection > 0)
+    .sort((first, second) => Math.abs(first - start.y) - Math.abs(second - start.y));
+  const entryRows = [...new Set(blockers.flatMap(rect => [rect.y - gap, rect.y + rect.height + gap]))]
+    .filter(y => (y - end.y) * targetDirection > 0)
+    .sort((first, second) => Math.abs(first - end.y) - Math.abs(second - end.y));
+  for (const nextExit of [exitY, ...exitRows.slice(0, 4)]) for (const nextEntry of [entryY, ...entryRows.slice(0, 4)]) {
+    if (intersects([start, { x: start.x, y: nextExit }], blockers) || intersects([{ x: end.x, y: nextEntry }, end], blockers)) continue;
+    for (const corridorX of corridors) {
+      const routed = orthogonalRoute([start, { x: start.x, y: nextExit }, { x: corridorX, y: nextExit }, { x: corridorX, y: nextEntry }, { x: end.x, y: nextEntry }, end]);
+      if (!intersects(routed.points, blockers)) return routed;
+    }
+  }
+  // Overlapping cards may leave no clear port exit; preserve the dependency and endpoints.
   return direct;
 }

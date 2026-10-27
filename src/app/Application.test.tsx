@@ -62,6 +62,9 @@ it('restores an owned learning area and preserves list entries through browser b
   expect(screen.queryByRole('combobox',{name:'切换学习区'})).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:'进入学习区'}));
   await screen.findByRole('combobox',{name:'切换学习区'});
+  expect(screen.getByRole('button',{name:'查看学习地图'})).toBeVisible();
+  fireEvent.click(screen.getByRole('button',{name:'查看学习地图'}));
+  expect(screen.getByRole('button',{name:'返回学习聊天'})).toBeVisible();
   const historyLength=window.history.length;
   act(()=>window.history.back());
   await waitFor(()=>expect(window.location.pathname+window.location.search).toBe('/learning'));
@@ -69,6 +72,7 @@ it('restores an owned learning area and preserves list entries through browser b
   act(()=>window.history.forward());
   await waitFor(()=>expect(window.location.pathname+window.location.search).toBe('/learning?area=owned-area'));
   await screen.findByRole('combobox',{name:'切换学习区'});
+  expect(screen.getByRole('button',{name:'返回学习聊天'})).toBeVisible();
   act(()=>window.history.back());
   await waitFor(()=>expect(window.location.pathname+window.location.search).toBe('/learning'));
   expect(await screen.findByRole('button',{name:'进入学习区'})).toBeVisible();

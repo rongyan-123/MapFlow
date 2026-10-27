@@ -56,6 +56,15 @@ function renderNode(displayMode: 'showcase' | 'personal', title?: string) {
 }
 
 describe('SkillNode 渲染', () => {
+  it('preserves its branch identity while waiting and while changing learning status',()=>{
+    const node=makeFlowNode('personal');node.data.branchTone='teal';node.data.ready=false;
+    const props={data:node.data,selected:false} as React.ComponentProps<typeof SkillNodeComponent>;
+    const view=render(<SkillNodeComponent {...props} />);
+    expect(view.container.firstElementChild).toHaveAttribute('data-branch-tone','teal');
+    view.rerender(<SkillNodeComponent {...props} selected data={{...node.data,progress:{node_id:node.id,status:'completed',progress_percent:100,evidence:''}}} />);
+    expect(view.container.firstElementChild).toHaveAttribute('data-branch-tone','teal');
+    expect(screen.getByText('100%')).toBeVisible();
+  });
   it.each([[35, 'in_progress', '进行中'], [100, 'completed', '已完成']] as const)('前置未完成时保留%s%%进度和点击，点亮后更新展示', (percent, status, label) => {
     const node = makeFlowNode('personal');
     node.data.ready = false;

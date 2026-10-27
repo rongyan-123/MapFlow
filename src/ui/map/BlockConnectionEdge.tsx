@@ -27,24 +27,39 @@ function BlockConnectionEdge({ source, target, data }: EdgeProps<BlockConnection
   }, [cards, source, target, data?.lane]);
   if (!route) return null;
   const highlighted = data?.relation === 'incoming' || data?.relation === 'outgoing';
-  const color = data?.relation === 'incoming' ? 'var(--mf-map-incoming)' : data?.relation === 'outgoing' ? 'var(--mf-map-outgoing)' : 'var(--mf-map-edge)';
+  const sourceColor = `var(--mf-branch-${data?.sourceTone ?? 'blue'})`;
+  const targetColor = `var(--mf-branch-${data?.targetTone ?? data?.sourceTone ?? 'blue'})`;
+  const gradientId = `${markerId}-branch`;
+  const color = sourceColor === targetColor ? sourceColor : `url(#${gradientId})`;
+  const duration = Math.min(14, Math.max(3, route.length / 85));
+  const flowStyle = { '--flow-distance': `${route.length}px`, '--flow-duration': `${duration}s`, '--flow-delay': `${-(data?.lane ?? 0) * .7}s` } as CSSProperties;
 
   return (
     <g
       className="mapflow-block-connection"
       data-relation={data?.relation}
-      style={{ '--connection-color': color } as CSSProperties}
+      data-has-focus={data?.hasFocus || undefined}
+      data-source-tone={data?.sourceTone}
+      data-target-tone={data?.targetTone}
+      style={{ ...flowStyle, '--connection-color': color } as CSSProperties}
       data-edge-type={data?.edgeType}
       aria-label={data?.relation === 'incoming' ? '直接前置' : data?.relation === 'outgoing' ? '直接后续' : data?.edgeType === 'prerequisite' ? '学习依赖' : '知识关联'}
     >
       <defs>
-        <marker id={markerId} viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto" markerUnits="userSpaceOnUse">
-          <path d="M 1 1 L 11 6 L 1 11 L 4 6 Z" fill={color} />
+        <linearGradient id={gradientId} gradientUnits="userSpaceOnUse" x1={route.start.x} y1={route.start.y} x2={route.end.x} y2={route.end.y}>
+          <stop offset="25%" stopColor={sourceColor} /><stop offset="85%" stopColor={targetColor} />
+        </linearGradient>
+        <marker id={markerId} viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto" markerUnits="userSpaceOnUse">
+          <path d="M 1 1 L 11 6 L 1 11 L 4 6 Z" fill={targetColor} />
         </marker>
       </defs>
       {highlighted && <path d={route.path} className="mapflow-connection-outline" />}
       <path d={route.path} className="mapflow-connection-line" markerEnd={`url(#${markerId})`} />
-      {highlighted && <><circle cx={route.start.x} cy={route.start.y} r="4" className="mapflow-connection-port" /><circle cx={route.end.x} cy={route.end.y} r="3" className="mapflow-connection-port" /></>}
+      <path d={route.path} className="mapflow-connection-flow mapflow-connection-flow--tail" strokeDasharray={`24 ${Math.max(1, route.length - 24)}`} />
+      <path d={route.path} className="mapflow-connection-flow mapflow-connection-flow--head" strokeDasharray={`6 ${Math.max(1, route.length - 6)}`} style={{ '--flow-start': '-18px' } as CSSProperties} />
+      <path d={route.path} className="mapflow-connection-flow mapflow-connection-flow--core" strokeDasharray={`6 ${Math.max(1, route.length - 6)}`} style={{ '--flow-start': '-18px' } as CSSProperties} />
+      <circle data-port="source" cx={route.start.x} cy={route.start.y} r={highlighted ? 3.5 : 2.5} className="mapflow-connection-port" style={{ fill: sourceColor }} />
+      <circle data-port="target" cx={route.end.x} cy={route.end.y} r={highlighted ? 3.5 : 2.5} className="mapflow-connection-port" style={{ fill: targetColor }} />
     </g>
   );
 }

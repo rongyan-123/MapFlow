@@ -35,6 +35,7 @@ import { getReadableInitialZoom,getStartingViewport } from '../../domains/maps/v
 import BlockConnectionEdge from './BlockConnectionEdge';
 import { buildBlockConnections } from '../../domains/maps/blockConnections';
 import { getNodeReadiness } from '../../domains/maps/nodeReadiness';
+import { getBranchTone, getNodeBranches } from '../../domains/maps/branchColors';
 
 interface BlockLaneData extends Record<string, unknown> {
   name: string;
@@ -78,6 +79,7 @@ export default function SkillTreeCanvas({
   onSelectNode,
   viewportStorageKey,
 }: SkillTreeCanvasProps) {
+  const branches = useMemo(() => getNodeBranches(snapshot), [snapshot.nodes, snapshot.blocks, snapshot.node_block_assignments, snapshot.tree.id]);
   const progressMap = useMemo(
     () => new Map(snapshot.progress.map((item) => [item.node_id, item])),
     [snapshot.progress],
@@ -121,8 +123,8 @@ export default function SkillTreeCanvas({
     return computeTreeLayout(snapshot.nodes, snapshot.edges);
   }, [blockLayout.positions, layoutMode, snapshot.edges, snapshot.nodes]);
   const blockConnections = useMemo(
-    () => buildBlockConnections(snapshot.edges, selectedNodeId, layoutMode),
-    [snapshot.edges, selectedNodeId, layoutMode],
+    () => buildBlockConnections(snapshot.edges, selectedNodeId, layoutMode, branches),
+    [snapshot.edges, selectedNodeId, layoutMode, branches],
   );
   const connectionRoles = useMemo(() => {
     const roles = new Map<string, 'focus' | 'incoming' | 'outgoing'>();
@@ -153,7 +155,7 @@ export default function SkillTreeCanvas({
               data: {
                 name: lane.name,
                 description: null,
-                color: lane.color,
+                color: `var(--mf-branch-${getBranchTone(`block:${lane.blockId}`)})`,
               },
             }))
           : [];
@@ -170,6 +172,7 @@ export default function SkillTreeCanvas({
           node,
           progress: progressMap.get(node.id) ?? null,
           ready: readiness.get(node.id) ?? true,
+          branchTone: branches.get(node.id)?.tone,
           isCurrent: node.id === snapshot.current_node_id,
           displayMode,
           layoutMode,
@@ -183,6 +186,7 @@ export default function SkillTreeCanvas({
     },
     [
       blockLayout.lanes,
+      branches,
       blockNameByNodeId,
       connectionRoles,
       displayMode,
@@ -316,11 +320,11 @@ export default function SkillTreeCanvas({
       }}
       minZoom={0.1}
       maxZoom={2.5}
-      defaultEdgeOptions={{ type: 'smoothstep' }}
+      defaultEdgeOptions={{ type: 'blockConnection' }}
       proOptions={{ hideAttribution: true }}
       ariaLabelConfig={{'controls.ariaLabel':'地图操作','controls.zoomIn.ariaLabel':'放大地图','controls.zoomOut.ariaLabel':'缩小地图','controls.fitView.ariaLabel':'显示整张地图','controls.interactive.ariaLabel':'切换地图拖动','minimap.ariaLabel':'地图总览'}}
     >
-      {selectedNodeId && <div className="mf-map-legend"><span>直接前置</span><span>→ 选中节点 →</span><span>直接后续</span></div>}
+      {selectedNodeId && <div className="mf-map-legend"><span>虚线：直接前置</span><span>→ 选中节点 →</span><span>实线：直接后续</span></div>}
       <FitViewWhenReady
         fitGraphView={fitGraphView}
         fitViewKey={fitViewKey}
@@ -333,14 +337,8 @@ export default function SkillTreeCanvas({
           if (node.type === 'block') {
             return (node.data as BlockLaneData).color ?? 'var(--mf-map-edge)';
           }
-          if (displayMode === 'showcase') return 'var(--mf-map-incoming)';
           const flowNode = node as SkillFlowNode;
-          if (flowNode.data.ready === false) return 'var(--mf-map-edge)';
-          const status = flowNode.data.progress?.status ?? 'not_started';
-          if (status === 'mastered') return 'var(--mf-map-mastery)';
-          if (status === 'completed') return 'var(--mf-map-complete)';
-          if (status === 'in_progress') return 'var(--mf-map-active)';
-          return 'var(--mf-map-edge)';
+          return `var(--mf-branch-${flowNode.data.branchTone??'blue'})`;
         }}
         maskColor="color-mix(in srgb, var(--mf-map-paper) 75%, transparent)"
         className="mf-flow-minimap"

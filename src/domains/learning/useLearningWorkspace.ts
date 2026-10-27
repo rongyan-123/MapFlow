@@ -3,16 +3,16 @@ import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {createLearningArea,fetchLearningAreas} from '../../api/tavernClient';
 import {usePersonalCatalog} from '../maps/useMapCatalog';
 import type {LearningArea} from '../conversations/types';
+import {usePanelVisibility} from '../../lib/usePanelVisibility';
 export function useLearningWorkspace(accountId:string,csrfToken:string,requestedAreaId?:string){
   const storageKey=`mapflow.learning.area.v1.${accountId}`;const client=useQueryClient();
   const rememberedArea=()=>{try{return localStorage.getItem(storageKey);}catch{return null;}};
   const [selection,setSelection]=useState<string|null>(()=>requestedAreaId??rememberedArea());
   const previousRequest=useRef({storageKey,requestedAreaId});
-  const [mapVisible,setMapVisible]=useState(false);
   useEffect(()=>{
     const previous=previousRequest.current;previousRequest.current={storageKey,requestedAreaId};
     if(previous.storageKey===storageKey&&previous.requestedAreaId===requestedAreaId)return;
-    setSelection(requestedAreaId??(previous.storageKey!==storageKey?rememberedArea():null));setMapVisible(false);
+    setSelection(requestedAreaId??(previous.storageKey!==storageKey?rememberedArea():null));
   },[storageKey,requestedAreaId]);
   const areasKey=['me',accountId,'learning','areas'] as const;
   const areas=useQuery({queryKey:areasKey,queryFn:({signal})=>fetchLearningAreas(signal),staleTime:30_000,retry:false});
@@ -20,8 +20,9 @@ export function useLearningWorkspace(accountId:string,csrfToken:string,requested
   // A new address must not expose the previous area's selection to route effects.
   const effectiveSelection=requestChanged?requestedAreaId??(previousRequest.current.storageKey!==storageKey?rememberedArea():null):selection;
   const area=areas.data?.find(item=>item.areaId===effectiveSelection);
+  const [mapVisible,setMapVisible]=usePanelVisibility(area?.available?`mapflow.ui.map.v1.${accountId}.${area.areaId}`:undefined);
   const maps=usePersonalCatalog(accountId,area?.available?area.libraryEntryId:undefined);
-  function select(areaId:string|null){setSelection(areaId);setMapVisible(false);try{if(areaId)localStorage.setItem(storageKey,areaId);else localStorage.removeItem(storageKey);}catch{/* Optional preference; server membership controls access. */}}
+  function select(areaId:string|null){setSelection(areaId);try{if(areaId)localStorage.setItem(storageKey,areaId);else localStorage.removeItem(storageKey);}catch{/* Optional preference; server membership controls access. */}}
   const creation=useMutation({mutationFn:(entryId:string)=>createLearningArea(entryId,csrfToken),onSuccess:async(saved)=>{
     await client.cancelQueries({queryKey:areasKey,exact:true});client.setQueryData<LearningArea[]>(areasKey,previous=>[saved,...(previous??[]).filter(item=>item.areaId!==saved.areaId)]);select(saved.areaId);
   }});

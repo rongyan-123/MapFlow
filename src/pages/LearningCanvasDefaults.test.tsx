@@ -46,8 +46,13 @@ function mount(scene: 'learning' | 'tavern' = 'learning', enabled = false, readO
   return { ...view, element, requests };
 }
 
-it('opens a learning canvas and persists enabled AI drawing on entry', async () => {
+it('starts with only chat despite enabled drawing and opens the canvas only on request', async () => {
   const { requests } = mount();
+  await screen.findByText('请用茶。');
+  await waitFor(() => expect(requests.some(request => request.options?.method === 'PATCH')).toBe(true));
+  expect(screen.queryByRole('region', { name: '教学画布' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '教学画布' })).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(screen.getByRole('button', { name: '教学画布' }));
   const permission = await screen.findByRole('checkbox', { name: '允许 AI 绘图' });
   await waitFor(() => expect(permission).toBeChecked());
   expect(requests.filter(request => request.options?.method === 'PATCH').map(request => JSON.parse(String(request.options?.body))))
@@ -84,8 +89,10 @@ it('preserves the chosen closed state when the viewport changes between phone an
   expect(toggle).toHaveAttribute('aria-expanded','false');
 });
 
-it('honors closing the canvas and revoking drawing until the learning page is entered again', async () => {
+it('restores the chosen closed UI independently of the drawing permission on reentry', async () => {
   const view = mount();
+  await screen.findByText('请用茶。');
+  fireEvent.click(screen.getByRole('button', { name: '教学画布' }));
   const permission = await screen.findByRole('checkbox', { name: '允许 AI 绘图' });
   await waitFor(() => expect(permission).toBeChecked());
   fireEvent.click(permission);
@@ -98,6 +105,9 @@ it('honors closing the canvas and revoking drawing until the learning page is en
   expect(view.requests.filter(request => request.options?.method === 'PATCH')).toHaveLength(2);
   view.unmount();
   render(view.element);
+  await waitFor(() => expect(view.requests.filter(request => request.options?.method === 'PATCH')).toHaveLength(3));
+  expect(screen.queryByRole('region', { name: '教学画布' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '教学画布' }));
   await waitFor(() => expect(screen.getByRole('checkbox', { name: '允许 AI 绘图' })).toBeChecked());
   expect(view.requests.filter(request => request.options?.method === 'PATCH')).toHaveLength(3);
 });
@@ -129,6 +139,7 @@ it('waits for the default drawing permission to be persisted before a learning m
   fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: '用图介绍这张地图' } });
   const blockedWhileSaving = (screen.getByRole('button', { name: '发送' }) as HTMLButtonElement).disabled;
   await act(async () => finishSave());
+  fireEvent.click(screen.getByRole('button', { name: '教学画布' }));
   await waitFor(() => expect(screen.getByRole('checkbox', { name: '允许 AI 绘图' })).toBeChecked());
   expect(blockedWhileSaving).toBe(true);
   expect(screen.getByRole('button', { name: '发送' })).toBeEnabled();
@@ -140,6 +151,7 @@ it('does not reopen a canvas the user closed while its initial document was stil
   const { requests } = mount('learning', false, false, undefined, () => pendingRead);
   await screen.findByText('请用茶。');
   await waitFor(() => expect(requests.some(request => request.path.endsWith('/canvas'))).toBe(true));
+  fireEvent.click(screen.getByRole('button', { name: '教学画布' }));
   fireEvent.click(screen.getByRole('button', { name: '教学画布' }));
   await act(async () => finishRead());
   await waitFor(() => expect(requests.some(request => request.options?.method === 'PATCH')).toBe(true));

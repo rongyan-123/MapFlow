@@ -3,14 +3,15 @@ import type { QueryClient } from '@tanstack/react-query';
 import { fetchTeachingCanvas } from '../../api/tavernClient';
 import { teachingCanvasPersistence } from './persistence';
 import type { TeachingCanvasState } from '../conversations/types';
+import { usePanelVisibility } from '../../lib/usePanelVisibility';
 
 export function useTeachingCanvas(conversationId: string, csrfToken: string, graphRevision: number, initial?: TeachingCanvasState,
-  options?: { readOnly?: boolean; initiallyOpen?: boolean; queryClient?: QueryClient; accountId?: string }) {
+  options?: { readOnly?: boolean; initiallyOpen?: boolean; visibilityKey?: string; queryClient?: QueryClient; accountId?: string }) {
   const persistence = useMemo(() => teachingCanvasPersistence(conversationId, csrfToken, initial, options?.queryClient, options?.accountId),
     [conversationId, options?.queryClient, options?.accountId]);
   persistence.setAccess(csrfToken, options?.readOnly === true);
   const snapshot = useSyncExternalStore(persistence.subscribe, persistence.getSnapshot, persistence.getSnapshot);
-  const [open, setOpen] = useState(options?.initiallyOpen ?? !!initial?.enabled);
+  const [open, setOpen] = usePanelVisibility(options?.visibilityKey, options?.initiallyOpen ?? !!initial?.enabled);
   const [wide, setWide] = useState(true);
   const [preview, setPreview] = useState<TeachingCanvasState | null>(null);
   useEffect(() => { persistence.retain(); return () => persistence.leave(); }, [persistence]);

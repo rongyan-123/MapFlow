@@ -103,8 +103,8 @@
  .mf-canvas-editor .excalidraw .App-toolbar-container .ToolIcon__icon,.mf-canvas-editor .excalidraw .ToolIcon_type_floating .ToolIcon__icon,.mf-canvas-editor .excalidraw .ToolIcon_size_small .ToolIcon__icon{width:44px;height:44px}
 }
 
-/* Learning navigation keeps history controls on the drawer edge. */
-.mf-conversation-workspace--learning .mf-history-edge{display:flex;flex:0 0 44px;justify-content:center;align-items:flex-start;padding-top:8px;border-right:1px solid var(--mf-line);background:color-mix(in srgb,var(--mf-panel) 80%,transparent)}
-.mf-conversation-workspace--learning .mf-history-edge .mf-history-toggle{width:44px;min-height:44px;padding:10px}
-.mf-conversation-workspace--learning .mf-history-edge .mf-history-toggle>span{display:none}
 .mf-conversation-workspace--learning .mf-chat-layout[data-side-pane='map']{--mf-pane-default-width:66.6667%}
+
+.mf-history-collapse{flex-shrink:0;width:36px;height:36px;min-height:36px}
+.mf-conversation-workspace--learning .mf-page-header>.mf-history-toggle{width:44px;min-height:44px;padding:10px}
+.mf-conversation-workspace--learning .mf-page-header>.mf-history-toggle>span{display:none}

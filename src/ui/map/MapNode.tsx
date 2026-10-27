@@ -8,6 +8,7 @@ import {
 import { DEPTH_LABELS, ICON_EMOJI } from '../../lib/constants';
 import { progressPercentForNode } from '../../types/learning';
 import { Icon } from '../Icon';
+import type { BranchTone } from '../../domains/maps/branchColors';
 import type {
   NodeLearningProgress,
   SkillNode as SkillNodeRecord,
@@ -24,6 +25,7 @@ export interface SkillNodeData extends Record<string, unknown> {
   blockName?: string;
   connectionRole?: 'focus' | 'incoming' | 'outgoing';
   ready?: boolean;
+  branchTone?: BranchTone;
 }
 
 export type SkillFlowNode = Node<SkillNodeData, 'skill'>;
@@ -33,7 +35,7 @@ function MapNode({data,selected}:NodeProps<SkillFlowNode>){
   const status=progress?.status??'not_started';const personal=displayMode==='personal';
   const percent=progressPercentForNode(progress);
   const waiting=personal&&data.ready===false;
-  return <div data-mapflow-skill-node="true" data-mapflow-display-mode={displayMode} data-mapflow-node-status={status} data-mapflow-readiness={personal?(waiting?'waiting':'ready'):undefined} data-connection-role={data.connectionRole} className={`mf-map-node ${selected?'mf-map-node--selected':''} ${isCurrent?'mf-map-node--current':''}`}>
+  return <div data-mapflow-skill-node="true" data-branch-tone={data.branchTone??'blue'} data-mapflow-display-mode={displayMode} data-mapflow-node-status={status} data-mapflow-readiness={personal?(waiting?'waiting':'ready'):undefined} data-connection-role={data.connectionRole} className={`mf-map-node ${selected?'mf-map-node--selected':''} ${isCurrent?'mf-map-node--current':''}`}>
     {layoutMode==='blocks'&&blockName&&<span className="mf-node-block">{blockName}</span>}
     <Handle type="target" position={Position.Top} className="mf-node-handle" />
     <Handle type="source" position={Position.Bottom} className="mf-node-handle" />

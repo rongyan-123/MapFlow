@@ -31,3 +31,31 @@ it('prefers an explicit area over the remembered area and clears when returning 
   await waitFor(()=>expect(view.result.current.area?.areaId).toBe('owned-map'));
   view.rerender({requested:undefined});expect(view.result.current.area).toBeUndefined();
 });
+
+it('remembers only explicit map choices per account and area across refresh and address navigation',async()=>{
+  const secondArea={...area,areaId:'second-map',libraryEntryId:'second-map'};
+  vi.stubGlobal('fetch',async(path:string)=>new Response(JSON.stringify(path.endsWith('/learning-areas')?{areas:[area,secondArea]}:{entries:[]})));
+  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
+  const wrapper=({children}:{children:React.ReactNode})=><QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  const view=renderHook(({account,requested})=>useLearningWorkspace(account,'csrf',requested),{initialProps:{account:'player-1',requested:'owned-map'},wrapper});
+  await waitFor(()=>expect(view.result.current.area?.areaId).toBe('owned-map'));
+  expect(view.result.current.mapVisible).toBe(false);
+  expect(Object.keys(localStorage).filter(key=>key.includes('mapflow.ui.'))).toEqual([]);
+  act(()=>view.result.current.setMapVisible(true));
+  view.unmount();
+  const refreshed=renderHook(({account,requested})=>useLearningWorkspace(account,'csrf',requested),{initialProps:{account:'player-1',requested:'owned-map'},wrapper});
+  await waitFor(()=>expect(refreshed.result.current.area?.areaId).toBe('owned-map'));
+  expect(refreshed.result.current.mapVisible).toBe(true);
+  refreshed.rerender({account:'player-1',requested:'second-map'});
+  expect(refreshed.result.current.mapVisible).toBe(false);
+  refreshed.rerender({account:'player-1',requested:'owned-map'});
+  expect(refreshed.result.current.mapVisible).toBe(true);
+  refreshed.rerender({account:'player-2',requested:'owned-map'});
+  expect(refreshed.result.current.mapVisible).toBe(false);
+  refreshed.rerender({account:'player-1',requested:'owned-map'});
+  act(()=>refreshed.result.current.setMapVisible(false));
+  refreshed.unmount();
+  const closed=mount('owned-map');
+  await waitFor(()=>expect(closed.result.current.area?.areaId).toBe('owned-map'));
+  expect(closed.result.current.mapVisible).toBe(false);
+});

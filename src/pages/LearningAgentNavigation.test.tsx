@@ -92,6 +92,20 @@ it('closes history when the learning map opens and lets the learner restore it w
   expect(requests.filter(request => request.options?.method === 'POST' && request.path.endsWith('/executions'))).toEqual([]);
 });
 
+it('puts collapse inside the history heading and restores it from the existing header without an extra rail', async () => {
+  const view=mountLearning();
+  await screen.findByText('逻辑向导的学习记录');
+  const history=screen.getByRole('complementary');
+  const collapse=within(history).getByRole('button',{name:'收起会话历史'});
+  expect(collapse.parentElement).toContainElement(within(history).getByRole('heading',{name:'会话历史'}));
+  expect(view.container.querySelector('.mf-history-edge')).toBeNull();
+  fireEvent.click(collapse);
+  expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+  const expand=within(screen.getByRole('banner')).getByRole('button',{name:'展开会话历史'});
+  fireEvent.click(expand);
+  expect(screen.getByRole('complementary')).toBeVisible();
+});
+
 it.each([false, true])('restores the map width after history closes, including initial map visibility %s', async initialMapVisible => {
   const storageKey = `mapflow.layout.canvas.${accountId}.map`;
   localStorage.setItem(storageKey, '681');

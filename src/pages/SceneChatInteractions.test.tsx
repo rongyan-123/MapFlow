@@ -82,13 +82,14 @@ function mount({ scene = 'learning', fresh = true, width = 1440, restored, loseA
 }
 async function sendQuestion(text = '请用画布介绍这个知识点') {
   await screen.findByText('消息操作');
-  await waitFor(() => expect(screen.getByRole('checkbox', { name: '允许 AI 绘图' })).toBeChecked());
   fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: text } });
   fireEvent.click(screen.getByRole('button', { name: '发送' }));
 }
 
 it('collapses the whole desktop history without replacing the draft or drawing editor', async () => {
   mount();
+  await screen.findByText('消息操作');
+  fireEvent.click(screen.getByRole('button', { name: '教学画布' }));
   const canvas = await screen.findByRole('region', { name: '教学画布' });
   fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: '还没发送的问题' } });
   const toggle = screen.getByRole('button', { name: '收起会话历史' });
@@ -181,7 +182,6 @@ it('does not hide a new outgoing question just because an earlier question has t
 it.each(['重新生成', '继续'])('does not invent another user question when invoking %s', async label => {
   const view = mount({ fresh: false });
   await screen.findByText('请用茶。');
-  await waitFor(() => expect(screen.getByRole('checkbox', { name: '允许 AI 绘图' })).toBeChecked());
   fireEvent.click(screen.getByText('消息操作'));
   fireEvent.click(screen.getByRole('button', { name: label }));
   await waitFor(() => expect(view.commands).toHaveLength(1));

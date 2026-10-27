@@ -9,6 +9,15 @@ const dependencies: SkillEdge[] = [
 ];
 
 describe('块布局关联线', () => {
+  it('keeps each cross-branch endpoint in its own branch color without changing the dependency direction',()=>{
+    const branches=new Map([
+      ['before',{key:'category:a',label:'基础',tone:'teal' as const}],
+      ['selected',{key:'category:b',label:'应用',tone:'violet' as const}],
+    ]);
+    const edge=buildBlockConnections(dependencies,'selected','relationship',branches)[0];
+    expect(edge.source).toBe('before');expect(edge.target).toBe('selected');
+    expect(edge.data).toMatchObject({sourceTone:'teal',targetTone:'violet',relation:'incoming'});
+  });
   it('保留旧按块行为：未选不画边，选中只画该节点局部关系', () => {
     expect(buildBlockConnections(dependencies, null)).toEqual([]);
     expect(buildBlockConnections(dependencies, 'missing')).toEqual([]);
@@ -61,8 +70,8 @@ describe('块布局关联线', () => {
 
 const first = { x: 0, y: 0, width: 240, height: 104 };
 
-describe('曲线方向与避让', () => {
-  it('同排节点从底部绕行，曲线中段离开分块边框', () => {
+describe('正交连接方向与避让', () => {
+  it('同排节点从底部绕行，折线中段离开分块边框', () => {
     const route = getBlockConnectionRoute(first, { ...first, x: 552 }, []);
     expect(route.start).toEqual({ x: 120, y: 104 });
     expect(route.end).toEqual({ x: 672, y: 104 });
@@ -70,11 +79,12 @@ describe('曲线方向与避让', () => {
     expect(route.points.every((point) => point.y >= 104)).toBe(true);
   });
 
-  it('同列跨排连接仍有弧度，末端到达后置节点顶部', () => {
+  it('同列跨排使用直接垂线，末端到达后置节点顶部', () => {
     const route = getBlockConnectionRoute(first, { ...first, y: 264 }, []);
     expect(route.start).toEqual({ x: 120, y: 104 });
     expect(route.end).toEqual({ x: 120, y: 264 });
-    expect(route.points.some((point) => Math.abs(point.x - 120) > 5)).toBe(true);
+    expect(route.path).not.toMatch(/[CQSA]/i);
+    expect(route.points.every((point) => point.x === 120)).toBe(true);
   });
 
   it('反向依赖从上排方向离开前置，指向后置节点底部', () => {
@@ -92,7 +102,7 @@ describe('曲线方向与避让', () => {
     expect(route.end).toEqual({ x: 120, y: 528 });
   });
 
-  it('多条同列连接分开弧度，并始终保持端点不变', () => {
+  it('多条同列连接分开折线路径，并始终保持端点不变', () => {
     const target = { ...first, y: 264 };
     const firstRoute = getBlockConnectionRoute(first, target, [], 0);
     const nextRoute = getBlockConnectionRoute(first, target, [], 1);

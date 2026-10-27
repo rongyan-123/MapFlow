@@ -60,7 +60,7 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
   const isMobile = useIsMobile();
   const learningScene = (detail.conversation.scene ?? (detail.conversation.libraryEntryId ? 'learning' : 'tavern')) === 'learning';
   const canvas = useTeachingCanvas(detail.conversation.conversationId, csrfToken, detail.graph.revision, detail.canvas,
-    { readOnly, initiallyOpen: learningScene && !readOnly && !isMobile, queryClient, accountId });
+    { readOnly, initiallyOpen: false, visibilityKey: learningScene ? `mapflow.ui.canvas.v1.${accountId}.${detail.conversation.conversationId}` : undefined, queryClient, accountId });
   const learningCanvasOpened = useRef(false);
   useEffect(() => {
     if (!learningScene || readOnly || busy || pendingGeneration || learningCanvasOpened.current) return;
@@ -69,7 +69,7 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
   }, [learningScene, readOnly, busy, pendingGeneration]);
   useEffect(()=>{canvas.setPreview(canvasPreview);},[canvasPreview,canvas.setPreview]);
   const mapVisibleRef = useRef(mapVisible); mapVisibleRef.current = mapVisible;
-  useEffect(() => { if (mapVisible) canvas.setOpen(false); }, [mapVisible]);
+  useEffect(() => { if (mapVisible && canvas.open) canvas.setOpen(false); }, [mapVisible]);
   async function openTeachingCanvas() {
     if (isMobile) composer.current?.blur();
     onOpenCanvas?.();

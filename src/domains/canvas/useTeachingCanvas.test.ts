@@ -8,7 +8,35 @@ beforeEach(() => {
   api.fetchTeachingCanvas.mockResolvedValue({ revision: 0, enabled: false, elements: [{ id: 'saved' }] });
   api.saveTeachingCanvas.mockResolvedValue({ revision: 1, enabled: false, elements: [] });
 });
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.resetAllMocks(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.resetAllMocks(); localStorage.clear(); });
+
+it('keeps drawing permission and saved content separate from account and conversation visibility choices', async () => {
+  const saved={revision:3,enabled:true,elements:[{id:'saved-drawing'}]};
+  api.fetchTeachingCanvas.mockResolvedValue(saved);
+  const wrapper=({account,story}:{account:string;story:string})=>useTeachingCanvas(story,'csrf',1,saved,
+    {accountId:account,initiallyOpen:false,visibilityKey:`mapflow.ui.canvas.v1.${account}.${story}`});
+  const first=renderHook(wrapper,{initialProps:{account:'first-owner',story:'first-story'}});
+  await act(async()=>{});
+  expect(first.result.current.open).toBe(false);
+  expect(localStorage.length).toBe(0);
+  await act(()=>first.result.current.show());
+  first.unmount();
+  const refreshed=renderHook(wrapper,{initialProps:{account:'first-owner',story:'first-story'}});
+  expect(refreshed.result.current.open).toBe(true);
+  refreshed.rerender({account:'first-owner',story:'second-story'});
+  expect(refreshed.result.current.open).toBe(false);
+  refreshed.rerender({account:'second-owner',story:'first-story'});
+  expect(refreshed.result.current.open).toBe(false);
+  refreshed.rerender({account:'first-owner',story:'first-story'});
+  expect(refreshed.result.current.open).toBe(true);
+  act(()=>refreshed.result.current.setOpen(false));
+  refreshed.unmount();
+  const closed=renderHook(wrapper,{initialProps:{account:'first-owner',story:'first-story'}});
+  await act(async()=>{});
+  expect(closed.result.current.open).toBe(false);
+  expect(closed.result.current.document).toEqual(saved);
+  expect(api.saveTeachingCanvas).not.toHaveBeenCalled();
+});
 
 it('opens immediately while loading and keeps the last close when the read arrives late', async () => {
   let finishRead!: (value: { revision: number; enabled: boolean; elements: [] }) => void;

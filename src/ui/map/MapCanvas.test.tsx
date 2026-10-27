@@ -169,8 +169,8 @@ describe('SkillTreeCanvas', () => {
       await waitFor(() => expect(screen.getByLabelText('连接 in')).toHaveAttribute('data-relation', 'incoming'));
       expect(screen.getByLabelText('连接 out')).toHaveAttribute('data-relation', 'outgoing');
       expect(screen.getByLabelText('连接 related')).toHaveAttribute('data-relation', 'neutral');
-      expect(screen.getByText('直接前置')).toBeVisible();
-      expect(screen.getByText('直接后续')).toBeVisible();
+      expect(screen.getByText('虚线：直接前置')).toBeVisible();
+      expect(screen.getByText('实线：直接后续')).toBeVisible();
       view.rerender(<SkillTreeCanvas {...props} layoutMode={layoutMode} selectedNodeId={null} />);
       if (layoutMode === 'blocks') await waitFor(() => expect(screen.queryByLabelText('连接 in')).not.toBeInTheDocument());
       else await waitFor(() => expect(screen.getByLabelText('连接 in')).toHaveAttribute('data-relation', 'neutral'));
