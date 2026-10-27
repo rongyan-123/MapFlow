@@ -26,6 +26,19 @@ interface Props {
   error?: unknown;
 }
 
+function MapFeedback({ text, isError, pending }: { text: string; isError: boolean; pending: boolean }) {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return <div className={`mf-map-feedback ${isError ? 'mf-map-feedback--error' : ''}`} role={isError ? 'alert' : 'status'}>
+    <span title={text}>{text}</span>
+    {!pending && <IconButton icon="close" label="关闭地图提示" onClick={event => {
+      const toolbar = event.currentTarget.closest('[role="toolbar"]');
+      setDismissed(true);
+      toolbar?.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus();
+    }} />}
+  </div>;
+}
+
 export default function MapView({
   snapshot, displayMode, accountId, entryId, csrfToken, initialNodeId, initialLayout,
   onLearn, onSetCompleted, onSetProgress, progressPending, completionPending, error,
@@ -64,6 +77,11 @@ export default function MapView({
       setSaving(busy);
     },
   });
+  const feedback = bulk.busy ? { text: `${bulk.notice} · ${bulk.processed}/${bulk.total}`, isError: false, pending: true }
+    : saving || completionPending || progressPending ? { text: '正在保存进度…', isError: false, pending: true }
+    : bulk.error ? { text: bulk.error, isError: true, pending: false }
+    : error ? { text: describePublicError(error), isError: true, pending: false }
+    : bulk.notice ? { text: bulk.notice, isError: false, pending: false } : null;
 
   useEffect(() => {
     setSelectedId(initialNodeId ?? null);
@@ -106,13 +124,14 @@ export default function MapView({
   }
 
   return <div className="mf-map-view">
-    <div className="mf-map-controls">
+    <div className="mf-map-controls" role="toolbar" aria-label="地图工具">
       <div className="mf-map-toolbar-actions"><Button className="mf-block-sort-button" variant={layout === 'blocks' ? 'primary' : 'secondary'}
         aria-pressed={layout === 'blocks'} title={layout === 'blocks' ? '再次点击恢复知识关系' : '按学习块整理地图节点'}
         onClick={() => setLayout(previous => previous === 'blocks' ? 'relationship' : 'blocks')}>按块排序</Button>
       {bulkAvailable && <MapBulkActions key={bulkKey} disabled={Boolean(saving || completionPending || progressPending || !snapshot.nodes.length)}
         allCompleted={snapshot.nodes.every(node => progressPercentForNode(snapshot.progress.find(item => item.node_id === node.id)) === 100)}
         undoCount={bulk.undoCount} onLight={bulk.light} onUndo={bulk.undo} />}</div>
+      {feedback && <MapFeedback key={`${accountId}.${entryId ?? ''}.${snapshot.tree.id}.${feedback.text}`} {...feedback} />}
       {selected ? <div className="mf-map-selection">
         <button ref={detailButton} type="button" className="mf-map-selection-title" aria-expanded={detailsOpen}
           aria-label={`查看节点详情：${selected.title}`} onClick={() => setDetailsOpen(true)}>{selected.title}</button>
@@ -121,10 +140,6 @@ export default function MapView({
         ? (snapshot.node_block_assignments?.length ? '再次点击恢复知识关系' : '暂无节点分组，仍显示知识关系')
         : '点击节点查看内容'}</span>}
     </div>
-    {bulk.busy && <p role="status" className="mf-map-bulk-status">{bulk.notice} · {bulk.processed}/{bulk.total}</p>}
-    {!bulk.busy && bulk.notice && <p role="status" className="mf-map-bulk-status">{bulk.notice}</p>}
-    {bulk.error && <p role="alert" className="mf-map-bulk-status mf-status--error">{bulk.error}</p>}
-    {Boolean(error) && <p role="alert" className="mf-status mf-status--error">{describePublicError(error)}</p>}
     <div className="mf-map-stage">
       <div className="mf-map-canvas">{snapshot.nodes.length
         ? <MapCanvas snapshot={snapshot} displayMode={displayMode} layoutMode={layout} selectedNodeId={selectedId}

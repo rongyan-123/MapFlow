@@ -36,6 +36,7 @@ function MapNode({data,selected}:NodeProps<SkillFlowNode>){
   const percent=progressPercentForNode(progress);
   const waiting=personal&&data.ready===false;
   return <div data-mapflow-skill-node="true" data-branch-tone={data.branchTone??'blue'} data-mapflow-lit={!personal||percent===100} data-mapflow-display-mode={displayMode} data-mapflow-node-status={status} data-mapflow-readiness={personal?(waiting?'waiting':'ready'):undefined} data-connection-role={data.connectionRole} className={`mf-map-node ${selected?'mf-map-node--selected':''} ${isCurrent?'mf-map-node--current':''}`}>
+    <span className="mf-node-color-fill" aria-hidden="true" />
     {layoutMode==='blocks'&&blockName&&<span className="mf-node-block">{blockName}</span>}
     <Handle type="target" position={Position.Top} className="mf-node-handle" />
     <Handle type="source" position={Position.Bottom} className="mf-node-handle" />
