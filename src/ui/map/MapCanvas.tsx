@@ -39,6 +39,7 @@ import BlockConnectionEdge from './BlockConnectionEdge';
 import { buildBlockConnections } from '../../domains/maps/blockConnections';
 import { getNodeReadiness } from '../../domains/maps/nodeReadiness';
 import { getBranchTone, getNodeBranches } from '../../domains/maps/branchColors';
+import { observeMapAnimations, type MapAnimationController } from './mapAnimations';
 
 interface BlockLaneData extends Record<string, unknown> {
   name: string;
@@ -215,6 +216,17 @@ export default function SkillTreeCanvas({
     null,
   );
   const containerRef=useRef<HTMLDivElement>(null);
+  const animationControllerRef = useRef<MapAnimationController | null>(null);
+  useEffect(() => {
+    const canvas = containerRef.current;
+    if (!canvas) return;
+    const controller = observeMapAnimations(canvas);
+    animationControllerRef.current = controller;
+    return () => {
+      animationControllerRef.current = null;
+      controller.dispose();
+    };
+  }, []);
   const canvasSize=()=>({width:containerRef.current?.clientWidth||window.innerWidth,height:containerRef.current?.clientHeight||window.innerHeight});
   useEffect(() => {
     const container = containerRef.current;
@@ -241,15 +253,16 @@ export default function SkillTreeCanvas({
     const layoutChanged = previousLayoutKeyRef.current !== layoutKey;
     previousLayoutKeyRef.current = layoutKey;
     setNodes((existingNodes) => {
-      const existingPositions = new Map(
-        layoutChanged
-          ? []
-          : existingNodes.map((node) => [node.id, node.position]),
-      );
-      return generatedNodes.map((node) => ({
-        ...node,
-        position: existingPositions.get(node.id) ?? node.position,
-      }));
+      const existingById = new Map(existingNodes.map(node => [node.id, node]));
+      return generatedNodes.map(node => {
+        const previous = existingById.get(node.id);
+        const sameSize = previous && previous.type === node.type && previous.width === node.width && previous.height === node.height;
+        return {
+          ...node,
+          ...(sameSize ? { measured: previous.measured } : {}),
+          position: !layoutChanged && previous ? previous.position : node.position,
+        };
+      });
     });
   }, [generatedNodes, layoutKey, setNodes]);
 
@@ -309,6 +322,9 @@ export default function SkillTreeCanvas({
       edgeTypes={edgeTypes}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
+      onMoveStart={() => animationControllerRef.current?.setMoving(true)}
+      onNodeDragStart={() => animationControllerRef.current?.setMoving(true, 'node')}
+      onNodeDragStop={() => animationControllerRef.current?.setMoving(false, 'node')}
       onNodeClick={(_, node) => selectAndCenterNode(node)}
       onKeyDown={event => {
         if ((event.key !== 'Enter' && event.key !== ' ') || !(event.target instanceof HTMLElement)) return;
@@ -317,6 +333,7 @@ export default function SkillTreeCanvas({
         if (node) { event.preventDefault(); selectAndCenterNode(node); }
       }}
       onMoveEnd={(_, viewport) => {
+        animationControllerRef.current?.setMoving(false);
         if (!viewportKey) return;
         try { localStorage.setItem(viewportKey, JSON.stringify({ layoutKey, viewport,canvas:canvasSize() })); }
         catch { /* Viewport preferences are optional and never affect server-owned map data. */ }

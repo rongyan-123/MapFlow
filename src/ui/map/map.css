@@ -190,6 +190,8 @@
 .mapflow-connection-flow--tail { stroke-width: 4; opacity: .16; }
 .mapflow-connection-flow--head { stroke-width: 3.5; opacity: .62; }
 .mapflow-connection-flow--core { stroke: var(--mf-map-glint); stroke-width: 1.2; opacity: .58; }
+.react-flow[data-mapflow-moving='true'] .mapflow-connection-flow,
+.react-flow[data-mapflow-flow-visibility='observed'] .mapflow-block-connection:not([data-mapflow-flow-visible='true']) .mapflow-connection-flow { animation-play-state: paused; }
 .mapflow-block-connection:is([data-relation='incoming'], [data-relation='outgoing']) .mapflow-connection-flow--head { stroke-width: 4; opacity: 1; }
 .mapflow-block-connection:is([data-relation='incoming'], [data-relation='outgoing']) .mapflow-connection-flow--core { opacity: 1; }
 .mapflow-connection-port { stroke: var(--mf-map-paper); stroke-width: 1.2; }

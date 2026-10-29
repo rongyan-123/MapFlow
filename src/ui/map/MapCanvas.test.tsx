@@ -15,6 +15,7 @@ const flowProbe = vi.hoisted(() => ({
 
 vi.mock('@xyflow/react', async () => {
   const React = await import('react');
+  const { applyNodeChanges } = await vi.importActual<typeof import('@xyflow/react')>('@xyflow/react');
 
   const flowInstance = {
     fitView: (...args: unknown[]) => {
@@ -27,9 +28,12 @@ vi.mock('@xyflow/react', async () => {
     setViewport: (...args: unknown[]) => flowProbe.setViewport(...args),
   };
 
-  function useNodesState<Node>(initialNodes: Node[]) {
+  function useNodesState<FlowNode extends import('@xyflow/react').Node>(initialNodes: FlowNode[]) {
     const [nodes, setNodes] = React.useState(initialNodes);
-    return [nodes, setNodes, () => undefined] as const;
+    const onNodesChange = React.useCallback((changes: import('@xyflow/react').NodeChange<FlowNode>[]) => {
+      setNodes(current => applyNodeChanges(changes, current));
+    }, []);
+    return [nodes, setNodes, onNodesChange] as const;
   }
 
   function useEdgesState<Edge>(initialEdges: Edge[]) {
@@ -53,7 +57,11 @@ vi.mock('@xyflow/react', async () => {
     nodes,
     edges,
     onInit,
+    onMoveStart,
     onMoveEnd,
+    onNodesChange,
+    onNodeDragStart,
+    onNodeDragStop,
     onNodeClick,
     children,
     reference,
@@ -61,7 +69,11 @@ vi.mock('@xyflow/react', async () => {
     nodes: unknown[];
     edges: Array<{ id: string; source: string; target: string; data?: { relation?: string } }>;
     onInit?: (instance: typeof flowInstance) => void;
+    onMoveStart?: (event: unknown, viewport: { x: number; y: number; zoom: number }) => void;
     onMoveEnd?: (event: unknown, viewport: { x: number; y: number; zoom: number }) => void;
+    onNodesChange?: (changes: import('@xyflow/react').NodeChange[]) => void;
+    onNodeDragStart?: () => void;
+    onNodeDragStop?: () => void;
     onNodeClick?: (event: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => void;
     children?: React.ReactNode;
     reference?: React.Ref<HTMLDivElement>;
@@ -73,7 +85,17 @@ vi.mock('@xyflow/react', async () => {
     return (
       <div ref={reference} data-testid="skill-tree-flow" data-node-count={nodes.length}>
         <div aria-label="地图连接">{edges.map(edge => <output key={edge.id} aria-label={`连接 ${edge.id}`} data-relation={edge.data?.relation}>{edge.source} → {edge.target}</output>)}</div>
-        {(nodes as Array<{id:string;type?:string;data:{ready?:boolean;progress?:{progress_percent?:number}|null}}>).filter(node=>node.type==='skill').map(node=><div key={node.id}><output aria-label={`节点 ${node.id} 准备状态`} data-ready={node.data.ready} data-progress={node.data.progress?.progress_percent} /><button onClick={event=>onNodeClick?.(event,node as unknown as {id:string;position:{x:number;y:number}})}>选择节点 {node.id}</button></div>)}
+        <svg aria-label="地图流光">{edges.map(edge=><g key={edge.id} className="mapflow-block-connection" data-edge-id={edge.id}><path className="mapflow-connection-flow" d="M 0 0 L 100 100" /></g>)}</svg>
+        {(nodes as Array<{id:string;type?:string;position:{x:number;y:number};measured?:{width?:number;height?:number};selected?:boolean;data:{ready?:boolean;progress?:{progress_percent?:number}|null}}>).filter(node=>node.type==='skill').map(node=><div key={node.id}>
+          <output aria-label={`节点 ${node.id} 准备状态`} data-ready={node.data.ready} data-progress={node.data.progress?.progress_percent}
+            data-measured-width={node.measured?.width} data-measured-height={node.measured?.height} data-x={node.position.x} data-y={node.position.y} data-selected={node.selected} />
+          <button onClick={event=>onNodeClick?.(event,node)}>选择节点 {node.id}</button>
+          <button onClick={()=>onNodesChange?.([{id:node.id,type:'dimensions',dimensions:{width:240,height:104}}])}>测量节点 {node.id}</button>
+          <button onClick={()=>onNodesChange?.([{id:node.id,type:'position',position:{x:321,y:654}}])}>拖动节点 {node.id}</button>
+        </div>)}
+        <button onClick={() => onMoveStart?.({}, { x: 72, y: -31, zoom: 0.63 })}>开始移动地图</button>
+        <button onClick={() => onNodeDragStart?.()}>开始拖动节点</button>
+        <button onClick={() => onNodeDragStop?.()}>结束拖动节点</button>
         <button onClick={() => onMoveEnd?.({}, { x: 72, y: -31, zoom: 0.63 })}>移动地图</button>
         {nodes.length > 0 && <button onClick={event => onNodeClick?.(event, nodes[0] as { id: string; position: { x: number; y: number } })}>选择地图节点</button>}
         {children}
@@ -129,6 +151,102 @@ const snapshot = {
 } satisfies LearningTreeSnapshot;
 
 describe('SkillTreeCanvas', () => {
+  it('retains measured node geometry through selection and progress changes while allowing layout positions to reset', async () => {
+    const props = { snapshot, displayMode: 'personal' as const, layoutMode: 'relationship' as const,
+      selectedNodeId: null, isGraphVisible: true, onSelectNode: () => undefined };
+    const view = render(<SkillTreeCanvas {...props} />);
+    const node = await screen.findByLabelText('节点 node-1 准备状态');
+    const originalX = node.getAttribute('data-x');
+    fireEvent.click(screen.getByRole('button', { name: '测量节点 node-1' }));
+    fireEvent.click(screen.getByRole('button', { name: '拖动节点 node-1' }));
+    expect(node).toHaveAttribute('data-measured-width', '240');
+    expect(node).toHaveAttribute('data-x', '321');
+    view.rerender(<SkillTreeCanvas {...props} selectedNodeId="node-1" />);
+    await waitFor(() => expect(node).toHaveAttribute('data-selected', 'true'));
+    expect(node).toHaveAttribute('data-measured-width', '240');
+    expect(node).toHaveAttribute('data-measured-height', '104');
+    expect(node).toHaveAttribute('data-x', '321');
+    const completed: LearningTreeSnapshot = { ...snapshot, progress: [{ node_id: 'node-1', progress_percent: 100, status: 'completed', evidence: '' }] };
+    view.rerender(<SkillTreeCanvas {...props} snapshot={completed} selectedNodeId="node-1" />);
+    await waitFor(() => expect(node).toHaveAttribute('data-progress', '100'));
+    expect(node).toHaveAttribute('data-measured-width', '240');
+    expect(node).toHaveAttribute('data-y', '654');
+    view.rerender(<SkillTreeCanvas {...props} snapshot={completed} layoutMode="blocks" selectedNodeId="node-1" />);
+    await waitFor(() => expect(node).toHaveAttribute('data-x', originalX));
+    expect(node).toHaveAttribute('data-measured-width', '240');
+  });
+
+  it.each([undefined, 'mapflow.motion.viewport'])('pauses flow during viewport interaction and resumes even without viewport persistence (%s)', async viewportStorageKey => {
+    render(<SkillTreeCanvas snapshot={snapshot} displayMode="personal" layoutMode="relationship"
+      selectedNodeId={null} isGraphVisible onSelectNode={() => undefined} viewportStorageKey={viewportStorageKey} />);
+    await screen.findByLabelText('节点 node-1 准备状态');
+    const canvas = screen.getByTestId('skill-tree-flow');
+    fireEvent.click(screen.getByRole('button', { name: '开始移动地图' }));
+    expect(canvas).toHaveAttribute('data-mapflow-moving', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '移动地图' }));
+    expect(canvas).not.toHaveAttribute('data-mapflow-moving', 'true');
+    if (viewportStorageKey) expect(localStorage.getItem(viewportStorageKey + '.relationship')).toContain('0.63');
+  });
+
+  it('observes edge visibility, handles added and removed edges, and disconnects without late DOM writes', async () => {
+    let notifyIntersections!: IntersectionObserverCallback;
+    const observe = vi.fn(), unobserve = vi.fn(), disconnect = vi.fn();
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(callback: IntersectionObserverCallback) { notifyIntersections = callback; }
+      observe = observe; unobserve = unobserve; disconnect = disconnect;
+    });
+    const graph: LearningTreeSnapshot = { ...snapshot, nodes: [...snapshot.nodes, { ...snapshot.nodes[0], id: 'node-2', depth_level: 2 }],
+      edges: [{ id: 'edge', source_node_id: 'node-1', target_node_id: 'node-2', edge_type: 'prerequisite', label: null }] };
+    const view = render(<SkillTreeCanvas snapshot={graph} displayMode="personal" layoutMode="relationship"
+      selectedNodeId={null} isGraphVisible onSelectNode={() => undefined} />);
+    const canvas = screen.getByTestId('skill-tree-flow');
+    await waitFor(() => expect(canvas.querySelector('.mapflow-block-connection')).toBeInTheDocument());
+    const edge = canvas.querySelector('.mapflow-block-connection')!;
+    await waitFor(() => expect(observe).toHaveBeenCalledWith(edge));
+    expect(canvas).toHaveAttribute('data-mapflow-flow-visibility', 'observed');
+    notifyIntersections([{ target: edge, isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+    expect(edge).toHaveAttribute('data-mapflow-flow-visible', 'true');
+    notifyIntersections([{ target: edge, isIntersecting: false } as IntersectionObserverEntry], {} as IntersectionObserver);
+    expect(edge).toHaveAttribute('data-mapflow-flow-visible', 'false');
+    const added = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    added.classList.add('mapflow-block-connection');
+    canvas.querySelector('svg')!.append(added);
+    await waitFor(() => expect(observe).toHaveBeenCalledWith(added));
+    added.remove();
+    await waitFor(() => expect(unobserve).toHaveBeenCalledWith(added));
+    view.unmount();
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    edge.removeAttribute('data-mapflow-flow-visible');
+    notifyIntersections([{ target: edge, isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+    expect(edge).not.toHaveAttribute('data-mapflow-flow-visible');
+  });
+
+  it('pauses the same flow animation while moving a card and resumes when the card is released', async () => {
+    render(<SkillTreeCanvas snapshot={snapshot} displayMode="personal" layoutMode="relationship"
+      selectedNodeId={null} isGraphVisible onSelectNode={() => undefined} />);
+    await screen.findByLabelText('节点 node-1 准备状态');
+    const canvas = screen.getByTestId('skill-tree-flow');
+    fireEvent.click(screen.getByRole('button', { name: '开始拖动节点' }));
+    expect(canvas).toHaveAttribute('data-mapflow-moving', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '拖动节点 node-1' }));
+    expect(screen.getByLabelText('节点 node-1 准备状态')).toHaveAttribute('data-x', '321');
+    fireEvent.click(screen.getByRole('button', { name: '结束拖动节点' }));
+    expect(canvas).not.toHaveAttribute('data-mapflow-moving', 'true');
+  });
+
+  it('keeps flow paused when card dragging overlaps viewport auto-pan', async () => {
+    render(<SkillTreeCanvas snapshot={snapshot} displayMode="personal" layoutMode="relationship"
+      selectedNodeId={null} isGraphVisible onSelectNode={() => undefined} />);
+    await screen.findByLabelText('节点 node-1 准备状态');
+    const canvas = screen.getByTestId('skill-tree-flow');
+    fireEvent.click(screen.getByRole('button', { name: '开始拖动节点' }));
+    fireEvent.click(screen.getByRole('button', { name: '开始移动地图' }));
+    fireEvent.click(screen.getByRole('button', { name: '移动地图' }));
+    expect(canvas).toHaveAttribute('data-mapflow-moving', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '结束拖动节点' }));
+    expect(canvas).not.toHaveAttribute('data-mapflow-moving', 'true');
+  });
+
   it('updates readiness from prerequisite progress while preserving a waiting node progress and selection', async () => {
     const graph: LearningTreeSnapshot = { ...snapshot, nodes: [{ ...snapshot.nodes[0], id: 'before' }, snapshot.nodes[0]],
       edges: [{ id: 'dependency', source_node_id: 'before', target_node_id: 'node-1', edge_type: 'prerequisite', label: null }],
