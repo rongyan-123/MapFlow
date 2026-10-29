@@ -67,6 +67,17 @@ export interface NodeProgress {
   progress_percent: number;
 }
 
+export interface NodeProgressChange {
+  nodeId: string;
+  expectedPercent: number;
+  progressPercent: number;
+}
+
+export interface BatchProgressResult {
+  status: 'applied' | 'cancelled';
+  node_progress: NodeProgress[];
+}
+
 export interface AddedTree {
   library_entry_id: string;
   tree_id: string;

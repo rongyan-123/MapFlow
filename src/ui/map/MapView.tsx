@@ -8,7 +8,7 @@ import NodeNoteDialog from './NodeNoteDialog';
 import MapProgressOverview from './MapProgressOverview';
 import CompletionCelebration from './CompletionCelebration';
 import { describePublicError } from '../../lib/publicErrors';
-import { useBulkNodeCompletion } from '../../domains/maps/useBulkNodeCompletion';
+import { useBulkNodeCompletion,type SaveBatchProgress,type CancelBatchProgress } from '../../domains/maps/useBulkNodeCompletion';
 import MapBulkActions from './MapBulkActions';
 import { Icon } from '../Icon';
 
@@ -23,6 +23,8 @@ interface Props {
   onLearn?: (node?: { id: string; title: string }) => void;
   onSetCompleted?: (nodeId: string, completed: boolean) => Promise<unknown>;
   onSetProgress?: (nodeId: string, percent: number) => Promise<unknown>;
+  onSetBatchProgress?: SaveBatchProgress;
+  onCancelBatchProgress?: CancelBatchProgress;
   progressPending?: boolean;
   completionPending?: boolean;
   error?: unknown;
@@ -46,7 +48,7 @@ function MapFeedback({ text, isError, pending }: { text: string; isError: boolea
 
 export default function MapView({
   snapshot, displayMode, accountId, entryId, csrfToken, initialNodeId, initialLayout,
-  onLearn, onSetCompleted, onSetProgress, progressPending, completionPending, error, toolbarTarget, toolbarHostRef,
+  onLearn, onSetCompleted, onSetProgress,onSetBatchProgress,onCancelBatchProgress, progressPending, completionPending, error, toolbarTarget, toolbarHostRef,
 }: Props) {
   const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
   useLayoutEffect(() => {
@@ -77,10 +79,10 @@ export default function MapView({
   const detailPanel = useRef<HTMLElement>(null);
   const detailButton = useRef<HTMLButtonElement>(null);
   const selected = snapshot.nodes.find(node => node.id === selectedId);
-  const bulkAvailable = displayMode === 'personal' && Boolean(onSetCompleted && onSetProgress);
+  const bulkAvailable = displayMode === 'personal' && Boolean(onSetBatchProgress && onCancelBatchProgress);
   const bulkKey = bulkAvailable ? `mapflow.bulk-completion.v1.${accountId}.${entryId ?? snapshot.tree.id}.${snapshot.tree.id}` : undefined;
   const bulkScope = saveScope.current;
-  const bulk = useBulkNodeCompletion({ snapshot, storageKey: bulkKey, onSetCompleted, onSetProgress,
+  const bulk = useBulkNodeCompletion({ snapshot, storageKey: bulkKey,onSetBatchProgress,onCancelBatchProgress,
     blocked: Boolean(saving || completionPending || progressPending),
     onBusyChange: busy => {
       if (!bulkScope.active || saveScope.current !== bulkScope) return;
@@ -88,7 +90,9 @@ export default function MapView({
       setSaving(busy);
     },
   });
-  const feedback = bulk.busy ? { text: `${bulk.notice} · ${bulk.processed}/${bulk.total}`, isError: false, pending: true }
+  const displayedSnapshot={...snapshot,progress:bulk.progress};
+  const feedback = bulk.uncertain ? {text:bulk.error,isError:true,pending:false}
+    : bulk.busy ? { text:bulk.notice, isError: false, pending: true }
     : saving || completionPending || progressPending ? { text: '正在保存进度…', isError: false, pending: true }
     : bulk.error ? { text: bulk.error, isError: true, pending: false }
     : error ? { text: describePublicError(error), isError: true, pending: false }
@@ -117,7 +121,7 @@ export default function MapView({
     const source = saveScope.current;
     const node = snapshot.nodes.find(item => item.id === nodeId);
     if (!node || source.saving || completionPending || progressPending) return;
-    const previousPercent = progressPercentForNode(snapshot.progress.find(progress => progress.node_id === nodeId));
+    const previousPercent = progressPercentForNode(bulk.progress.find(progress => progress.node_id === nodeId));
     source.saving = true;
     setSaving(true);
     try {
@@ -139,8 +143,8 @@ export default function MapView({
         aria-label="按块排序" aria-pressed={layout === 'blocks'} title={layout === 'blocks' ? '再次点击恢复知识关系' : '按学习块整理地图节点'}
         onClick={() => setLayout(previous => previous === 'blocks' ? 'relationship' : 'blocks')}><Icon name="map" /><span className="mf-map-action-label">按块排序</span></Button>
       {bulkAvailable && <MapBulkActions key={bulkKey} disabled={Boolean(saving || completionPending || progressPending || !snapshot.nodes.length)}
-        allCompleted={snapshot.nodes.every(node => progressPercentForNode(snapshot.progress.find(item => item.node_id === node.id)) === 100)}
-        undoCount={bulk.undoCount} onLight={bulk.light} onUndo={bulk.undo} />}</div>
+        allCompleted={snapshot.nodes.every(node => progressPercentForNode(bulk.progress.find(item => item.node_id === node.id)) === 100)}
+        undoCount={bulk.undoCount} onLight={bulk.light} onUndo={bulk.undo} busy={bulk.busy} checking={bulk.checking} uncertain={bulk.uncertain} onCancel={bulk.cancel} />}</div>
       {feedback && <MapFeedback key={`${accountId}.${entryId ?? ''}.${snapshot.tree.id}.${feedback.text}`} {...feedback} />}
       {selected ? <div className="mf-map-selection">
         <button ref={detailButton} type="button" className="mf-map-selection-title" aria-expanded={detailsOpen}
@@ -154,13 +158,13 @@ export default function MapView({
     {target ? createPortal(toolbar, target) : target === undefined ? toolbar : null}
     <div className="mf-map-stage">
       <div className="mf-map-canvas">{snapshot.nodes.length
-        ? <MapCanvas snapshot={snapshot} displayMode={displayMode} layoutMode={layout} selectedNodeId={selectedId}
+        ? <MapCanvas snapshot={displayedSnapshot} displayMode={displayMode} layoutMode={layout} selectedNodeId={selectedId}
           onSelectNode={selectNode} isGraphVisible viewportStorageKey={`mapflow.map-viewport.v1.${accountId}.${snapshot.tree.id}`} />
         : <p className="mf-empty">这张地图还没有节点。</p>}</div>
       {selected && detailsOpen && <aside ref={detailPanel} className="mf-map-detail-panel" aria-label="节点详情" tabIndex={-1}
         onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setDetailsOpen(false); } }}>
         <div className="mf-map-detail-header"><span>节点详情</span><div className="mf-map-detail-header-actions"><IconButton icon="close" label="取消节点选择" onClick={() => { setSelectedId(null); setNoteOpen(false); }} /><IconButton icon="down" label="收起节点详情" onClick={() => setDetailsOpen(false)} /></div></div>
-        <div className="mf-map-detail-content"><NodeDetails key={`${accountId}.${entryId ?? ''}.${snapshot.tree.id}.${selected.id}`} snapshot={snapshot} selectedNodeId={selected.id}
+        <div className="mf-map-detail-content"><NodeDetails key={`${accountId}.${entryId ?? ''}.${snapshot.tree.id}.${selected.id}`} snapshot={displayedSnapshot} selectedNodeId={selected.id}
           displayMode={displayMode}
           onSetCompleted={onSetCompleted ? (nodeId, completed) => void saveNodeProgress(nodeId, completed ? 100 : 0, () => onSetCompleted(nodeId, completed)) : undefined}
           onSetProgress={onSetProgress ? (nodeId, percent) => void saveNodeProgress(nodeId, percent, () => onSetProgress(nodeId, percent)) : undefined}
@@ -170,7 +174,7 @@ export default function MapView({
       </aside>}
       {celebration && <CompletionCelebration key={celebration.sequence} title={celebration.title} onDismiss={dismissCelebration} />}
     </div>
-    {displayMode === 'personal' && <MapProgressOverview snapshot={snapshot} />}
+    {displayMode === 'personal' && <MapProgressOverview snapshot={displayedSnapshot} />}
     {selected && noteOpen && entryId && csrfToken && <NodeNoteDialog accountId={accountId} libraryEntryId={entryId}
       nodeId={selected.id} nodeTitle={selected.title} csrfToken={csrfToken} onClose={() => setNoteOpen(false)} />}
   </div>;

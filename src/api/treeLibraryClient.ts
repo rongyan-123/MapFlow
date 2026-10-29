@@ -15,6 +15,8 @@ import type {
   PublicationPrepare,
   PublicationResult,
   PublicationStatus,
+  NodeProgressChange,
+  BatchProgressResult,
 } from '../domains/maps/types';
 import type {
   RecommendedDepth,
@@ -231,6 +233,28 @@ export async function setNodeProgress(
     },
     body: JSON.stringify({ progressPercent }),
   });
+}
+
+export async function setNodeProgressBatch(entryId:string,changes:NodeProgressChange[],operationId:string,csrfToken:string,signal:AbortSignal):Promise<BatchProgressResult>{
+  const response=await request(`/api/me/tree-library/${encodeURIComponent(entryId)}/progress/batch`,{
+    method:'PUT',signal,credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-Token':csrfToken},
+    body:JSON.stringify({operationId,changes}),
+  });
+  return parseBatchProgress(await readJson(response));
+}
+
+export async function cancelNodeProgressBatch(entryId:string,operationId:string,csrfToken:string,signal:AbortSignal):Promise<BatchProgressResult>{
+  const response=await request(`/api/me/tree-library/${encodeURIComponent(entryId)}/progress/batch/${encodeURIComponent(operationId)}/cancel`,{
+    method:'POST',signal,credentials:'same-origin',headers:{Accept:'application/json','X-CSRF-Token':csrfToken},
+  });
+  return parseBatchProgress(await readJson(response));
+}
+
+function parseBatchProgress(body:unknown):BatchProgressResult{
+  if(!isRecord(body)||(body.status!=='applied'&&body.status!=='cancelled')||!Array.isArray(body.node_progress))throw invalidResponseError();
+  const nodeProgress=parseNodeProgress(body.node_progress,[]);
+  if(new Set(nodeProgress.map(item=>item.node_id)).size!==nodeProgress.length)throw invalidResponseError();
+  return {status:body.status,node_progress:nodeProgress};
 }
 
 async function getJson(path: string): Promise<unknown> {
