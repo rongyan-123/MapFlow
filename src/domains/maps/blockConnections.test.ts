@@ -34,7 +34,7 @@ describe('块布局关联线', () => {
       ['in', 'incoming'], ['out', 'outgoing'], ['related', 'neutral'],
     ]);
   });
-  it('默认保留全部真实连接，只高亮选中节点的直接前置和直接后续', () => {
+  it('主连接保持真实方向，只高亮选中节点的直接前置和直接后续', () => {
     expect(buildBlockConnections(dependencies, 'selected', 'relationship').map(({ source, target, data }) => ({ source, target, relation: data?.relation }))).toEqual([
       { source: 'before', target: 'selected', relation: 'incoming' },
       { source: 'selected', target: 'after', relation: 'outgoing' },
@@ -70,6 +70,67 @@ describe('块布局关联线', () => {
     expect(normal.map(edge => edge.data?.lane)).toEqual(selected.map(edge => edge.data?.lane));
     expect(normal.every(edge => edge.data!.lane >= 0 && edge.data!.lane <= 4)).toBe(true);
     expect(new Set(normal.map(edge => edge.data?.lane)).size).toBe(170);
+  });
+
+  it('知识关系布局默认为每个节点保留最近的一条直接前置', () => {
+    const edges = [
+      { ...dependencies[0], id: 'far', source_node_id: 'far' },
+      { ...dependencies[0], id: 'near', source_node_id: 'near' },
+    ];
+    const positions = new Map([
+      ['selected', { x: 0, y: 336 }],
+      ['far', { x: 552, y: 0 }],
+      ['near', { x: 0, y: 168 }],
+    ]);
+    expect(buildBlockConnections(edges, null, 'relationship', undefined, undefined, positions).map(edge => edge.id)).toEqual(['near']);
+  });
+
+  it('直接前置比距离更近的知识关联优先，没有前置时保留最近的知识关联', () => {
+    const edges = [
+      { ...dependencies[0], id: 'prerequisite', source_node_id: 'far' },
+      { ...dependencies[0], id: 'related-near', source_node_id: 'near', edge_type: 'requires' },
+      { ...dependencies[0], id: 'fallback-far', source_node_id: 'far', target_node_id: 'fallback', edge_type: 'requires' },
+      { ...dependencies[0], id: 'fallback-near', source_node_id: 'near', target_node_id: 'fallback', edge_type: 'requires' },
+    ];
+    const positions = new Map([
+      ['selected', { x: 0, y: 336 }], ['fallback', { x: 0, y: 504 }],
+      ['far', { x: 552, y: 0 }], ['near', { x: 0, y: 168 }],
+    ]);
+    expect(buildBlockConnections(edges, null, 'relationship', undefined, undefined, positions).map(edge => edge.id)).toEqual(['prerequisite', 'fallback-near']);
+  });
+
+  it.each([new Map([
+    ['selected', { x: 0, y: 336 }], ['left', { x: -276, y: 168 }], ['right', { x: 276, y: 168 }],
+  ]), undefined])('距离相同或坐标缺失时，重排输入不会切换主连线 (%s)', positions => {
+    const edges = [
+      { ...dependencies[0], id: 'z-right', source_node_id: 'right' },
+      { ...dependencies[0], id: 'a-left', source_node_id: 'left' },
+    ];
+    for (const ordered of [edges, [...edges].reverse()]) {
+      expect(buildBlockConnections(ordered, null, 'relationship', undefined, undefined, positions).map(edge => edge.id)).toEqual(['a-left']);
+    }
+  });
+
+  it('只展开选中节点的全部直接关系，切换或取消选择后恢复其他节点的主连接', () => {
+    const edges = [
+      { ...dependencies[0], id: 'near', source_node_id: 'near' },
+      { ...dependencies[0], id: 'far', source_node_id: 'far' },
+      { ...dependencies[0], id: 'expanded-related', source_node_id: 'selected', target_node_id: 'child', edge_type: 'requires' },
+      { ...dependencies[0], id: 'child-primary', source_node_id: 'other', target_node_id: 'child' },
+      { ...dependencies[0], id: 'remote-near', source_node_id: 'near', target_node_id: 'remote' },
+      { ...dependencies[0], id: 'remote-far', source_node_id: 'far', target_node_id: 'remote' },
+    ];
+    const original = structuredClone(edges);
+    const positions = new Map([
+      ['selected', { x: 0, y: 336 }], ['near', { x: 0, y: 168 }], ['far', { x: 552, y: 0 }],
+      ['child', { x: 0, y: 504 }], ['other', { x: 276, y: 336 }], ['remote', { x: 276, y: 336 }],
+    ]);
+    const visible = (selected: string | null) => buildBlockConnections(edges, selected, 'relationship', undefined, undefined, positions);
+    expect(visible(null).map(edge => edge.id)).toEqual(['near', 'child-primary', 'remote-near']);
+    expect(visible('selected').map(edge => edge.id)).toEqual(['near', 'far', 'expanded-related', 'child-primary', 'remote-near']);
+    expect(visible('remote').map(edge => edge.id)).toEqual(['near', 'child-primary', 'remote-near', 'remote-far']);
+    expect(visible(null).map(edge => edge.id)).toEqual(['near', 'child-primary', 'remote-near']);
+    expect(edges).toEqual(original);
   });
 });
 

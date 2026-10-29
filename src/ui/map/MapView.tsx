@@ -152,7 +152,7 @@ export default function MapView({
         <IconButton icon="close" label="取消选择" onClick={() => { setSelectedId(null); setNoteOpen(false); }} />
       </div> : <span className="mf-muted mf-small">{snapshot.nodes.length} 个节点 · {layout === 'blocks'
         ? (snapshot.node_block_assignments?.length ? '再次点击恢复知识关系' : '暂无节点分组，仍显示知识关系')
-        : '点击节点查看内容'}</span>}
+        : '点击节点展开全部连线'}</span>}
     </div>;
   return <div className="mf-map-view">
     {target ? createPortal(toolbar, target) : target === undefined ? toolbar : null}

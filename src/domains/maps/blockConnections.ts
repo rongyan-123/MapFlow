@@ -6,7 +6,7 @@ export interface ConnectionRect { x: number; y: number; width: number; height: n
 interface Point { x: number; y: number }
 export type BlockConnection = Edge<{ relation: 'neutral' | 'incoming' | 'outgoing'; lane: number; edgeType: string; sourceTone?: BranchTone; targetTone?: BranchTone; sourceLit?: boolean; targetLit?: boolean; hasFocus?: boolean }, 'blockConnection'>;
 
-export function buildBlockConnections(edges: SkillEdge[], selectedNodeId: string | null, layoutMode: TreeLayoutMode = 'blocks', branches?: ReadonlyMap<string, NodeBranch>, litNodes?: ReadonlySet<string>): BlockConnection[] {
+export function buildBlockConnections(edges: SkillEdge[], selectedNodeId: string | null, layoutMode: TreeLayoutMode = 'blocks', branches?: ReadonlyMap<string, NodeBranch>, litNodes?: ReadonlySet<string>, positions?: ReadonlyMap<string, Point>): BlockConnection[] {
   if (layoutMode === 'blocks' && !selectedNodeId) return [];
   const groups = new Map<string, SkillEdge[]>();
   for (const edge of edges) {
@@ -19,7 +19,22 @@ export function buildBlockConnections(edges: SkillEdge[], selectedNodeId: string
     group.sort((first, second) => first.id.localeCompare(second.id));
     group.forEach((edge, index) => lanes.set(edge.id, group.length > 1 ? index * 4 / (group.length - 1) : 0));
   }
-  const visible = layoutMode === 'blocks' ? edges.filter(edge => edge.source_node_id === selectedNodeId || edge.target_node_id === selectedNodeId) : edges;
+  const nearestByTarget = new Map<string, SkillEdge>();
+  const priority = (edge: SkillEdge) => edge.edge_type === 'prerequisite' ? 0 : 1;
+  const distance = (edge: SkillEdge) => {
+    const source = positions?.get(edge.source_node_id);
+    const target = positions?.get(edge.target_node_id);
+    return source && target ? Math.hypot(source.x - target.x, source.y - target.y) : Infinity;
+  };
+  for (const edge of edges) {
+    const nearest = nearestByTarget.get(edge.target_node_id);
+    if (!nearest || priority(edge) < priority(nearest)
+      || priority(edge) === priority(nearest) && (distance(edge) < distance(nearest)
+        || distance(edge) === distance(nearest) && edge.id.localeCompare(nearest.id) < 0)) nearestByTarget.set(edge.target_node_id, edge);
+  }
+  const primaryIds = new Set([...nearestByTarget.values()].map(edge => edge.id));
+  const visible = edges.filter(edge => edge.source_node_id === selectedNodeId || edge.target_node_id === selectedNodeId
+    || layoutMode === 'relationship' && primaryIds.has(edge.id));
   return visible.map((edge) => ({
       id: edge.id,
       source: edge.source_node_id,
