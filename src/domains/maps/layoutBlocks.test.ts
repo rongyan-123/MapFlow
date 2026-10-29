@@ -40,7 +40,7 @@ const assignment = (
 ): SkillNodeBlockAssignment => ({ node_id, block_id });
 
 describe('computeBlockLayout', () => {
-  it('stacks blocks vertically and keeps nodes in each block on one horizontal row', () => {
+  it('preserves internal dependencies and keeps independent roots on the same layer', () => {
     const nodes = [node('a'), node('b', 1), node('c'), node('unassigned')];
     const edges: SkillEdge[] = [
       {
@@ -58,10 +58,9 @@ describe('computeBlockLayout', () => {
       [assignment('a', 'first'), assignment('b', 'first'), assignment('c', 'second')],
     );
 
-    expect(positions.get('a')?.y).toBe(positions.get('b')?.y);
-    expect(positions.get('b')?.x).toBeGreaterThan(positions.get('a')!.x);
-    expect(positions.get('c')?.y).toBeGreaterThan(positions.get('a')!.y);
-    expect(positions.get('unassigned')?.y).toBeGreaterThan(
+    expect(positions.get('b')?.y).toBeGreaterThan(positions.get('a')!.y);
+    expect(positions.get('c')?.y).toBe(positions.get('a')!.y);
+    expect(positions.get('unassigned')?.y).toBe(
       positions.get('c')!.y,
     );
   });
@@ -91,8 +90,15 @@ describe('computeBlockLayout', () => {
       '未分组节点',
     ]);
     expect(model.lanes[0].y).toBe(0);
-    expect(model.lanes[1].y).toBeGreaterThan(model.lanes[0].y);
-    expect(model.lanes[2].y).toBeGreaterThan(model.lanes[1].y);
+    expect(model.lanes[1].x).toBeGreaterThan(model.lanes[0].x);
+    expect(model.lanes[2].x).toBeGreaterThan(model.lanes[1].x);
+  });
+
+  it('orders cross-block prerequisites regardless of the display order of blocks', () => {
+    const edges = [['a','b'],['b','c']].map(([source,target]) => ({id:source+target,source_node_id:source,target_node_id:target,edge_type:'prerequisite',label:null}));
+    const positions=computeBlockLayout([node('a'),node('b'),node('c')],edges,[block('first',0),block('second',1)],[assignment('a','second'),assignment('b','first'),assignment('c','second')]);
+    expect(positions.get('b')!.y).toBeGreaterThan(positions.get('a')!.y);
+    expect(positions.get('c')!.y).toBeGreaterThan(positions.get('b')!.y);
   });
 
   it('keeps same-level nodes separated by the rendered card width', () => {

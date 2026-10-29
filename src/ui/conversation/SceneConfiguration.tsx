@@ -54,7 +54,7 @@ export default function SceneConfiguration(props: Props) {
   </div>;
   return <ConfigurationDialog initialSection={props.section} busy={props.settingsBusy} onClose={props.onClose} content={{
     overview,
-    model: <ModelSettings accountId={owner.accountId} csrfToken={owner.csrfToken} onWallet={props.onWallet} locked={props.executionBusy} />,
+    model: <ModelSettings initialPurpose={owner.scene} accountId={owner.accountId} csrfToken={owner.csrfToken} onWallet={props.onWallet} locked={props.executionBusy} />,
     tools: current && !readonly ? <ToolSettings key={`${current.conversation.conversationId}.${current.graph.revision}`} detail={current}
       csrfToken={owner.csrfToken} onUpdated={props.onUpdated} onConflict={props.onConflict} onBusyChange={props.onBusyChange}
       onCanvas={() => { props.onClose(); if (runtime) void runtime.openTeachingCanvas(); }}

@@ -104,7 +104,7 @@ it('keeps a site-credit rejection editable and lets the user switch to BYOK in o
   fireEvent.change(screen.getByLabelText('API URL'),{target:{value:'https://models.example/v1'}});
   fireEvent.change(screen.getByLabelText('上游模型'),{target:{value:'user-model'}});
   fireEvent.change(screen.getByLabelText('上下文窗口（Token）'),{target:{value:'64000'}});
-  fireEvent.click(screen.getByRole('button',{name:'保存配置'}));fireEvent.click(screen.getByRole('button',{name:'关闭'}));
+  fireEvent.click(screen.getByRole('button',{name:'保存全局助手配置'}));fireEvent.click(screen.getByRole('button',{name:'关闭'}));
   await waitFor(()=>expect(screen.getByRole('button',{name:'发送'})).toBeEnabled());fireEvent.click(screen.getByRole('button',{name:'发送'}));
   await waitFor(()=>expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue(''));
   const commands=view.requests.filter(([path,options])=>path.endsWith('/executions')&&options?.method==='POST').map(([,options])=>JSON.parse(String(options?.body)));

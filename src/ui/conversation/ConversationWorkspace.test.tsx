@@ -99,3 +99,13 @@ it('makes secondary actions available in one menu and keeps the composer draft',
   fireEvent.click(screen.getByRole('button',{name:'更多聊天操作'}));expect(screen.getByRole('dialog',{name:'聊天操作'})).toBeVisible();
   fireEvent.click(screen.getByRole('button',{name:'查看会话历史'}));expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue('还没发送');
 });
+
+it('keeps retained map and canvas state when the visible purpose changes',()=>{
+ const props:ConversationWorkspaceProps={scene:'learning',title:'Learning',draft:'chat draft',onDraftChange:()=>{},onSend:()=>{},modelLabel:'model',onConfigure:()=>{},onModelConfigure:()=>{},onNew:()=>{},onHistory:()=>{},onCanvas:()=>{}};
+ const pane=<input aria-label="retained canvas note" defaultValue="" />;
+ const view=render(<ConversationWorkspace {...props} sidePaneKind="map" sidePane={pane} />);
+ fireEvent.change(screen.getByLabelText('retained canvas note'),{target:{value:'unsaved drawing note'}});
+ view.rerender(<ConversationWorkspace {...props} sidePaneKind="canvas" sidePane={pane} />);
+ expect(screen.getByLabelText('retained canvas note')).toHaveValue('unsaved drawing note');
+ expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue('chat draft');
+});

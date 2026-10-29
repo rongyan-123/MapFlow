@@ -68,13 +68,10 @@ export function useConversationExecution({detail,accountId,csrfToken,modelSelect
     void canvas.enableDrawing();
   }, [learningScene, readOnly, busy, pendingGeneration]);
   useEffect(()=>{canvas.setPreview(canvasPreview);},[canvasPreview,canvas.setPreview]);
-  const mapVisibleRef = useRef(mapVisible); mapVisibleRef.current = mapVisible;
-  useEffect(() => { if (mapVisible && canvas.open) canvas.setOpen(false); }, [mapVisible]);
   async function openTeachingCanvas() {
     if (isMobile) composer.current?.blur();
     onOpenCanvas?.();
     await canvas.show();
-    if (mapVisibleRef.current) canvas.setOpen(false);
   }
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');

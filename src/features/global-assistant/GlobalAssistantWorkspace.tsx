@@ -41,7 +41,7 @@ export default function GlobalAssistantWorkspace({accountId,csrfToken,navigate}:
   const queryClient=useQueryClient();const controller=useMemo(()=>new GlobalAssistantController(accountId,csrfToken,queryClient),[accountId,queryClient]);
   useLayoutEffect(()=>controller.updateCsrfToken(csrfToken),[controller,csrfToken]);
   const state=useSyncExternalStore(controller.subscribe,controller.getSnapshot,controller.getSnapshot);
-  const model=useAgentModelConfiguration();const shared=useSharedModelSelection()!;
+  const model=useAgentModelConfiguration('management');const shared=useSharedModelSelection('management')!;
   const [settingsOpen,setSettingsOpen]=useState(false);const [settingsBusy,setSettingsBusy]=useState(false);
   const [credentialTarget,setCredentialTarget]=useState<AgentStatus|null>(null);
   const [windowEnd,setWindowEnd]=useState<string|null>(null);
@@ -58,7 +58,7 @@ export default function GlobalAssistantWorkspace({accountId,csrfToken,navigate}:
   const loadedIds=useMemo(()=>new Set(timeline?.messages.map(message=>message.messageId)),[timeline?.messages]);
   const projectedActive=timeline?.activeExecution;
   const active=!!execution?.pendingGeneration||!!execution?.rejectedGeneration||!!execution?.busy||!!projectedActive&&!terminal(projectedActive.state)&&!(execution?.executionId===projectedActive.executionId&&terminal(execution.state));
-  const canSend=!!timeline&&!state.loading&&!state.error&&!state.syncing&&!state.syncError&&!settingsBusy&&!execution?.pendingGeneration&&!execution?.rejectedGeneration&&!execution?.busy&&timeline.sendAvailability.conversation&&(model.options.funding!=='cash'||timeline.sendAvailability.cash);
+  const canSend=model.ready&&!!timeline&&!state.loading&&!state.error&&!state.syncing&&!state.syncError&&!settingsBusy&&!execution?.pendingGeneration&&!execution?.rejectedGeneration&&!execution?.busy&&timeline.sendAvailability.conversation&&(model.options.funding!=='cash'||timeline.sendAvailability.cash);
   const modelLabel=`${(model.options.modelLabel??shared.selection.model)||'配置模型'} · ${model.options.funding==='cash'?'现金额度':model.options.funding==='points'?'平台积分':'自填 Key'}`;
   const send=async()=>{if(!canSend)return;try{await controller.send(globalModelCommand(model.options,shared.selection));}catch(error){controller.rejectPreflight(error);}};
   const loadOlder=async()=>{
@@ -116,7 +116,7 @@ export default function GlobalAssistantWorkspace({accountId,csrfToken,navigate}:
     </form><p className="mf-composer-note">AI 的建议可以参考，理解和判断属于你。</p></div>
     {settingsOpen&&<Dialog title="模型设置" onClose={()=>setSettingsOpen(false)} dismissible={!settingsBusy}><div className="mf-stack">
       <p className="mf-muted mf-small">模型选择用于下一次发送；原请求沿用已接受的模型和资金通路。</p>
-      <ModelSettings accountId={accountId} csrfToken={csrfToken} onWallet={()=>navigate('/wallet')} />
+      <ModelSettings initialPurpose="management" accountId={accountId} csrfToken={csrfToken} onWallet={()=>navigate('/wallet')} />
       {(credentialTarget||execution?.state==='awaiting_reconciliation'&&execution?.control?.actions.canResume===true||execution?.controlAvailability==='unsupported'&&execution?.error instanceof AgentApiError&&execution.error.code==='credential_required'||!execution?.executionId&&execution?.pendingGeneration&&execution.funding==='byok')&&<div className="mf-status mf-stack"><p>恢复原模型：{credentialTarget?.modelId??execution?.modelId??'原请求模型'}。请补回匹配原配置的 Key，再显式恢复。</p><Button disabled={!shared.selection.apiKey.trim()} onClick={()=>void controller.resume(shared.selection.apiKey,credentialTarget??undefined)}>恢复原请求</Button></div>}
       {timeline&&<details className="mf-global-parameters"><summary>生成参数</summary><GenerationSettingsForm conversationId={timeline.conversationId} settings={timeline.generationSettings} version={timeline.generationSettingsVersion} csrfToken={csrfToken} onUpdated={controller.patchSettings} onConflict={controller.reload} onBusyChange={setSettingsBusy} /></details>}
     </div></Dialog>}

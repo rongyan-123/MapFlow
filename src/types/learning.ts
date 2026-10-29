@@ -59,6 +59,7 @@ export interface SkillBlock {
   name: string;
   color: string | null;
   sort_order: number;
+  overview?: {version:number;core_question:string;chain_node_ids:string[];note:string}|null;
 }
 
 export interface SkillNodeBlockAssignment {

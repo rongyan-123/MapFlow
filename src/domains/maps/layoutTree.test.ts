@@ -55,4 +55,30 @@ describe('computeTreeLayout', () => {
       computeTreeLayout(original, edges),
     );
   });
+
+  it('does not promote a cycle or its downstream nodes to a normal root row', () => {
+    const nodes = ['root', 'a', 'b', 'tail'].map(id => makeNode(id, 0, 0));
+    const edges = [['a', 'b'], ['b', 'a'], ['b', 'tail']].map(([source, target]) => ({
+      id: `${source}-${target}`, source_node_id: source, target_node_id: target, edge_type: 'prerequisite', label: null,
+    }));
+    const positions = computeTreeLayout(nodes, edges);
+    expect(positions.size).toBe(4);
+    for (const id of ['a', 'b', 'tail']) expect(positions.get(id)!.y).toBeGreaterThan(positions.get('root')!.y);
+  });
+
+  it('keeps a legal dependency chain when a related edge points backwards', () => {
+    const nodes = ['a', 'b', 'c'].map(id => makeNode(id, 0, 0));
+    const edges = [['a', 'b', 'prerequisite'], ['b', 'c', 'prerequisite'], ['c', 'a', 'related']].map(([source, target, type]) => ({
+      id: `${source}-${target}`, source_node_id: source, target_node_id: target, edge_type: type, label: null,
+    }));
+    const positions = computeTreeLayout(nodes, edges);
+    expect(positions.get('b')!.y).toBeGreaterThan(positions.get('a')!.y);
+    expect(positions.get('c')!.y).toBeGreaterThan(positions.get('b')!.y);
+  });
+
+  it('keeps all nodes visible when a legacy edge references a missing node', () => {
+    const nodes = [makeNode('a', 0, 0)];
+    expect(() => computeTreeLayout(nodes, [{ id: 'broken', source_node_id: 'missing', target_node_id: 'a', edge_type: 'prerequisite', label: null }])).not.toThrow();
+    expect(computeTreeLayout(nodes, []).size).toBe(1);
+  });
 });

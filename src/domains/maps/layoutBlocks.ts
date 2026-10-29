@@ -1,3 +1,4 @@
+import { analyzeDependencies } from './dependencies';
 import type {
   SkillBlock,
   SkillEdge,
@@ -28,19 +29,14 @@ export interface BlockLayoutModel {
   lanes: BlockLaneLayout[];
 }
 
-/**
- * 按 Agent 提供的 block 分组，把每个块排成独立的纵向泳道。
- *
- * 每个块占一整行，节点按学习深度与稳定顺序横向展开；块之间只负责提供
- * 稳定的纵向分隔。MCP 写入的 position_x/position_y 不参与布局。
- */
+/** Block columns share global prerequisite layers; grouping never flattens dependencies. */
 export function computeBlockLayoutModel(
   nodes: SkillNode[],
   edges: SkillEdge[],
   blocks: SkillBlock[],
   assignments: SkillNodeBlockAssignment[],
 ): BlockLayoutModel {
-  void edges;
+  const { layers } = analyzeDependencies(nodes.map(node => node.id), edges);
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const blockById = new Map(blocks.map((block) => [block.id, block]));
   const nodeBlock = new Map<string, string>();
@@ -73,49 +69,30 @@ export function computeBlockLayoutModel(
 
   const positions = new Map<string, { x: number; y: number }>();
   const lanes: BlockLaneLayout[] = [];
-  let cursorY = 0;
-
+  let cursorX = 0;
+  const headerHeight = 72;
+  const maximumLayer = Math.max(0, ...layers.values());
   for (const [groupId, groupNodes] of groups) {
-    if (groupNodes.length === 0) continue;
-
-    const orderedNodes = [...groupNodes].sort(
-      (a, b) =>
-        a.depth_level - b.depth_level ||
-        a.order_in_level - b.order_in_level ||
-        a.id.localeCompare(b.id),
-    );
-    const contentWidth =
-      orderedNodes.length * BLOCK_NODE_WIDTH +
-      Math.max(0, orderedNodes.length - 1) * BLOCK_HORIZONTAL_GAP;
-    const laneWidth =
-      BLOCK_LABEL_WIDTH +
-      BLOCK_LABEL_GAP +
-      contentWidth +
-      BLOCK_PADDING * 2;
-    const laneHeight = BLOCK_NODE_HEIGHT + BLOCK_PADDING * 2;
-    const laneX = -laneWidth / 2;
-    const contentStartX =
-      laneX + BLOCK_LABEL_WIDTH + BLOCK_LABEL_GAP + BLOCK_PADDING;
-    const nodeY = cursorY + BLOCK_PADDING;
-
-    orderedNodes.forEach((node, index) => {
-      positions.set(node.id, {
-        x: contentStartX + index * (BLOCK_NODE_WIDTH + BLOCK_HORIZONTAL_GAP),
-        y: nodeY,
-      });
+    if (!groupNodes.length) continue;
+    const rows = new Map<number, SkillNode[]>();
+    for (const node of groupNodes) {
+      const layer = layers.get(node.id)!;
+      rows.set(layer, [...(rows.get(layer) ?? []), node]);
+    }
+    const columns = Math.max(...[...rows.values()].map(row => row.length));
+    const laneWidth = columns * (BLOCK_NODE_WIDTH + BLOCK_HORIZONTAL_GAP) - BLOCK_HORIZONTAL_GAP + BLOCK_PADDING * 2;
+    for (const [layer, row] of rows) {
+      row.sort((a, b) => a.id.localeCompare(b.id)).forEach((node, column) => positions.set(node.id, {
+        x: cursorX + BLOCK_PADDING + column * (BLOCK_NODE_WIDTH + BLOCK_HORIZONTAL_GAP),
+        y: headerHeight + BLOCK_PADDING + layer * (BLOCK_NODE_HEIGHT + BLOCK_VERTICAL_GAP),
+      }));
+    }
+    const block = blockById.get(groupId);
+    lanes.push({ blockId: groupId, name: block?.name ?? '未分组节点', color: block?.color ?? null,
+      x: cursorX, y: 0, width: laneWidth,
+      height: headerHeight + BLOCK_PADDING * 2 + maximumLayer * (BLOCK_NODE_HEIGHT + BLOCK_VERTICAL_GAP) + BLOCK_NODE_HEIGHT,
     });
-
-    const block = groupId === '__unassigned__' ? null : blockById.get(groupId);
-    lanes.push({
-      blockId: groupId,
-      name: block?.name ?? '未分组节点',
-      color: block?.color ?? null,
-      x: laneX,
-      y: cursorY,
-      width: laneWidth,
-      height: laneHeight,
-    });
-    cursorY += laneHeight + BLOCK_VERTICAL_GAP;
+    cursorX += laneWidth + BLOCK_HORIZONTAL_GAP;
   }
 
   return { positions, lanes };

@@ -11,7 +11,7 @@ export interface ByokCapabilitiesDraft {
 function validEndpoint(value:string){
   try{const endpoint=new URL(value);return endpoint.protocol==='https:'&&!endpoint.username&&!endpoint.password&&!endpoint.search&&!endpoint.hash&&/\/v1\/?$/u.test(endpoint.pathname);}catch{return false;}
 }
-export default function ByokForm({selection,capabilities,onChange,csrfToken,locked=false}:{selection:TavernModelSelection;capabilities?:ByokCapabilitiesDraft;onChange:(selection:TavernModelSelection,capabilities?:ByokCapabilitiesDraft)=>void;csrfToken:string;locked?:boolean}){
+export default function ByokForm({selection,capabilities,onChange,csrfToken,locked=false,onDraftChange}:{selection:TavernModelSelection;capabilities?:ByokCapabilitiesDraft;onChange:(selection:TavernModelSelection,capabilities?:ByokCapabilitiesDraft)=>void;csrfToken:string;locked?:boolean;onDraftChange?:(selection:TavernModelSelection,capabilities?:ByokCapabilitiesDraft)=>void}){
   const [draft,setDraft]=useState({...selection,provider:'custom' as const});const [preset,setPreset]=useState(()=>modelPresets.find(preset=>preset.baseUrl===selection.baseUrl)?.id??'custom');
   const [capabilityDraft,setCapabilityDraft]=useState<ByokCapabilitiesDraft|undefined>(()=>capabilities?{
     contextWindow:capabilities.contextWindow,maxOutputTokens:capabilities.maxOutputTokens,
@@ -19,8 +19,8 @@ export default function ByokForm({selection,capabilities,onChange,csrfToken,lock
   }:undefined);
   const [error,setError]=useState('');const [saved,setSaved]=useState(false);const [testing,setTesting]=useState(false);const [connection,setConnection]=useState<{ok:boolean;models:string[];message:string}|null>(null);const probe=useRef<AbortController|null>(null);
   useEffect(()=>()=>probe.current?.abort(),[]);
-  function change(next:typeof draft,invalidate=true){setDraft(next);setError('');setSaved(false);if(invalidate){probe.current?.abort();probe.current=null;setTesting(false);setConnection(null);}}
-  function changeCapabilities(patch:Partial<ByokCapabilitiesDraft>){setCapabilityDraft(previous=>previous?{...previous,...patch}:previous);setSaved(false);setError('');}
+  function change(next:typeof draft,invalidate=true){setDraft(next);onDraftChange?.(next,capabilityDraft);setError('');setSaved(false);if(invalidate){probe.current?.abort();probe.current=null;setTesting(false);setConnection(null);}}
+  function changeCapabilities(patch:Partial<ByokCapabilitiesDraft>){if(capabilityDraft)onDraftChange?.(draft,{...capabilityDraft,...patch});setCapabilityDraft(previous=>previous?{...previous,...patch}:previous);setSaved(false);setError('');}
   function save(){
     if(locked)return;
     const cleaned={...draft,apiKey:draft.apiKey.trim(),baseUrl:draft.baseUrl.trim(),model:draft.model.trim()};
@@ -45,6 +45,6 @@ export default function ByokForm({selection,capabilities,onChange,csrfToken,lock
       <label className="mf-field">模型输出上限（可选）<input type="number" min={1} step={1} value={capabilityDraft.maxOutputTokens} placeholder="留空使用模型默认值" onChange={event=>changeCapabilities({maxOutputTokens:event.target.value})} /></label>
       <label className="mf-field">推理参数协议<select aria-label="推理参数协议" value={capabilityDraft.reasoningProtocol} onChange={event=>{const reasoningProtocol=event.target.value as ByokCapabilitiesDraft['reasoningProtocol'];changeCapabilities({reasoningProtocol,reasoningSupported:reasoningProtocol!=='none'});}}><option value="none">不额外发送推理参数</option><option value="deepseek">DeepSeek</option><option value="siliconflow">SiliconFlow</option><option value="openai_reasoning">OpenAI reasoning</option></select><small>根据服务商的接口说明选择，不按模型名称自动猜测。</small></label>
     </>}
-    <div className="mf-row mf-wrap"><Button disabled={testing} onClick={()=>void test()}>{testing?'测试中…':'测试连接 / 获取模型'}</Button><Button variant="primary" onClick={save}>保存配置</Button></div>{error&&<p role="alert" className="mf-status mf-status--error">{error}</p>}{connection&&<p role={connection.ok?'status':'alert'} className={`mf-status ${connection.ok?'':'mf-status--error'}`}>{connection.message}</p>}<p role="status" className="mf-muted mf-small">{saved?'已保存，当前页面内有效。':'修改后请保存配置。'}测试连接只查询模型目录，不验证聊天或工具调用。</p>
+    <div className="mf-row mf-wrap"><Button disabled={testing} onClick={()=>void test()}>{testing?'测试中…':'测试连接 / 获取模型'}</Button>{!onDraftChange&&<Button variant="primary" onClick={save}>保存配置</Button>}</div>{error&&<p role="alert" className="mf-status mf-status--error">{error}</p>}{connection&&<p role={connection.ok?'status':'alert'} className={`mf-status ${connection.ok?'':'mf-status--error'}`}>{connection.message}</p>}<p role="status" className="mf-muted mf-small">{onDraftChange?'填写完成后保存该用途的配置。':saved?'已保存，当前页面内有效。':'修改后请保存配置。'}测试连接只查询模型目录，不验证聊天或工具调用。</p>
   </fieldset>;
 }

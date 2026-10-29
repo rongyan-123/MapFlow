@@ -1,5 +1,7 @@
 import { createContext, useContext, useRef, useState, type ReactNode } from 'react';
 import { readModelSelection, saveModelSelection } from './preferences';
+import {useSceneModels} from './SceneModelContext';
+import type {ModelPurpose} from './scenePreferences';
 import type { TavernModelSelection } from '../conversations/types';
 
 interface ModelSelectionState {
@@ -24,4 +26,10 @@ export function ModelSelectionProvider({ accountId, children }: { accountId: str
   return <ModelSelectionContext.Provider value={{ selection, change }}>{children}</ModelSelectionContext.Provider>;
 }
 
-export function useSharedModelSelection() { return useContext(ModelSelectionContext); }
+export function useSharedModelSelection(purpose:ModelPurpose='tavern') {
+  const legacy=useContext(ModelSelectionContext);const scenes=useSceneModels();
+  if(!scenes)return legacy;
+  const saved=scenes.entries[purpose];
+  const selection:TavernModelSelection={provider:'custom',apiKey:scenes.credentials[purpose]??'',baseUrl:saved?.settings.baseUrl??'',model:saved?.settings.model??'',historyBytes:saved?.settings.historyBytes??32768,settings:{}};
+  return {selection,change:(next:TavernModelSelection)=>{if(saved)void scenes.save(purpose,saved.version,{...saved.settings,baseUrl:next.baseUrl,model:next.model,historyBytes:next.historyBytes},next.apiKey).catch(()=>scenes.reload());}};
+}

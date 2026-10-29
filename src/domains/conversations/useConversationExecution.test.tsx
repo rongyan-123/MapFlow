@@ -6,6 +6,17 @@ import { useConversationExecution } from './useConversationExecution';
 afterEach(()=>{vi.unstubAllGlobals();sessionStorage.clear();});
 const conversationId='22222222-2222-4222-8222-222222222222';
 const saved={...detail,conversation:{...detail.conversation,conversationId}};
+it('retains an open teaching canvas while the map temporarily covers it',()=>{
+  vi.stubGlobal('fetch',async()=>Response.json({execution:null}));
+  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
+  const view=renderHook(({mapVisible})=>useConversationExecution({detail:saved,accountId:'a',csrfToken:'csrf',mapVisible,modelSelection:{provider:'custom',apiKey:'',baseUrl:'',model:'',settings:{},historyBytes:32768},onCompleted:vi.fn(),onRecovered:vi.fn(),onGraphChanged:vi.fn()}),{initialProps:{mapVisible:false},wrapper:({children})=><QueryClientProvider client={client}>{children}</QueryClientProvider>});
+  act(()=>view.result.current.canvas.setOpen(true));
+  view.rerender({mapVisible:true});
+  expect(view.result.current.canvas.open).toBe(true);
+  view.rerender({mapVisible:false});
+  expect(view.result.current.canvas.open).toBe(true);
+  view.unmount();
+});
 function setup(funding:'cash'|'byok'='cash',initialDraft='',available=true){
   const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
   const recovered=vi.fn();

@@ -508,7 +508,13 @@ function parseSkillBlock(value: unknown): SkillBlock {
     name: value.name,
     color: value.color,
     sort_order: value.sort_order,
+    ...(value.overview===undefined?{}:{overview:parseBlockOverview(value.overview)}),
   };
+}
+function parseBlockOverview(value:unknown):SkillBlock['overview']{
+  if(value===null)return null;
+  if(!isRecord(value)||value.version!==2||typeof value.core_question!=='string'||typeof value.note!=='string'||!isStringArray(value.chain_node_ids))throw invalidResponseError();
+  return {version:2,core_question:value.core_question,chain_node_ids:value.chain_node_ids,note:value.note};
 }
 
 function parseSkillNodeBlockAssignment(
