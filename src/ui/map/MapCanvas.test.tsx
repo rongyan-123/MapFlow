@@ -58,6 +58,7 @@ vi.mock('@xyflow/react', async () => {
     edges,
     onInit,
     onMoveStart,
+    onMove,
     onMoveEnd,
     onNodesChange,
     onNodeDragStart,
@@ -70,6 +71,7 @@ vi.mock('@xyflow/react', async () => {
     edges: Array<{ id: string; source: string; target: string; data?: { relation?: string } }>;
     onInit?: (instance: typeof flowInstance) => void;
     onMoveStart?: (event: unknown, viewport: { x: number; y: number; zoom: number }) => void;
+    onMove?: (event: unknown, viewport: { x: number; y: number; zoom: number }) => void;
     onMoveEnd?: (event: unknown, viewport: { x: number; y: number; zoom: number }) => void;
     onNodesChange?: (changes: import('@xyflow/react').NodeChange[]) => void;
     onNodeDragStart?: () => void;
@@ -94,6 +96,12 @@ vi.mock('@xyflow/react', async () => {
           <button onClick={()=>onNodesChange?.([{id:node.id,type:'position',position:{x:321,y:654}}])}>拖动节点 {node.id}</button>
         </div>)}
         <button onClick={() => onMoveStart?.({}, { x: 72, y: -31, zoom: 0.63 })}>开始移动地图</button>
+        <button onClick={() => onMove?.({ type: 'mousemove', buttons: 1 }, { x: 72, y: -31, zoom: 0.63 })}>拖动画布</button>
+        <button onClick={() => onMove?.({ type: 'mousemove', buttons: 0 }, { x: 72, y: -31, zoom: 0.63 })}>悬停画布</button>
+        <button onClick={() => onMove?.({ type: 'wheel' }, { x: 72, y: -31, zoom: 0.5 })}>滚轮缩放地图</button>
+        <button onClick={() => onMove?.(null, { x: 72, y: -31, zoom: 0.63 })}>程序定位地图</button>
+        <button onClick={() => onMove?.({ type: 'touchmove', touches: [{}] }, { x: 72, y: -31, zoom: 0.63 })}>单指平移地图</button>
+        <button onClick={() => onMove?.({ type: 'touchmove', touches: [{}, {}] }, { x: 72, y: -31, zoom: 0.5 })}>双指缩放地图</button>
         <button onClick={() => onNodeDragStart?.()}>开始拖动节点</button>
         <button onClick={() => onNodeDragStop?.()}>结束拖动节点</button>
         <button onClick={() => onMoveEnd?.({}, { x: 72, y: -31, zoom: 0.63 })}>移动地图</button>
@@ -151,6 +159,81 @@ const snapshot = {
 } satisfies LearningTreeSnapshot;
 
 describe('SkillTreeCanvas', () => {
+  it.each([undefined, 'mapflow.pan.viewport'])('hides connections only after real canvas panning and restores on release (%s)', async viewportStorageKey => {
+    render(<SkillTreeCanvas snapshot={snapshot} displayMode="personal" layoutMode="relationship"
+      selectedNodeId={null} isGraphVisible onSelectNode={() => undefined} viewportStorageKey={viewportStorageKey} />);
+    await screen.findByLabelText('节点 node-1 准备状态');
+    const canvas = screen.getByTestId('skill-tree-flow');
+    fireEvent.click(screen.getByRole('button', { name: '开始移动地图' }));
+    expect(canvas).not.toHaveAttribute('data-mapflow-panning');
+    const attributes = vi.spyOn(canvas, 'setAttribute');
+    fireEvent.click(screen.getByRole('button', { name: '拖动画布' }));
+    expect(canvas).toHaveAttribute('data-mapflow-panning', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '拖动画布' }));
+    expect(attributes.mock.calls.filter(([name]) => name === 'data-mapflow-panning')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: '移动地图' }));
+    expect(canvas).not.toHaveAttribute('data-mapflow-panning');
+    expect(screen.getByLabelText('节点 node-1 准备状态')).toBeInTheDocument();
+  });
+
+  it('keeps connections visible for node drag, wheel zoom, hovering and programmatic centering', async () => {
+    render(<SkillTreeCanvas snapshot={snapshot} displayMode="personal" layoutMode="relationship"
+      selectedNodeId={null} isGraphVisible onSelectNode={() => undefined} />);
+    await screen.findByLabelText('节点 node-1 准备状态');
+    const canvas = screen.getByTestId('skill-tree-flow');
+    for (const name of ['开始拖动节点', '悬停画布', '滚轮缩放地图', '程序定位地图']) {
+      fireEvent.click(screen.getByRole('button', { name }));
+      expect(canvas).not.toHaveAttribute('data-mapflow-panning');
+    }
+    fireEvent.click(screen.getByRole('button', { name: '拖动画布' }));
+    expect(canvas).toHaveAttribute('data-mapflow-panning', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '滚轮缩放地图' }));
+    expect(canvas).not.toHaveAttribute('data-mapflow-panning');
+    fireEvent.click(screen.getByRole('button', { name: '拖动画布' }));
+    fireEvent.click(screen.getByRole('button', { name: '程序定位地图' }));
+    expect(canvas).not.toHaveAttribute('data-mapflow-panning');
+  });
+
+  it('hides connections for one-finger panning and restores them for two-finger zoom', async () => {
+    render(<SkillTreeCanvas snapshot={snapshot} displayMode="personal" layoutMode="relationship"
+      selectedNodeId={null} isGraphVisible onSelectNode={() => undefined} />);
+    await screen.findByLabelText('节点 node-1 准备状态');
+    const canvas = screen.getByTestId('skill-tree-flow');
+    fireEvent.click(screen.getByRole('button', { name: '单指平移地图' }));
+    expect(canvas).toHaveAttribute('data-mapflow-panning', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '双指缩放地图' }));
+    expect(canvas).not.toHaveAttribute('data-mapflow-panning');
+  });
+
+  it.each(['pointerup', 'pointercancel', 'blur', 'hidden'])('restores connections when a pan ends outside the canvas (%s)', async ending => {
+    render(<SkillTreeCanvas snapshot={snapshot} displayMode="personal" layoutMode="relationship"
+      selectedNodeId={null} isGraphVisible onSelectNode={() => undefined} />);
+    await screen.findByLabelText('节点 node-1 准备状态');
+    const canvas = screen.getByTestId('skill-tree-flow');
+    fireEvent.click(screen.getByRole('button', { name: '拖动画布' }));
+    expect(canvas).toHaveAttribute('data-mapflow-panning', 'true');
+    if (ending === 'hidden') {
+      const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+      fireEvent(document, new Event('visibilitychange'));
+      hidden.mockRestore();
+    } else fireEvent(ending === 'blur' ? window : document, new Event(ending));
+    expect(canvas).not.toHaveAttribute('data-mapflow-panning');
+  });
+
+  it('cleans pan visibility state and global cancellation listeners on unmount', async () => {
+    const removed = vi.spyOn(window, 'removeEventListener');
+    const view = render(<SkillTreeCanvas snapshot={snapshot} displayMode="personal" layoutMode="relationship"
+      selectedNodeId={null} isGraphVisible onSelectNode={() => undefined} />);
+    await screen.findByLabelText('节点 node-1 准备状态');
+    const canvas = screen.getByTestId('skill-tree-flow');
+    fireEvent.click(screen.getByRole('button', { name: '拖动画布' }));
+    expect(canvas).toHaveAttribute('data-mapflow-panning', 'true');
+    view.unmount();
+    expect(canvas).not.toHaveAttribute('data-mapflow-panning');
+    expect(removed.mock.calls.some(([name]) => name === 'blur')).toBe(true);
+    removed.mockRestore();
+  });
+
   it('retains measured node geometry through selection and progress changes while allowing layout positions to reset', async () => {
     const props = { snapshot, displayMode: 'personal' as const, layoutMode: 'relationship' as const,
       selectedNodeId: null, isGraphVisible: true, onSelectNode: () => undefined };

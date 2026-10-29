@@ -323,6 +323,12 @@ export default function SkillTreeCanvas({
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onMoveStart={() => animationControllerRef.current?.setMoving(true)}
+      onMove={event => {
+        const panning = event?.type === 'touchmove'
+          ? 'touches' in event && event.touches.length === 1
+          : Boolean(event && (event.type === 'mousemove' || event.type === 'pointermove') && 'buttons' in event && event.buttons > 0);
+        animationControllerRef.current?.setPanning(panning);
+      }}
       onNodeDragStart={() => animationControllerRef.current?.setMoving(true, 'node')}
       onNodeDragStop={() => animationControllerRef.current?.setMoving(false, 'node')}
       onNodeClick={(_, node) => selectAndCenterNode(node)}
@@ -333,6 +339,7 @@ export default function SkillTreeCanvas({
         if (node) { event.preventDefault(); selectAndCenterNode(node); }
       }}
       onMoveEnd={(_, viewport) => {
+        animationControllerRef.current?.setPanning(false);
         animationControllerRef.current?.setMoving(false);
         if (!viewportKey) return;
         try { localStorage.setItem(viewportKey, JSON.stringify({ layoutKey, viewport,canvas:canvasSize() })); }

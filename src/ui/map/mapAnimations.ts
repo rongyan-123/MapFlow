@@ -3,16 +3,34 @@ const visibilityAttribute = 'data-mapflow-flow-visible';
 
 export interface MapAnimationController {
   setMoving: (moving: boolean, source?: 'viewport' | 'node') => void;
+  setPanning: (panning: boolean) => void;
   dispose: () => void;
 }
 
 /** Keep animation scheduling outside React's per-frame viewport updates. */
 export function observeMapAnimations(canvas: HTMLElement): MapAnimationController {
   let disposed = false;
+  let panning = false;
+  const ownerDocument = canvas.ownerDocument;
+  const ownerWindow = ownerDocument.defaultView;
   const observed = new Set<Element>();
   const movingSources = new Set<'viewport' | 'node'>();
   let intersections: IntersectionObserver | undefined;
   let mutations: MutationObserver | undefined;
+
+  function setPanning(next: boolean) {
+    if (disposed || next === panning) return;
+    panning = next;
+    if (panning) canvas.setAttribute('data-mapflow-panning', 'true');
+    else canvas.removeAttribute('data-mapflow-panning');
+  }
+
+  const finishPan = () => setPanning(false);
+  const finishPanWhenHidden = () => { if (ownerDocument.hidden) finishPan(); };
+  ownerDocument.addEventListener('pointerup', finishPan, true);
+  ownerDocument.addEventListener('pointercancel', finishPan, true);
+  ownerDocument.addEventListener('visibilitychange', finishPanWhenHidden);
+  ownerWindow?.addEventListener('blur', finishPan);
 
   function forEachConnection(root: Node, visit: (connection: Element) => void) {
     if (!(root instanceof Element)) return;
@@ -54,6 +72,7 @@ export function observeMapAnimations(canvas: HTMLElement): MapAnimationControlle
   }
 
   return {
+    setPanning,
     setMoving(moving, source = 'viewport') {
       if (disposed) return;
       if (moving) movingSources.add(source);
@@ -63,6 +82,10 @@ export function observeMapAnimations(canvas: HTMLElement): MapAnimationControlle
     },
     dispose() {
       disposed = true;
+      ownerDocument.removeEventListener('pointerup', finishPan, true);
+      ownerDocument.removeEventListener('pointercancel', finishPan, true);
+      ownerDocument.removeEventListener('visibilitychange', finishPanWhenHidden);
+      ownerWindow?.removeEventListener('blur', finishPan);
       mutations?.disconnect();
       intersections?.disconnect();
       observed.forEach(connection => connection.removeAttribute(visibilityAttribute));
@@ -70,6 +93,7 @@ export function observeMapAnimations(canvas: HTMLElement): MapAnimationControlle
       movingSources.clear();
       canvas.removeAttribute('data-mapflow-flow-visibility');
       canvas.removeAttribute('data-mapflow-moving');
+      canvas.removeAttribute('data-mapflow-panning');
     },
   };
 }
