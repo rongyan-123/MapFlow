@@ -25,7 +25,7 @@ it('uses the real orthogonal route for every flow layer and updates ports when a
   const view=render(<svg><BlockConnectionEdge {...props} /></svg>);
   const base=view.container.querySelector('.mapflow-connection-line')!;
   const original=base.getAttribute('d');
-  expect(original).not.toMatch(/[CQSA]/i);
+  expect(original).toContain('Q');
   const flow=view.container.querySelectorAll('.mapflow-connection-flow');
   expect(flow.length).toBeGreaterThan(0);
   for(const layer of flow)expect(layer.getAttribute('d')).toBe(original);
@@ -38,4 +38,18 @@ it('uses the real orthogonal route for every flow layer and updates ports when a
   for(const layer of view.container.querySelectorAll('.mapflow-connection-flow'))expect(layer.getAttribute('d')).toBe(moved);
   expect(view.container.querySelector('[data-port="target"]')).toHaveAttribute('cx','720');
   expect(view.container.querySelector('[data-port="target"]')).toHaveAttribute('cy','350');
+});
+
+it('renders distributed ports without losing the shared path of the arrow and flow layers', () => {
+  geometry.nodes = [
+    { id: 'a', type: 'skill', position: { x: 0, y: 0 }, measured: { width: 240, height: 104 } },
+    { id: 'b', type: 'skill', position: { x: 280, y: 264 }, measured: { width: 240, height: 104 } },
+  ];
+  const props = { id: 'fanout', source: 'a', target: 'b', data: { relation: 'outgoing', edgeType: 'prerequisite', lane: 0, sourcePort: .2, targetPort: .88 } } as React.ComponentProps<typeof BlockConnectionEdge>;
+  const view = render(<svg><BlockConnectionEdge {...props} /></svg>);
+  expect(view.container.querySelector('[data-port="source"]')).toHaveAttribute('cx', '48');
+  expect(view.container.querySelector('[data-port="target"]')).toHaveAttribute('cx', '491.2');
+  const main = view.container.querySelector('.mapflow-connection-line')!;
+  expect(main).toHaveAttribute('marker-end');
+  for (const layer of view.container.querySelectorAll('.mapflow-connection-flow')) expect(layer.getAttribute('d')).toBe(main.getAttribute('d'));
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildBlockConnections, getBlockConnectionRoute } from './blockConnections';
+import { buildBlockConnections, createConnectionRouter, getBlockConnectionRoute } from './blockConnections';
 import type { SkillEdge } from '../../types/learning';
 
 const dependencies: SkillEdge[] = [
@@ -132,11 +132,56 @@ describe('块布局关联线', () => {
     expect(visible(null).map(edge => edge.id)).toEqual(['near', 'child-primary', 'remote-near']);
     expect(edges).toEqual(original);
   });
+
+  it('出线按目标位置分散接出，展开前后端口不跳动', () => {
+    const edges = [-552, -276, 0, 276, 552].map((x, index) => ({ ...dependencies[0], id: `out-${4-index}`, source_node_id: 'source', target_node_id: `target-${x}` }));
+    const positions = new Map([['source', { x: 0, y: 0 }], ...[-552, -276, 0, 276, 552].map(x => [`target-${x}`, { x, y: 168 }] as const)]);
+    const normal = buildBlockConnections(edges, null, 'relationship', undefined, undefined, positions);
+    const selected = buildBlockConnections(edges, 'source', 'relationship', undefined, undefined, positions);
+    normal.forEach((edge, index) => expect(edge.data?.sourcePort).toBeCloseTo([.2, .35, .5, .65, .8][index]));
+    expect(normal.map(edge => edge.data?.targetPort)).toEqual([.5, .5, .5, .5, .5]);
+    expect(selected.map(edge => edge.data?.sourcePort)).toEqual(normal.map(edge => edge.data?.sourcePort));
+  });
 });
 
 const first = { x: 0, y: 0, width: 240, height: 104 };
 
 describe('正交连接方向与避让', () => {
+  it('短折线使用小圆角，路径与流光长度仍准确到达实际端口', () => {
+    const route = getBlockConnectionRoute(first, { ...first, x: 276, y: 168 }, [], 0, { source: .2, target: .8 });
+    expect(route.path).toContain('Q');
+    expect(route.path).toMatch(/^M 48 104 /);
+    expect(route.path).toMatch(/L 468 168$/);
+    expect(route.end).toEqual({ x: 468, y: 168 });
+    expect(route.length).toBeGreaterThan(470);
+    expect(route.length).toBeLessThan(484);
+  });
+
+  it('共享通道里的长线保持间距，避免再次叠成一束', () => {
+    const target = { ...first, y: 528 }, obstacle = { ...first, y: 264 };
+    const router = createConnectionRouter([first, obstacle, target]);
+    const tracks = [.3, .4, .45].map(port => {
+      const route = router.route(first, target, 0, { source: port, target: port });
+      const segments = route.points.slice(1).map((point, index) => ({ point, previous: route.points[index] }))
+        .filter(({ point, previous }) => point.x === previous.x)
+        .sort((a, b) => Math.abs(b.point.y - b.previous.y) - Math.abs(a.point.y - a.previous.y));
+      return segments[0].point.x;
+    });
+    expect(new Set(tracks).size).toBe(3);
+    for (let index = 1; index < tracks.length; index++) expect(Math.abs(tracks[index] - tracks[index - 1])).toBeGreaterThanOrEqual(6);
+  });
+
+  it('交错卡片之间就近换通道，不把整条线绕到所有卡片外侧', () => {
+    const target = { ...first, y: 672 };
+    const obstacles = [{ ...first, y: 168 }, { ...first, x: -138, y: 336 }, { ...first, x: 138, y: 504 }];
+    const route = getBlockConnectionRoute(first, target, obstacles);
+    expect(route.length).toBeLessThanOrEqual(900);
+    for (const point of route.points) for (const obstacle of obstacles) {
+      expect(point.x > obstacle.x - 12 && point.x < obstacle.x + obstacle.width + 12
+        && point.y > obstacle.y - 12 && point.y < obstacle.y + obstacle.height + 12).toBe(false);
+    }
+  });
+
   it('同排节点从底部绕行，折线中段离开分块边框', () => {
     const route = getBlockConnectionRoute(first, { ...first, x: 552 }, []);
     expect(route.start).toEqual({ x: 120, y: 104 });
@@ -168,19 +213,21 @@ describe('正交连接方向与避让', () => {
     expect(route.end).toEqual({ x: 120, y: 528 });
   });
 
-  it('多条同列连接分开折线路径，并始终保持端点不变', () => {
+  it('多条同列连接分散在卡片边缘的不同端口', () => {
     const target = { ...first, y: 264 };
-    const firstRoute = getBlockConnectionRoute(first, target, [], 0);
-    const nextRoute = getBlockConnectionRoute(first, target, [], 1);
+    const firstRoute = getBlockConnectionRoute(first, target, [], 0, { source: .25, target: .25 });
+    const nextRoute = getBlockConnectionRoute(first, target, [], 1, { source: .75, target: .75 });
     expect(firstRoute.path).not.toBe(nextRoute.path);
-    expect(firstRoute.start).toEqual(nextRoute.start);
-    expect(firstRoute.end).toEqual(nextRoute.end);
+    expect(firstRoute.start).toEqual({ x: 60, y: 104 });
+    expect(nextRoute.start).toEqual({ x: 180, y: 104 });
+    expect(firstRoute.end).toEqual({ x: 60, y: 264 });
+    expect(nextRoute.end).toEqual({ x: 180, y: 264 });
   });
 
   it('跨排绕行的多条连接不共用同一条长路径', () => {
     const target = { ...first, y: 528 };
     const obstacles = [{ ...first, y: 264 }];
-    const paths = [0, 1, 2].map((lane) => getBlockConnectionRoute(first, target, obstacles, lane).path);
+    const paths = [0, 1, 2].map((lane) => getBlockConnectionRoute(first, target, obstacles, lane, { source: .25 + lane * .25, target: .25 + lane * .25 }).path);
     expect(new Set(paths).size).toBe(3);
   });
 });
