@@ -16,3 +16,5 @@
 .mf-learning-arrow{left:calc(50% - 22px);top:-52px}
 
 .mf-retained-pane{display:flex;flex-direction:column;flex:1;min-width:0;width:100%}
+.mf-map-stage:has(>.mf-map-dependency-notice){flex-direction:column}
+.mf-map-dependency-notice{position:static;flex:none;margin:8px 12px}
