@@ -1,4 +1,4 @@
-import { analyzeDependencies } from './dependencies';
+import { analyzeLayoutRelations } from './layoutRelations';
 import type {
   SkillBlock,
   SkillEdge,
@@ -29,14 +29,14 @@ export interface BlockLayoutModel {
   lanes: BlockLaneLayout[];
 }
 
-/** Block columns share global prerequisite layers; grouping never flattens dependencies. */
+/** Block columns share the same relation layers; grouping never flattens dependencies. */
 export function computeBlockLayoutModel(
   nodes: SkillNode[],
   edges: SkillEdge[],
   blocks: SkillBlock[],
   assignments: SkillNodeBlockAssignment[],
 ): BlockLayoutModel {
-  const { layers } = analyzeDependencies(nodes.map(node => node.id), edges);
+  const { layers } = analyzeLayoutRelations(nodes.map(node => node.id), edges);
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const blockById = new Map(blocks.map((block) => [block.id, block]));
   const nodeBlock = new Map<string, string>();

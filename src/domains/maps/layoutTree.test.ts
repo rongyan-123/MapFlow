@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { SkillEdge, SkillNode } from '../../types/learning';
 import { computeTreeLayout } from './layoutTree';
+import { analyzeDependencies } from './dependencies';
+import { getNodeReadiness } from './nodeReadiness';
 
 const makeNode = (
   id: string,
@@ -29,6 +31,63 @@ const makeNode = (
 });
 
 describe('computeTreeLayout', () => {
+  it('preserves legacy support ordering without turning support into a learning prerequisite', () => {
+    const nodes = [makeNode('foundation', 0, 0), makeNode('advanced', 18, 0)];
+    const edges: SkillEdge[] = [{ id: 'support', source_node_id: 'foundation', target_node_id: 'advanced', edge_type: 'requires', label: '支撑能力' }];
+    const original = structuredClone(edges);
+    const positions = computeTreeLayout(nodes, edges);
+    expect(positions.get('advanced')!.y).toBeGreaterThan(positions.get('foundation')!.y);
+    expect(getNodeReadiness(nodes.map(node => node.id), edges, []).get('advanced')).toBe(true);
+    expect(analyzeDependencies(nodes.map(node => node.id), edges).ambiguousEdges).toEqual(['support']);
+    expect(edges).toEqual(original);
+  });
+
+  it('keeps explicit prerequisites ahead of conflicting legacy cycles and still places the legacy tail', () => {
+    const nodes = ['a', 'b', 'c', 'independent'].map(id => makeNode(id, 0, 0));
+    const edges = [
+      { id: 'hard', source_node_id: 'a', target_node_id: 'b', edge_type: 'prerequisite', label: null },
+      { id: 'back', source_node_id: 'b', target_node_id: 'a', edge_type: 'requires', label: null },
+      { id: 'tail', source_node_id: 'b', target_node_id: 'c', edge_type: 'requires', label: null },
+    ];
+    const positions = computeTreeLayout(nodes, edges);
+    expect(positions.get('a')!.y).toBe(positions.get('independent')!.y);
+    expect(positions.get('b')!.y).toBeGreaterThan(positions.get('a')!.y);
+    expect(positions.get('c')!.y).toBeGreaterThan(positions.get('b')!.y);
+    expect(computeTreeLayout([...nodes].reverse(), [...edges].reverse())).toEqual(positions);
+  });
+
+  it('does not let a legacy relation pull a healthy node into an unresolved prerequisite cycle', () => {
+    const nodes = ['a', 'b', 'tail', 'healthy'].map(id => makeNode(id, 0, 0));
+    const edges = [
+      ['a', 'b', 'prerequisite'], ['b', 'a', 'prerequisite'], ['b', 'tail', 'prerequisite'], ['tail', 'healthy', 'requires'],
+    ].map(([source, target, type]) => ({ id: source + target, source_node_id: source, target_node_id: target, edge_type: type, label: null }));
+    const positions = computeTreeLayout(nodes, edges);
+    expect(positions.get('healthy')!.y).toBe(0);
+    for (const id of ['a', 'b', 'tail']) expect(positions.get(id)!.y).toBeGreaterThan(positions.get('healthy')!.y);
+  });
+
+  it('lays out a legacy-only cycle deterministically while preserving its original relations for review', () => {
+    const nodes = ['a', 'b', 'c', 'independent'].map(id => makeNode(id, 0, 0));
+    const edges = [['a', 'b'], ['b', 'c'], ['c', 'a']].map(([source, target]) => ({
+      id: source + target, source_node_id: source, target_node_id: target, edge_type: 'requires', label: null,
+    }));
+    const original = structuredClone(edges);
+    const positions = computeTreeLayout(nodes, edges);
+    expect(positions.get('a')!.y).toBe(positions.get('independent')!.y);
+    expect(positions.get('b')!.y).toBeGreaterThan(positions.get('a')!.y);
+    expect(positions.get('c')!.y).toBeGreaterThan(positions.get('b')!.y);
+    expect(computeTreeLayout([...nodes].reverse(), [...edges].reverse())).toEqual(positions);
+    expect(analyzeDependencies(nodes.map(node => node.id), edges).ambiguousEdges).toHaveLength(3);
+    expect(edges).toEqual(original);
+  });
+
+  it('keeps every truly independent root on the same layer without imposing a column limit', () => {
+    const nodes = Array.from({ length: 17 }, (_, index) => makeNode(`root-${index}`, index, index));
+    const positions = computeTreeLayout(nodes, []);
+    expect([...positions.values()].map(position => position.y)).toEqual(Array(17).fill(0));
+    expect(new Set([...positions.values()].map(position => position.x)).size).toBe(17);
+  });
+
   it('ignores Agent coordinates and within-level ordering', () => {
     const edges: SkillEdge[] = [
       {

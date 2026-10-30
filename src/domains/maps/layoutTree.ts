@@ -1,9 +1,9 @@
 import type { SkillEdge, SkillNode } from '../../types/learning';
-import { analyzeDependencies } from './dependencies';
+import { analyzeLayoutRelations } from './layoutRelations';
 
-/** Longest prerequisite path; related edges and stored depth never invent dependencies. */
+/** Explicit prerequisites and compatible legacy layout relations; never stored depth. */
 export function computeTreeLayout(nodes: SkillNode[], edges: SkillEdge[]): Map<string, { x: number; y: number }> {
-  const { layers, parents } = analyzeDependencies(nodes.map(node => node.id), edges);
+  const { layers, parents } = analyzeLayoutRelations(nodes.map(node => node.id), edges);
   const levels = new Map<number, SkillNode[]>();
   for (const node of nodes) {
     const level = layers.get(node.id)!;

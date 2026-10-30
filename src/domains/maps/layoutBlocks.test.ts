@@ -40,6 +40,21 @@ const assignment = (
 ): SkillNodeBlockAssignment => ({ node_id, block_id });
 
 describe('computeBlockLayout', () => {
+  it('keeps legacy support ordered across blocks without flattening a mixed cycle', () => {
+    const edges: SkillEdge[] = [
+      { id: 'support', source_node_id: 'foundation', target_node_id: 'advanced', edge_type: 'requires', label: null },
+      { id: 'hard', source_node_id: 'advanced', target_node_id: 'delivery', edge_type: 'prerequisite', label: null },
+      { id: 'back', source_node_id: 'delivery', target_node_id: 'advanced', edge_type: 'requires', label: null },
+    ];
+    const positions = computeBlockLayout(
+      [node('foundation'), node('advanced'), node('delivery')], edges,
+      [block('first', 0), block('second', 1)],
+      [assignment('foundation', 'second'), assignment('advanced', 'first'), assignment('delivery', 'second')],
+    );
+    expect(positions.get('advanced')!.y).toBeGreaterThan(positions.get('foundation')!.y);
+    expect(positions.get('delivery')!.y).toBeGreaterThan(positions.get('advanced')!.y);
+  });
+
   it('preserves internal dependencies and keeps independent roots on the same layer', () => {
     const nodes = [node('a'), node('b', 1), node('c'), node('unassigned')];
     const edges: SkillEdge[] = [
