@@ -1,6 +1,6 @@
 import { memo, useId, useMemo, type CSSProperties } from 'react';
 import { useStore, type ReactFlowState, type Node, type EdgeProps } from '@xyflow/react';
-import { getBlockConnectionRoute, type BlockConnection, type ConnectionRect } from '../../domains/maps/blockConnections';
+import { createConnectionRouter, type BlockConnection, type ConnectionRect } from '../../domains/maps/blockConnections';
 import { BLOCK_NODE_HEIGHT, BLOCK_NODE_WIDTH } from '../../domains/maps/layoutBlocks';
 
 type RoutingCard = ConnectionRect & { id: string };
@@ -10,21 +10,33 @@ const sameGeometry = (previous: Node[], next: Node[]) => previous === next || pr
   return card.id === other.id && card.type === other.type && card.position.x === other.position.x && card.position.y === other.position.y && card.measured?.width === other.measured?.width && card.measured?.height === other.measured?.height;
 });
 
+type RoutingGeometry = { signature: string; cards: Map<string, RoutingCard>; router: ReturnType<typeof createConnectionRouter> };
+const geometryCache = new WeakMap<Node[], RoutingGeometry>();
+let recentGeometry: RoutingGeometry | undefined;
+function getRoutingGeometry(nodes: Node[]): RoutingGeometry {
+  const cached = geometryCache.get(nodes);
+  if (cached) return cached;
+  const cards: RoutingCard[] = nodes.filter(node => node.type === 'skill').map(node => ({
+    id: node.id, x: node.position.x, y: node.position.y,
+    width: node.measured?.width ?? BLOCK_NODE_WIDTH, height: node.measured?.height ?? BLOCK_NODE_HEIGHT,
+  }));
+  const signature = JSON.stringify(cards);
+  if (recentGeometry?.signature !== signature) recentGeometry = { signature, cards: new Map(cards.map(card => [card.id, card])), router: createConnectionRouter(cards) };
+  geometryCache.set(nodes, recentGeometry);
+  return recentGeometry;
+}
+
 function BlockConnectionEdge({ source, target, data }: EdgeProps<BlockConnection>) {
   // Selection and viewport changes do not rerun obstacle sampling for every edge.
   const nodes = useStore(routingNodes, sameGeometry);
-  const cards = useMemo<RoutingCard[]>(() => nodes.filter(node => node.type === 'skill').map(node => ({
-    id: node.id, x: node.position.x, y: node.position.y,
-    width: node.measured?.width ?? BLOCK_NODE_WIDTH,
-    height: node.measured?.height ?? BLOCK_NODE_HEIGHT,
-  })), [nodes]);
+  const geometry = useMemo(() => getRoutingGeometry(nodes), [nodes]);
   const markerId = `connection-arrow-${useId().replace(/:/g, '')}`;
   const route = useMemo(() => {
-    const sourceCard = cards.find((node) => node.id === source);
-    const targetCard = cards.find((node) => node.id === target);
+    const sourceCard = geometry.cards.get(source);
+    const targetCard = geometry.cards.get(target);
     if (!sourceCard || !targetCard) return null;
-    return getBlockConnectionRoute(sourceCard, targetCard, cards.filter((node) => node.id !== source && node.id !== target), data?.lane);
-  }, [cards, source, target, data?.lane]);
+    return geometry.router.route(sourceCard, targetCard, data?.lane, { source: data?.sourcePort, target: data?.targetPort });
+  }, [geometry, source, target, data?.lane, data?.sourcePort, data?.targetPort]);
   if (!route) return null;
   const highlighted = data?.relation === 'incoming' || data?.relation === 'outgoing';
   const sourceColor = data?.sourceLit === false ? 'var(--mf-map-unlit-accent)' : `var(--mf-branch-${data?.sourceTone ?? 'blue'})`;

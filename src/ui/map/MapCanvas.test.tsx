@@ -347,7 +347,7 @@ describe('SkillTreeCanvas', () => {
     await waitFor(() => expect(screen.getByLabelText('节点 node-1 准备状态')).toHaveAttribute('data-ready', 'true'));
     expect(screen.getByLabelText('节点 node-1 准备状态')).toHaveAttribute('data-progress', '100');
   });
-  it('keeps real edges neutral by default and highlights only direct prerequisites in either layout', async () => {
+  it('keeps primary edges neutral by default and expands direct relations in either layout', async () => {
     const connected = { ...snapshot, current_node_id: null,
       nodes: [{ ...snapshot.nodes[0], id: 'before' }, snapshot.nodes[0], { ...snapshot.nodes[0], id: 'after' }],
       edges: [
@@ -364,7 +364,7 @@ describe('SkillTreeCanvas', () => {
       else {
         await waitFor(() => expect(screen.getByLabelText('连接 in')).toHaveAttribute('data-relation', 'neutral'));
         expect(screen.getByLabelText('连接 out')).toHaveTextContent('node-1 → after');
-        expect(screen.getByLabelText('连接 related')).toHaveAttribute('data-relation', 'neutral');
+        expect(screen.queryByLabelText('连接 related')).not.toBeInTheDocument();
       }
       view.rerender(<SkillTreeCanvas {...props} layoutMode={layoutMode} selectedNodeId="node-1" />);
       await waitFor(() => expect(screen.getByLabelText('连接 in')).toHaveAttribute('data-relation', 'incoming'));
@@ -377,6 +377,34 @@ describe('SkillTreeCanvas', () => {
       else await waitFor(() => expect(screen.getByLabelText('连接 in')).toHaveAttribute('data-relation', 'neutral'));
     }
     expect(screen.getByLabelText('地图网格')).toHaveAttribute('data-variant', 'lines');
+  });
+
+  it('uses layout distance for the primary connection while hidden prerequisites still lock the node', async () => {
+    const graph: LearningTreeSnapshot = { ...snapshot, current_node_id: null,
+      nodes: ['a-far', 'm-near', 'z-extra', 'node-1'].map(id => ({ ...snapshot.nodes[0], id })),
+      edges: [
+        { id: 'a-far', source_node_id: 'a-far', target_node_id: 'node-1', edge_type: 'prerequisite', label: null },
+        { id: 'm-near', source_node_id: 'm-near', target_node_id: 'node-1', edge_type: 'prerequisite', label: null },
+        { id: 'z-extra', source_node_id: 'z-extra', target_node_id: 'node-1', edge_type: 'prerequisite', label: null },
+      ],
+      progress: [
+        { node_id: 'm-near', progress_percent: 100, status: 'completed', evidence: '' },
+        { node_id: 'node-1', progress_percent: 35, status: 'in_progress', evidence: '' },
+      ],
+    };
+    const props = { snapshot: graph, layoutMode: 'relationship' as const, displayMode: 'personal' as const, isGraphVisible: true, onSelectNode: () => {} };
+    const view = render(<SkillTreeCanvas {...props} selectedNodeId={null} />);
+    await waitFor(() => expect(screen.getByLabelText('连接 m-near')).toBeInTheDocument());
+    expect(screen.queryByLabelText('连接 a-far')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('连接 z-extra')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('节点 node-1 准备状态')).toHaveAttribute('data-ready', 'false');
+    expect(screen.getByLabelText('节点 node-1 准备状态')).toHaveAttribute('data-progress', '35');
+    view.rerender(<SkillTreeCanvas {...props} selectedNodeId="node-1" />);
+    await waitFor(() => expect(screen.getByLabelText('连接 a-far')).toBeInTheDocument());
+    expect(screen.getByLabelText('连接 z-extra')).toBeInTheDocument();
+    view.rerender(<SkillTreeCanvas {...props} selectedNodeId={null} />);
+    await waitFor(() => expect(screen.queryByLabelText('连接 a-far')).not.toBeInTheDocument());
+    expect(screen.getByLabelText('连接 m-near')).toBeInTheDocument();
   });
   afterEach(()=>vi.unstubAllGlobals());
   beforeEach(() => {

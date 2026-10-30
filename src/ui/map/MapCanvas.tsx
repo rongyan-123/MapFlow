@@ -130,8 +130,8 @@ export default function SkillTreeCanvas({
     return computeTreeLayout(snapshot.nodes, snapshot.edges);
   }, [blockLayout.positions, layoutMode, snapshot.edges, snapshot.nodes]);
   const blockConnections = useMemo(
-    () => buildBlockConnections(snapshot.edges, selectedNodeId, layoutMode, branches, litNodes),
-    [snapshot.edges, selectedNodeId, layoutMode, branches, litNodes],
+    () => buildBlockConnections(snapshot.edges, selectedNodeId, layoutMode, branches, litNodes, positions),
+    [snapshot.edges, selectedNodeId, layoutMode, branches, litNodes, positions],
   );
   const connectionRoles = useMemo(() => {
     const roles = new Map<string, 'focus' | 'incoming' | 'outgoing'>();
