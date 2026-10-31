@@ -7,7 +7,7 @@ type RoutingCard = ConnectionRect & { id: string };
 const routingNodes = (state: ReactFlowState) => state.nodes;
 const sameGeometry = (previous: Node[], next: Node[]) => previous === next || previous.length === next.length && previous.every((card, index) => {
   const other = next[index];
-  return card.id === other.id && card.type === other.type && card.position.x === other.position.x && card.position.y === other.position.y && card.measured?.width === other.measured?.width && card.measured?.height === other.measured?.height;
+  return card.id === other.id && card.type === other.type && card.data?.frameExpanded === other.data?.frameExpanded && card.position.x === other.position.x && card.position.y === other.position.y && card.measured?.width === other.measured?.width && card.measured?.height === other.measured?.height;
 });
 
 type RoutingGeometry = { signature: string; cards: Map<string, RoutingCard>; router: ReturnType<typeof createConnectionRouter> };
@@ -16,7 +16,7 @@ let recentGeometry: RoutingGeometry | undefined;
 function getRoutingGeometry(nodes: Node[]): RoutingGeometry {
   const cached = geometryCache.get(nodes);
   if (cached) return cached;
-  const cards: RoutingCard[] = nodes.filter(node => node.type === 'skill').map(node => ({
+  const cards: RoutingCard[] = nodes.filter(node => node.type === 'skill' || node.type === 'learningGroup' && !node.data?.frameExpanded).map(node => ({
     id: node.id, x: node.position.x, y: node.position.y,
     width: node.measured?.width ?? BLOCK_NODE_WIDTH, height: node.measured?.height ?? BLOCK_NODE_HEIGHT,
   }));
@@ -50,6 +50,7 @@ function BlockConnectionEdge({ source, target, data }: EdgeProps<BlockConnection
     <g
       className="mapflow-block-connection"
       data-relation={data?.relation}
+      data-closing={data?.closing || undefined}
       data-has-focus={data?.hasFocus || undefined}
       data-source-tone={data?.sourceTone}
       data-target-tone={data?.targetTone}
@@ -69,6 +70,7 @@ function BlockConnectionEdge({ source, target, data }: EdgeProps<BlockConnection
       </defs>
       {highlighted && <path d={route.path} className="mapflow-connection-outline" />}
       <path d={route.path} className="mapflow-connection-line" markerEnd={`url(#${markerId})`} />
+      <path d={route.path} pathLength="1" className="mf-group-reveal-line" />
       {data?.sourceLit !== false && <><path d={route.path} className="mapflow-connection-flow mapflow-connection-flow--tail" strokeDasharray={`24 ${Math.max(1, route.length - 24)}`} />
       <path d={route.path} className="mapflow-connection-flow mapflow-connection-flow--head" strokeDasharray={`6 ${Math.max(1, route.length - 6)}`} style={{ '--flow-start': '-18px' } as CSSProperties} />
       <path d={route.path} className="mapflow-connection-flow mapflow-connection-flow--core" strokeDasharray={`6 ${Math.max(1, route.length - 6)}`} style={{ '--flow-start': '-18px' } as CSSProperties} /></>}

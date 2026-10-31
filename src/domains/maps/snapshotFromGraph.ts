@@ -11,5 +11,6 @@ export function snapshotFromGraph(graph: TreeGraph, completedNodeIds: readonly s
       .filter(([nodeId, percent]) => graph.nodes.some(node => node.id === nodeId) && percent > 0)
       .map(([nodeId, percent]) => ({ node_id: nodeId, status: learningStatusFromProgressPercent(percent), evidence: '', progress_percent: percent })),
     blocks: graph.blocks ?? [], node_block_assignments: graph.node_block_assignments ?? [],
+    learning_groups: graph.learning_groups ?? [],
   };
 }

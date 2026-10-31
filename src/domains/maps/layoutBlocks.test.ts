@@ -40,6 +40,14 @@ const assignment = (
 ): SkillNodeBlockAssignment => ({ node_id, block_id });
 
 describe('computeBlockLayout', () => {
+  it('uses the five existing depth values for new-tree peers without reversing prerequisites',()=>{
+    const nodes=[{...node('a'),recommended_depth:'DeepMastery' as const},{...node('b'),recommended_depth:'Recognize' as const},node('c')];
+    const edges:SkillEdge[]=[{id:'a-b',source_node_id:'a',target_node_id:'b',edge_type:'prerequisite',label:null}];
+    const model=computeBlockLayoutModel(nodes,edges,[block('one',0)],nodes.map(item=>assignment(item.id,'one')),true);
+    expect(model.positions.get('a')!.y-model.positions.get('c')!.y).toBe(42);
+    expect(model.positions.get('b')!.y).toBeGreaterThan(model.positions.get('a')!.y+104);
+    expect(model.lanes[0].height).toBeGreaterThan(model.positions.get('b')!.y+104);
+  });
   it('keeps legacy support ordered across blocks without flattening a mixed cycle', () => {
     const edges: SkillEdge[] = [
       { id: 'support', source_node_id: 'foundation', target_node_id: 'advanced', edge_type: 'requires', label: null },

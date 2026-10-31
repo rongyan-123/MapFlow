@@ -21,7 +21,7 @@ it('shows a retry after a catalog error without inserting demonstration maps',as
   let attempts=0;vi.stubGlobal('fetch',async(path:string)=>path.startsWith('/api/trees') && ++attempts===1 ? new Response('{}',{status:503}):new Response(JSON.stringify({trees:[],attributions:{},next_cursor:null})));
   mount(<LibraryPage navigate={vi.fn()} />);
   await screen.findByRole('alert');fireEvent.click(screen.getByRole('button',{name:'重新读取书库'}));
-  await screen.findByText('书库暂时没有公开地图。');expect(screen.queryByText('NestJS')).not.toBeInTheDocument();
+  await screen.findByText('新版本书库还没有地图。');expect(screen.queryByText('NestJS')).not.toBeInTheDocument();
 });
 it('checks the owned index before reading a personal deep link',async()=>{
   const paths:string[]=[];vi.stubGlobal('fetch',async(path:string)=>{paths.push(path);if(path==='/api/me/tree-library')return new Response(JSON.stringify({entries:[{library_entry_id:'entry-owned',tree,completed_nodes:0}]}));return new Response('{}',{status:503});});

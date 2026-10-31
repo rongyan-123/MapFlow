@@ -1,4 +1,5 @@
 import { analyzeLayoutRelations } from './layoutRelations';
+import { DEPTH_ORDER } from './learningGroupLayout';
 import type {
   SkillBlock,
   SkillEdge,
@@ -35,6 +36,7 @@ export function computeBlockLayoutModel(
   edges: SkillEdge[],
   blocks: SkillBlock[],
   assignments: SkillNodeBlockAssignment[],
+  staggerDepth = false,
 ): BlockLayoutModel {
   const { layers } = analyzeLayoutRelations(nodes.map(node => node.id), edges);
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
@@ -82,15 +84,16 @@ export function computeBlockLayoutModel(
     const columns = Math.max(...[...rows.values()].map(row => row.length));
     const laneWidth = columns * (BLOCK_NODE_WIDTH + BLOCK_HORIZONTAL_GAP) - BLOCK_HORIZONTAL_GAP + BLOCK_PADDING * 2;
     for (const [layer, row] of rows) {
+      const baseDepth = Math.min(...row.map(node => DEPTH_ORDER[node.recommended_depth]));
       row.sort((a, b) => a.id.localeCompare(b.id)).forEach((node, column) => positions.set(node.id, {
         x: cursorX + BLOCK_PADDING + column * (BLOCK_NODE_WIDTH + BLOCK_HORIZONTAL_GAP),
-        y: headerHeight + BLOCK_PADDING + layer * (BLOCK_NODE_HEIGHT + BLOCK_VERTICAL_GAP),
+        y: headerHeight + BLOCK_PADDING + layer * (BLOCK_NODE_HEIGHT + BLOCK_VERTICAL_GAP) + (staggerDepth ? (DEPTH_ORDER[node.recommended_depth] - baseDepth) * 14 : 0),
       }));
     }
     const block = blockById.get(groupId);
     lanes.push({ blockId: groupId, name: block?.name ?? '未分组节点', color: block?.color ?? null,
       x: cursorX, y: 0, width: laneWidth,
-      height: headerHeight + BLOCK_PADDING * 2 + maximumLayer * (BLOCK_NODE_HEIGHT + BLOCK_VERTICAL_GAP) + BLOCK_NODE_HEIGHT,
+      height: headerHeight + BLOCK_PADDING * 2 + maximumLayer * (BLOCK_NODE_HEIGHT + BLOCK_VERTICAL_GAP) + BLOCK_NODE_HEIGHT + (staggerDepth ? 56 : 0),
     });
     cursorX += laneWidth + BLOCK_HORIZONTAL_GAP;
   }

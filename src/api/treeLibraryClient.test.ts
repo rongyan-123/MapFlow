@@ -1,5 +1,6 @@
 import { publicHttpErrorMessage } from '../lib/publicErrors';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { snapshotFromGraph } from '../domains/maps/snapshotFromGraph';
 import {
   TreeLibraryApiError,
   addTreeToPersonalLibrary,
@@ -23,6 +24,30 @@ afterEach(() => {
 });
 
 describe('treeLibraryClient', () => {
+  it('keeps generation and learning groups through fetching and the learning snapshot', async () => {
+    const members = [graph.nodes[0].id, 'second-node'];
+    const groupedGraph = { ...graph, tree: { ...tree, generation_version: 2, total_nodes: 2 }, edges: [],
+      nodes: [graph.nodes[0], { ...graph.nodes[0], id: members[1] }],
+      learning_groups: [{ group_id: 'functions', title: '函数的输入输出', node_ids: members }],
+    };
+    fetchMock.mockResolvedValueOnce(jsonResponse({ view_mode: 'showcase', graph: groupedGraph }));
+    vi.stubGlobal('fetch', fetchMock);
+    const detail = await fetchPublicTree(tree.id);
+    expect(detail.graph.tree).toMatchObject({ generation_version: 2 });
+    expect(detail.graph).toMatchObject({ learning_groups: groupedGraph.learning_groups });
+    const snapshot = snapshotFromGraph(detail.graph, [], [{node_id: members[0],progress_percent:35}]);
+    expect(snapshot).toMatchObject({ learning_groups: groupedGraph.learning_groups, current_node_id: null,
+      progress: [{node_id:members[0], progress_percent:35}] });
+  });
+
+  it('sends a version filter to the server before catalog pagination', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ trees: [], next_cursor: null }));
+    vi.stubGlobal('fetch', fetchMock);
+    await fetchPublicTrees({version:2, limit:50, cursor:'v2.next'});
+    const requestUrl = new URL(String(fetchMock.mock.calls[fetchMock.mock.calls.length-1]?.[0]), 'https://mapflow.test');
+    expect(requestUrl.searchParams.get('version')).toBe('2');
+    expect(requestUrl.searchParams.get('cursor')).toBe('v2.next');
+  });
   it('reads the anonymous catalog and public graph with same-origin credentials', async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ trees: [tree] }))

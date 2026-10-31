@@ -9,6 +9,11 @@ const dependencies: SkillEdge[] = [
 ];
 
 describe('块布局关联线', () => {
+  it('keeps every branch and join explicitly revealed inside an open learning group',()=>{
+    const joins=[...dependencies,{...dependencies[0],id:'second-parent',source_node_id:'sibling'}];
+    const revealed=new Set(joins.map(edge=>edge.id));
+    expect(buildBlockConnections(joins,null,'relationship',undefined,undefined,undefined,revealed).map(edge=>edge.id)).toEqual(joins.map(edge=>edge.id));
+  });
   it('carries completion independently from the stable branch and selected relation',()=>{
     const edges=buildBlockConnections(dependencies,'selected','relationship',undefined,new Set(['before']));
     expect(edges[0].data).toMatchObject({relation:'incoming',sourceLit:true,targetLit:false});

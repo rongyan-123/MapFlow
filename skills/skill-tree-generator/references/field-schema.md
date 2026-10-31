@@ -4,6 +4,20 @@
 
 ---
 
+## 新版元数据与兼容
+
+新版输出 tree.generation_version=2，旧格式缺省为1。以下旧示例仅说明基础字段，不能直接换版本号当作新版输出。
+
+- tree.description 必须说明范围与起步建议，total_nodes 必须为真实节点数。
+- 后端导入的 blocks: {block_id,name,color,sort_order,overview:{version:2,core_question,chain_node_ids,note}}[]，overview 引用实际节点。前端显示模型才把 block_id 转成 id。
+- node_block_assignments: {node_id,block_id}[]，每个新版节点有一个专业分类。
+- learning_groups: {group_id,title,node_ids}[]，组员引用同一份真实节点；每点至多属于一组，独立点不分组，单点不套组。
+- 组内和收纳后的外层 prerequisite 图均须无环；related/supports 不决定学习顺序。
+- 复用 recommended_depth 五级，不新增另一套层级或固定节点数量。
+- 新图 current_node_id=null、progress 为未开始；展开和推荐不写进度。
+
+工具 mapflow.create_tree 使用 tree.generationVersion、learningGroups[{groupId,title,nodeIds}]、blocks[{id,name,overview:{version,core_question,chain_node_ids,note}}]、nodes[].blockId。overview 内部保留 snake_case，不能机械转换。完整参数见 [创建示例](../../mapflow-mcp/references/create-tree-v2-example.json)。
+
 ## 1. 顶层结构
 
 `LearningTreeSnapshot` 是技能树的顶层数据结构，由五个部分组成：
@@ -29,7 +43,7 @@
 | `title` | `string` | 是 | 展示标题（如 `"生产级 Agent AI 应用后端完整体系（NestJS）"`） |
 | `description` | `string \| null` | 是 | 一句话描述整棵树的范围与目标 |
 | `difficulty_level` | `string` | 是 | 整体难度，三枚举：`"beginner"` / `"intermediate"` / `"advanced"` |
-| `total_nodes` | `number` | 是 | 节点总数。可填 `0`（由前端根据 `nodes.length` 自动计算），也可显式填入准确值 |
+| `total_nodes` | `number` | 是 | 节点总数，填写 nodes.length 的准确值 |
 
 **类型定义出处**：`src/types/learning.ts` 第 14-21 行 `SkillTree` 接口。
 
@@ -119,19 +133,19 @@
 
 - **类型**：`number`
 - **必填**：是
-- **说明**：节点在技能树中的层级深度，从 `1` 开始递增。`depth_level=1` 为根节点（无前置依赖），`depth_level=2` 的节点依赖 `depth_level=1` 的节点，以此类推。同一 `depth_level` 的节点在拓扑排序中处于同级。
+- **说明**：兼容字段。实际学习顺序与布局根据 prerequisite 边计算，不根据这个数值推导依赖；不要为了数值分层而造边。
 
 ### 3.10 position_x
 
 - **类型**：`number`
 - **必填**：是
-- **说明**：节点在画布上的 X 坐标（像素）。可填 `0` 或任意值 —— 前端自动布局算法会覆盖此字段。若手动布局，建议以 100-200 为间距。
+- **说明**：节点在画布上的 X 坐标（像素）。可填 `0` 或任意值 —— 前端自动布局算法会覆盖此字段。它不控制网站的自动排列。
 
 ### 3.11 position_y
 
 - **类型**：`number`
 - **必填**：是
-- **说明**：节点在画布上的 Y 坐标（像素）。可填 `0` 或任意值 —— 前端自动布局算法会覆盖此字段。若手动布局，建议以 100-150 为行间距。
+- **说明**：节点在画布上的 Y 坐标（像素）。可填 `0` 或任意值 —— 前端自动布局算法会覆盖此字段。它不控制网站的自动排列。
 
 ### 3.12 order_in_level
 

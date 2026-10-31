@@ -24,6 +24,14 @@ export interface SkillTree {
   total_nodes: number;
   revision?: number;
   layout_mode?: 'auto' | 'manual';
+  generation_version?: 1 | 2;
+}
+
+/** A small foldable collection of real nodes; independent of professional blocks. */
+export interface LearningGroup {
+  group_id: string;
+  title: string;
+  node_ids: string[];
 }
 
 export interface SkillNode {
@@ -113,6 +121,7 @@ export interface LearningTreeSnapshot {
   /** Agent 创建/维护的分组；旧接口没有这些字段时按空分组处理。 */
   blocks?: SkillBlock[];
   node_block_assignments?: SkillNodeBlockAssignment[];
+  learning_groups?: LearningGroup[];
   /** 演示数据来源标识（如 'nestjs' / 'agent'），后端真实数据无此字段 */
   demo_source?: string | null;
 }

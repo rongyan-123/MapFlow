@@ -66,6 +66,7 @@ vi.mock('@xyflow/react', async () => {
     onNodeClick,
     children,
     reference,
+    'data-mapflow-layout-moving': layoutMoving,
   }: {
     nodes: unknown[];
     edges: Array<{ id: string; source: string; target: string; data?: { relation?: string } }>;
@@ -79,15 +80,17 @@ vi.mock('@xyflow/react', async () => {
     onNodeClick?: (event: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => void;
     children?: React.ReactNode;
     reference?: React.Ref<HTMLDivElement>;
+    'data-mapflow-layout-moving'?: boolean;
   }) {
     React.useEffect(() => {
       onInit?.(flowInstance);
     }, []);
 
     return (
-      <div ref={reference} data-testid="skill-tree-flow" data-node-count={nodes.length}>
+      <div ref={reference} data-testid="skill-tree-flow" data-node-count={nodes.length} data-mapflow-layout-moving={layoutMoving}>
         <div aria-label="地图连接">{edges.map(edge => <output key={edge.id} aria-label={`连接 ${edge.id}`} data-relation={edge.data?.relation}>{edge.source} → {edge.target}</output>)}</div>
         <svg aria-label="地图流光">{edges.map(edge=><g key={edge.id} className="mapflow-block-connection" data-edge-id={edge.id}><path className="mapflow-connection-flow" d="M 0 0 L 100 100" /></g>)}</svg>
+        {(nodes as Array<{id:string;type?:string;data:{title:string;percent:number;expanded:boolean;onToggle:()=>void}}>).filter(node=>node.type==='learningGroup').map(node=><button key={node.id} data-progress={node.data.percent} aria-expanded={node.data.expanded} onClick={node.data.onToggle}>{node.data.expanded?'收起':'展开'} {node.data.title}</button>)}
         {(nodes as Array<{id:string;type?:string;position:{x:number;y:number};measured?:{width?:number;height?:number};selected?:boolean;data:{ready?:boolean;progress?:{progress_percent?:number}|null}}>).filter(node=>node.type==='skill').map(node=><div key={node.id}>
           <output aria-label={`节点 ${node.id} 准备状态`} data-ready={node.data.ready} data-progress={node.data.progress?.progress_percent}
             data-measured-width={node.measured?.width} data-measured-height={node.measured?.height} data-x={node.position.x} data-y={node.position.y} data-selected={node.selected} />
@@ -159,6 +162,88 @@ const snapshot = {
 } satisfies LearningTreeSnapshot;
 
 describe('SkillTreeCanvas', () => {
+  const grouped:LearningTreeSnapshot={...snapshot,tree:{...snapshot.tree,generation_version:2,total_nodes:3},current_node_id:null,
+    nodes:[...snapshot.nodes,{...snapshot.nodes[0],id:'node-2'},{...snapshot.nodes[0],id:'node-3'}],
+    learning_groups:[{group_id:'test-group',title:'小组',node_ids:['node-1','node-2']}],
+    edges:[{id:'inside',source_node_id:'node-1',target_node_id:'node-2',edge_type:'prerequisite',label:null},{id:'outside',source_node_id:'node-2',target_node_id:'node-3',edge_type:'prerequisite',label:null}]};
+  it('expands in the original canvas, reverses a quick collapse, and never selects or refits on toggle',async()=>{
+    const select=vi.fn();const original=structuredClone(grouped);
+    render(<SkillTreeCanvas snapshot={grouped} displayMode="personal" layoutMode="relationship" selectedNodeId={null} isGraphVisible onSelectNode={select} />);
+    await screen.findByRole('button',{name:'展开 小组'});
+    await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());
+    const fitCalls=flowProbe.fitView.mock.calls.length;
+    const viewportCalls=flowProbe.setViewport.mock.calls.length;
+    expect(screen.queryByLabelText('节点 node-1 准备状态')).not.toBeInTheDocument();
+    const canvas=screen.getByTestId('skill-tree-flow');
+    fireEvent.click(screen.getByRole('button',{name:'展开 小组'}));
+    await screen.findByLabelText('节点 node-2 准备状态');
+    expect(canvas).toHaveAttribute('data-mapflow-layout-moving','true');
+    fireEvent.click(screen.getByRole('button',{name:'收起 小组'}));
+    fireEvent.click(screen.getByRole('button',{name:'展开 小组'}));
+    await new Promise(resolve=>setTimeout(resolve,350));
+    expect(canvas).not.toHaveAttribute('data-mapflow-layout-moving','true');
+    expect(screen.getAllByLabelText('节点 node-2 准备状态')).toHaveLength(1);
+    expect(screen.getByTestId('skill-tree-flow')).toBe(canvas);
+    expect(flowProbe.fitView).toHaveBeenCalledTimes(fitCalls);
+    expect(flowProbe.setViewport).toHaveBeenCalledTimes(viewportCalls);
+    expect(select).not.toHaveBeenCalled();expect(grouped).toEqual(original);
+    fireEvent.click(screen.getByRole('button',{name:'收起 小组'}));
+    await waitFor(()=>expect(screen.queryByLabelText('节点 node-1 准备状态')).not.toBeInTheDocument());
+    expect(screen.getByLabelText('连接 outside')).toHaveTextContent('learning-group:test-group → node-3');
+  });
+  it('opens and locates a selected inner node, and complete view keeps the same real IDs',async()=>{
+    const {rerender}=render(<SkillTreeCanvas snapshot={grouped} displayMode="personal" layoutMode="relationship" selectedNodeId={null} isGraphVisible onSelectNode={()=>{}} />);
+    await screen.findByRole('button',{name:'展开 小组'});
+    rerender(<SkillTreeCanvas snapshot={grouped} displayMode="personal" layoutMode="relationship" selectedNodeId="node-2" isGraphVisible onSelectNode={()=>{}} />);
+    await screen.findByLabelText('节点 node-2 准备状态');
+    await waitFor(()=>expect(flowProbe.setViewport).toHaveBeenCalled());
+    rerender(<SkillTreeCanvas snapshot={grouped} displayMode="personal" layoutMode="relationship" condensed={false} selectedNodeId="node-2" isGraphVisible onSelectNode={()=>{}} />);
+    expect(await screen.findByLabelText('节点 node-1 准备状态')).toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'收起 小组'})).not.toBeInTheDocument();
+    expect(screen.getByLabelText('连接 inside')).toHaveTextContent('node-1 → node-2');
+  });
+  it('reveals a saved current learning node on entry without selecting it or advancing progress',async()=>{
+    const select=vi.fn();
+    render(<SkillTreeCanvas snapshot={{...grouped,current_node_id:'node-2'}} displayMode="personal" layoutMode="relationship" selectedNodeId={null} isGraphVisible onSelectNode={select} />);
+    await screen.findByLabelText('节点 node-2 准备状态');
+    expect(select).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button',{name:'收起 小组'}));
+    await waitFor(()=>expect(screen.queryByLabelText('节点 node-2 准备状态')).not.toBeInTheDocument());
+  });
+  it('keeps a group unfinished until every member reaches one hundred percent',async()=>{
+    const progress:LearningTreeSnapshot['progress']=[{node_id:'node-1',progress_percent:100,status:'completed',evidence:''},{node_id:'node-2',progress_percent:99,status:'in_progress',evidence:''}];
+    const props={displayMode:'personal' as const,layoutMode:'relationship' as const,selectedNodeId:null,isGraphVisible:true,onSelectNode:vi.fn()};
+    const {rerender}=render(<SkillTreeCanvas {...props} snapshot={{...grouped,progress}} />);
+    expect(await screen.findByRole('button',{name:'展开 小组'})).toHaveAttribute('data-progress','99');
+    rerender(<SkillTreeCanvas {...props} snapshot={{...grouped,progress:progress.map(item=>({...item,progress_percent:100,status:'completed'}))}} />);
+    await waitFor(()=>expect(screen.getByRole('button',{name:'展开 小组'})).toHaveAttribute('data-progress','100'));
+  });
+  it('reopens and locates the same selected node when returning from overview after collapsing its group',async()=>{
+    const props={snapshot:grouped,displayMode:'personal' as const,layoutMode:'relationship' as const,selectedNodeId:'node-2',onSelectNode:vi.fn()};
+    const {rerender}=render(<SkillTreeCanvas {...props} isGraphVisible />);
+    await screen.findByLabelText('节点 node-2 准备状态');
+    fireEvent.click(screen.getByRole('button',{name:'收起 小组'}));
+    await waitFor(()=>expect(screen.queryByLabelText('节点 node-2 准备状态')).not.toBeInTheDocument());
+    rerender(<SkillTreeCanvas {...props} isGraphVisible={false} />);
+    flowProbe.setViewport.mockClear();
+    rerender(<SkillTreeCanvas {...props} isGraphVisible />);
+    await screen.findByLabelText('节点 node-2 准备状态');
+    await waitFor(()=>expect(flowProbe.setViewport).toHaveBeenCalled());
+    expect(props.onSelectNode).not.toHaveBeenCalled();
+  });
+  it('does not restore an expanded-map viewport over a freshly collapsed map',async()=>{
+    const props={snapshot:grouped,displayMode:'personal' as const,layoutMode:'relationship' as const,selectedNodeId:null,isGraphVisible:true,onSelectNode:vi.fn(),viewportStorageKey:'group-shape'};
+    const first=render(<SkillTreeCanvas {...props} />);
+    await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button',{name:'展开 小组'}));
+    await screen.findByLabelText('节点 node-2 准备状态');
+    fireEvent.click(screen.getByRole('button',{name:'移动地图'}));
+    first.unmount();flowProbe.fitView.mockClear();flowProbe.setViewport.mockClear();
+    render(<SkillTreeCanvas {...props} />);
+    await screen.findByRole('button',{name:'展开 小组'});
+    await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());
+    expect(flowProbe.setViewport).not.toHaveBeenCalledWith({x:72,y:-31,zoom:.63},{duration:0});
+  });
   it.each([undefined, 'mapflow.pan.viewport'])('hides connections only after real canvas panning and restores on release (%s)', async viewportStorageKey => {
     render(<SkillTreeCanvas snapshot={snapshot} displayMode="personal" layoutMode="relationship"
       selectedNodeId={null} isGraphVisible onSelectNode={() => undefined} viewportStorageKey={viewportStorageKey} />);
@@ -499,18 +584,20 @@ describe('SkillTreeCanvas', () => {
     expect(flowProbe.setViewport).not.toHaveBeenCalledWith({x:72,y:-31,zoom:.63},{duration:0});
   });
 
-  it('等待 React Flow 节点完成测量后再 fitView，避免初始视口停留在原始坐标', async () => {
-    render(
+  it('waits until the retained learning map is visible and measured before positioning or saving its viewport', async () => {
+    const props={snapshot,displayMode:'personal' as const,layoutMode:'relationship' as const,selectedNodeId:null,onSelectNode:()=>{},viewportStorageKey:'hidden-learning'};
+    const {rerender}=render(
       <SkillTreeCanvas
-        snapshot={snapshot}
-        displayMode="personal"
-        layoutMode="relationship"
-        selectedNodeId={null}
+        {...props}
         isGraphVisible={false}
-        onSelectNode={() => undefined}
       />,
     );
-
+    await waitFor(()=>expect(flowProbe.nodesInitialized).toBe(true));
+    await new Promise(resolve=>window.setTimeout(resolve,20));
+    expect(flowProbe.fitView).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button',{name:'移动地图'}));
+    expect(localStorage.getItem('hidden-learning.relationship')).toBeNull();
+    rerender(<SkillTreeCanvas {...props} isGraphVisible />);
     await waitFor(() => expect(flowProbe.fitView).toHaveBeenCalledTimes(1));
     expect(flowProbe.fitViewBeforeNodesInitialized).toEqual([false]);
   });

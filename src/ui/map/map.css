@@ -113,6 +113,38 @@
 .mf-map-canvas .react-flow__pane { background: transparent; }
 .mf-map-canvas .react-flow__background { opacity: .55; }
 
+.mf-tree-version-tabs { margin-bottom: 20px; }
+.mf-map-disclosure-switch { display: flex; flex-shrink: 0; padding: 3px; border: 1px solid var(--mf-map-line); border-radius: 12px; background: var(--mf-map-paper); }
+.mf-map-disclosure-switch .mf-button { min-height: 34px; padding: 6px 10px; border: 0; background: transparent; box-shadow: none; font-size: 12px; }
+.mf-map-disclosure-switch [aria-pressed='true'] { background: var(--mf-map-surface); box-shadow: 0 1px 5px #15213c14; color: var(--mf-map-ink); }
+.mf-inline-groups[data-mapflow-layout-moving='true'] .react-flow__node:not(.dragging) { transition: transform 320ms cubic-bezier(.22,1,.36,1), width 320ms, height 320ms; }
+.mf-inline-groups[data-mapflow-layout-moving='true'] .react-flow__edge { visibility: hidden; }
+.mf-inline-groups[data-mapflow-layout-moving='true'] .react-flow__edge path { animation: none; }
+.mf-learning-group.mf-map-node { width: 100%; height: 100%; cursor: default; }
+.mf-learning-group-heading { display: flex; align-items: flex-start; gap: 10px; }
+.mf-group-toggle { display: grid; flex-shrink: 0; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid color-mix(in srgb,var(--node-accent) 35%,transparent); border-radius: 8px; background: var(--mf-map-surface); color: var(--node-accent); font: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
+.mf-group-toggle:focus-visible { outline: 2px solid var(--node-accent); outline-offset: 3px; }
+.mf-learning-group[data-expanded='true'] { pointer-events: none; background: color-mix(in srgb,var(--mf-map-paper) 88%,transparent); border-color: color-mix(in srgb,var(--node-accent) 50%,transparent); box-shadow: inset 0 0 24px color-mix(in srgb,var(--node-accent) 4%,transparent); }
+.mf-learning-group[data-expanded='true'] .mf-node-color-fill { opacity: .05; }
+.mf-learning-group[data-expanded='true'] .mf-learning-group-heading { pointer-events: auto; }
+.mf-learning-group[data-expanded='true'] .mf-node-heading { -webkit-line-clamp: 1; }
+.mf-group-trace { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+.mf-group-trace rect { fill: none; stroke: var(--node-accent); stroke-width: 1.4px; stroke-dasharray: 1; animation: mf-group-trace-in 420ms ease-out both; }
+.mf-group-member .mf-map-node { animation: mf-group-node-in 300ms ease-out both; }
+.mf-group-member--closing .mf-map-node { animation: mf-group-node-out 260ms ease-in both; pointer-events: none; }
+.mf-group-reveal-line { display: none; }
+.mf-group-connection .mf-group-reveal-line { display: block; fill: none; stroke: var(--connection-color); stroke-width: 2px; stroke-dasharray: 1; animation: mf-group-trace-in 420ms ease-out both; pointer-events: none; }
+.mf-group-connection .mapflow-connection-line { animation: mf-group-edge-in 320ms ease-out; }
+.mf-group-connection [data-closing='true'] { animation: mf-group-node-out 260ms ease-in both; }
+@keyframes mf-group-node-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes mf-group-node-out { to { opacity: 0; transform: translateY(-6px); } }
+@keyframes mf-group-edge-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mf-group-trace-in { 0% { stroke-dashoffset: 1; opacity: .9; } 75% { stroke-dashoffset: 0; opacity: .65; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+@media (max-width: 760px) {
+  .mf-header-map-tools:has(.mf-map-disclosure-switch) { overflow-x: auto; }
+  .mf-map-disclosure-switch .mf-button { padding-inline: 7px; font-size: 11px; }
+}
+
 .mf-map-node {
   --branch-fill: var(--mf-branch-blue-fill);
   --branch-accent: var(--mf-branch-blue);

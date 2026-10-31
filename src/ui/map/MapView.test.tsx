@@ -14,6 +14,26 @@ const snapshot:LearningTreeSnapshot={
 beforeEach(()=>{vi.stubGlobal('ResizeObserver',class{observe(){}unobserve(){}disconnect(){}});});
 afterEach(()=>{vi.unstubAllGlobals();localStorage.clear();});
 
+it('keeps folded/full views, professional blocks, and overview search on the original map',async()=>{
+  const grouped:LearningTreeSnapshot={...snapshot,tree:{...snapshot.tree,generation_version:2,total_nodes:2},
+    nodes:[...snapshot.nodes,{...snapshot.nodes[0],id:'second',title:'内部知识点'}],
+    learning_groups:[{group_id:'small',title:'入门练习',node_ids:['node','second']}]};
+  const save=vi.fn();render(<MapView snapshot={grouped} displayMode="personal" accountId="a" onSetProgress={save} />);
+  expect(screen.getByRole('button',{name:'收纳地图'})).toHaveAttribute('aria-pressed','true');
+  fireEvent.click(screen.getByRole('button',{name:'完整地图'}));
+  expect(screen.getByRole('button',{name:'完整地图'})).toHaveAttribute('aria-pressed','true');
+  fireEvent.click(screen.getByRole('button',{name:'收纳地图'}));
+  fireEvent.click(screen.getByRole('button',{name:'按块排序'}));
+  expect(screen.getByRole('button',{name:'完整地图'})).toHaveAttribute('aria-pressed','true');
+  fireEvent.click(screen.getByRole('button',{name:'收纳地图'}));
+  fireEvent.click(screen.getByRole('button',{name:'知识总览'}));
+  fireEvent.change(screen.getByRole('searchbox',{name:'搜索知识点'}),{target:{value:'内部知识点'}});
+  fireEvent.click(screen.getByRole('button',{name:/内部知识点/}));
+  expect(screen.getByRole('button',{name:'知识总览'})).toHaveAttribute('aria-pressed','false');
+  expect(screen.getByRole('complementary',{name:'节点详情'})).toHaveTextContent('内部知识点');
+  expect(save).not.toHaveBeenCalled();
+});
+
 it('keeps progress feedback in the toolbar and allows a later single-node error after dismissing the old one',()=>{
   const error=new PublicUiError('保存进度失败。');
   const props={snapshot,displayMode:'personal' as const,accountId:'account',error};

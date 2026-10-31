@@ -1,0 +1,11 @@
+{
+  "tree": {"topic":"函数","title":"函数的输入与输出","description":"认识函数如何接收输入并返回结果。先从函数参数开始，再学习返回值；不要求个人经验问卷。","difficultyLevel":"beginner","layoutMode":"auto","generationVersion":2},
+  "nodes": [
+    {"id":"root","title":"函数参数","description":"理解调用函数时怎样传入值。","category":"函数","blockId":"b1000000-0000-4000-8000-000000000001","learningObjectives":["解释参数"],"keyConcepts":["实参与形参"],"observableEvidence":["给函数传入一个值"],"recommendedDepth":"Understand"},
+    {"id":"child","title":"返回值","description":"理解函数怎样返回一个计算结果。","category":"函数","blockId":"b1000000-0000-4000-8000-000000000001","learningObjectives":["使用返回值"],"keyConcepts":["return"],"observableEvidence":["接收并使用函数结果"],"recommendedDepth":"Use"}
+  ],
+  "edges": [{"id":"root-child","sourceNodeId":"root","targetNodeId":"child","edgeType":"prerequisite"}],
+  "blocks": [{"id":"b1000000-0000-4000-8000-000000000001","name":"函数","overview":{"version":2,"core_question":"函数怎样接收输入并返回结果？","chain_node_ids":["root","child"],"note":"从参数到返回值，只覆盖函数调用的输入与输出。"}}],
+  "learningGroups": [{"groupId":"input-output","title":"输入与输出","nodeIds":["root","child"]}],
+  "idempotencyKey":"example-new-tree-001"
+}

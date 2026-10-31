@@ -1,4 +1,5 @@
 import type {
+  LearningGroup,
   SkillBlock,
   SkillEdge,
   SkillNode,
@@ -13,6 +14,7 @@ export interface TreeGraph {
   /** 旧版接口可能没有块字段，客户端按空数组兼容。 */
   blocks?: SkillBlock[];
   node_block_assignments?: SkillNodeBlockAssignment[];
+  learning_groups?: LearningGroup[];
 }
 
 export interface PublicTreeCatalog {

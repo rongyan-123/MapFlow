@@ -19,6 +19,7 @@ import type {
   BatchProgressResult,
 } from '../domains/maps/types';
 import type {
+  LearningGroup,
   RecommendedDepth,
   SkillBlock,
   SkillEdge,
@@ -46,8 +47,9 @@ export class TreeLibraryApiError extends PublicUiError {
   }
 }
 
-export async function fetchPublicTrees(options: { cursor?: string | null; limit?: number } = {}): Promise<PublicTreeCatalog> {
+export async function fetchPublicTrees(options: { cursor?: string | null; limit?: number; version?: 1 | 2 } = {}): Promise<PublicTreeCatalog> {
   const search = new URLSearchParams();
+  if (options.version !== undefined) search.set('version', String(options.version));
   if (options.limit !== undefined) search.set('limit', String(options.limit));
   if (options.cursor) search.set('cursor', options.cursor);
   const query = search.toString();
@@ -385,6 +387,7 @@ function parseGraph(value: unknown): TreeGraph {
     nodes: value.nodes.map(parseSkillNode),
     edges: value.edges.map(parseSkillEdge),
     blocks: parseOptionalArray(value.blocks, parseSkillBlock),
+    learning_groups: parseOptionalArray(value.learning_groups, parseLearningGroup),
     node_block_assignments: parseOptionalArray(
       value.node_block_assignments,
       parseSkillNodeBlockAssignment,
@@ -401,6 +404,13 @@ function parseOptionalArray<T>(
   return value.map(parser);
 }
 
+function parseLearningGroup(value: unknown): LearningGroup {
+  if (!isRecord(value) || typeof value.group_id !== 'string' || !value.group_id.trim()
+    || typeof value.title !== 'string' || !value.title.trim() || !Array.isArray(value.node_ids)
+    || !value.node_ids.every(id => typeof id === 'string' && id.length > 0)) throw invalidResponseError();
+  return { group_id: value.group_id, title: value.title, node_ids: value.node_ids as string[] };
+}
+
 function parseSkillTree(value: unknown): SkillTree {
   if (
     !isRecord(value) ||
@@ -409,7 +419,8 @@ function parseSkillTree(value: unknown): SkillTree {
     typeof value.title !== 'string' ||
     !isNullableString(value.description) ||
     typeof value.difficulty_level !== 'string' ||
-    !isNonNegativeInteger(value.total_nodes)
+    !isNonNegativeInteger(value.total_nodes) ||
+    (value.generation_version !== undefined && value.generation_version !== 1 && value.generation_version !== 2)
   ) {
     throw invalidResponseError();
   }
@@ -420,6 +431,7 @@ function parseSkillTree(value: unknown): SkillTree {
     description: value.description,
     difficulty_level: value.difficulty_level,
     total_nodes: value.total_nodes,
+    ...(value.generation_version === 1 || value.generation_version === 2 ? { generation_version: value.generation_version } : {}),
     ...(isNonNegativeInteger(value.revision)
       ? { revision: value.revision }
       : {}),

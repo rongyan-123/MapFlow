@@ -2,7 +2,7 @@
 name: mapflow-mcp
 description: Use MapFlow MCP to create, inspect, update, annotate, and publish learning trees while preserving MapFlow's ownership and confirmation rules.
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # MapFlow MCP
@@ -16,19 +16,27 @@ unavailable, continue conservative read-only work and avoid guessing mutation co
 
 The public catalog is immutable. When a user joins an official tree from the website, MapFlow
 creates an account-owned private copy; subsequent chat/MCP mutations target that copy and never
-the official source. The website chat Agent does not create new trees; use the website generation
-button or `mapflow.create_tree` for that separate workflow.
+the official source. The website management assistant creates trees through versioned drafts;
+external clients use `mapflow.create_tree`.
 
 ## Presentation contract
 
-MapFlow's frontend has exactly two display layouts:
+MapFlow keeps two display layouts:
 
 1. **Relationship layout** (default): nodes are laid out from the dependency graph and learning levels.
 2. **Block layout**: nodes are grouped into semantic blocks ordered by `blocks.sortOrder`; each block still uses the dependency layout internally, and unassigned nodes remain visible in an unassigned lane.
 
-These are the only layouts the frontend supports. An Agent changing `positionX`, `positionY`, or `orderInLevel` cannot create a third layout, manually place nodes, or change how either layout is computed. Changes to dependency edges or learning-depth metadata may naturally change the computed result because they change the learning graph itself. `tree.layoutMode` and the `update_tree` `layoutMode` patch (`auto`/`manual`) describe coordinate-writing intent in the MCP contract; they are **not** the frontend's relationship/block switch.
+New trees also offer folded/full map views. `learningGroups` fold small, tightly related sets of real nodes in the same canvas; opening a group allows a simple DAG with forks and joins. This is separate from professional `blocks`. Coordinates cannot force a new display layout. `tree.layoutMode` and the `update_tree` `layoutMode` patch (`auto`/`manual`) describe coordinate-writing intent, not the frontend's relationship/block or folded/full switches.
 
-Block metadata is optional for backwards compatibility. A tree without valid `blocks` and node-to-block assignments uses relationship layout only. A tree becomes eligible for block layout when it has at least one block and at least one assignment that references an existing node and block. Every node does not need to be assigned.
+## New tree generation
+
+Use the supplied topic, goal and material. Do not ask about personal experience or time before generation. Audit every root and explain a useful beginner entry in the description without inventing prerequisites to force a single root. Teaching can later recommend a personal start using existing context and, when useful, a brief question.
+
+For new generation use `tree.generationVersion: 2`, a meaningful description, professional blocks with `overview: {version:2, core_question, chain_node_ids, note}`, and per-node `blockId`. Overview's nested fields remain snake_case. See the [complete create_tree arguments](references/create-tree-v2-example.json); choose a separate idempotencyKey for each independent creation. Example array lengths are not size limits. Add `learningGroups: [{groupId,title,nodeIds}]` only for closely related small problems. Unrelated points remain independent. Members reference the original node IDs, each in at most one group. Keep both real prerequisite edges and the contracted group graph acyclic; fix group boundaries rather than delete edges. Preserve forks and joins: 分支做简单点，不要为了复杂而复杂. Do not impose fixed node, group, branch or root counts.
+
+Keep the existing five `recommended_depth` values; do not add a second level system. `related` and `supports` do not imply learning prerequisites. Old trees remain generation 1 and keep their records; changing only a version label is not an upgrade. `get_tree` returns `tree.generationVersion` and `learningGroups` for verification.
+
+For legacy generation 1, block metadata stays optional for compatibility. Generation 2 requires professional blocks, their overviews, and one valid block assignment per node. Learning groups remain optional in both cases.
 
 Read [references/block-layout.md](references/block-layout.md) before creating or reorganizing blocks.
 
@@ -40,7 +48,7 @@ Read [references/block-layout.md](references/block-layout.md) before creating or
 mastery. `observable_evidence` describes evidence that could verify learning later; it is not proof
 that the user has already provided that evidence.
 
-Progress is currently binary. `completedNodeIds` means only completed or unfinished; there is no
+`completedNodeIds` is the completed subset; the website also keeps 0–100 per-node progress. There is no
 separate mastery-depth or submitted-evidence record. On an explicit user request, call
 `mapflow.set_node_completion` with `libraryEntryId`, `nodeId`, and `completed`. This changes only
 the current account's progress and does not change the tree definition or revision. Never mark a

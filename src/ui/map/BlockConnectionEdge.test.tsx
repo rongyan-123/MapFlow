@@ -8,6 +8,17 @@ const geometry=vi.hoisted(()=>({nodes:[
 ]}));
 vi.mock('@xyflow/react',()=>({useStore:()=>geometry.nodes}));
 
+it('connects to a folded group card, and routes between real nodes inside an expanded frame',()=>{
+  geometry.nodes=[{id:'a',type:'learningGroup',position:{x:0,y:0},measured:{width:240,height:104}},
+    {id:'b',type:'skill',position:{x:280,y:264},measured:{width:240,height:104}}];
+  const props={id:'group-edge',source:'a',target:'b',data:{relation:'neutral',edgeType:'prerequisite',lane:0}} as React.ComponentProps<typeof BlockConnectionEdge>;
+  const view=render(<svg><BlockConnectionEdge {...props} /></svg>);
+  expect(view.container.querySelector('.mapflow-connection-line')).not.toBeNull();
+  expect(view.container.querySelector('[data-port="source"]')).toHaveAttribute('cy','104');
+  geometry.nodes=[{id:'a',type:'skill',position:{x:0,y:0},measured:{width:240,height:104}},
+    {id:'b',type:'skill',position:{x:280,y:264},measured:{width:240,height:104}}];
+});
+
 it('keeps unfinished ports neutral and only sends colored flow from a completed source',()=>{
   const props={id:'edge',source:'a',target:'b',data:{relation:'outgoing',edgeType:'prerequisite',lane:0,sourceTone:'teal',targetTone:'violet',sourceLit:false,targetLit:false}} as React.ComponentProps<typeof BlockConnectionEdge>;
   const view=render(<svg><BlockConnectionEdge {...props} /></svg>);

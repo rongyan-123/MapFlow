@@ -78,6 +78,8 @@ function MapViewContent({
   });
   const target = toolbarHostRef ? headerTarget : toolbarTarget;
   const [layout, setLayout] = useState<TreeLayoutMode>(initialLayout ?? 'relationship');
+  const [condensed, setCondensed] = useState(initialLayout !== 'blocks');
+  const hasGroups = snapshot.tree.generation_version === 2 && !!snapshot.learning_groups?.length;
   const [selectedId, setSelectedId] = useState<string | null>(initialNodeId ?? null);
   const [detailsOpen, setDetailsOpen] = useState(Boolean(initialNodeId));
   const [noteOpen, setNoteOpen] = useState(false);
@@ -122,6 +124,7 @@ function MapViewContent({
   useEffect(() => {
     setSelectedId(initialNodeId ?? null);
     setLayout(initialLayout ?? 'relationship');
+    setCondensed(initialLayout !== 'blocks');
     setDetailsOpen(Boolean(initialNodeId));
     setNoteOpen(false);
   }, [accountId, entryId, snapshot.tree.id, initialNodeId, initialLayout]);
@@ -160,9 +163,9 @@ function MapViewContent({
   }
 
   const toolbar = <div className="mf-map-controls" role="toolbar" aria-label="地图工具">
-      <div className="mf-map-toolbar-actions"><Button aria-label="知识总览" title="知识总览" aria-pressed={overview} onClick={()=>changeOverview(!overview)}><Icon name="map" /><span className="mf-map-action-label">知识总览</span></Button><Button className="mf-block-sort-button" variant={layout === 'blocks' ? 'primary' : 'secondary'}
+      <div className="mf-map-toolbar-actions">{hasGroups&&<div className="mf-map-disclosure-switch" role="group" aria-label="地图展开方式"><Button aria-pressed={condensed} onClick={()=>{changeOverview(false);setCondensed(true);setLayout('relationship');}}>收纳地图</Button><Button aria-pressed={!condensed} onClick={()=>{changeOverview(false);setCondensed(false);}}>完整地图</Button></div>}<Button aria-label="知识总览" title="知识总览" aria-pressed={overview} onClick={()=>changeOverview(!overview)}><Icon name="map" /><span className="mf-map-action-label">知识总览</span></Button><Button className="mf-block-sort-button" variant={layout === 'blocks' ? 'primary' : 'secondary'}
         aria-label="按块排序" aria-pressed={layout === 'blocks'} title={layout === 'blocks' ? '再次点击恢复知识关系' : '按学习块整理地图节点'}
-        onClick={() => {changeOverview(false);setLayout(previous => previous === 'blocks' ? 'relationship' : 'blocks');}}><Icon name="map" /><span className="mf-map-action-label">按块排序</span></Button>
+        onClick={() => {changeOverview(false);setCondensed(false);setLayout(previous => previous === 'blocks' ? 'relationship' : 'blocks');}}><Icon name="map" /><span className="mf-map-action-label">按块排序</span></Button>
       {bulkAvailable && <MapBulkActions key={bulkKey} disabled={Boolean(saving || completionPending || progressPending || !snapshot.nodes.length)}
         allCompleted={snapshot.nodes.every(node => progressPercentForNode(bulk.progress.find(item => item.node_id === node.id)) === 100)}
         undoCount={bulk.undoCount} onLight={bulk.light} onUndo={bulk.undo} busy={bulk.busy} checking={bulk.checking} uncertain={bulk.uncertain} onCancel={bulk.cancel} />}</div>
@@ -179,11 +182,11 @@ function MapViewContent({
     {target ? createPortal(toolbar, target) : target === undefined ? toolbar : null}
     {learningState&&(learningState.position.error||learningState.plan.error)&&<p role="alert" className="mf-plan-task">学习位置或计划暂时无法读取。<Button onClick={()=>{void learningState.position.refetch();void learningState.plan.refetch();}}>重试</Button></p>}
     {learningState?.plan.data?.task&&<div className="mf-plan-task"><span>{learningState.plan.data.task.accepted?(learningState.plan.data.task.submission?.outcome==='needs_adjustment'?'时间条件需要调整，原计划已保留。':'学习计划已保存。'):learningState.plan.data.task.state==='failed'?'计划生成失败，原计划已保留。':learningState.plan.data.task.state==='stopped'?'计划生成已取消，原计划已保留。':'计划任务处理中…'}</span> <Button variant="quiet" onClick={()=>setPlanOpen(true)}>查看计划任务</Button></div>}
-    <div className="mf-map-overview-pane" hidden={!overview}>{(overview||overviewVisited)&&<KnowledgeOverview snapshot={displayedSnapshot} personal={displayMode==='personal'} onSelect={selectNode} plan={learningState?.plan.data?.plan} onPlan={learningState?.plan.isSuccess?()=>setPlanOpen(true):undefined} />}</div>
+    <div className="mf-map-overview-pane" hidden={!overview}>{(overview||overviewVisited)&&<KnowledgeOverview snapshot={displayedSnapshot} personal={displayMode==='personal'} onSelect={id=>{selectNode(id);changeOverview(false);}} plan={learningState?.plan.data?.plan} onPlan={learningState?.plan.isSuccess?()=>setPlanOpen(true):undefined} />}</div>
     <div className="mf-map-stage" hidden={overview}>
       {(dependencies.unresolved.length>0||dependencies.missingEdges.length>0||dependencies.ambiguousEdges.length>0)&&<p className="mf-map-dependency-notice" role="status">前置关系待审阅 · {dependencies.unresolved.length} 个顺序未确定节点 · {dependencies.missingEdges.length} 条缺少端点 · {dependencies.ambiguousEdges.length} 条旧关系</p>}
       <div className="mf-map-canvas">{snapshot.nodes.length
-        ? <MapCanvas snapshot={displayedSnapshot} displayMode={displayMode} layoutMode={layout} selectedNodeId={selectedId}
+        ? <MapCanvas snapshot={displayedSnapshot} displayMode={displayMode} layoutMode={layout} condensed={condensed} selectedNodeId={selectedId}
           onSelectNode={selectNode} isGraphVisible={isVisible&&!overview} viewportStorageKey={`mapflow.map-viewport.v1.${accountId}.${snapshot.tree.id}`} />
         : <p className="mf-empty">这张地图还没有节点。</p>}</div>
       {celebration && <CompletionCelebration key={celebration.sequence} title={celebration.title} onDismiss={dismissCelebration} />}
