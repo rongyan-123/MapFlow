@@ -16,7 +16,7 @@ export const DEPTH_ORDER: Record<RecommendedDepth, number> = { Recognize: 0, Und
 const nodeUnit = (node: SkillNode): Unit => ({ id: node.id, width: 240, height: 104, depth: DEPTH_ORDER[node.recommended_depth] });
 
 /** Vary parallel nodes by existing learning depth. Real prerequisites always get a later row. */
-function placeUnits(units: Unit[], edges: SkillEdge[]): Map<string, Point> {
+function placeUnits(units: Unit[], edges: SkillEdge[], maximumRowWidth=Infinity): Map<string, Point> {
   const { layers, parents } = analyzeDependencies(units.map(unit => unit.id), edges);
   const rows = new Map<number, Unit[]>();
   for (const unit of units) {
@@ -32,21 +32,32 @@ function placeUnits(units: Unit[], edges: SkillEdge[]): Map<string, Point> {
   for (const [, row] of [...rows].sort(([a], [b]) => a - b)) {
     row.sort((a,b) => parentCenter(a.id) - parentCenter(b.id) || a.depth - b.depth || a.id.localeCompare(b.id));
     const minimumDepth = Math.min(...row.map(unit => unit.depth));
-    let x = -(row.reduce((sum, unit) => sum + unit.width, 0) + Math.max(0, row.length - 1) * 52) / 2;
-    let bottom = rowY;
-    for (const unit of row) {
-      const y = rowY + (unit.depth - minimumDepth) * 14;
-      positions.set(unit.id, { x, y });
-      x += unit.width + 52;
-      bottom = Math.max(bottom, y + unit.height);
+    const wrappedRows:Unit[][]=[[]];
+    let occupiedWidth=0;
+    for(const unit of row) {
+      if(occupiedWidth>0 && occupiedWidth+52+unit.width>maximumRowWidth) {
+        wrappedRows.push([]);occupiedWidth=0;
+      }
+      wrappedRows[wrappedRows.length-1].push(unit);
+      occupiedWidth+=(occupiedWidth>0?52:0)+unit.width;
     }
-    rowY = bottom + 88;
+    for(const wrapped of wrappedRows) {
+      let x = -(wrapped.reduce((sum, unit) => sum + unit.width, 0) + Math.max(0, wrapped.length - 1) * 52) / 2;
+      let bottom = rowY;
+      for (const unit of wrapped) {
+        const y = rowY + (unit.depth - minimumDepth) * 14;
+        positions.set(unit.id, { x, y });
+        x += unit.width + 52;
+        bottom = Math.max(bottom, y + unit.height);
+      }
+      rowY = bottom + 88;
+    }
   }
   return positions;
 }
 
-export function computeLearningNodeLayout(nodes: SkillNode[], edges: SkillEdge[]) {
-  return placeUnits(nodes.map(nodeUnit), edges);
+export function computeLearningNodeLayout(nodes: SkillNode[], edges: SkillEdge[], maximumRowWidth=Infinity) {
+  return placeUnits(nodes.map(nodeUnit), edges, maximumRowWidth);
 }
 
 function projectEdges(edges: SkillEdge[], resolve: (id: string) => string): SkillEdge[] {
@@ -62,7 +73,7 @@ function projectEdges(edges: SkillEdge[], resolve: (id: string) => string): Skil
 }
 
 /** Display projection only. Never save its folded edges or group IDs as learning nodes. */
-export function computeLearningGroupLayout(snapshot: LearningTreeSnapshot, expanded: ReadonlySet<string>) {
+export function computeLearningGroupLayout(snapshot: LearningTreeSnapshot, expanded: ReadonlySet<string>, maximumGroupWidth=Infinity) {
   const groups = snapshot.learning_groups ?? [];
   const nodesById = new Map(snapshot.nodes.map(node => [node.id, node]));
   const ownerByNodeId = new Map<string, string>();
@@ -102,7 +113,7 @@ export function computeLearningGroupLayout(snapshot: LearningTreeSnapshot, expan
     if (isExpanded) {
       const memberIds = new Set(group.node_ids);
       const internalEdges = snapshot.edges.filter(edge => memberIds.has(edge.source_node_id) && memberIds.has(edge.target_node_id));
-      const inner = computeLearningNodeLayout(members, internalEdges);
+      const inner = computeLearningNodeLayout(members, internalEdges, Math.max(240,maximumGroupWidth-56));
       const left = Math.min(...[...inner.values()].map(point => point.x));
       width = Math.max(...[...inner.values()].map(point => point.x + 240)) - left + 56;
       height = Math.max(...[...inner.values()].map(point => point.y + 104)) + 114;

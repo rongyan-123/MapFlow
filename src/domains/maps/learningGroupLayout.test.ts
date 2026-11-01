@@ -13,6 +13,16 @@ export const groupedSnapshot: LearningTreeSnapshot = {
 };
 
 describe('learning groups in the same canvas', () => {
+  it('wraps parallel members to fit a narrow canvas without changing the real branches',()=>{
+    const original=structuredClone(groupedSnapshot);
+    const layout=computeLearningGroupLayout(groupedSnapshot,new Set(['g1','g2']),320);
+    expect(layout.groups.every(group=>group.width<=320)).toBe(true);
+    expect(layout.edges).toEqual(groupedSnapshot.edges);
+    for(const relation of layout.edges.filter(relation=>relation.edge_type==='prerequisite')) {
+      expect(layout.positions.get(relation.target_node_id)!.y).toBeGreaterThan(layout.positions.get(relation.source_node_id)!.y+104);
+    }
+    expect(groupedSnapshot).toEqual(original);
+  });
   it('does not hide a real cycle inside a folded group',()=>{
     const layout=computeLearningGroupLayout({...groupedSnapshot,edges:[...groupedSnapshot.edges,edge('d','a')]},new Set());
     expect(layout.invalidGroups).toBe(true);

@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { getReadableInitialZoom,getStartingViewport } from './viewport';
+import { getGroupViewport,getReadableInitialZoom,getStartingViewport } from './viewport';
 
 describe('skill tree viewport', () => {
+  it('keeps a tall narrow group readable with its heading visible instead of shrinking the entire group',()=>{
+    const view=getGroupViewport({width:390,height:660},{x:-148,y:300,width:296,height:1100},{x:0,y:0,zoom:.2});
+    expect(view.zoom).toBeGreaterThanOrEqual(.85);
+    expect(300*view.zoom+view.y).toBe(32);
+    expect(-148*view.zoom+view.x).toBeGreaterThanOrEqual(32);
+    expect(148*view.zoom+view.x).toBeLessThanOrEqual(358);
+  });
   it('放大 fitView 的结果，让默认地图保持可读', () => {
     expect(getReadableInitialZoom(0.3)).toBeCloseTo(0.405);
   });

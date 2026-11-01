@@ -16,6 +16,7 @@ const guides:Array<{label:string;caption:string;prompt:string;icon:IconName}>=[
 const learningGuides=[guides[2],guides[3],{label:'从当前地图开始',caption:'先了解路线，再安排今天的学习',prompt:'请介绍这张地图的学习路线，帮我选择今天的起点。',icon:'map' as const},{label:'练一练',caption:'用一道小题检查理解',prompt:'请围绕当前学习内容出一道练习题，等我作答后再讲解。',icon:'learn' as const}];
 const tavernGuides=[{label:'继续故事',caption:'从角色的开场接着聊',prompt:'接着说说你的故事吧。',icon:'spark' as const},{label:'认识一下',caption:'和当前角色打个招呼',prompt:'你好，先介绍一下自己吧。',icon:'chat' as const},{label:'聊一个话题',caption:'按自己的兴趣展开',prompt:'我想和你聊聊：',icon:'book' as const},{label:'一起想办法',caption:'换个角度思考遇到的事',prompt:'我遇到了一件事，想听听你的看法：',icon:'learn' as const}];
 export interface ConversationWorkspaceProps{
+  actionsMenu?:{open:boolean;setOpen:(open:boolean)=>void};
   scene:ConversationScene;title:string;draft:string;onDraftChange:(draft:string)=>void;onSend:()=>void;
   onStop?:()=>void;sending?:boolean;disabled?:boolean;sendDisabled?:boolean;modelLabel:string;onConfigure:()=>void;onModelConfigure:()=>void;onNew:()=>void;onHistory:()=>void;onCanvas:()=>void;
   historyLabel?:string;historyExpanded?:boolean;historyInTitle?:boolean;canvasExpanded?:boolean;
@@ -29,7 +30,9 @@ export function ConversationWorkspace(props:ConversationWorkspaceProps){
   const historyToggle=<Button variant="quiet" className="mf-history-toggle" aria-label={props.historyLabel??'会话历史'} title={props.historyLabel??'会话历史'} aria-expanded={props.historyExpanded??false} onClick={props.onHistory}><Icon name="sidebar" /><span>{props.historyLabel??'会话历史'}</span></Button>;
   const paneVisible=!!props.sidePane&&!props.sidePaneHidden;
   const canvasCoversChat=isMobile&&paneVisible;
-  const [moreOpen,setMoreOpen]=useState(false);
+  const [localMoreOpen,setLocalMoreOpen]=useState(false);
+  const moreOpen=props.actionsMenu?.open??localMoreOpen;
+  const setMoreOpen=props.actionsMenu?.setOpen??setLocalMoreOpen;
   const sidePane=useRef<HTMLDivElement>(null);const previousPane=useRef({kind:props.sidePaneKind,wide:props.sidePaneWide});
   useLayoutEffect(()=>{
     const previous=previousPane.current;previousPane.current={kind:props.sidePaneKind,wide:props.sidePaneWide};

@@ -142,6 +142,9 @@
 @keyframes mf-group-trace-in { 0% { stroke-dashoffset: 1; opacity: .9; } 75% { stroke-dashoffset: 0; opacity: .65; } 100% { stroke-dashoffset: 0; opacity: 0; } }
 @media (max-width: 760px) {
   .mf-header-map-tools:has(.mf-map-disclosure-switch) { overflow-x: auto; }
+  .mf-page-header:has(.mf-map-disclosure-switch) .mf-page-header-title {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
   .mf-map-disclosure-switch .mf-button { padding-inline: 7px; font-size: 11px; }
 }
 

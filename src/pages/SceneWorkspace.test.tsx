@@ -9,7 +9,7 @@ import SceneWorkspace from './SceneWorkspace';
 afterEach(()=>{vi.unstubAllGlobals();localStorage.clear();sessionStorage.clear();});
 const account='player-1';const managementStory={...conversation,conversationId:'22222222-2222-4222-8222-222222222222',scene:'management' as const,learningAreaId:null,libraryEntryId:null};
 const profile={profileId:'33333333-3333-4333-8333-333333333333',profileVersion:1,modelId:'live-model',displayName:'真实模型',contextWindow:128000,maxOutputTokens:8000};
-function mount(active=false,fresh=false,scene:'management'|'tavern'='management'){
+function mount(active=false,fresh=false,scene:'management'|'tavern'='management',detailLoaded?:Promise<void>){
   const story={...managementStory,scene};
   const requests:Array<[string,RequestInit|undefined]>=[];
   const createdStories:typeof story[]=[];
@@ -20,7 +20,7 @@ function mount(active=false,fresh=false,scene:'management'|'tavern'='management'
     if(path.endsWith('/executions'))return new Response(JSON.stringify({execution:null}));
     if(path==='/api/me/tree-library')return new Response(JSON.stringify({entries:[]}));
     if(path==='https://raw.githubusercontent.com/SillyTavern/SillyTavern-Content/main/index.json')return new Response(JSON.stringify([{type:'character',id:'guide.png',name:'官方示例向导',description:'官方目录中的角色卡',highlight:false,url:'https://raw.githubusercontent.com/SillyTavern/SillyTavern-Content/main/assets/character/guide.png'}]));
-    if(path.endsWith('/'+story.conversationId))return new Response(JSON.stringify({...detail,conversation:story,...(fresh?{turns:[],generations:[],graph:{...detail.graph,activePath:['message-opening'],messages:[detail.graph.messages[0]],branches:[{...detail.graph.branches[0],leafMessageId:'message-opening'}]}}:{})}));
+    if(path.endsWith('/'+story.conversationId)){await detailLoaded;return new Response(JSON.stringify({...detail,conversation:story,...(fresh?{turns:[],generations:[],graph:{...detail.graph,activePath:['message-opening'],messages:[detail.graph.messages[0]],branches:[{...detail.graph.branches[0],leafMessageId:'message-opening'}]}}:{})}));}
     if(path.includes('/conversations'))return new Response(JSON.stringify({conversations:active?[story]:[],bootstrapState:active?'has_active':'cleared'}));
     return new Response('{}',{status:503});
   });
@@ -28,6 +28,16 @@ function mount(active=false,fresh=false,scene:'management'|'tavern'='management'
   render(<QueryClientProvider client={client}><IdentityProvider><AgentModelProvider accountId={account}><ModelSelectionProvider accountId={account}><SceneWorkspace owner={{accountId:account,csrfToken:'csrf',userName:'小明',scene}} navigate={vi.fn()} /></ModelSelectionProvider></AgentModelProvider></IdentityProvider></QueryClientProvider>);
   return requests;
 }
+it('keeps the actions menu open when the conversation finishes loading',async()=>{
+  let finishLoading!:()=>void;
+  const loaded=new Promise<void>(resolve=>{finishLoading=resolve;});
+  const requests=mount(true,false,'management',loaded);
+  await waitFor(()=>expect(requests.some(([path])=>path.endsWith('/'+managementStory.conversationId))).toBe(true));
+  fireEvent.click(screen.getByRole('button',{name:'更多聊天操作'}));
+  expect(screen.getByRole('dialog',{name:'聊天操作'})).toBeVisible();
+  finishLoading();await screen.findByText('请用茶。');
+  expect(screen.getByRole('dialog',{name:'聊天操作'})).toBeVisible();
+});
 it('keeps a cleared scene editable without implicitly opening or generating a conversation',async()=>{
   const requests=mount();await waitFor(()=>expect(screen.getByRole('status')).toHaveTextContent('还没有会话，先新建一段对话。'));
   fireEvent.click(screen.getByRole('button',{name:'创建一张学习地图'}));expect(screen.getByRole('textbox',{name:'消息'})).toBeEnabled();

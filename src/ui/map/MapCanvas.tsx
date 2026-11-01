@@ -34,7 +34,7 @@ import {
 import SkillNodeComponent, {
   type SkillFlowNode,
 } from './MapNode';
-import { getReadableInitialZoom,getStartingViewport } from '../../domains/maps/viewport';
+import { getFocusedNodeViewport, getGroupViewport, getReadableInitialZoom,getStartingViewport } from '../../domains/maps/viewport';
 import BlockConnectionEdge from './BlockConnectionEdge';
 import { buildBlockConnections } from '../../domains/maps/blockConnections';
 import { getNodeReadiness } from '../../domains/maps/nodeReadiness';
@@ -91,18 +91,26 @@ export default function SkillTreeCanvas({
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
   const [closingGroups, setClosingGroups] = useState<Set<string>>(() => new Set());
   const closingTimers = useRef(new Map<string, number>());
+  const pendingGroupFocus = useRef<string | null>(null);
+  const activeGroupFocus = useRef<string | null>(null);
+  const [canvasWidth, setCanvasWidth] = useState(window.innerWidth);
+  const [canvasHeight, setCanvasHeight] = useState(window.innerHeight);
   const grouped = condensed && layoutMode === 'relationship' && snapshot.tree.generation_version === 2 && !!snapshot.learning_groups?.length;
   const toggleGroup = useCallback((id: string) => {
     const timer = closingTimers.current.get(id);
     if (timer !== undefined) window.clearTimeout(timer);
     closingTimers.current.delete(id);
     if (!expandedGroups.has(id) || closingGroups.has(id)) {
+      pendingGroupFocus.current=id;
+      activeGroupFocus.current=id;
       setClosingGroups(current => new Set([...current].filter(groupId => groupId !== id)));
       setExpandedGroups(current => new Set(current).add(id));
     } else {
+      activeGroupFocus.current=id;
       setClosingGroups(current => new Set(current).add(id));
       const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : 260;
       closingTimers.current.set(id, window.setTimeout(() => {
+        pendingGroupFocus.current=activeGroupFocus.current;
         closingTimers.current.delete(id);
         setClosingGroups(current => new Set([...current].filter(groupId => groupId !== id)));
         setExpandedGroups(current => new Set([...current].filter(groupId => groupId !== id)));
@@ -110,6 +118,8 @@ export default function SkillTreeCanvas({
     }
   }, [expandedGroups, closingGroups]);
   useEffect(() => {
+    pendingGroupFocus.current=null;
+    activeGroupFocus.current=null;
     setExpandedGroups(new Set());setClosingGroups(new Set());
     return () => {for (const timer of closingTimers.current.values()) window.clearTimeout(timer);closingTimers.current.clear();};
   }, [snapshot.tree.id]);
@@ -123,8 +133,8 @@ export default function SkillTreeCanvas({
     setClosingGroups(current => new Set([...current].filter(id => id !== group.group_id)));
     setExpandedGroups(current => new Set(current).add(group.group_id));
   }, [selectedNodeId, snapshot.current_node_id, snapshot.tree.id, snapshot.learning_groups, isGraphVisible]);
-  const groupLayout = useMemo(() => grouped ? computeLearningGroupLayout(snapshot, expandedGroups) : null,
-    [grouped, snapshot.nodes, snapshot.edges, snapshot.learning_groups, snapshot.tree.generation_version, expandedGroups]);
+  const groupLayout = useMemo(() => grouped ? computeLearningGroupLayout(snapshot, expandedGroups, Math.max(296,(canvasWidth-64)/.85)) : null,
+    [grouped, snapshot.nodes, snapshot.edges, snapshot.learning_groups, snapshot.tree.generation_version, expandedGroups, canvasWidth]);
   const branches = useMemo(() => getNodeBranches(snapshot), [snapshot.nodes, snapshot.blocks, snapshot.node_block_assignments, snapshot.tree.id]);
   const progressMap = useMemo(
     () => new Map(snapshot.progress.map((item) => [item.node_id, item])),
@@ -307,13 +317,18 @@ export default function SkillTreeCanvas({
     const container = containerRef.current;
     if (!container || !isGraphVisible || typeof ResizeObserver === 'undefined') return;
     let previous = canvasSize();
+    setCanvasWidth(previous.width);
+    setCanvasHeight(previous.height);
     const observer = new ResizeObserver(() => {
       const next = canvasSize();
       const flow = flowRef.current;
       if (flow && previous.width > 0 && previous.height > 0 && (next.width !== previous.width || next.height !== previous.height)) {
         const viewport = flow.getViewport();
-        void flow.setViewport({ ...viewport, x: viewport.x + (next.width - previous.width) / 2, y: viewport.y + (next.height - previous.height) / 2 }, { duration: 0 });
+        if(activeGroupFocus.current)pendingGroupFocus.current=activeGroupFocus.current;
+        else void flow.setViewport({ ...viewport, x: viewport.x + (next.width - previous.width) / 2, y: viewport.y + (next.height - previous.height) / 2 }, { duration: 0 });
       }
+      setCanvasWidth(next.width);
+      setCanvasHeight(next.height);
       previous = next;
     });
     observer.observe(container);
@@ -321,7 +336,7 @@ export default function SkillTreeCanvas({
   }, [isGraphVisible]);
   const baseLayoutKey = `${snapshot.tree.id}:${snapshot.tree.revision ?? 0}:${layoutMode}`;
   const layoutKey = snapshot.tree.generation_version === 2 ? `${baseLayoutKey}:${grouped?'condensed':'full'}` : baseLayoutKey;
-  const shapeKey = grouped ? `${layoutKey}:${JSON.stringify([...expandedGroups].sort())}` : layoutKey;
+  const shapeKey = grouped ? `${layoutKey}:${JSON.stringify([...expandedGroups].sort())}:${expandedGroups.size?canvasWidth:''}` : layoutKey;
   const fitViewKey = `${viewportStorageKey ?? ''}:${layoutKey}:${snapshot.current_node_id ?? ''}`;
   const viewportKey = viewportStorageKey ? `${viewportStorageKey}.${layoutMode}` : undefined;
   const previousLayoutKeyRef = useRef<string | null>(null);
@@ -361,13 +376,24 @@ export default function SkillTreeCanvas({
     setEdges(generatedEdges);
   }, [generatedEdges, setEdges]);
 
+  const orderedEntryId = useMemo(() => {
+    if (snapshot.tree.generation_version !== 2) return undefined;
+    const dependentIds = new Set(snapshot.edges.filter(edge => edge.edge_type === 'prerequisite').map(edge => edge.target_node_id));
+    const visibleDependentIds = new Set((groupLayout?.edges??snapshot.edges).filter(edge=>edge.edge_type==='prerequisite').map(edge=>edge.target_node_id));
+    const rootDisplays = snapshot.nodes.filter(node => !dependentIds.has(node.id))
+      .sort((first, second) => first.order_in_level - second.order_in_level)
+      .map(root=>generatedNodes.find(node=>node.id===root.id)?.id
+        ?? groupLayout?.groups.find(group=>group.group.node_ids.includes(root.id))?.id);
+    return rootDisplays.find(id=>id&&!visibleDependentIds.has(id))??rootDisplays[0];
+  }, [snapshot.tree.generation_version, snapshot.nodes, snapshot.edges, generatedNodes, groupLayout]);
+
   const fitGraphView = useCallback(() => {
     const flow = flowRef.current;
     if (!flow || generatedNodes.length === 0) return;
     const selectedNode = generatedNodes.find(node => node.type === 'skill' && node.id === selectedNodeId);
     const remembered = readMapViewport(viewportKey, shapeKey,canvasSize());
     if (remembered && !selectedNode) { void flow.setViewport(remembered, { duration: 0 }); return; }
-    const startingNode=selectedNode?.id??(generatedNodes.some(node=>node.id===snapshot.current_node_id)?snapshot.current_node_id:null)??generatedNodes.filter(node=>node.type!=='block').sort((first,second)=>first.position.y-second.position.y||first.position.x-second.position.x)[0]?.id;
+    const startingNode=selectedNode?.id??(generatedNodes.some(node=>node.id===snapshot.current_node_id)?snapshot.current_node_id:null)??orderedEntryId??generatedNodes.filter(node=>node.type!=='block').sort((first,second)=>first.position.y-second.position.y||first.position.x-second.position.x)[0]?.id;
 
     void flow
       .fitView({
@@ -386,19 +412,35 @@ export default function SkillTreeCanvas({
         const starting=generatedNodes.find(node=>node.id===startingNode);
         if(starting)void flow.setViewport(getStartingViewport(canvasSize(),starting.position,readableZoom),{duration:0});
       });
-  }, [generatedNodes, layoutMode, selectedNodeId, snapshot.current_node_id, viewportKey, shapeKey]);
+  }, [generatedNodes, layoutMode, selectedNodeId, snapshot.current_node_id, viewportKey, shapeKey, orderedEntryId]);
 
   const lastLocatedSelection = useRef<string | null>(null);
   useEffect(() => {
+    const id=pendingGroupFocus.current??activeGroupFocus.current;
+    const group=groupLayout?.groups.find(item=>item.group.group_id===id);
+    if(!id || !group || !isGraphVisible)return;
+    const frame=window.requestAnimationFrame(()=>{
+      const flow=flowRef.current;
+      if(!flow || (pendingGroupFocus.current??activeGroupFocus.current)!==id)return;
+      pendingGroupFocus.current=null;
+      const current=flow.getViewport();
+      const next=getGroupViewport(canvasSize(),{...group.position,width:group.width,height:group.height},current);
+      if(next!==current)void flow.setViewport(next,{duration:window.matchMedia?.('(prefers-reduced-motion: reduce)').matches?0:320});
+    });
+    return ()=>window.cancelAnimationFrame(frame);
+  },[groupLayout,isGraphVisible,canvasHeight]);
+
+  useEffect(() => {
     if (snapshot.tree.generation_version !== 2) return;
     if (!selectedNodeId || !isGraphVisible) {lastLocatedSelection.current=null;return;}
-    if (lastLocatedSelection.current===selectedNodeId || !nodes.some(node=>node.type==='skill'&&node.id===selectedNodeId)) return;
+    const selectionKey=`${selectedNodeId}:${canvasWidth}`;
+    if (lastLocatedSelection.current===selectionKey || !nodes.some(node=>node.type==='skill'&&node.id===selectedNodeId)) return;
     const point=positions.get(selectedNodeId); const flow=flowRef.current;
     if (!point||!flow) return;
-    lastLocatedSelection.current=selectedNodeId;
-    const size=canvasSize(),zoom=flow.getZoom();
-    void flow.setViewport({x:size.width/2-(point.x+120)*zoom,y:size.height/2-(point.y+52)*zoom,zoom},{duration:0});
-  }, [selectedNodeId,nodes,positions,snapshot.tree.generation_version,isGraphVisible]);
+    pendingGroupFocus.current=null;activeGroupFocus.current=null;
+    lastLocatedSelection.current=selectionKey;
+    void flow.setViewport(getFocusedNodeViewport(canvasSize(), point, flow.getZoom()), {duration:0});
+  }, [selectedNodeId,nodes,positions,snapshot.tree.generation_version,isGraphVisible,canvasWidth]);
 
   function selectAndCenterNode(node: SkillFlowNode | BlockLaneFlowNode | LearningGroupFlowNode) {
     if (node.type !== 'skill') return;
@@ -408,6 +450,10 @@ export default function SkillTreeCanvas({
       if (!flow || flowRef.current !== flow || !containerRef.current?.isConnected) return;
       const size = canvasSize();
       const zoom = flow.getZoom();
+      if (snapshot.tree.generation_version === 2) {
+        void flow.setViewport(getFocusedNodeViewport(size, node.position, zoom), {duration:0});
+        return;
+      }
       void flow.setViewport({
         x: size.width / 2 - (node.position.x + BLOCK_NODE_WIDTH / 2) * zoom,
         y: size.height / 2 - (node.position.y + BLOCK_NODE_HEIGHT / 2) * zoom,
@@ -427,7 +473,10 @@ export default function SkillTreeCanvas({
       edgeTypes={edgeTypes}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
-      onMoveStart={() => animationControllerRef.current?.setMoving(true)}
+      onMoveStart={event => {
+        if(event){activeGroupFocus.current=null;pendingGroupFocus.current=null;}
+        animationControllerRef.current?.setMoving(true);
+      }}
       onMove={event => {
         const panning = event?.type === 'touchmove'
           ? 'touches' in event && event.touches.length === 1
@@ -467,7 +516,7 @@ export default function SkillTreeCanvas({
         isGraphVisible={isGraphVisible}
       />
       <Background variant={BackgroundVariant.Lines} color="color-mix(in srgb, var(--mf-map-edge) 30%, transparent)" gap={24} size={.8} />
-      <Controls className="mf-flow-controls" />
+      <Controls className="mf-flow-controls" onFitView={()=>{activeGroupFocus.current=null;pendingGroupFocus.current=null;}} />
       <MiniMap
         nodeColor={(node) => {
           if (node.type === 'block') {
