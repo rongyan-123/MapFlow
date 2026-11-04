@@ -268,6 +268,24 @@ describe('SkillTreeCanvas', () => {
     expect(Number(group.dataset.y)*viewport.zoom+viewport.y).toBeGreaterThanOrEqual(24);
     expect((Number(group.dataset.y)+Number(group.dataset.height))*viewport.zoom+viewport.y).toBeLessThanOrEqual(636);
   });
+  it('replaces an older viewport animation when a collapsing group changes the active group position',async()=>{
+    vi.stubGlobal('innerWidth',1216);vi.stubGlobal('innerHeight',888);
+    const graph={...grouped,nodes:[...grouped.nodes,{...grouped.nodes[0],id:'node-4'}],
+      learning_groups:[...grouped.learning_groups!,{group_id:'next-group',title:'下一组',node_ids:['node-3','node-4']}],
+      edges:[...grouped.edges,{id:'next',source_node_id:'node-3',target_node_id:'node-4',edge_type:'prerequisite',label:null}]};
+    render(<SkillTreeCanvas snapshot={graph} displayMode="personal" layoutMode="relationship" selectedNodeId={null} isGraphVisible onSelectNode={()=>{}} />);
+    await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button',{name:'展开 小组'}));
+    await screen.findByLabelText('节点 node-1 准备状态');
+    fireEvent.click(screen.getByRole('button',{name:'收起 小组'}));
+    fireEvent.click(screen.getByRole('button',{name:'展开 下一组'}));
+    await screen.findByLabelText('节点 node-4 准备状态');
+    // The current frame fits, but an earlier animation is still targeting the old position.
+    flowProbe.getViewport.mockReturnValue({x:608,y:32,zoom:.85});
+    flowProbe.setViewport.mockClear();
+    await waitFor(()=>expect(screen.queryByLabelText('节点 node-1 准备状态')).not.toBeInTheDocument());
+    await waitFor(()=>expect(flowProbe.setViewport).toHaveBeenCalledWith({x:608,y:32,zoom:.85},{duration:320}));
+  });
   it('keeps the selected node centered when its group wraps after a width change',async()=>{
     let resized!:ResizeObserverCallback;
     vi.stubGlobal('ResizeObserver',class {constructor(callback:ResizeObserverCallback){resized=callback;}observe(){}disconnect(){}});

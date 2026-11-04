@@ -428,7 +428,8 @@ export default function SkillTreeCanvas({
       pendingGroupFocus.current=null;
       const current=flow.getViewport();
       const next=getGroupViewport(canvasSize(),{...group.position,width:group.width,height:group.height},current);
-      if(next!==current)void flow.setViewport(next,{duration:window.matchMedia?.('(prefers-reduced-motion: reduce)').matches?0:320});
+      // Replace any animation targeting the previous layout, even if this frame already fits.
+      void flow.setViewport(next,{duration:window.matchMedia?.('(prefers-reduced-motion: reduce)').matches?0:320});
     });
     return ()=>window.cancelAnimationFrame(frame);
   },[groupLayout,isGraphVisible,canvasHeight]);
