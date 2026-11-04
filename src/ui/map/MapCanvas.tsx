@@ -378,10 +378,13 @@ export default function SkillTreeCanvas({
 
   const orderedEntryId = useMemo(() => {
     if (snapshot.tree.generation_version !== 2) return undefined;
-    const dependentIds = new Set(snapshot.edges.filter(edge => edge.edge_type === 'prerequisite').map(edge => edge.target_node_id));
+    const prerequisiteEdges = snapshot.edges.filter(edge => edge.edge_type === 'prerequisite');
+    const dependentIds = new Set(prerequisiteEdges.map(edge => edge.target_node_id));
+    const prerequisiteSources = new Set(prerequisiteEdges.map(edge => edge.source_node_id));
     const visibleDependentIds = new Set((groupLayout?.edges??snapshot.edges).filter(edge=>edge.edge_type==='prerequisite').map(edge=>edge.target_node_id));
     const rootDisplays = snapshot.nodes.filter(node => !dependentIds.has(node.id))
-      .sort((first, second) => first.order_in_level - second.order_in_level)
+      .sort((first, second) => first.order_in_level - second.order_in_level
+        || Number(prerequisiteSources.has(second.id)) - Number(prerequisiteSources.has(first.id)))
       .map(root=>generatedNodes.find(node=>node.id===root.id)?.id
         ?? groupLayout?.groups.find(group=>group.group.node_ids.includes(root.id))?.id);
     return rootDisplays.find(id=>id&&!visibleDependentIds.has(id))??rootDisplays[0];

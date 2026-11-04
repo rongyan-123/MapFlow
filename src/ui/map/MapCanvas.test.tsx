@@ -170,6 +170,29 @@ describe('SkillTreeCanvas', () => {
     await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());
     expect(flowProbe.fitView.mock.calls[0][0].nodes).toEqual([{id:'node-1'}]);
   });
+  it.each([true,false])('breaks tied root order using a real prerequisite path, regardless of readback order (%s)',async(parallelFirst)=>{
+    const camera={...snapshot.nodes[0],title:'手机相机基础',depth_level:0,order_in_level:0};
+    const etiquette={...camera,id:'etiquette',title:'拍摄伦理'};
+    const focusing={...camera,id:'focusing',title:'对焦操作',depth_level:1};
+    const roots=parallelFirst?[etiquette,camera]:[camera,etiquette];
+    render(<SkillTreeCanvas snapshot={{...snapshot,tree:{...snapshot.tree,generation_version:2,total_nodes:3},
+      nodes:[...roots,focusing],current_node_id:null,
+      edges:[{id:'camera-focusing',source_node_id:camera.id,target_node_id:focusing.id,edge_type:'prerequisite',label:null}]}}
+      displayMode="personal" layoutMode="relationship" selectedNodeId={null} isGraphVisible onSelectNode={()=>{}} />);
+    await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());
+    expect(flowProbe.fitView.mock.calls[0][0].nodes).toEqual([{id:camera.id}]);
+  });
+  it('preserves an explicitly earlier standalone entry over another root with prerequisites',async()=>{
+    const first={...snapshot.nodes[0],id:'first',depth_level:0,order_in_level:0};
+    const foundation={...first,id:'foundation',order_in_level:1};
+    const following={...first,id:'following',depth_level:1};
+    render(<SkillTreeCanvas snapshot={{...snapshot,tree:{...snapshot.tree,generation_version:2,total_nodes:3},
+      nodes:[foundation,following,first],current_node_id:null,
+      edges:[{id:'foundation-following',source_node_id:foundation.id,target_node_id:following.id,edge_type:'prerequisite',label:null}]}}
+      displayMode="personal" layoutMode="relationship" selectedNodeId={null} isGraphVisible onSelectNode={()=>{}} />);
+    await waitFor(()=>expect(flowProbe.fitView).toHaveBeenCalled());
+    expect(flowProbe.fitView.mock.calls[0][0].nodes).toEqual([{id:first.id}]);
+  });
   const grouped:LearningTreeSnapshot={...snapshot,tree:{...snapshot.tree,generation_version:2,total_nodes:3},current_node_id:null,
     nodes:[...snapshot.nodes,{...snapshot.nodes[0],id:'node-2'},{...snapshot.nodes[0],id:'node-3'}],
     learning_groups:[{group_id:'test-group',title:'小组',node_ids:['node-1','node-2']}],
