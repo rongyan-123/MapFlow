@@ -1,20 +1,22 @@
 # 当前生产发布
 
-现场切换时间：**2026-10-30 10:01:00（北京时间）**。已修复旧图requires关系不参与分层、导致大量后期节点落到首排的问题，并让旧关系提示占用独立空间。用户截图验收发现问题后完成只读复现、红绿测试、真实图对照和正式发布；原学习计划与连线功能保留。
+现场切换时间：**2026-11-05 00:19:58（北京时间）**。已修复直接打开或刷新全局助手时，四用途模型设置缺少样式、出现原生灰色按钮的问题。现有折叠布局保留，样式由模型设置组件自己加载。此前旧关系布局修复和学习计划功能保留，新树生成及断线恢复开发分支未纳入本次发布。
 
 | 内容 | 生产冻结值 |
 | --- | --- |
-| 前端产品提交 | 44c8e2bc57a6e2b6935a6917cc39e0c4f6210606，400静态文件 |
+| 前端产品提交 | 1d4bab436857280fe0e90b5259f2a74158f277a9，401静态文件 |
 | 后端产品提交 | 9ce434b7b4f24c15f7617c622b07b8cdfd48cafa，本轮未变 |
 | Worker源码提交 | 742c0e7c1fcad6b3af9c0d4803eca05ef30845c6，1516完整文件逐项未变 |
 | 技能树引擎 | 00b97c01fff6fa4fa4b4832d37cea8853b0e5c49 |
-| 当前镜像ID | sha256:c9cc5ad6da9c961b5d5ea0b2f70c485a33eb5fb204e347f1146b1ca5299f0f1c |
-| 上一完整镜像 | sha256:dd7f948fefe44863eab55d72d054b55cd766e7ccceb1eb953ec63c3d8c3e901f |
+| 当前镜像ID | sha256:890813b2b071ef36cfb9a74f1b67c977648552b9fc89129349319ed26c81eb92 |
+| 上一完整镜像 | sha256:c9cc5ad6da9c961b5d5ea0b2f70c485a33eb5fb204e347f1146b1ca5299f0f1c |
 | 数据库 | 原PostgreSQL与schema67保持，本轮无迁移/生产恢复覆盖 |
 | 英语世界 | 继续关闭，业务接口404 |
-| 详细记录 | [本轮布局修复](research/2026-10-30-map-legacy-layout-deployment.md)、[连线整合](research/2026-10-30-learning-plan-lines-deployment.md)、[学习计划首次发布](research/2026-10-30-learning-plan-deployment.md) |
+| 详细记录 | [本轮模型设置修复](research/2026-11-05-model-settings-style-deployment.md)、[旧图布局修复](research/2026-10-30-map-legacy-layout-deployment.md)、[连线整合](research/2026-10-30-learning-plan-lines-deployment.md)、[学习计划首次发布](research/2026-10-30-learning-plan-deployment.md) |
 
 ## 修复与兼容范围
+
+模型设置的 `.mf-scene-model-*` 样式原先依赖地图页面懒加载，直接打开助手没有加载该文件。现将现有样式迁到组件自己的 `ModelSettings.css` 并直接导入，同时移除地图样式里会覆盖它的旧规则；只改3个前端文件。四用途配置、资金通路、模型选择、参数和API均未修改。
 
 普通图和按块图共用布局关系投影：先保留全部明确prerequisite，再按稳定顺序加入不会成环的旧requires方向；成环的旧线仍可见并保留待审阅信息，不用它强排层级。真正的前置环及下游保持异常区域，不通过支撑关系传播到正常节点。该投影仅供布局，可开始状态和计划仍只读取明确前置；节点、关系、ID、进度、学习位置和数据库没有改写。
 
@@ -24,22 +26,23 @@
 
 ## 验证与数据保留
 
-布局业务修改四轮先红后绿；前端115测试文件867通过、1文件/1测试原有跳过，类型/构建和diff检查通过。最终镜像后台Chrome45项布局/连线/提示避让检查、29项学习功能检查及170节点历史图前后对照通过，五宽双主题截图实际查看。首次候选的125项既有接口与77项学习功能回归通过；最终候选只追加2行CSS，前后源码归档逐文件核对仅overview.css变化，后端/Worker完全一致，最终镜像API烟雾和浏览器验证重新执行。
+本轮前端完整测试867通过、1项原有跳过，类型/构建和diff检查通过；纯样式修复使用实际浏览器旧版红、新版绿验证。候选本机44项检查通过；Linux实际新旧镜像、电脑/手机及亮暗主题共8组32项对照检查通过。隔离库125项既有接口、77项学习功能及8项发布保护测试通过。截图实际查看。旧图布局的历史测试和样本结果见其原发布记录，未当作本轮重跑。
 
-维护窗复核无活动工作，最新备份独立还原134张表摘要一致，生产业务数据、原数据库身份、schema67及12条资金证据保持，未充值/核销/免单或主动扣费。公网35项HTTP、11资源哈希和43项实际浏览器检查通过。没有生产测试登录、进度写入或付费模型调用。后端历史Windows IPv6测试限制见首次学习计划发布记录，本轮未改后端。
+维护窗复核无活动工作，最新备份独立还原134张表摘要一致，生产业务数据、原数据库身份、schema67及12条资金证据保持，未充值/核销/免单或主动扣费。公网36项HTTP、12资源哈希和44项浏览器检查通过。公网浏览器读取实际生产静态文件，但将全部API转发到隔离测试后端；没有生产测试登录、业务写入或付费模型调用，不代表正式用户账号端到端验收。后端历史Windows IPv6测试限制见首次学习计划发布记录，本轮未改后端。
 
 ## 运维与回退
 
-当前app：cabc2ae16b639c7d9b47ece2b866d9487daffdc07c839d42532a979a1fe0f2dc；知识服务：8a3a5f4cc462b3a9ae5466077137f2645bd844e3e1b2fa20d8fd697b0037de8f，共享当前app网络。原PostgreSQL：d57bb0d28f216a4048849e182a90eafd61c25dae5da0352f186a4592f710b19a。后端/Node/Worker、知识镜像、挂载、环境、安全/资源/日志/重启策略及Caddy配置和隧道均保留。
+当前app：683cf4c02a6782aa2bfed8fc18f82642d4cf34136bd39b85a74b3e4d7ad18a09；知识服务：6892d2eba815d6b97180f636bd39af20f1eae42a5feefa6929591919a07d3039，共享当前app网络。原PostgreSQL：d57bb0d28f216a4048849e182a90eafd61c25dae5da0352f186a4592f710b19a。后端/Node/Worker、知识镜像、挂载、环境、安全/资源/日志/重启策略及Caddy配置和隧道均保留。
 
-上一完整容器对停止保留为 `mapflow-laptop-app-before-map-legacy-layout-20261030` / `mapflow-laptop-knowledge-before-map-legacy-layout-20261030`。当前恢复入口见宿主OPERATIONS首段及 `/opt/mapflow-laptop-migration-20261006/releases/20261030-map-legacy-layout/recover.py`：要求身份、迁移校验、无活动和原资金证据一致，使用相同后端/Worker/schema67，只回退前端，保留数据库新数据。生产未执行回退，不使用更早发布的恢复脚本。
+上一完整容器对停止保留为 `mapflow-laptop-app-before-model-settings-css-20261104` / `mapflow-laptop-knowledge-before-model-settings-css-20261104`。当前恢复入口见宿主OPERATIONS首段及 `/opt/mapflow-laptop-migration-20261006/releases/20261104-model-settings-css/restore_previous_frontend.py`：要求身份、迁移校验、无活动和原资金证据一致，使用相同后端/Worker/schema67，只回退前端，保留数据库新数据。生产未执行回退，不使用更早发布的恢复脚本。
 
-仍按先停知识服务、重启app并等readiness、再启知识服务的顺序操作。本轮验收容器/本机代理与隧道停止，源码、备份、镜像和证据保留，其他会话的分支、目录和62417预览不动。
+仍按先停知识服务、重启app并等readiness、再启知识服务的顺序操作。本轮专用验收容器、代理与隧道停止，源码、备份、镜像和证据保留；用户正在验收的本机新树预览及其他会话保持。
 
 ## 最近发布
 
 | 日期 | 内容 | 记录 |
 | --- | --- | --- |
+| 2026-11-05 | 修复助手冷启动时模型设置样式缺失 | [发布](research/2026-11-05-model-settings-style-deployment.md) |
 | 2026-10-30 | 修复旧关系被忽略导致的超长首排及顶部提示遮挡 | [发布](research/2026-10-30-map-legacy-layout-deployment.md) |
 | 2026-10-30 | 学习计划版整合默认主连线、分散出口与就近绕行 | [发布](research/2026-10-30-learning-plan-lines-deployment.md) |
 | 2026-10-30 | 知识总览、持久学习位置、AI学习计划与四用途模型设置 | [发布](research/2026-10-30-learning-plan-deployment.md) |
