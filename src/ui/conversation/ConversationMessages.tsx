@@ -9,11 +9,11 @@ import SafeMarkdown from '../SafeMarkdown';
 import { CharacterAvatar } from './CharacterPresentation';
 import AgentMapResults from './AgentMapResults';
 type State=ReturnType<typeof useConversationExecution>;
-const toolNames:Record<string,string>={read_canvas:'读取画布',apply_canvas_patch:'绘图',read_skill_tree:'读取地图概览',read_tree_overview:'读取地图概览',find_tree_nodes:'查找知识点',read_tree_node:'读取节点资料',read_node_relations:'读取节点关系',web_search:'搜索资料',personal_tree_mutation:'修改地图',map_draft_begin:'规划学习地图',map_draft_apply:'整理学习地图',map_draft_publish:'保存学习地图'};
+const toolNames:Record<string,string>={read_canvas:'读取画布',apply_canvas_patch:'绘图',read_skill_tree:'读取地图概览',read_tree_overview:'读取地图概览',find_tree_nodes:'查找知识点',read_tree_node:'读取节点资料',read_node_relations:'读取节点关系',web_search:'搜索资料',personal_tree_mutation:'修改地图',map_draft_begin:'规划学习地图',map_draft_apply:'整理学习地图',map_draft_publish:'保存学习地图',map_stream_recovery:'继续生成原地图'};
 export function ProcessInfo({events,live=false}:{events:GenerationProcessEvent[];live?:boolean}){
   const reasoning=events.flatMap(event=>event.type==='reasoning'?[event.text]:[]).join('');const tools=events.filter((event):event is Extract<GenerationProcessEvent,{type:'tool'}>=>event.type==='tool');const latest=tools[tools.length-1];
   if(!reasoning&&!latest)return null;
-  return <div className="mf-process-info">{reasoning&&<details><summary>思考过程</summary><pre>{reasoning}</pre></details>}{latest&&<p role="status">{live&&latest.state==='started'?'正在':''}{toolNames[latest.name]??'执行工具'}{latest.state==='completed'?' · 已完成':latest.state==='failed'?' · 未完成':''}</p>}{!live&&tools.length>2&&<details><summary>工具过程</summary><ol>{tools.map((tool,index)=><li key={index}>{toolNames[tool.name]??'工具'} · {tool.state==='completed'?'完成':tool.state==='failed'?'失败':'开始'}</li>)}</ol></details>}</div>;
+  return <div className="mf-process-info">{reasoning&&<details><summary>思考过程</summary><pre>{reasoning}</pre></details>}{latest&&<p role="status">{live&&latest.name==='map_stream_recovery'&&latest.state==='started'?'连接中断，正在重新连接并继续原地图…':`${live&&latest.state==='started'?'正在':''}${toolNames[latest.name]??'执行工具'}${latest.state==='completed'?' · 已完成':latest.state==='failed'?' · 未完成':''}`}</p>}{!live&&tools.length>2&&<details><summary>工具过程</summary><ol>{tools.map((tool,index)=><li key={index}>{toolNames[tool.name]??'工具'} · {tool.state==='completed'?'完成':tool.state==='failed'?'失败':'开始'}</li>)}</ol></details>}</div>;
 }
 function UsageSummary({completion}:{completion:AgentCompletion}){
   const pending=['pending_evidence','pending_posting'].includes(completion.settlement.status);
