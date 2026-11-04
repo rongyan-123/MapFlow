@@ -9,6 +9,7 @@ import {describePublicError} from '../../lib/publicErrors';
 import {ReferencePrices,ReferencePriceNote} from '../models/ReferencePrices';
 import {Button} from '../Button';
 import ByokForm from './ByokForm';
+import './ModelSettings.css';
 import type {TavernModelSelection} from '../../domains/conversations/types';
 interface Props{accountId:string;csrfToken:string;onWallet:()=>void;locked?:boolean;initialPurpose?:ModelPurpose;onDone?:()=>void}
 export default function ModelSettings(props:Props){
