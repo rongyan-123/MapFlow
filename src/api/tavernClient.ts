@@ -56,10 +56,19 @@ export function parseTeachingCanvas(value: unknown): import('../domains/conversa
   return value as unknown as import('../domains/conversations/types').TeachingCanvasState;
 }
 export async function testModelConnection(apiKey: string, baseUrl: string, csrfToken: string, signal?: AbortSignal): Promise<{ ok: boolean; models: string[]; message: string }> {
-  const result = await readJson(await request(`${ROOT}/model-access/test`, {
+  const response = await request(`${ROOT}/model-access/test`, {
     method: 'POST', headers: mutationHeaders(csrfToken, true), credentials: 'same-origin',
     body: JSON.stringify({ apiKey, baseUrl }), signal,
-  }));
+  }).catch((failure: unknown) => {
+    // This endpoint reports this code when resolving the user-supplied API domain.
+    if (failure instanceof TavernApiError && failure.code === 'server.network_unavailable') {
+      throw new TavernApiError(failure.status, failure.code,
+        '无法解析你填写的 API 域名，请检查接口地址是否正确，或稍后重试。',
+        failure.traceId, failure.generationFailed);
+    }
+    throw failure;
+  });
+  const result = await readJson(response);
   if (!isRecord(result) || typeof result.ok !== 'boolean' || typeof result.message !== 'string'
     || !Array.isArray(result.models) || result.models.length > 1000
     || !result.models.every(model => typeof model === 'string' && model.trim() && model.length <= 256)) throw invalidResponse();

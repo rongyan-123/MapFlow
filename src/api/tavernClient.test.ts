@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createConversation, deleteCharacter, deleteConversation, fetchCharacters, fetchConversation, fetchConversations, fetchTurns, generateStream, importCharacter, mutateGraph, updateConversationProfile, updateTreeConnection, switchConversationCharacter, updateGenerationSettings,parseTeachingCanvas } from './tavernClient';
+import { createConversation, deleteCharacter, deleteConversation, fetchCharacters, fetchConversation, fetchConversations, fetchTurns, generateStream, importCharacter, mutateGraph, updateConversationProfile, updateTreeConnection, switchConversationCharacter, updateGenerationSettings,parseTeachingCanvas,testModelConnection } from './tavernClient';
 import { character, completion, conversation, detail, sseResponse, turn } from '../test/conversations';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -39,6 +39,19 @@ it('reads durable native completions only when bound to this conversation and an
 });
 
 describe('Tavern HTTP contract', () => {
+  it('explains a BYOK connection-test DNS failure while retaining diagnostics and other request messages', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Response(JSON.stringify({ error: {
+      code: 'server.network_unavailable', message: 'private-host private-test-key', traceId: 'dns-test-request',
+    } }), { status: 503 })));
+    await expect(testModelConnection('private-test-key', 'https://models.example.com/v1', 'csrf')).rejects.toMatchObject({
+      status: 503, code: 'server.network_unavailable', traceId: 'dns-test-request', generationFailed: false,
+      message: '无法解析你填写的 API 域名，请检查接口地址是否正确，或稍后重试。',
+    });
+    await expect(fetchCharacters()).rejects.toMatchObject({
+      status: 503, code: 'server.network_unavailable', traceId: 'dns-test-request',
+      message: '服务器网络异常，请稍后重试。',
+    });
+  });
   it('reads a saved canvas above the former aggregate shape cap without accepting malformed elements',()=>{
     const canvas={revision:12,enabled:true,elements:Array.from({length:600},(_,id)=>({id:`shape-${id}`,type:'rectangle'}))};
     expect(parseTeachingCanvas(canvas).elements).toHaveLength(600);
