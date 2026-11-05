@@ -16,7 +16,10 @@ export default defineConfig({
       key: readFileSync(devKeyFile), cert: readFileSync(devCertificateFile),
     } : undefined,
     proxy: {
-      '/api': process.env.MAPFLOW_API_TARGET ?? 'http://127.0.0.1:3000',
+      '/api': {
+        target: process.env.MAPFLOW_API_TARGET ?? 'http://127.0.0.1:3000',
+        changeOrigin: false,
+      },
     },
   },
   test: {
