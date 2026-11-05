@@ -55,6 +55,66 @@ class WorkspaceEntryTests(unittest.TestCase):
         self.git(self.repo, 'switch', '--quiet', '-c', 'codex/unfinished')
         self.assert_rejected('wrong_branch')
 
+    def test_development_mode_accepts_a_branch_from_main_in_the_same_directory(self):
+        original_head = self.git(self.repo, 'rev-parse', 'HEAD')
+        self.git(self.repo, 'switch', '--quiet', '-c', 'codex/local-polish')
+        completed = subprocess.run([sys.executable, str(SCRIPT), '--repo', str(self.repo), '--development', '--json'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8')
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        report = json.loads(completed.stdout)
+        self.assertTrue(report['ok'])
+        self.assertEqual(report['workspaces'][0]['branch'], 'codex/local-polish')
+        self.assertEqual(original_head, self.git(self.repo, 'rev-parse', 'HEAD'))
+
+    def test_development_branch_must_include_current_local_main_even_before_push(self):
+        self.git(self.repo, 'switch', '--quiet', '-c', 'codex/old-baseline')
+        self.git(self.repo, 'switch', '--quiet', 'main')
+        (self.repo / 'content.txt').write_text('verified local main integration\n', encoding='utf-8')
+        self.git(self.repo, 'add', 'content.txt')
+        self.git(self.repo, 'commit', '--quiet', '-m', 'integrate local main without publishing')
+        self.git(self.repo, 'switch', '--quiet', 'codex/old-baseline')
+        completed = subprocess.run([sys.executable, str(SCRIPT), '--repo', str(self.repo), '--development', '--json'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8')
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        report = json.loads(completed.stdout)
+        self.assertIn('behind_local_main', [issue['code'] for issue in report['workspaces'][0]['issues']])
+
+    def test_development_mode_reports_and_preserves_in_progress_edits(self):
+        self.git(self.repo, 'switch', '--quiet', '-c', 'codex/local-polish')
+        (self.repo / 'content.txt').write_text('manual edit in progress\n', encoding='utf-8')
+        self.git(self.repo, 'add', 'content.txt')
+        (self.repo / 'notes.txt').write_text('unsaved feature file\n', encoding='utf-8')
+        original_status = self.git(self.repo, 'status', '--porcelain=v1')
+        original_index = hashlib.sha256((self.repo / '.git/index').read_bytes()).hexdigest()
+        completed = subprocess.run([sys.executable, str(SCRIPT), '--repo', str(self.repo), '--development', '--json'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8')
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        workspace = json.loads(completed.stdout)['workspaces'][0]
+        self.assertEqual(workspace['trackedChangeCount'], 1)
+        self.assertEqual(workspace['untrackedFileCount'], 1)
+        self.assertEqual({warning['code'] for warning in workspace['warnings']}, {'tracked_changes', 'untracked_files'})
+        self.assertEqual(original_status, self.git(self.repo, 'status', '--porcelain=v1'))
+        self.assertEqual(original_index, hashlib.sha256((self.repo / '.git/index').read_bytes()).hexdigest())
+
+    def test_development_mode_still_rejects_detached_head_and_unapproved_branch_names(self):
+        for branch in ('experiment', None):
+            if branch:
+                self.git(self.repo, 'switch', '--quiet', '-c', branch)
+            else:
+                self.git(self.repo, 'switch', '--detach', '--quiet')
+            completed = subprocess.run([sys.executable, str(SCRIPT), '--repo', str(self.repo), '--development', '--json'],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8')
+            self.assertEqual(completed.returncode, 1, completed.stderr)
+            self.assertIn('wrong_branch', [issue['code'] for issue in json.loads(completed.stdout)['workspaces'][0]['issues']])
+
+    def test_development_mode_requires_a_local_main_reference(self):
+        self.git(self.repo, 'switch', '--quiet', '-c', 'codex/local-polish')
+        self.git(self.repo, 'update-ref', '-d', 'refs/heads/main')
+        completed = subprocess.run([sys.executable, str(SCRIPT), '--repo', str(self.repo), '--development', '--json'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding='utf-8')
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        self.assertIn('missing_local_main', [issue['code'] for issue in json.loads(completed.stdout)['workspaces'][0]['issues']])
+
     def test_main_behind_origin_is_rejected(self):
         old = self.git(self.repo, 'rev-parse', 'HEAD').decode().strip()
         (self.repo / 'content.txt').write_text('new published version\n', encoding='utf-8')

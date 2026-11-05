@@ -18,9 +18,9 @@ def read_git(root, *arguments):
         env=dict(os.environ, GIT_OPTIONAL_LOCKS='0', GIT_TERMINAL_PROMPT='0', GCM_INTERACTIVE='Never'))
 
 
-def inspect_workspace(location, expected_repository=None):
+def inspect_workspace(location, expected_repository=None, development=False):
     root = Path(location).resolve()
-    workspace_report = {'path': str(root), 'issues': []}
+    workspace_report = {'path': str(root), 'issues': [], 'warnings': []}
 
     def issue(code, message):
         workspace_report['issues'].append({'code': code, 'message': message})
@@ -50,13 +50,26 @@ def inspect_workspace(location, expected_repository=None):
                 issue('wrong_repository', 'origin 与固定入口登记的产品仓库不一致。')
         branch = read_git(root, 'symbolic-ref', '--short', '-q', 'HEAD')
         workspace_report['branch'] = branch.stdout.strip() if branch.returncode == 0 else 'DETACHED'
-        if workspace_report['branch'] != 'main':
-            issue('wrong_branch', '固定入口应位于 main；请先保存开发工作，再恢复主目录。')
+        if workspace_report['branch'] != 'main' and not (development and workspace_report['branch'].startswith('codex/')):
+            issue('wrong_branch', '入口应位于 main；开发模式也允许从 main 建立的 codex/ 分支。')
         head = read_git(root, 'rev-parse', '--verify', 'HEAD')
         if head.returncode:
             issue('missing_head', '工作区没有可读取的提交。')
             return workspace_report
         workspace_report['head'] = head.stdout.strip()
+        if development:
+            local_main = read_git(root, 'rev-parse', '--verify', 'refs/heads/main')
+            if local_main.returncode:
+                issue('missing_local_main', '缺少本地 main，无法确认日常开发基线。')
+            else:
+                workspace_report['localMain'] = local_main.stdout.strip()
+                counts = read_git(root, 'rev-list', '--left-right', '--count', 'HEAD...refs/heads/main')
+                if counts.returncode:
+                    issue('cannot_compare_main', '无法核对当前分支与本地 main。')
+                else:
+                    workspace_report['aheadMain'], workspace_report['behindMain'] = map(int, counts.stdout.split())
+                    if workspace_report['behindMain']:
+                        issue('behind_local_main', '当前分支缺少本地 main 的提交；保留已有改动后再更新基线。')
         tracking = read_git(root, 'rev-parse', '--verify', 'refs/remotes/origin/main')
         if tracking.returncode:
             issue('missing_origin_main', '缺少 origin/main；请先 git fetch origin。')
@@ -91,10 +104,11 @@ def inspect_workspace(location, expected_repository=None):
                         cursor += 1
             workspace_report['trackedChangeCount'] = tracked
             workspace_report['untrackedFileCount'] = untracked
+            changes = workspace_report['warnings'] if development else workspace_report['issues']
             if tracked:
-                issue('tracked_changes', '固定入口有暂存或未暂存改动；请将功能工作保存在独立工作区。')
+                changes.append({'code': 'tracked_changes', 'message': '有暂存或未暂存改动；保留当前工作，验收前核对并保存。'})
             if untracked:
-                issue('untracked_files', '固定入口有未跟踪文件；先确认其用途，保存工作或明确本地资料的忽略规则。')
+                changes.append({'code': 'untracked_files', 'message': '有未跟踪文件；确认用途并保留，不能自动清理。'})
         if tracking.returncode == 0:
             remote = read_git(root, 'ls-remote', '--exit-code', 'origin', 'refs/heads/main')
             if remote.returncode or not remote.stdout.strip():
@@ -113,10 +127,11 @@ def main():
     parser.add_argument('--repo', action='append', help='指定完整仓库根目录；可重复。默认检查两个固定 MapFlow 入口。')
     parser.add_argument('--expected-repository', help='核对 origin 的 owner/repository；默认固定目录使用已登记仓库。')
     parser.add_argument('--json', action='store_true', help='输出结构化检查结果。')
+    parser.add_argument('--development', action='store_true', help='检查固定目录中的日常开发分支；只读检查，不切分支。')
     arguments = parser.parse_args()
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
-    workspaces = [inspect_workspace(location, arguments.expected_repository) for location in arguments.repo or DEFAULT_ROOTS]
+    workspaces = [inspect_workspace(location, arguments.expected_repository, arguments.development) for location in arguments.repo or DEFAULT_ROOTS]
     report = {'ok': all(not workspace['issues'] for workspace in workspaces), 'workspaces': workspaces}
     if arguments.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -127,6 +142,8 @@ def main():
                 print(f"  {workspace.get('branch')} {workspace['head'][:12]}；落后 origin/main {workspace.get('behindOrigin', '?')} 个提交")
             for issue in workspace['issues']:
                 print(f"  {issue['message']}")
+            for warning in workspace['warnings']:
+                print(f"  提示：{warning['message']}")
     return 0 if report['ok'] else 1
 
 

@@ -12,7 +12,7 @@ MapFlow 是技能树学习平台，线上入口为 [xxian.fun](https://xxian.fun
 | mapflow-server | D:/mapflow-server | Rust 后端、DSH Worker、知识检索与部署 |
 | skill-tree-engine | D:/skill-tree-engine | 生成引擎与共享运行契约 |
 
-固定目录保持最新整合 main。先读 [AGENTS.md](AGENTS.md)，运行 `python D:/MapFlow-publish/scripts/workspace_entry.py`，再在独立 codex/ 分支和 worktree 开发；优先复用空闲工作区。详见[工作区规则](docs/workflow/workspace-entry.md)。已有 Codex 会话及关联目录保留。
+固定目录是日常开发入口，以最新本地 main 为基线，在同一目录建立/切换 codex/ 分支。先读 [AGENTS.md](AGENTS.md)，运行 `python D:/MapFlow-publish/scripts/workspace_entry.py --development`；确有并行隔离需要时再使用 worktree。详见[工作区规则](docs/workflow/workspace-entry.md)和[本机开发启动](docs/workflow/local-main-development.md)。已有会话和旧目录原位保留。
 
 ## 当前产品
 

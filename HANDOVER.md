@@ -1,19 +1,19 @@
 # MapFlow 新会话交接
 
-维护日期：2026-10-19。本文只说明当前入口，不再叠加旧发布正文。具体版本集中在 [current-release.md](docs/current-release.md)，历史验收从[文档目录](docs/README.md)查找。
+维护日期：2026-11-05。本文说明日常入口；本机开发见[固定目录与启动](docs/workflow/local-main-development.md)，生产身份仍以 [current-release.md](docs/current-release.md)为准。本机 main 合入不表示已经推送或部署。
 
 ## 开始顺序
 
-1. 阅读当前仓库 AGENTS.md，运行 `python D:/MapFlow-publish/scripts/workspace_entry.py`。
+1. 阅读当前仓库 AGENTS.md，日常运行 `python D:/MapFlow-publish/scripts/workspace_entry.py --development`；合入收尾再用不加参数的严格检查。
 2. 前端以 D:/MapFlow-publish、后端以 D:/mapflow-server、引擎以 D:/skill-tree-engine 的最新 main 为准。引擎依赖以 Cargo.toml 固定 SHA 为准。
 3. 读取[领域用语](CONTEXT.md)、当前源码和任务相关合同；旧目录名字不能证明代码最新。
-4. 从最新 main 建立独立 codex/ 分支并复用适合的空闲 worktree。先确认范围，再按 TDD 实施业务逻辑。
+4. 默认在上述固定目录内从最新本地 main 建立 codex/ 分支；仅在确有并行需要时使用额外 worktree。先确认范围，再按 TDD 实施业务逻辑。当前已封板，只做现有功能修复、文案、适配和体验微调。
 
 ## 产品边界
 
 全局助手是平台客服、规划和学习指导智能体；知识点教学在学习区完成。私人角色不包含平台助手。学习与酒馆共用聊天核心，但会话、草稿、学习资料权限和资金通路不能混用。
 
-英语世界文本版已于 2026-10-19 按用户要求撤下：生产入口恢复旧界面，功能开关 false，接口返回 404。代码与独立本地测试环境保留；未经用户明确确认，不再上线。用户反馈随机题材入口缺失、进度长期 0%、生成失败仍扣积分；此次失败与费用已保留原始证据，用户明确不需要积分补偿。数据库继续保留 schema65，不能启动旧 schema63 后端或覆盖新数据。实现合同及实际范围见[公共合同](docs/contracts/english-world-v1.md)、[本地验收](docs/implementation/2026-10-18-english-world-local-acceptance.md)、[发布与撤回](docs/research/2026-10-19-english-world-deployment.md)。
+英语世界文本版已于 2026-10-19 按用户要求撤下：生产入口恢复旧界面，功能开关 false，接口返回 404。代码与独立本地测试环境保留；未经用户明确确认，不再上线。用户反馈随机题材入口缺失、进度长期 0%、生成失败仍扣积分；此次失败与费用已保留原始证据，用户明确不需要积分补偿。当时数据库为 schema65；当前本机与生产数据库版本须分别核对，不能启动更老后端或用旧备份覆盖新数据。实现合同及实际范围见[公共合同](docs/contracts/english-world-v1.md)、[本地验收](docs/implementation/2026-10-18-english-world-local-acceptance.md)、[发布与撤回](docs/research/2026-10-19-english-world-deployment.md)。
 
 学习区默认展开画布并请求绘图授权；用户本次访问中关闭后保留选择。酒馆保留画布功能，默认收起。新学习会话默认值及教学角色画布指导已随本轮新核心部署，真实创建与重放在隔离副本验证。
 

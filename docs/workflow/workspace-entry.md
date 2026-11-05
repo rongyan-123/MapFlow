@@ -1,33 +1,36 @@
-# 固定主目录与开发工作区
+# 固定开发目录与分支
 
-本机前端入口为 `D:/MapFlow-publish`，后端入口为 `D:/mapflow-server`，引擎为 `D:/skill-tree-engine`。前后端固定目录保持最新整合 `main`；功能开发使用独立 worktree。
+本机前端入口为 `D:/MapFlow-publish`，后端入口为 `D:/mapflow-server`，引擎为 `D:/skill-tree-engine`。用户于2026-11-05确认：日常使用固定目录，在同一目录从最新本地 main 建立 codex/ 分支，不因每次微调新增目录。main 是整合基线，可能包含尚未推送的已确认提交。
 
 ## 开始前检查
 
 ```powershell
-python D:/MapFlow-publish/scripts/workspace_entry.py
+python D:/MapFlow-publish/scripts/workspace_entry.py --development
 ```
 
-退出码 0 表示两个固定入口均属于登记的产品仓库、位于 main、包含本地 origin/main、远端 main 与跟踪记录一致，且没有暂存、未暂存或未跟踪的产品改动。退出码 1 会列出需处理的原因；远端不可用或检查超时也不宣称入口为最新。
+开发模式退出码0表示固定入口属于登记产品仓库、处于main或codex/分支、包含当前本地main与origin/main，且远端main与跟踪记录一致。编辑中的已跟踪/未跟踪文件只报告数量与提示并原样保留，不因此要求新建目录。错误仓库、detached HEAD、缺少本地main、旧分支或远端核对失败仍返回1。检查通过不等于工作区干净。
+
+合入收尾不加 `--development`，执行严格检查：两个固定入口必须在main、包含最新已确认远端main且产品工作区干净。纯本地后续提交允许存在，不能把“未推送”误报为基线错误。
 
 可输出 JSON，或检查其他机器的完整仓库根目录：
 
 ```powershell
-python scripts/workspace_entry.py --json
-python scripts/workspace_entry.py --repo E:/MapFlow --expected-repository rongyan-123/MapFlow
+python scripts/workspace_entry.py --development --json
+python scripts/workspace_entry.py --development --repo D:/MapFlow-publish --expected-repository rongyan-123/MapFlow
 ```
 
 检查器只读，不自动 fetch、改分支、写索引、覆盖工作或删除文件。远端已有新提交时，先 `git fetch origin`，再保存本地工作并核对差距。已包含远端 main 的本地后续提交允许存在，JSON 结果会显示 ahead/behind；是否推送单独按任务授权处理。
 
-## 独立开发
+## 同一目录开发
 
-先确认固定主目录检查通过，再从其 main 创建明确任务名的工作区；已有空闲开发工作区可以复用。
+先保存当前工作、核对本地与远端main，再在固定目录创建明确任务名的分支。已有未保存编辑或其他会话正在使用的分支不能被擅自切换。用户明确要求直接在main修改时按其要求执行，TDD及验证规则保持。
 
 ```powershell
-git -C D:/MapFlow-publish worktree add -b codex/example-task D:/MapFlow-worktrees/example-task main
+git -C D:/MapFlow-publish switch main
+git -C D:/MapFlow-publish switch -c codex/example-polish
 ```
 
-在新工作区完成任务的计划、TDD 与验证。固定主目录保持可供其他 AI 读取的整合版本。工作区之间共享 Git 对象及引用，各自检出的分支和工作文件独立；合并 main 不会让其他功能分支自动更新。
+在同一目录完成计划、TDD、验证与提交，确认后合回main。只有确实需要并行隔离时才另用worktree，优先复用已有目录。已有旧目录与会话保留；合并main不会使其他工作区自动更新，也不自动允许清理它们。本地启动方式见[main开发与启动](local-main-development.md)。
 
 ## 收尾与更新固定入口
 
