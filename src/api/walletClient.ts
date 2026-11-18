@@ -41,12 +41,16 @@ export interface LedgerEntry {
 export interface WalletAccount { accountId: string; username: string; playerId: string; status: string; balanceMicros: number }
 export interface WalletAdjustment { requestId: string; amountFen: number; note: string; password: string }
 export interface Wallet { balanceMicros: number; currency: 'CNY'; supportContact: string; qqGroup?: string; channels: Channel[]; topups: Topup[]; ledger: LedgerEntry[] }
-export interface UpstreamBalance { status: 'available' | 'exhausted' | 'unavailable' | 'disabled'; availableBalanceUsd: string | null; checkedAt: string }
+export interface UpstreamBalance { status: 'available' | 'partial' | 'exhausted' | 'unavailable' | 'disabled'; availableBalanceUsd: string | null; checkedAt: string; accountCount?: number; availableAccountCount?: number; unavailableAccountCount?: number }
 export async function readUpstreamBalance(): Promise<UpstreamBalance> {
   const balance = asRecord(await request('/api/admin/model-balance', { ...get, signal: AbortSignal.timeout(10_000) }));
-  if (!balance || !['available', 'exhausted', 'unavailable', 'disabled'].includes(String(balance.status))
+  if (!balance || !['available', 'partial', 'exhausted', 'unavailable', 'disabled'].includes(String(balance.status))
     || !(balance.availableBalanceUsd === null || typeof balance.availableBalanceUsd === 'string' && /^-?\d+(?:\.\d+)?$/u.test(balance.availableBalanceUsd))
     || typeof balance.checkedAt !== 'string' || !Number.isFinite(Date.parse(balance.checkedAt))) return invalid();
+  for (const field of ['accountCount', 'availableAccountCount', 'unavailableAccountCount']) {
+    if (balance[field] !== undefined && (!Number.isSafeInteger(balance[field]) || Number(balance[field]) < 0)) return invalid();
+  }
+  if (balance.status === 'partial' && (balance.accountCount === undefined || !Number(balance.unavailableAccountCount))) return invalid();
   return balance as unknown as UpstreamBalance;
 }
 export async function readCommunitySettings(): Promise<{ qqGroup: string }> {

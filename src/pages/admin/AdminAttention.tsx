@@ -20,7 +20,9 @@ export default function AdminAttention({ accountId, csrfToken }: { accountId: st
   const page = settlements.data;
   return <div className="mf-stack mf-admin-attention">
     {balance && balance.status !== 'disabled' && <p role={balance.status === 'exhausted' ? 'alert' : 'status'} className="mf-status">
-      {balance.status === 'exhausted' ? '上游账号余额已耗尽，请补充余额。' : balance.status === 'unavailable' ? '暂时无法检测上游余额，将自动重试。' : `上游可用余额：$${balance.availableBalanceUsd} USD · 每 90 秒检查`}
+      {balance.status === 'exhausted' ? '上游账号余额已耗尽，请补充余额。' : balance.status === 'unavailable' ? '暂时无法检测上游余额，将自动重试。' : `${balance.accountCount === undefined ? '上游可用余额' : '上游账号池可用余额'}：$${balance.availableBalanceUsd} USD · 每 90 秒检查`}
+      {balance.accountCount !== undefined && <span> · 共 {balance.accountCount} 个账号，{balance.availableAccountCount ?? 0} 个已确认有余额</span>}
+      {balance.status === 'partial' && <span> · {balance.unavailableAccountCount} 个账号未能查询，以上不是完整合计，将自动重试。</span>}
     </p>}
     <QueryStatus error={upstream.error} retry={() => void upstream.refetch()} />
     <QueryStatus error={settlements.error} retry={() => void settlements.refetch()} />

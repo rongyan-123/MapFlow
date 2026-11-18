@@ -4,6 +4,17 @@ import { afterEach, expect, it, vi } from 'vitest';
 import AdminAttention from './AdminAttention';
 
 afterEach(() => vi.unstubAllGlobals());
+
+it.each(['available', 'partial'])('shows the pool USD subtotal and explicitly identifies missing accounts (%s)', async status => {
+  vi.stubGlobal('fetch', async (path: string) => Response.json(path.endsWith('/model-balance')
+    ? { status, availableBalanceUsd: '2.818170', checkedAt: '2026-11-18T12:00:00Z', accountCount: 2, availableAccountCount: status === 'partial' ? 1 : 2, unavailableAccountCount: status === 'partial' ? 1 : 0 }
+    : { pending: [], nextBefore: null, totalCount: 0 }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><AdminAttention accountId="admin" csrfToken="csrf-fixture" /></QueryClientProvider>);
+  expect(await screen.findByText(/上游账号池.*\$2\.818170 USD/u)).toBeVisible();
+  expect(screen.getByText(/2 个账号/u)).toBeVisible();
+  if (status === 'partial') expect(screen.getByText(/1 个账号未能查询.*不是完整合计/u)).toBeVisible();
+});
 const executionId = '01a14370-3646-7603-a29c-69dcc8bc6e49';
 const record = {
   executionId, accountId: '01a13d99-c669-7892-a45b-24b9ef2337a4', conversationId: '11111111-1111-4111-8111-111111111111',
