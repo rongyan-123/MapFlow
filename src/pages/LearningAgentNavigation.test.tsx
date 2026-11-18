@@ -1,3 +1,4 @@
+import {roleEntry,openRoleLibrary,roleRecord,chooseRole} from '../test/roleLibrary';
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -140,15 +141,15 @@ it('opens the learning map before a conversation exists without starting an exec
 it('lists every library role in learning chat, including a role with no conversations', async () => {
   mountLearning();
   await screen.findByText('逻辑向导的学习记录');
-  const selector = within(screen.getByRole('complementary')).getByRole('combobox');
-  expect(within(selector).getByRole('option', { name: '逻辑向导' })).toHaveValue(agentA.characterId);
-  expect(within(selector).getByRole('option', { name: '阅读伙伴' })).toHaveValue(agentB.characterId);
+  const selector = roleEntry();
+  expect(roleRecord('逻辑向导')).toBeInTheDocument();
+  expect(roleRecord('阅读伙伴')).toBeInTheDocument();
 });
 
 it('opens the selected learning role own conversation without replacing another conversation role', async () => {
   const view = mountLearning([storyA, storyB]);
   await screen.findByText('逻辑向导的学习记录');
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   await screen.findByText('阅读伙伴的学习记录');
   expect(screen.queryByText('逻辑向导的学习记录')).not.toBeInTheDocument();
   expect(view.requests.filter(request => request.options?.method === 'PATCH' || request.options?.method === 'POST')).toEqual([]);
@@ -157,7 +158,7 @@ it('opens the selected learning role own conversation without replacing another 
 it('creates an unused library role in the current learning area without copying the previous role persona or history', async () => {
   const view = mountLearning();
   await screen.findByText('逻辑向导的学习记录');
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   await screen.findByRole('heading', { name: '阅读伙伴' });
   expect(screen.queryByText('逻辑向导的学习记录')).not.toBeInTheDocument();
   const writes = view.requests.filter(request => request.options?.method === 'POST');
@@ -166,7 +167,7 @@ it('creates an unused library role in the current learning area without copying 
   expect(JSON.parse(String(writes[0].options?.body))).toMatchObject({ characterId: agentB.characterId, userName: '小明' });
   expect(JSON.parse(String(writes[0].options?.body))).not.toHaveProperty('persona');
   expect(JSON.parse(String(writes[0].options?.body))).not.toHaveProperty('vocabulary');
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentA.characterId } });
+  await chooseRole(agentA.card.name);
   await screen.findByText('逻辑向导的学习记录');
 });
 
@@ -174,11 +175,11 @@ it('keeps each learning role unsent draft when switching away and back', async (
   mountLearning([storyA, storyB]);
   await screen.findByText('逻辑向导的学习记录');
   fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: '逻辑草稿' } });
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   await screen.findByText('阅读伙伴的学习记录');
   expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('');
   fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: '阅读草稿' } });
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentA.characterId } });
+  await chooseRole(agentA.card.name);
   await screen.findByText('逻辑向导的学习记录');
   expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('逻辑草稿');
 });
@@ -188,10 +189,10 @@ it('returns to the learning role last selected conversation rather than its newe
   mountLearning([storyA, older, storyB]);
   await screen.findByText('逻辑向导的学习记录');
   fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: /^更早的逻辑练习/ }));
-  await waitFor(() => expect(within(screen.getByRole('complementary')).getByRole('combobox')).not.toBeDisabled());
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentB.characterId } });
+  await waitFor(() => expect(roleEntry()).not.toBeDisabled());
+  await chooseRole(agentB.card.name);
   await screen.findByText('阅读伙伴的学习记录');
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentA.characterId } });
+  await chooseRole(agentA.card.name);
   await screen.findByText('逻辑向导的学习记录');
   expect(within(screen.getByRole('complementary')).getByRole('button', { name: /^更早的逻辑练习/ })).toHaveAttribute('aria-current', 'true');
 });
@@ -202,25 +203,27 @@ it('does not replay another role pending creation when selecting an unused role'
   localStorage.setItem(pendingKey, JSON.stringify({ characterId: agentA.characterId, clientRequestId: requestId, userName: '小明' }));
   const view = mountLearning();
   await screen.findByText('逻辑向导的学习记录');
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentB.characterId } });
-  await screen.findByText('另一个角色的新建请求待确认，请先切回该角色重试新建。');
+  await chooseRole(agentB.card.name);
+  await screen.findAllByText('另一个角色的新建请求待确认，请先切回该角色重试新建。');
+  fireEvent.click(screen.getByRole('button', { name: '关闭' }));
   expect(screen.getByText('逻辑向导的学习记录')).toBeVisible();
   expect(view.requests.filter(request => request.options?.method === 'POST')).toHaveLength(0);
   fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: '开始新对话' }));
   await waitFor(() => expect(localStorage.getItem(pendingKey)).toBeNull());
   expect(JSON.parse(String(view.requests.find(request => request.options?.method === 'POST')?.options?.body))).toMatchObject({ characterId: agentA.characterId, clientRequestId: requestId });
-  await waitFor(() => expect(within(screen.getByRole('complementary')).getByRole('combobox')).not.toBeDisabled());
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentB.characterId } });
+  await waitFor(() => expect(roleEntry()).not.toBeDisabled());
+  await chooseRole(agentB.card.name);
   await screen.findByRole('heading', { name: '阅读伙伴' });
 });
 
 it('lists the complete library and opens the first selected role after history was cleared', async () => {
   const view = mountLearning([]);
-  const selector = within(screen.getByRole('complementary')).getByRole('combobox');
-  await within(selector).findByRole('option', { name: '阅读伙伴' });
+  const selector = roleEntry();
+  await waitFor(() => expect(selector).toBeEnabled());
+  expect(roleRecord('阅读伙伴')).toBeInTheDocument();
   await waitFor(() => expect(selector).not.toBeDisabled());
   expect(view.requests.some(request => request.options?.method === 'POST')).toBe(false);
-  fireEvent.change(selector, { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   await screen.findByRole('heading', { name: '阅读伙伴' });
 });
 
@@ -232,9 +235,9 @@ it('offers every library role from the phone header and history drawer', async (
   expect(within(header).getByRole('option', { name: '阅读伙伴' })).toHaveValue(agentB.characterId);
   fireEvent.click(screen.getByRole('button', { name: '会话历史' }));
   const drawer = screen.getByRole('dialog', { name: '会话历史' });
-  const selector = within(drawer).getByRole('combobox', { name: '当前智能体' });
-  expect(within(selector).getAllByRole('option')).toHaveLength(3);
-  fireEvent.change(selector, { target: { value: agentB.characterId } });
+  const selector = roleEntry();
+  expect(within(openRoleLibrary()).getAllByRole('article')).toHaveLength(2);
+  await chooseRole(agentB.card.name);
   await screen.findByText('阅读伙伴的学习记录');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(screen.getByRole('combobox', { name: '切换智能体' })).toHaveValue(agentB.characterId);
@@ -243,17 +246,17 @@ it('offers every library role from the phone header and history drawer', async (
 it('makes a newly created learning role selectable immediately after leaving the editor', async () => {
   const view = mountLearning();
   await screen.findByText('逻辑向导的学习记录');
-  fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: '打开角色库' }));
+  fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: /^我的角色：/ }));
   fireEvent.click(screen.getByRole('button', { name: '创建角色卡' }));
   fireEvent.change(screen.getByRole('textbox', { name: '角色名称' }), { target: { value: '围棋伙伴' } });
   fireEvent.change(screen.getByRole('textbox', { name: '角色设定（提示词）' }), { target: { value: '陪我复盘围棋。' } });
   fireEvent.click(screen.getByRole('button', { name: '保存角色卡' }));
   await screen.findByRole('heading', { name: '围棋伙伴' });
   fireEvent.click(screen.getByRole('button', { name: '关闭' }));
-  const selector = within(screen.getByRole('complementary')).getByRole('combobox');
-  const added = within(selector).getByRole('option', { name: '围棋伙伴' });
+  const selector = roleEntry();
+  const added = roleRecord('围棋伙伴');
   expect(view.requests.filter(request => request.options?.method === 'POST' && request.path.endsWith('/conversations'))).toHaveLength(0);
-  fireEvent.change(selector, { target: { value: added.getAttribute('value') } });
+  fireEvent.click(within(added).getByRole('button', { name: '使用角色' }));
   await screen.findByRole('heading', { name: '围棋伙伴' });
 });
 
@@ -263,7 +266,7 @@ it.each(['tavern', 'another learning area'])('does not open the same role conver
   localStorage.setItem(`mapflow.tavern.selection.v1.${accountId}.tree.${areaId}.character.${agentB.characterId}`, outside.conversationId);
   const view = mountLearning([storyA, outside]);
   await screen.findByText('逻辑向导的学习记录');
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   await screen.findByRole('heading', { name: '阅读伙伴' });
   expect(view.requests.filter(request => request.path === `/api/me/tavern/conversations/${storyB.conversationId}`)).toHaveLength(0);
   expect(view.requests.filter(request => request.options?.method === 'POST')).toHaveLength(1);
@@ -273,14 +276,15 @@ it('keeps distinct library entries with the same name available even without con
   const duplicate = { ...agentB, card: { ...agentB.card, name: agentA.card.name } };
   mountLearning([storyA], [agentA, duplicate]);
   await screen.findByText('逻辑向导的学习记录');
-  const selector = within(screen.getByRole('complementary')).getByRole('combobox');
-  expect(within(selector).getAllByRole('option', { name: '逻辑向导' }).map(option => option.getAttribute('value'))).toEqual([agentA.characterId, agentB.characterId]);
+  const selector = roleEntry();
+  expect(within(openRoleLibrary()).getAllByRole('heading', { name: '逻辑向导' })).toHaveLength(2);
+  expect(within(openRoleLibrary()).getAllByRole('button', { name: /^(当前角色|使用角色)$/ })).toHaveLength(2);
 });
 
 it('does not allow role selection in an unavailable learning area', async () => {
   const view = mountLearning([storyA], [agentA, agentB], { available: false });
   await screen.findByText('逻辑向导的学习记录');
-  expect(within(screen.getByRole('complementary')).getByRole('combobox')).toBeDisabled();
+  expect(roleEntry()).toBeDisabled();
   expect(view.requests.filter(request => request.options?.method === 'POST')).toHaveLength(0);
 });
 
@@ -298,7 +302,8 @@ it('shows a role library loading failure and allows retry without creating a con
   await screen.findByText('逻辑向导的学习记录');
   const error = await screen.findByRole('alert');
   fireEvent.click(within(error).getByRole('button', { name: '重试' }));
-  await within(screen.getByRole('complementary')).findByRole('option', { name: '阅读伙伴' });
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(roleRecord('阅读伙伴')).toBeInTheDocument();
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(view.requests.filter(request => request.options?.method === 'POST')).toHaveLength(0);
 });

@@ -9,11 +9,11 @@ const node={id:'remembered-node',tree_id:tree.id,title:'记住的学习节点',d
 function open(address:string,loggedIn=false,ownedEntries:string[]=[]){vi.stubGlobal('ResizeObserver',class{observe(){}unobserve(){}disconnect(){}});window.history.replaceState({},'',address);const requests:Array<[string,RequestInit|undefined]>=[];vi.stubGlobal('fetch',async(path:string,options?:RequestInit)=>{requests.push([path,options]);if(path==='/api/auth/login')return new Response(JSON.stringify({account:{playerId:'a',username:'用户',status:'active',isAdmin:false},csrfToken:'csrf'}));if(path==='/api/me/tree-library')return new Response(JSON.stringify({entries:ownedEntries.map(library_entry_id=>({library_entry_id,tree,completed_nodes:0}))}));if(ownedEntries.some(id=>path==='/api/me/tree-library/'+id))return new Response(JSON.stringify({library_entry_id:path.split('/').pop(),view_mode:'personal',graph:{tree,nodes:[node],edges:[]},completed_node_ids:[]}));if(path==='/api/auth/me')return new Response(JSON.stringify({account:null}),{status:401});return new Response('{}',{status:503});});const client=new QueryClient({defaultOptions:{queries:{retry:false}}});client.setQueryData(SESSION_QUERY_KEY,loggedIn?{account:{playerId:'a',username:'用户',status:'active',isAdmin:false},csrfToken:'csrf'}:null);render(<QueryClientProvider client={client}><IdentityProvider><Application /></IdentityProvider></QueryClientProvider>);return requests;}
 it('holds a private deep link behind login without querying personal records',()=>{const requests=open('/maps?entry=private-map');expect(screen.getByRole('textbox',{name:'用户名'})).toBeVisible();expect(requests.some(([path])=>path==='/api/me/tree-library')).toBe(false);});
 it('retains the requested deep link after successful login',async()=>{open('/maps?entry=private-map');fireEvent.change(screen.getByRole('textbox',{name:'用户名'}),{target:{value:'用户'}});fireEvent.change(screen.getByLabelText('密码'),{target:{value:'secure-password'}});fireEvent.click(screen.getByRole('button',{name:'登录'}));await screen.findByText('当前账号找不到这张地图。',{}, {timeout:5000});expect(window.location.pathname+window.location.search).toBe('/maps?entry=private-map');});
-it('restores the account-owned legacy console view and responds to browser navigation',async()=>{localStorage.setItem('mapflow.console.state.v1.a',JSON.stringify({version:1,view:'personal'}));open('/console',true);await screen.findByText('第一张地图，从你的目标开始。');act(()=>{window.history.pushState({},'','/settings');window.dispatchEvent(new PopStateEvent('popstate'));});await screen.findByText('让学习，合你的习惯。');expect(screen.getAllByRole('banner')).toHaveLength(1);});
+it('restores the account-owned legacy console view and responds to browser navigation',async()=>{localStorage.setItem('mapflow.console.state.v1.a',JSON.stringify({version:1,view:'personal'}));open('/console',true);await screen.findByText('第一张地图，从你的目标开始。');act(()=>{window.history.pushState({},'','/settings');window.dispatchEvent(new PopStateEvent('popstate'));});await screen.findByRole('heading',{name:'账号与设置',level:2});expect(screen.getAllByRole('banner')).toHaveLength(1);});
 it('opens the anonymous marketing page',()=>{open('/?marketing=1');expect(screen.getByRole('heading',{level:1})).toBeVisible();expect(screen.getByRole('button',{name:/打开我的学习地图/})).toBeVisible();});
 it('opens the Skill and MCP installation guide directly from the workspace',async()=>{
   open('/settings',true);
-  await screen.findByText('让学习，合你的习惯。');
+  await screen.findByRole('heading',{name:'账号与设置',level:2});
   fireEvent.click(screen.getByRole('button',{name:'Skill / MCP 接入'}));
   const guide=within(screen.getByRole('dialog',{name:'Agent 接入教程'}));
   fireEvent.click(guide.getByRole('button',{name:'安装 Skill'}));
@@ -26,7 +26,7 @@ it('opens the Skill and MCP installation guide directly from the workspace',asyn
 it('reaches the same guide from the mobile workspace drawer and closes the drawer',async()=>{
   vi.stubGlobal('innerWidth',390);
   open('/settings',true);
-  await screen.findByText('让学习，合你的习惯。');
+  await screen.findByRole('heading',{name:'账号与设置',level:2});
   fireEvent.click(screen.getByRole('button',{name:'打开功能菜单'}));
   fireEvent.click(within(screen.getByRole('dialog',{name:'MapFlow'})).getByRole('button',{name:'Skill / MCP 接入'}));
   expect(screen.queryByRole('dialog',{name:'MapFlow'})).not.toBeInTheDocument();
@@ -50,31 +50,54 @@ it('does not restore another account legacy selection',async()=>{
 it('restores an owned learning area and preserves list entries through browser back and forward',async()=>{
   const area={areaId:'owned-area',libraryEntryId:'owned-area',title:'记住的学习区',available:true,createdAt:'2026-10-14T10:00:00Z'};
   window.history.replaceState({},'','/learning');localStorage.setItem('mapflow.learning.area.v1.a',area.areaId);
-  vi.stubGlobal('fetch',async(path:string)=>new Response(JSON.stringify(path.endsWith('/learning-areas')?{areas:[area]}:path==='/api/me/tree-library'?{entries:[]}:path.endsWith('/characters')?{characters:[]}:path.includes('/learning-areas/')?{conversations:[],bootstrapState:'cleared'}:{})));
+  vi.stubGlobal('fetch',async(path:string,options?:RequestInit)=>new Response(JSON.stringify(options?.method==='POST'&&path==='/api/me/learning-areas/owned-area'?area:path.endsWith('/learning-areas')?{areas:[area]}:path==='/api/me/tree-library'?{entries:[{library_entry_id:area.areaId,tree:{...tree,generation_version:2,title:area.title},completed_nodes:0,progress_percent:0}]}:path.endsWith('/characters')?{characters:[]}:path.includes('/learning-areas/')?{conversations:[],bootstrapState:'cleared'}:{})));
   const client=new QueryClient({defaultOptions:{queries:{retry:false}}});client.setQueryData(SESSION_QUERY_KEY,{account:{playerId:'a',username:'用户',status:'active',isAdmin:false},csrfToken:'csrf'});
   render(<QueryClientProvider client={client}><IdentityProvider><Application /></IdentityProvider></QueryClientProvider>);
-  await screen.findByRole('combobox',{name:'切换学习区'});await waitFor(()=>expect(window.location.pathname+window.location.search).toBe('/learning?area=owned-area'));
-  const back=screen.getByRole('button',{name:'返回学习区列表'});
+  await screen.findByText('记住的学习区');await waitFor(()=>expect(window.location.pathname+window.location.search).toBe('/learning?area=owned-area'));
+  const back=screen.getByRole('button',{name:'返回我的学习'});
   expect(screen.getByRole('heading',{level:1,name:'学习聊天'}).compareDocumentPosition(back)&Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
   fireEvent.click(back);
-  await screen.findByRole('button',{name:'进入学习区'});
-  expect(window.location.pathname+window.location.search).toBe('/learning');
+  await screen.findByRole('button',{name:'继续学习'});
+  expect(window.location.pathname+window.location.search).toBe('/maps');
   expect(screen.queryByRole('combobox',{name:'切换学习区'})).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'进入学习区'}));
-  await screen.findByRole('combobox',{name:'切换学习区'});
+  fireEvent.click(screen.getByRole('button',{name:'继续学习'}));
+  await screen.findByText('记住的学习区');
   expect(screen.getByRole('button',{name:'查看学习地图'})).toBeVisible();
   fireEvent.click(screen.getByRole('button',{name:'查看学习地图'}));
   expect(screen.getByRole('button',{name:'返回学习聊天'})).toBeVisible();
   const historyLength=window.history.length;
   act(()=>window.history.back());
-  await waitFor(()=>expect(window.location.pathname+window.location.search).toBe('/learning'));
-  await screen.findByRole('button',{name:'进入学习区'});
+  await waitFor(()=>expect(window.location.pathname+window.location.search).toBe('/maps'));
+  await screen.findByRole('button',{name:'继续学习'});
   act(()=>window.history.forward());
   await waitFor(()=>expect(window.location.pathname+window.location.search).toBe('/learning?area=owned-area'));
-  await screen.findByRole('combobox',{name:'切换学习区'});
+  await screen.findByText('记住的学习区');
   expect(screen.getByRole('button',{name:'返回学习聊天'})).toBeVisible();
   act(()=>window.history.back());
-  await waitFor(()=>expect(window.location.pathname+window.location.search).toBe('/learning'));
-  expect(await screen.findByRole('button',{name:'进入学习区'})).toBeVisible();
+  await waitFor(()=>expect(window.location.pathname+window.location.search).toBe('/maps'));
+  expect(await screen.findByRole('button',{name:'继续学习'})).toBeVisible();
   expect(window.history.length).toBe(historyLength);
+});
+
+it('presents one learning destination and routes support to full workspace pages',async()=>{
+  open('/settings',true);
+  await screen.findByRole('heading',{name:'账号与设置',level:2});
+  const nav=within(screen.getByRole('navigation',{name:'业务导航'}));
+  expect(nav.getAllByRole('link').map(link=>link.textContent)).toEqual(['首页','公共书库','我的学习','独立聊天']);
+  expect(nav.getByRole('link',{name:'我的学习'})).toHaveAttribute('href','/maps');
+  fireEvent.click(screen.getByRole('button',{name:'帮助与反馈'}));
+  await screen.findByRole('heading',{name:'帮助与反馈',level:1});
+  expect(window.location.pathname).toBe('/help');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole('complementary',{name:'全局导航'})).getByRole('button',{name:/消息/}));
+  await screen.findByRole('heading',{name:'消息',level:1});
+  expect(window.location.pathname).toBe('/messages');
+});
+
+it('opens the requested feedback after navigating from messages in the same workspace',async()=>{
+  open('/messages',true);
+  await screen.findByRole('heading',{name:'消息',level:1});
+  act(()=>{window.history.pushState({},'','/help?feedback=feedback-1');window.dispatchEvent(new PopStateEvent('popstate'));});
+  expect(await screen.findByRole('region',{name:'反馈详情'})).toBeVisible();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

@@ -1,3 +1,4 @@
+import {roleEntry,openRoleLibrary,roleRecord,chooseRole} from '../test/roleLibrary';
 import { QueryClient,QueryClientProvider } from '@tanstack/react-query';
 import { render,screen,fireEvent,waitFor,within } from '@testing-library/react';
 import { afterEach,expect,it,vi } from 'vitest';
@@ -53,21 +54,21 @@ it('keeps a real conversation draft through the five-section configuration dialo
 it('opens the role library from history without replacing the draft or stacking dialogs',async()=>{
   const requests=mount(true,false,'tavern');await screen.findByText('请用茶。');
   fireEvent.change(screen.getByRole('textbox',{name:'消息'}),{target:{value:'尚未发送的草稿'}});
-  fireEvent.click(within(screen.getByRole('complementary')).getByRole('button',{name:'打开角色库'}));
+  fireEvent.click(within(screen.getByRole('complementary')).getByRole('button',{name:/^我的角色：/}));
   expect(screen.getByRole('dialog',{name:'角色库'})).toBeVisible();
   expect(within(screen.getByRole('dialog',{name:'角色库'})).getByRole('button',{name:'导入角色卡'})).toBeVisible();
   fireEvent.click(screen.getByRole('button',{name:'关闭'}));
   expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue('尚未发送的草稿');
   fireEvent.click(screen.getByRole('button',{name:'配置'}));
   fireEvent.click(within(screen.getByRole('dialog',{name:'配置'})).getByRole('button',{name:'会话历史'}));
-  fireEvent.click(within(screen.getByRole('dialog',{name:'会话历史'})).getByRole('button',{name:'打开角色库'}));
+  fireEvent.click(within(screen.getByRole('dialog',{name:'会话历史'})).getByRole('button',{name:/^我的角色：/}));
   expect(screen.getAllByRole('dialog')).toHaveLength(1);
   expect(screen.getByRole('dialog',{name:'角色库'})).toBeVisible();
   expect(requests.every(([,options])=>!options?.method||options.method==='GET')).toBe(true);
 });
 it('exposes communities and opens the official catalog directly from the role library',async()=>{
   const requests=mount(true,false,'tavern');await screen.findByText('请用茶。');
-  fireEvent.click(within(screen.getByRole('complementary')).getByRole('button',{name:'打开角色库'}));
+  fireEvent.click(within(screen.getByRole('complementary')).getByRole('button',{name:/^我的角色：/}));
   const library=screen.getByRole('dialog',{name:'角色库'});
   expect(within(library).getByText('点击此处浏览角色卡社区')).toBeVisible();
   for(const name of ['类脑 · 中文酒馆社区','废墟之下的藏书室','Chub','AI Character Cards']){

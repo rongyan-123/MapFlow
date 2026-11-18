@@ -109,3 +109,13 @@ it('keeps retained map and canvas state when the visible purpose changes',()=>{
  expect(screen.getByLabelText('retained canvas note')).toHaveValue('unsaved drawing note');
  expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue('chat draft');
 });
+
+it('keeps learning tabs reachable on a phone while the map covers the chat',()=>{
+  vi.stubGlobal('innerWidth',390);
+  const note=vi.fn();
+  const view=render(<ConversationWorkspace scene="learning" title="学习" draft="草稿" onDraftChange={()=>{}} onSend={()=>{}} modelLabel="模型" onConfigure={()=>{}} onModelConfigure={()=>{}} onNew={()=>{}} onHistory={()=>{}} onCanvas={()=>{}} sidePaneKind="map" sidePane={<div>真实地图画布</div>} panelTabs={<div role="tablist"><button role="tab" onClick={note}>笔记</button></div>} />);
+  fireEvent.click(screen.getByRole('tab',{name:'笔记'}));
+  expect(note).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('textbox',{name:'消息'})).not.toBeInTheDocument();
+  view.unmount();vi.unstubAllGlobals();
+});

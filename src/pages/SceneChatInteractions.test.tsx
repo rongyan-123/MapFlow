@@ -119,8 +119,8 @@ it.each(['learning', 'tavern'] as const)('opens model selection directly from th
   fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: '保留这个草稿' } });
   // Select the visible composer chip, without relying on a new label to reproduce the existing route.
   fireEvent.click(screen.getByRole('button', { name: /所选模型 · 现金额度/ }));
-  const settings = within(screen.getByRole('dialog', { name: '配置' }));
-  expect(settings.getByRole('button', { name: '模型接入' })).toHaveAttribute('aria-selected', 'true');
+  const settings = within(screen.getByRole('dialog', { name: scene === 'learning' ? '学习聊天的模型' : '独立聊天的模型' }));
+  expect(settings.getByRole('group', { name: '使用方式' })).toBeVisible();
   expect(settings.getByRole('combobox', { name: '模型' })).toBeVisible();
   fireEvent.click(settings.getByRole('button', { name: '关闭' }));
   expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('保留这个草稿');

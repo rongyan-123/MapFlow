@@ -143,3 +143,11 @@ describe('NodeNoteDialog',()=>{
     expect(JSON.parse(String((fetchMock.mock.calls[1][1] as RequestInit).body))).toEqual({markdown:'精炼后的理解',expectedVersion:2});
   });
 });
+
+it('edits the same server note inline without opening a second window',async()=>{
+ const note={node_id:'n1',markdown:'已有笔记',has_note:true,version:2,updated_at:null};
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(note))));
+ render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><NodeNoteDialog embedded accountId="account-1" libraryEntryId="e1" nodeId="n1" nodeTitle="事务" csrfToken="csrf" onClose={vi.fn()} /></QueryClientProvider>);
+ expect(await screen.findByRole('textbox',{name:'Markdown 笔记'})).toHaveValue('已有笔记');
+ expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});

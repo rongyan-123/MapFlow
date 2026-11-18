@@ -1,3 +1,4 @@
+import {roleEntry,openRoleLibrary,roleRecord,chooseRole} from '../test/roleLibrary';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -59,14 +60,14 @@ function mountTavern(stories: Conversation[] = [storyA], creationControls: { bef
 it('lists every library agent even when it has never had a conversation', async () => {
   mountTavern();
   await screen.findByText('观星向导的独立记录');
-  const selector = within(screen.getByRole('complementary')).getByRole('combobox');
-  expect(within(selector).getByRole('option', { name: agentB.card.name })).toHaveValue(agentB.characterId);
+  const selector = roleEntry();
+  expect(roleRecord(agentB.card.name)).toBeInTheDocument();
 });
 
 it('opens the selected agent conversation without changing the previous conversation role', async () => {
   const { requests } = mountTavern([storyA, storyB]);
   await screen.findByText('观星向导的独立记录');
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   await screen.findByText('故事旅行家的独立记录');
   expect(screen.queryByText('观星向导的独立记录')).not.toBeInTheDocument();
   expect(within(screen.getByRole('complementary')).queryByRole('button', { name: /观星的第一段/ })).not.toBeInTheDocument();
@@ -76,7 +77,7 @@ it('opens the selected agent conversation without changing the previous conversa
 it('creates a first conversation for a new agent without copying the previous agent profile or messages', async () => {
   const { requests } = mountTavern();
   await screen.findByText('观星向导的独立记录');
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   await screen.findByText(agentB.card.firstMessage);
   expect(screen.queryByText('观星向导的独立记录')).not.toBeInTheDocument();
   const writes = requests.filter(request => request.options?.method && request.options.method !== 'GET');
@@ -91,9 +92,9 @@ it('returns to each agent last selected conversation when that agent has several
   await screen.findByText('观星向导的独立记录');
   fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: /^观星更早的一段/ }));
   await waitFor(() => expect(within(screen.getByRole('complementary')).getByRole('button', { name: /^观星更早的一段/ })).toHaveAttribute('aria-current', 'true'));
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   await screen.findByText('故事旅行家的独立记录');
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentA.characterId } });
+  await chooseRole(agentA.card.name);
   await screen.findByText('观星向导的独立记录');
   expect(within(screen.getByRole('complementary')).getByRole('button', { name: /^观星更早的一段/ })).toHaveAttribute('aria-current', 'true');
 });
@@ -102,11 +103,11 @@ it('keeps unsent drafts with their own conversation when switching between agent
   mountTavern([storyA, storyB]);
   await screen.findByText('观星向导的独立记录');
   fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: '只给观星向导的草稿' } });
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   await screen.findByText('故事旅行家的独立记录');
   expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('');
   fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: '只给旅行家的草稿' } });
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentA.characterId } });
+  await chooseRole(agentA.card.name);
   await screen.findByText('观星向导的独立记录');
   expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('只给观星向导的草稿');
 });
@@ -116,9 +117,9 @@ it('remembers an existing saved conversation from before agent-specific navigati
   localStorage.setItem('mapflow.tavern.selection.v1.player-1', storyA.conversationId);
   mountTavern([latest, storyA, storyB]);
   await screen.findByText('观星向导的独立记录');
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   await screen.findByText('故事旅行家的独立记录');
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentA.characterId } });
+  await chooseRole(agentA.card.name);
   await screen.findByText('观星向导的独立记录');
   expect(within(screen.getByRole('complementary')).getByRole('button', { name: /^观星的第一段/ })).toHaveAttribute('aria-current', 'true');
 });
@@ -132,9 +133,9 @@ it('combines the phone agent selector and history into one header button', async
   const entry = screen.getByRole('button', { name: '智能体与会话' });
   expect(entry).toHaveTextContent(agentA.card.name);
   fireEvent.click(entry);
-  const selector = within(screen.getByRole('dialog', { name: '会话历史' })).getByRole('combobox', { name: '当前智能体' });
-  expect(within(selector).getByRole('option', { name: agentB.card.name })).toHaveValue(agentB.characterId);
-  fireEvent.change(selector, { target: { value: agentB.characterId } });
+  const selector = roleEntry();
+  expect(roleRecord(agentB.card.name)).toBeInTheDocument();
+  await chooseRole(agentB.card.name);
   await screen.findByText('故事旅行家的独立记录');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: '智能体与会话' })).toHaveTextContent(agentB.card.name);
@@ -143,7 +144,7 @@ it('combines the phone agent selector and history into one header button', async
 it('makes a newly created character immediately available without returning to the library to use it', async () => {
   const { requests } = mountTavern();
   await screen.findByText('观星向导的独立记录');
-  fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: '打开角色库' }));
+  fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: /^我的角色：/ }));
   fireEvent.click(screen.getByRole('button', { name: '创建角色卡' }));
   fireEvent.change(screen.getByRole('textbox', { name: '角色名称' }), { target: { value: '围棋伙伴' } });
   fireEvent.change(screen.getByRole('textbox', { name: '角色设定（提示词）' }), { target: { value: '陪我复盘围棋。' } });
@@ -151,18 +152,18 @@ it('makes a newly created character immediately available without returning to t
   fireEvent.click(screen.getByRole('button', { name: '保存角色卡' }));
   await screen.findByRole('heading', { name: '围棋伙伴' });
   fireEvent.click(screen.getByRole('button', { name: '关闭' }));
-  const selector = within(screen.getByRole('complementary')).getByRole('combobox');
-  const added = within(selector).getByRole('option', { name: '围棋伙伴' });
+  const selector = roleEntry();
+  const added = roleRecord('围棋伙伴');
   expect(screen.getByText('观星向导的独立记录')).toBeVisible();
   expect(requests.filter(request => request.options?.method === 'POST' && request.path.endsWith('/conversations'))).toHaveLength(0);
-  fireEvent.change(selector, { target: { value: added.getAttribute('value') } });
+  fireEvent.click(within(added).getByRole('button', { name: '使用角色' }));
   await screen.findByText('今天下哪一手？');
 });
 
 it('creates additional conversations only for the currently selected agent', async () => {
   const { requests } = mountTavern([storyA, storyB]);
   await screen.findByText('观星向导的独立记录');
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   await screen.findByText('故事旅行家的独立记录');
   fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: '开始新对话' }));
   await screen.findByText(agentB.card.firstMessage);
@@ -200,11 +201,11 @@ it('locks the previous composer while opening a first agent conversation and doe
   const pending = new Promise<void>(resolve => { finishCreation = resolve; });
   const { requests } = mountTavern([storyA], { beforeCreation: () => pending });
   await screen.findByText('观星向导的独立记录');
-  const selector = within(screen.getByRole('complementary')).getByRole('combobox');
-  fireEvent.change(selector, { target: { value: agentB.characterId } });
+  const selector = roleEntry();
+  await chooseRole(agentB.card.name);
   expect(selector).toBeDisabled();
   const composerDisabled = (screen.getByRole('textbox', { name: '消息' }) as HTMLTextAreaElement).disabled;
-  fireEvent.change(selector, { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   expect(requests.filter(request => request.options?.method === 'POST' && request.path.endsWith('/conversations'))).toHaveLength(1);
   await act(async () => finishCreation());
   await screen.findByText(agentB.card.firstMessage);
@@ -215,7 +216,7 @@ it('keeps a failed first conversation selection in the role library and allows a
   let fail = true;
   mountTavern([storyA], { beforeCreation: async () => fail ? new Response('{}', { status: 503 }) : undefined });
   await screen.findByText('观星向导的独立记录');
-  fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: '打开角色库' }));
+  fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: /^我的角色：/ }));
   const library = screen.getByRole('dialog', { name: '角色库' });
   const agent = within(library).getByRole('heading', { name: agentB.card.name }).closest('article')!;
   fireEvent.click(within(agent).getByRole('button', { name: '使用角色' }));
@@ -230,16 +231,16 @@ it('keeps a failed first conversation selection in the role library and allows a
 it('makes an imported card selectable after closing the library without using its use-role button', async () => {
   mountTavern();
   await screen.findByText('观星向导的独立记录');
-  fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: '打开角色库' }));
+  fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: /^我的角色：/ }));
   fireEvent.click(screen.getByRole('button', { name: '导入角色卡' }));
   const file = new File([JSON.stringify({ name: '航海伙伴', description: '一起探索海洋。', first_mes: '船已起航。' })], 'sailor.json', { type: 'application/json' });
   fireEvent.change(screen.getByLabelText('选择角色卡'), { target: { files: [file] } });
   fireEvent.click(await screen.findByRole('button', { name: '确认导入' }));
   await screen.findByRole('dialog', { name: '角色库' });
   fireEvent.click(screen.getByRole('button', { name: '关闭' }));
-  const selector = within(screen.getByRole('complementary')).getByRole('combobox');
-  const imported = within(selector).getByRole('option', { name: '航海伙伴' });
-  fireEvent.change(selector, { target: { value: imported.getAttribute('value') } });
+  const selector = roleEntry();
+  const imported = roleRecord('航海伙伴');
+  fireEvent.click(within(imported).getByRole('button', { name: '使用角色' }));
   await screen.findByText('船已起航。');
 });
 
@@ -249,7 +250,7 @@ it('uses the same complete agent list in the phone history drawer and closes it 
   await screen.findByText('观星向导的独立记录');
   fireEvent.click(screen.getByRole('button', { name: '智能体与会话' }));
   const drawer = screen.getByRole('dialog', { name: '会话历史' });
-  fireEvent.change(within(drawer).getByRole('combobox', { name: '当前智能体' }), { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   await screen.findByText('故事旅行家的独立记录');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
@@ -258,7 +259,7 @@ it('does not open another scene conversation when that scene used the same chara
   const globalStory = { ...storyB, scene: 'management' as const };
   const { requests } = mountTavern([storyA, globalStory]);
   await screen.findByText('观星向导的独立记录');
-  fireEvent.change(within(screen.getByRole('complementary')).getByRole('combobox'), { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   await screen.findByText(agentB.card.firstMessage);
   expect(requests.some(request => request.path.endsWith('/' + globalStory.conversationId))).toBe(false);
   expect(requests.filter(request => request.options?.method === 'POST' && request.path === '/api/me/tavern/conversations')).toHaveLength(1);
@@ -266,11 +267,11 @@ it('does not open another scene conversation when that scene used the same chara
 
 it('opens the first explicitly selected agent with an empty draft after all conversations were cleared', async () => {
   const { requests } = mountTavern([]);
-  const selector = await screen.findByRole('combobox', { name: '当前智能体' });
+  const selector = await screen.findByRole('button', { name: /^我的角色：/ });
   await waitFor(() => expect(selector).toBeEnabled());
   fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: '还未选定角色的草稿' } });
   expect(requests.filter(request => request.options?.method === 'POST')).toHaveLength(0);
-  fireEvent.change(selector, { target: { value: agentB.characterId } });
+  await chooseRole(agentB.card.name);
   await screen.findByText(agentB.card.firstMessage);
   expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('');
 });
@@ -278,14 +279,14 @@ it('opens the first explicitly selected agent with an empty draft after all conv
 it('can open an unused available agent from a historical conversation whose character was deleted', async () => {
   mountTavern([storyA], { characters: [agentB] });
   await screen.findByText('观星向导的独立记录');
-  const selector = within(screen.getByRole('complementary')).getByRole('combobox');
-  fireEvent.change(selector, { target: { value: agentB.characterId } });
+  const selector = roleEntry();
+  await chooseRole(agentB.card.name);
   await screen.findByText(agentB.card.firstMessage);
 });
 
 it('asks for an agent instead of silently creating a conversation for the first library card', async () => {
   const { requests } = mountTavern([]);
-  await waitFor(() => expect(screen.getByRole('combobox', { name: '当前智能体' })).toBeEnabled());
+  await waitFor(() => expect(roleEntry()).toBeEnabled());
   fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: '开始新对话' }));
   const library = await screen.findByRole('dialog', { name: '角色库' });
   expect(within(library).queryByRole('button', { name: '当前角色' })).not.toBeInTheDocument();

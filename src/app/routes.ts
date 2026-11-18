@@ -1,4 +1,4 @@
-export type PageId = 'landing' | 'assistant' | 'library' | 'maps' | 'learning' | 'tavern' | 'english-world' | 'wallet' | 'models' | 'admin' | 'settings' | 'login' | 'register';
+export type PageId = 'landing' | 'assistant' | 'library' | 'maps' | 'learning' | 'tavern' | 'english-world' | 'wallet' | 'models' | 'admin' | 'settings' | 'login' | 'register' | 'help' | 'messages';
 export type EnglishWorldRoute =
   | { view: 'home' | 'words' | 'review' | 'not-found' }
   | { view: 'prepare'; taskId: string }
@@ -40,7 +40,7 @@ function englishWorldRoute(url: URL): EnglishWorldRoute {
   return { view: 'not-found' };
 }
 
-const pages = new Set<PageId>(['assistant','library','maps','learning','tavern','wallet','models','admin','settings','login','register']);
+const pages = new Set<PageId>(['assistant','library','maps','learning','tavern','wallet','models','admin','settings','login','register','help','messages']);
 
 export function resolveRoute(address: string, remembered?: LegacyView|LegacyConsoleState): ApplicationRoute {
   const url = new URL(address, window.location.origin);

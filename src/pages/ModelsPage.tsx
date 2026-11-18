@@ -1,3 +1,7 @@
+import {useSceneModels} from '../domains/models/SceneModelContext';
+import {modelPurposes,type ModelPurpose} from '../domains/models/scenePreferences';
+import ModelSettings,{modelPurposeTitles,modelPurposeDescriptions} from '../ui/conversation/ModelSettings';
+import {Dialog} from '../ui/Dialog';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {fetchAgentModelCatalogue} from '../api/agentExecutionClient';
@@ -7,7 +11,8 @@ import { describePublicError } from '../lib/publicErrors';
 import { PageHeader } from '../ui/PageHeader';
 import { Button } from '../ui/Button';
 
-export default function ModelsPage({accountId,onBack,onNavigateTavern,onNavigateWallet}:{accountId:string;onBack:()=>void;onNavigateTavern:()=>void;onNavigateWallet:()=>void}) {
+export default function ModelsPage({accountId,csrfToken,onBack,onNavigateTavern,onNavigateWallet}:{accountId:string;csrfToken?:string;onBack:()=>void;onNavigateTavern:()=>void;onNavigateWallet:()=>void}) {
+  const sceneModels=useSceneModels();const [editing,setEditing]=useState<ModelPurpose|null>(null);const [settingsBusy,setSettingsBusy]=useState(false);
   const catalog=useQuery({queryKey:['model-catalog','pricing'],queryFn:readModelPricing,retry:false,staleTime:60_000});
   const wallet=useQuery({queryKey:['me',accountId,'wallet'],queryFn:readWallet,retry:false,staleTime:30_000});
   const native=useQuery({queryKey:['me',accountId,'agent-models'],queryFn:({signal})=>fetchAgentModelCatalogue(signal),retry:false,staleTime:30_000});
@@ -16,7 +21,8 @@ export default function ModelsPage({accountId,onBack,onNavigateTavern,onNavigate
   const selected=models.find(model=>model.id===selectedId)??models[0];
   const cashAvailable=selected&&(native.data?native.data.cash.some(profile=>profile.modelId===selected.id):selected.availability==='wallet');
   return <><PageHeader title="模型与价格" actions={<Button onClick={onNavigateWallet} aria-label={wallet.data?`现金额度 ${formatAmountMicros(wallet.data.balanceMicros)}，前往充值`:'前往充值'}>{wallet.data?`${formatAmountMicros(wallet.data.balanceMicros)} 额度`:'我的额度'}</Button>} />
-    <div className="mf-content"><main className="mf-page"><div className="mf-page-heading"><div><h1>选择你的学习伙伴。</h1><p>{'查看模型、渠道参考价和参数。额度模型在助手的模型配置中选择，其他模型也可以使用自填 Key。'}</p></div><Button onClick={onNavigateTavern}>配置聊天模型</Button></div>
+    <div className="mf-content"><main className="mf-page"><div className="mf-page-heading"><div><h2>模型与价格</h2><p>{'查看模型、渠道参考价和参数。额度模型在助手的模型配置中选择，其他模型也可以使用自填 Key。'}</p></div></div>
+    {sceneModels&&csrfToken&&<section className="mf-scene-configurations" aria-label="按用途配置模型">{modelPurposes.map(purpose=>{const saved=sceneModels.entries[purpose]?.settings;const funding=saved?.funding;const label=funding==='cash'?native.data?.cash.find(profile=>profile.profileId===saved?.profileId)?.displayName??native.data?.defaultCash?.displayName:funding==='points'?native.data?.points?.displayName:saved?.model;return <article key={purpose} className="mf-card"><h2>{modelPurposeTitles[purpose]}</h2><p className="mf-muted mf-small">{modelPurposeDescriptions[purpose]}</p><strong>{sceneModels.ready?label||'尚未配置':'正在读取…'}</strong><small>{funding==='cash'?'使用余额':funding==='points'?'使用积分':funding==='byok'?'使用自己的 API':''}</small><Button aria-label={`设置${modelPurposeTitles[purpose]}`} onClick={()=>setEditing(purpose)}>修改设置</Button></article>;})}</section>}
     {catalog.isPending && <p role="status" className="mf-status">正在读取模型目录…</p>}
     {catalog.error && <div role="alert" className="mf-status mf-status--error">{describePublicError(catalog.error)} <Button onClick={()=>void catalog.refetch()}>重试</Button></div>}
     {catalog.data && <div className="mf-model-layout"><aside className="mf-card mf-model-list" aria-label="模型列表"><label className="mf-field">搜索模型<input value={search} onChange={event=>setSearch(event.target.value)} placeholder="模型名称或厂商" /></label><small className="mf-muted">{models.length} 个模型</small><ul>{models.map(model=><li key={model.id}><button type="button" aria-label={`选择模型 ${model.id}`} aria-pressed={selected?.id===model.id} className="mf-model-option" onClick={()=>setSelectedId(model.id)}><span>{model.displayName??model.id}</span><small>{model.provider}</small></button></li>)}</ul>{!models.length && <p className="mf-status">没有找到匹配的模型</p>}</aside>
@@ -26,5 +32,6 @@ export default function ModelsPage({accountId,onBack,onNavigateTavern,onNavigate
       <div className="mf-card"><div className="mf-section-title"><h2>模型参数</h2></div>{selected.settings.length ? <dl>{selected.settings.map(setting=><div className="mf-record" key={setting.name}><dt>{setting.name}</dt><dd className="mf-row mf-wrap">{setting.kind==='switch'?<span className="mf-pill">开 / 关</span>:setting.options.map(option=><span className="mf-pill" key={option}>{option}</span>)}</dd></div>)}</dl>:<p className="mf-muted">无额外参数</p>}</div>
     </> : <p className="mf-status">换个关键词，试试其他模型。</p>}</section></div>}
     <Button variant="quiet" onClick={onBack}>返回工作空间</Button></main></div>
+    {editing&&csrfToken&&<Dialog title={`${modelPurposeTitles[editing]}的模型`} className="mf-model-settings-card" dismissible={!settingsBusy} onClose={()=>setEditing(null)}><ModelSettings onBusyChange={setSettingsBusy} accountId={accountId} csrfToken={csrfToken} initialPurpose={editing} onWallet={onNavigateWallet} onDone={()=>setEditing(null)} /></Dialog>}
   </>;
 }

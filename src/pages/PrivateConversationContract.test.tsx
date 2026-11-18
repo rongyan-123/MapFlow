@@ -1,3 +1,4 @@
+import {roleEntry,openRoleLibrary,roleRecord,chooseRole} from '../test/roleLibrary';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -86,31 +87,31 @@ describe.each(['tavern', 'learning'] as const)('%s page shared conversation cont
     </ModelSelectionProvider></AgentModelProvider></IdentityProvider></QueryClientProvider>);
     return { requests, writes: () => requests.filter(request => request.options?.method === 'POST'), first };
   }
-  function selector() { return within(screen.getByRole('complementary')).getByRole('combobox', { name: '当前智能体' }); }
-  function choose(role: Character) { fireEvent.change(selector(), { target: { value: role.characterId } }); }
+  function selector() { return roleEntry(); }
+  async function choose(role: Character) { await chooseRole(role.card.name); }
   async function selected(role: Character) {
-    await waitFor(() => expect(selector()).toHaveValue(role.characterId));
+    await waitFor(() => expect(selector()).toHaveTextContent(role.card.name));
     await waitFor(() => expect(selector()).toBeEnabled());
   }
 
   it('shows the complete library even for a role without conversations', async () => {
     mount();
     await screen.findByText('逻辑伙伴的聊天内容');
-    expect(within(selector()).getByRole('option', { name: unusedRole.card.name })).toHaveValue(unusedRole.characterId);
+    expect(roleRecord(unusedRole.card.name)).toBeInTheDocument();
   });
 
   it('restores independent messages and drafts without changing either conversation role', async () => {
     const view = mount();
     await screen.findByText('逻辑伙伴的聊天内容');
     fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: '逻辑草稿' } });
-    choose(roleB);
+    await choose(roleB);
     await screen.findByText('阅读伙伴的聊天内容');
     expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('');
     fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: '阅读草稿' } });
-    choose(roleA);
+    await choose(roleA);
     await screen.findByText('逻辑伙伴的聊天内容');
     expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('逻辑草稿');
-    choose(roleB);
+    await choose(roleB);
     await screen.findByText('阅读伙伴的聊天内容');
     expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('阅读草稿');
     expect(view.writes()).toEqual([]);
@@ -120,7 +121,7 @@ describe.each(['tavern', 'learning'] as const)('%s page shared conversation cont
   it('creates an unused role in its own scene without copying another role profile', async () => {
     const view = mount();
     await screen.findByText('逻辑伙伴的聊天内容');
-    choose(unusedRole);
+    await choose(unusedRole);
     await selected(unusedRole);
     expect(screen.queryByText('逻辑伙伴的聊天内容')).not.toBeInTheDocument();
     expect(view.writes()).toHaveLength(1);
@@ -129,7 +130,7 @@ describe.each(['tavern', 'learning'] as const)('%s page shared conversation cont
     expect(input).toMatchObject({ characterId: unusedRole.characterId, userName: '小明' });
     expect(input).not.toHaveProperty('persona');
     expect(input).not.toHaveProperty('vocabulary');
-    choose(roleA);
+    await choose(roleA);
     await screen.findByText('逻辑伙伴的聊天内容');
   });
 
@@ -149,14 +150,14 @@ describe.each(['tavern', 'learning'] as const)('%s page shared conversation cont
   it('makes a created card immediately selectable after closing the library', async () => {
     const view = mount();
     await screen.findByText('逻辑伙伴的聊天内容');
-    fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: '打开角色库' }));
+    openRoleLibrary();
     fireEvent.click(screen.getByRole('button', { name: '创建角色卡' }));
     fireEvent.change(screen.getByRole('textbox', { name: '角色名称' }), { target: { value: '新增伙伴' } });
     fireEvent.change(screen.getByRole('textbox', { name: '角色设定（提示词）' }), { target: { value: '一起交流。' } });
     fireEvent.click(screen.getByRole('button', { name: '保存角色卡' }));
     await screen.findByRole('heading', { name: '新增伙伴' });
     fireEvent.click(screen.getByRole('button', { name: '关闭' }));
-    expect(within(selector()).getByRole('option', { name: '新增伙伴' })).toBeInTheDocument();
+    expect(roleRecord('新增伙伴')).toBeInTheDocument();
     expect(screen.getByText('逻辑伙伴的聊天内容')).toBeVisible();
     expect(view.writes().filter(request => request.path === collection)).toEqual([]);
   });
@@ -165,7 +166,7 @@ describe.each(['tavern', 'learning'] as const)('%s page shared conversation cont
     const view = mount({ cleared: true });
     await waitFor(() => expect(selector()).toBeEnabled());
     expect(view.writes()).toEqual([]);
-    choose(unusedRole);
+    await choose(unusedRole);
     await selected(unusedRole);
     expect(view.writes()).toHaveLength(1);
   });
@@ -174,19 +175,20 @@ describe.each(['tavern', 'learning'] as const)('%s page shared conversation cont
     const view = mount();
     await screen.findByText('逻辑伙伴的聊天内容');
     fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: '保留的草稿' } });
-    fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: '打开角色库' }));
+    openRoleLibrary();
     const record = screen.getByRole('heading', { name: unusedRole.card.name }).closest('article')!;
     fireEvent.click(within(record).getByRole('button', { name: '重命名' }));
     fireEvent.change(screen.getByRole('textbox', { name: '角色名称' }), { target: { value: '重命名伙伴' } });
     fireEvent.click(screen.getByRole('button', { name: '保存名称' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(within(selector()).getByRole('option', { name: '重命名伙伴' })).toHaveValue(unusedRole.characterId);
-    fireEvent.click(within(screen.getByRole('complementary')).getByRole('button', { name: '打开角色库' }));
+    expect(roleRecord('重命名伙伴')).toBeInTheDocument();
+    openRoleLibrary();
     const renamed = screen.getByRole('heading', { name: '重命名伙伴' }).closest('article')!;
     fireEvent.click(within(renamed).getByRole('button', { name: '删除角色' }));
     fireEvent.click(screen.getByRole('button', { name: '确认删除角色' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(within(selector()).queryByRole('option', { name: '重命名伙伴' })).not.toBeInTheDocument();
+    expect(within(openRoleLibrary()).queryByRole('heading', { name: '重命名伙伴' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }));
     expect(screen.getByText('逻辑伙伴的聊天内容')).toBeVisible();
     expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('保留的草稿');
     expect(view.requests.filter(request => request.options?.method === 'DELETE').map(request => request.path)).toEqual(['/api/me/tavern/characters/' + unusedRole.characterId]);
@@ -197,8 +199,11 @@ describe.each(['tavern', 'learning'] as const)('%s page shared conversation cont
     await screen.findByText('逻辑伙伴的聊天内容');
     fireEvent.change(screen.getByRole('textbox', { name: '消息' }), { target: { value: '配置之外的草稿' } });
     fireEvent.click(screen.getByTitle('选择模型'));
+    const modelCard = within(screen.getByRole('dialog', { name: scene === 'learning' ? '学习聊天的模型' : '独立聊天的模型' }));
+    expect(modelCard.getByRole('group', { name: '使用方式' })).toBeVisible();
+    fireEvent.click(modelCard.getByRole('button', { name: '关闭' }));
+    fireEvent.click(screen.getByRole('button', { name: '配置' }));
     const dialog = within(screen.getByRole('dialog', { name: '配置' }));
-    expect(dialog.getByRole('button', { name: '模型接入' })).toHaveAttribute('aria-selected', 'true');
     expect(dialog.queryByRole('textbox', { name: '用户称呼' })).not.toBeInTheDocument();
     fireEvent.click(dialog.getByRole('button', { name: '会话设定' }));
     expect(dialog.getByRole('textbox', { name: '用户称呼' })).toHaveValue('小明');
@@ -222,8 +227,8 @@ describe.each(['tavern', 'learning'] as const)('%s page shared conversation cont
     else expect(screen.getByRole('button', { name: '智能体与会话' })).toHaveTextContent(roleA.card.name);
     fireEvent.click(screen.getByRole('button', { name: scene === 'tavern' ? '智能体与会话' : '会话历史' }));
     const drawer = screen.getByRole('dialog', { name: '会话历史' });
-    expect(within(drawer).getByRole('option', { name: unusedRole.card.name })).toBeInTheDocument();
-    fireEvent.change(within(drawer).getByRole('combobox', { name: '当前智能体' }), { target: { value: roleB.characterId } });
+    expect(roleRecord(unusedRole.card.name)).toBeInTheDocument();
+    await chooseRole(roleB.card.name);
     await screen.findByText('阅读伙伴的聊天内容');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     if (scene === 'learning') expect(screen.getByRole('combobox', { name: '切换智能体' })).toHaveValue(roleB.characterId);

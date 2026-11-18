@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { StrictMode } from 'react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { Dialog } from './Dialog';
 
@@ -36,4 +37,29 @@ it('calls the supplied close action for Escape', () => {
   render(<Dialog title="地图预览" onClose={close}>地图</Dialog>);
   fireEvent.keyDown(document, { key: 'Escape' });
   expect(close).toHaveBeenCalledOnce();
+});
+
+it('opens a contextual card without blocking or dimming the workspace',()=>{
+ const background=document.createElement('button'); background.textContent='页面按钮'; document.body.append(background);background.focus();
+ const view=render(<Dialog title="设置" onClose={vi.fn()}>内容</Dialog>);
+ expect(screen.getByRole('dialog',{name:'设置'})).not.toHaveAttribute('aria-modal','true');
+ expect(background.inert).not.toBe(true);
+ expect(document.body.style.overflow).not.toBe('hidden');
+ view.unmount();background.remove();
+});
+
+it('does not create an exit copy during StrictMode setup or unset a selected radio',async()=>{
+  const animate=vi.fn(()=>({cancel:vi.fn(),finished:new Promise<void>(()=>{})}));
+  Object.defineProperty(HTMLElement.prototype,'animate',{configurable:true,value:animate});
+  try{
+    const view=render(<StrictMode><Dialog title="资金方式" onClose={()=>{}}><label>余额<input name="funding" type="radio" checked readOnly /></label></Dialog></StrictMode>);
+    await act(async()=>{});
+    expect(document.querySelector('.mf-floating-exit')).toBeNull();
+    expect(screen.getByRole('radio',{name:'余额'})).toBeChecked();
+    view.unmount();
+    await act(async()=>{});
+    const ghost=document.querySelector('.mf-floating-exit');
+    expect(ghost).not.toBeNull();
+    expect(ghost?.querySelector('[name="funding"]')).toBeNull();
+  }finally{delete (HTMLElement.prototype as {animate?:unknown}).animate;document.querySelectorAll('.mf-floating-exit').forEach(element=>element.remove());}
 });

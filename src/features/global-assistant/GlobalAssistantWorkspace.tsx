@@ -13,7 +13,7 @@ import {Button,IconButton} from '../../ui/Button';
 import {Icon} from '../../ui/Icon';
 import {Dialog} from '../../ui/Dialog';
 import {BrandMark} from '../../ui/BrandMark';
-import {WelcomeArtwork} from '../../ui/WelcomeArtwork';
+import {HomeLearningLinks} from '../../ui/HomeLearningLinks';
 import GlobalMessageMarkdown from './GlobalMessageMarkdown';
 import GlobalMessageBody from './GlobalMessageBody';
 import ModelSettings from '../../ui/conversation/ModelSettings';
@@ -80,14 +80,16 @@ export default function GlobalAssistantWorkspace({accountId,csrfToken,navigate}:
   const currentRequest:RequestIdentity|null=execution?.executionId&&execution.state?{executionId:execution.executionId,conversationId:timeline?.conversationId??'',state:execution.state,funding:execution.funding??'cash',modelId:execution.modelId??'',error:execution.error instanceof AgentApiError?{code:execution.error.code,message:execution.error.message,requestId:execution.executionId}:null}:null;
   const currentRequestNeedsAttention=currentRequest&&currentRequest.state!=='succeeded'&&(currentRequest.state==='awaiting_reconciliation'||currentRequest.state==='failed'||Boolean(execution?.error)||Boolean(execution?.rejectedGeneration));
   const renderCompletion=(completion:typeof completions[number])=><GlobalExecutionResult key={completion.executionId} completion={completion} accountId={accountId} csrfToken={csrfToken} navigate={navigate} />;
+  const welcome=!messages.length&&!active;
+  const composerArea=(<div className="mf-composer-area"><form className="mf-composer" onSubmit={event=>{event.preventDefault();void send();}}>
+      <textarea ref={composer} aria-label="消息" rows={1} placeholder="例如：我想学 Python，做一个整理文件的小工具" value={state.draft} onChange={event=>controller.setDraft(event.target.value)} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&window.innerWidth>=768){event.preventDefault();void send();}}} />
+      <div className="mf-composer-bottom"><button type="button" className="mf-model-chip" aria-label="打开模型设置" title={modelLabel} onClick={()=>{setCredentialTarget(null);setSettingsOpen(true);}}><Icon name="spark" /><span>{modelLabel}</span><Icon name="down" /></button><small className="mf-desktop-only">Enter 发送 · Shift+Enter 换行</small>{execution?.busy?<IconButton icon="stop" label="停止生成" className="mf-send" onClick={()=>stop()} />:<IconButton icon="arrow" label="发送" type="submit" className="mf-send" disabled={!canSend||!state.draft.trim()} />}</div>
+    </form><p className="mf-composer-note">AI 的建议可以参考，理解和判断属于你。</p></div>);
   return <section className="mf-global-assistant" data-composer-focused={focused}>
-    <PageHeader title="MapFlow 助手" context={<span className="mf-muted mf-small">网站使用 · 学习规划</span>} actions={<Button variant="quiet" onClick={()=>{setCredentialTarget(null);setSettingsOpen(true);}}><Icon name="settings" /><span>模型设置</span></Button>} />
+    <PageHeader title="首页" actions={<Button variant="quiet" onClick={()=>{setCredentialTarget(null);setSettingsOpen(true);}}><Icon name="settings" /><span>模型设置</span></Button>} />
     <div className="mf-global-scroll" ref={scroll} onScroll={()=>{const pane=scroll.current;if(pane){followLatest.current=pane.scrollHeight-pane.scrollTop-pane.clientHeight<100;if(pane.scrollTop<40&&(startIndex>0||timeline?.olderCursor)&&!state.loadingOlder&&!state.historyError)void loadOlder();}}}>
       <div className="mf-global-content">
-        <div className="mf-global-intro">
-          <WelcomeArtwork />
-          <div className="mf-global-intro-copy"><span className="mf-welcome-mark"><BrandMark /></span><p className="mf-eyebrow">MAPFLOW · 你的下一步</p><h2>把下一步，看清楚。</h2><p>网站怎么用，学习路线怎么规划。<br />从一个问题开始，一起找到方向。</p></div>
-        </div>
+        {welcome&&<><div className="mf-global-intro"><div className="mf-global-intro-copy"><span className="mf-welcome-mark"><BrandMark /></span><h2>今天，你想学什么？</h2><p>找一张地图，和 AI 一起学。你的进度、笔记和对话都在这里。</p></div></div>{composerArea}<HomeLearningLinks accountId={accountId} csrfToken={csrfToken} navigate={navigate} /></>}
         {state.loading&&<p role="status" className="mf-muted mf-small">正在读取最近消息…</p>}
         {Boolean(state.error)&&<p role="alert" className="mf-status mf-status--error">{describePublicError(state.error)} <Button onClick={()=>void controller.reload()}>重新读取最近消息</Button></p>}
         {Boolean(state.noticeError)&&!state.error&&<p role="alert" className="mf-status">{describePublicError(state.noticeError)}</p>}
@@ -110,13 +112,10 @@ export default function GlobalAssistantWorkspace({accountId,csrfToken,navigate}:
         {atLatest&&!state.guidesDismissed&&!active&&<section className="mf-global-questions" aria-label="问一问"><h2>问一问 <span>从这里开始</span></h2>{state.questions.map((question,index)=><button key={question.id} type="button" aria-label={question.text} onClick={()=>{controller.chooseQuestion(question.text);composer.current?.focus();}}><span className="mf-question-icon"><Icon name={(['book','map','learn'] as const)[index%3]} /></span><span className="mf-question-copy"><strong>{question.text}</strong><small>{['认识 MapFlow','找到使用方法','规划学习方向'][index%3]}</small></span><Icon name="right" /></button>)}</section>}
       </div>
     </div>
-    <div className="mf-composer-area"><form className="mf-composer" onSubmit={event=>{event.preventDefault();void send();}}>
-      <textarea ref={composer} aria-label="消息" rows={1} placeholder="问问网站用法，或说说学习目标…" value={state.draft} onChange={event=>controller.setDraft(event.target.value)} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&window.innerWidth>=768){event.preventDefault();void send();}}} />
-      <div className="mf-composer-bottom"><button type="button" className="mf-model-chip" aria-label="打开模型设置" title={modelLabel} onClick={()=>{setCredentialTarget(null);setSettingsOpen(true);}}><Icon name="spark" /><span>{modelLabel}</span><Icon name="down" /></button><small className="mf-desktop-only">Enter 发送 · Shift+Enter 换行</small>{execution?.busy?<IconButton icon="stop" label="停止生成" className="mf-send" onClick={()=>stop()} />:<IconButton icon="arrow" label="发送" type="submit" className="mf-send" disabled={!canSend||!state.draft.trim()} />}</div>
-    </form><p className="mf-composer-note">AI 的建议可以参考，理解和判断属于你。</p></div>
-    {settingsOpen&&<Dialog title="模型设置" onClose={()=>setSettingsOpen(false)} dismissible={!settingsBusy}><div className="mf-stack">
+    {!welcome&&composerArea}
+    {settingsOpen&&<Dialog title="首页助手的模型" className="mf-model-settings-card" onClose={()=>setSettingsOpen(false)} dismissible={!settingsBusy}><div className="mf-stack">
       <p className="mf-muted mf-small">模型选择用于下一次发送；原请求沿用已接受的模型和资金通路。</p>
-      <ModelSettings initialPurpose="management" accountId={accountId} csrfToken={csrfToken} onWallet={()=>navigate('/wallet')} />
+      <ModelSettings onBusyChange={setSettingsBusy} initialPurpose="management" accountId={accountId} csrfToken={csrfToken} onWallet={()=>navigate('/wallet')} />
       {(credentialTarget||execution?.state==='awaiting_reconciliation'&&execution?.control?.actions.canResume===true||execution?.controlAvailability==='unsupported'&&execution?.error instanceof AgentApiError&&execution.error.code==='credential_required'||!execution?.executionId&&execution?.pendingGeneration&&execution.funding==='byok')&&<div className="mf-status mf-stack"><p>恢复原模型：{credentialTarget?.modelId??execution?.modelId??'原请求模型'}。请补回匹配原配置的 Key，再显式恢复。</p><Button disabled={!shared.selection.apiKey.trim()} onClick={()=>void controller.resume(shared.selection.apiKey,credentialTarget??undefined)}>恢复原请求</Button></div>}
       {timeline&&<details className="mf-global-parameters"><summary>生成参数</summary><GenerationSettingsForm conversationId={timeline.conversationId} settings={timeline.generationSettings} version={timeline.generationSettingsVersion} csrfToken={csrfToken} onUpdated={controller.patchSettings} onConflict={controller.reload} onBusyChange={setSettingsBusy} /></details>}
     </div></Dialog>}

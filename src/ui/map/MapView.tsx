@@ -28,6 +28,7 @@ interface Props {
   csrfToken?: string;
   initialNodeId?: string;
   initialLayout?: TreeLayoutMode;
+  onNodeSelect?: (node: {id:string;title:string})=>void;
   onLearn?: (node?: { id: string; title: string }) => void;
   onSetCompleted?: (nodeId: string, completed: boolean) => Promise<unknown>;
   onSetProgress?: (nodeId: string, percent: number) => Promise<unknown>;
@@ -63,7 +64,7 @@ function SavedMapView(props:Props&{entryId:string;csrfToken:string}){
 }
 function MapViewContent({
   snapshot, displayMode, accountId, entryId, csrfToken, initialNodeId, initialLayout,overviewVisible,onOverviewChange,isVisible=true,learningState,
-  onLearn, onSetCompleted, onSetProgress,onSetBatchProgress,onCancelBatchProgress, progressPending, completionPending, error, toolbarTarget, toolbarHostRef,
+  onNodeSelect, onLearn, onSetCompleted, onSetProgress,onSetBatchProgress,onCancelBatchProgress, progressPending, completionPending, error, toolbarTarget, toolbarHostRef,
 }: Props) {
   const [localOverview,setLocalOverview]=useState(false);const overview=overviewVisible??localOverview;const [overviewVisited,setOverviewVisited]=useState(false);
   const changeOverview=(visible:boolean)=>{if(visible)setOverviewVisited(true);setLocalOverview(visible);onOverviewChange?.(visible);};
@@ -137,6 +138,7 @@ function MapViewContent({
 
   function selectNode(nodeId: string) {
     setSelectedId(nodeId);
+    const node=snapshot.nodes.find(item=>item.id===nodeId);if(node)onNodeSelect?.(node);
     setDetailsOpen(true);
     setNoteOpen(false);
   }

@@ -20,3 +20,11 @@ it('shows newest conversations first with creation times and numbers that surviv
   expect(screen.getAllByRole('listitem')).toHaveLength(1);
   expect(screen.getByText('第 3 段')).toBeVisible();
 });
+
+it('uses the current role as the single role-library entry',()=>{
+ const open=vi.fn();render(<HistoryList items={[]} characters={[character]} current={null} onSelect={vi.fn()} onDelete={vi.fn()} onNew={vi.fn()} onOpenLibrary={open} agentSelection={{characterId:character.characterId,onSelect:vi.fn(),disabled:false}} />);
+ fireEvent.click(screen.getByRole('button',{name:`我的角色：${character.card.name}`}));
+ expect(open).toHaveBeenCalledOnce();
+ expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'打开角色库'})).not.toBeInTheDocument();
+});

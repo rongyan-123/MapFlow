@@ -7,6 +7,7 @@
 @import './ui/conversation/conversation.css';
 @import './ui/support/support.css';
 @import './pages/admin/admin.css';
+@import './ui/workspace.css';
 *{box-sizing:border-box}html,body,#root{width:100%;height:100%;margin:0}body{background:var(--mf-bg);color:var(--mf-ink);font-size:14px;overflow:hidden}h1,h2,h3,h4,p{margin:0}h2{font-size:18px;font-weight:600}h3{font-size:15px;font-weight:550}button,input,textarea,select{font:inherit}button,a,input,textarea,select{-webkit-tap-highlight-color:transparent}button{color:inherit}img{max-width:100%}fieldset{border:0;min-width:0;padding:0;margin:0}legend{font-size:12px;margin-bottom:10px}pre{max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;line-height:1.8}summary{cursor:pointer}details>p{margin-top:10px}a{color:var(--mf-brand)}.mf-entry-loading{display:grid;place-items:center;min-height:100dvh;color:var(--mf-muted)}.mf-payment-image{display:block;width:192px;height:192px;max-width:100%;object-fit:contain;border-radius:12px;background:white;padding:8px}
 
 :where(a,button,summary,input,textarea,select):focus-visible{outline:2px solid var(--mf-brand);outline-offset:3px}button,a{touch-action:manipulation}.mf-markdown code,.mf-command code{font-family:var(--mf-font-mono)}

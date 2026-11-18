@@ -76,8 +76,8 @@ it('opens one continuous assistant with model-only settings and three questions 
   expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue(`我自己的草稿\n${question}`);
   expect(requests.filter(([,options])=>options?.method==='POST').map(([path])=>path)).toEqual(['/api/me/global-assistant/open']);
   fireEvent.click(screen.getByRole('button',{name:'模型设置'}));
-  const dialog=within(screen.getByRole('dialog',{name:'模型设置'}));
-  expect(dialog.getByLabelText('资金通路')).toBeVisible();
+  const dialog=within(screen.getByRole('dialog',{name:'首页助手的模型'}));
+  expect(dialog.getByRole('group',{name:'使用方式'})).toBeVisible();
   expect(dialog.getByLabelText('API Key')).toBeVisible();
   fireEvent.click(dialog.getByText('生成参数'));
   expect(dialog.getByText('最大输出 Token')).toBeVisible();
@@ -99,12 +99,12 @@ it('keeps a site-credit rejection editable and lets the user switch to BYOK in o
   await screen.findByText('本站现金额度不足。可以切换为自填 API Key，或补充本站额度后发送。');
   expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue('额度透支后继续这个问题');
   fireEvent.click(screen.getByRole('button',{name:'模型设置'}));
-  fireEvent.change(screen.getByLabelText('资金通路'),{target:{value:'byok'}});
+  fireEvent.click(screen.getByRole('radio',{name:/使用自己的 API/}));
   fireEvent.change(screen.getByLabelText('API Key'),{target:{value:'synthetic-user-key'}});
   fireEvent.change(screen.getByLabelText('API URL'),{target:{value:'https://models.example/v1'}});
   fireEvent.change(screen.getByLabelText('上游模型'),{target:{value:'user-model'}});
   fireEvent.change(screen.getByLabelText('上下文窗口（Token）'),{target:{value:'64000'}});
-  fireEvent.click(screen.getByRole('button',{name:'保存全局助手配置'}));fireEvent.click(screen.getByRole('button',{name:'关闭'}));
+  fireEvent.click(screen.getByRole('button',{name:'保存首页助手配置'}));fireEvent.click(screen.getByRole('button',{name:'关闭'}));
   await waitFor(()=>expect(screen.getByRole('button',{name:'发送'})).toBeEnabled());fireEvent.click(screen.getByRole('button',{name:'发送'}));
   await waitFor(()=>expect(screen.getByRole('textbox',{name:'消息'})).toHaveValue(''));
   const commands=view.requests.filter(([path,options])=>path.endsWith('/executions')&&options?.method==='POST').map(([,options])=>JSON.parse(String(options?.body)));
@@ -229,4 +229,25 @@ it('keeps a rejected draft separate from another device request and offers expli
     expect(screen.queryByRole('region',{name:'原请求状态'})).not.toBeInTheDocument();
     expect(view.requests.filter(([path,options])=>path.endsWith('/executions')&&options?.method==='POST')).toHaveLength(0);
   }finally{confirm.mockRestore();view.unmount();view.client.clear();}
+});
+
+it('edits only the home purpose and preserves BYOK input while switching payment methods',async()=>{
+ mount(); await screen.findByText('这是已经保存的回复。');
+ fireEvent.click(screen.getByRole('button',{name:'模型设置'}));
+ const card=within(screen.getByRole('dialog'));
+ expect(card.queryByRole('button',{name:/学习聊天/})).not.toBeInTheDocument();
+ fireEvent.click(card.getByRole('radio',{name:/使用自己的 API/}));
+ fireEvent.change(card.getByLabelText('API URL'),{target:{value:'https://my-provider.example/v1'}});
+ fireEvent.change(card.getByLabelText('API Key'),{target:{value:'unsaved-key'}});
+ fireEvent.click(card.getByRole('radio',{name:/使用积分/}));
+ expect(card.queryByLabelText('API URL')).not.toBeInTheDocument();
+ fireEvent.click(card.getByRole('radio',{name:/使用自己的 API/}));
+ expect(card.getByLabelText('API URL')).toHaveValue('https://my-provider.example/v1');
+ expect(card.getByLabelText('API Key')).toHaveValue('unsaved-key');
+});
+
+it('removes the welcome banner once saved conversation messages are displayed',async()=>{
+ mount(); await screen.findByText('这是已经保存的回复。');
+ expect(screen.queryByText('把下一步，看清楚。')).not.toBeInTheDocument();
+ expect(screen.getByRole('textbox',{name:'消息'})).toBeVisible();
 });

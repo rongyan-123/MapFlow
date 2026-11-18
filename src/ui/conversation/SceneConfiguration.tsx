@@ -4,8 +4,10 @@ import type { useConversationExecution } from '../../domains/conversations/useCo
 import { Button } from '../Button';
 import { ConfigurationDialog, type ConfigurationSection } from './ConfigurationDialog';
 import { CharacterAvatar, CompatibilityReport } from './CharacterPresentation';
-import ModelSettings from './ModelSettings';
+import ModelSettings, {modelPurposeTitles} from './ModelSettings';
+import {Dialog} from '../Dialog';
 import ToolSettings from './ToolSettings';
+import GenerationSettingsForm from './GenerationSettingsForm';
 import ConversationProfileForm from './ConversationProfileForm';
 import BranchesSettings from './BranchesSettings';
 
@@ -52,9 +54,10 @@ export default function SceneConfiguration(props: Props) {
       <Button onClick={props.onHistory}>会话历史</Button>
     </div>
   </div>;
+  if(props.section==='model')return <Dialog title={`${modelPurposeTitles[owner.scene]}的模型`} onClose={props.onClose} dismissible={!props.settingsBusy} className="mf-model-settings-card"><ModelSettings onBusyChange={props.onBusyChange} initialPurpose={owner.scene} accountId={owner.accountId} csrfToken={owner.csrfToken} onWallet={props.onWallet} onDone={props.onClose} />{current&&!readonly&&<details className="mf-global-parameters"><summary>生成参数</summary><GenerationSettingsForm conversationId={current.conversation.conversationId} settings={current.conversation.generationSettings} version={current.conversation.generationSettingsVersion} csrfToken={owner.csrfToken} onUpdated={()=>void props.onConflict()} onConflict={props.onConflict} onBusyChange={props.onBusyChange} /></details>}</Dialog>;
   return <ConfigurationDialog initialSection={props.section} busy={props.settingsBusy} onClose={props.onClose} content={{
     overview,
-    model: <ModelSettings initialPurpose={owner.scene} accountId={owner.accountId} csrfToken={owner.csrfToken} onWallet={props.onWallet} locked={props.executionBusy} />,
+    model: <ModelSettings onBusyChange={props.onBusyChange} initialPurpose={owner.scene} accountId={owner.accountId} csrfToken={owner.csrfToken} onWallet={props.onWallet} locked={props.executionBusy} />,
     tools: current && !readonly ? <ToolSettings key={`${current.conversation.conversationId}.${current.graph.revision}`} detail={current}
       csrfToken={owner.csrfToken} onUpdated={props.onUpdated} onConflict={props.onConflict} onBusyChange={props.onBusyChange}
       onCanvas={() => { props.onClose(); if (runtime) void runtime.openTeachingCanvas(); }}
